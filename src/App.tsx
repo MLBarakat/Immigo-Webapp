@@ -7,7 +7,6 @@ import { StatusIndicator } from './components/StatusIndicator';
 import { ConversationHistory } from './components/ConversationHistory';
 import { ControlPanel } from './components/ControlPanel';
 import { ChatInput } from './components/ChatInput';
-import { LoginButton } from './components/LoginButton';
 import { UserProfile } from './components/UserProfile';
 import { LoginPage } from './components/LoginPage';
 import ImmigoLogo from './assets/immigo_logo.png';
@@ -22,6 +21,8 @@ const pollyVoices = [
   { id: 'Arthur', name: 'Arthur (British English, Male)' },
 ];
 
+// This component contains the main chat interface.
+// It will only be rendered when the user is logged in.
 function ConversationUI() {
   const { state, dispatch } = useConversation();
   const { user, logout } = useAuth();
@@ -110,13 +111,16 @@ function ConversationUI() {
   );
 }
 
+// This component now acts as the main entry point and auth guard.
 function App() {
   const { user, login, loading } = useAuth();
 
+  // Show a loading state while Supabase is checking for a session.
   if (loading) {
     return <div className="h-screen bg-immigo-gray-50" />;
   }
 
+  // Conditionally render the correct component based on login state.
   return (
     <>
       {user ? (
