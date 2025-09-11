@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { ConversationProvider, useConversation } from './context/ConversationContext';
 import { useAuth } from './context/AuthContext';
@@ -8,127 +8,84 @@ import { ConversationHistory } from './components/ConversationHistory';
 import { ControlPanel } from './components/ControlPanel';
 import { ChatInput } from './components/ChatInput';
 import { UserProfile } from './components/UserProfile';
-import { LoginPage } from './components/LoginPage';
+import { AuthPage } from './components/AuthPage';
+import { ApiClient } from './services/apiClient';
 import ImmigoLogo from './assets/immigo_logo.png';
 
-const pollyVoices = [
-  { id: 'Joanna', name: 'Joanna (US English, Female)' },
-  { id: 'Matthew', name: 'Matthew (US English, Male)' },
-  { id: 'Salli', name: 'Salli (US English, Female)' },
-  { id: 'Ruth', name: 'Ruth (US English, Female)' },
-  { id: 'Stephen', name: 'Stephen (US English, Male)' },
-  { id: 'Kajal', name: 'Kajal (Indian English, Female)' },
-  { id: 'Arthur', name: 'Arthur (British English, Male)' },
-];
+const pollyVoices =;
 
-// This component contains the main chat interface.
-// It will only be rendered when the user is logged in.
 function ConversationUI() {
   const { state, dispatch } = useConversation();
-  const { user, logout } = useAuth();
+  const { user, session, logout } = useAuth();
   const { startSession, endSession, sendTextMessage } = useConversationManager();
 
-  const handleClearError = () => {
-    dispatch({ type: 'CLEAR_ERROR' });
-  };
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (session) {
+        const apiClient = new ApiClient(session.access_token);
+        const history = await apiClient.getHistory();
+        dispatch({ type: 'SET_HISTORY', payload: history });
+      }
+    };
+    fetchHistory();
+  }, [session, dispatch]);
 
-  const handleVoiceChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    dispatch({ type: 'SET_VOICE', payload: event.target.value });
-  };
-
-  const isInputDisabled = state.appStatus !== 'idle' && state.appStatus !== 'error';
+  const handleClearError = () => dispatch({ type: 'CLEAR_ERROR' });
+  const handleVoiceChange = (e) => dispatch({ type: 'SET_VOICE', payload: e.target.value });
+  const isInputDisabled = state.appStatus!== 'idle' && state.appStatus!== 'error';
 
   return (
     <div className="h-screen bg-gradient-to-br from-immigo-gray-50 via-star-white to-immigo-gray-50 flex flex-col font-sans">
       <header className="bg-star-white shadow-xl border-b-4 border-art-blue-600 px-4 sm:px-8 py-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center space-x-4">
-            <div className="relative w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center">
-              <img src={ImmigoLogo} alt="Immigo Logo" className="w-full h-full object-contain drop-shadow-md" />
+            <div className="relative w-12 h-12 sm:w-16 sm:h-16">
+              <img src={ImmigoLogo} alt="Immigo Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">
-                Immigo
-              </h1>
-              <p className="text-deep-navy font-semibold text-sm sm:text-lg mt-1 tracking-wide">
-                Your Real-time AI Conversation Partner
-              </p>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold">Immigo</h1>
+              <p className="text-deep-navy font-semibold text-sm sm:text-lg">Your AI Conversation Partner</p>
             </div>
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4">
-            <select
-              value={state.voiceId}
-              onChange={handleVoiceChange}
-              className="bg-immigo-gray-100 border-2 border-immigo-gray-300 text-deep-navy text-sm rounded-lg focus:ring-art-blue-500 focus:border-art-blue-500 p-2 shadow-sm w-32 sm:w-auto"
-            >
-              {pollyVoices.map(voice => (
-                <option key={voice.id} value={voice.id}>{voice.name}</option>
-              ))}
+            <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 p-2 rounded-lg">
+              {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
             </select>
-            {user && (
-              <UserProfile
-                user={{ name: user.email || 'User', initials: user.email?.substring(0, 2).toUpperCase() || 'U' }}
-                onLogout={logout}
-              />
-            )}
+            {user && <UserProfile user={{ name: user.email, initials: user.email?.substring(0, 2).toUpperCase() }} onLogout={logout} />}
           </div>
         </div>
       </header>
-
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden p-2 sm:p-4 lg:p-6 gap-4 lg:gap-6 bg-immigo-gray-100">
-        <div className="flex-1 flex flex-col bg-star-white shadow-xl border border-immigo-gray-200 rounded-2xl overflow-hidden h-full">
-          <div className="bg-gradient-to-r from-immigo-gray-50 via-star-white to-immigo-gray-100 border-b-2 border-immigo-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <MessageSquare className="w-6 h-6 sm:w-7 sm:h-7 text-art-blue-600" />
-              <h2 className="text-xl sm:text-2xl font-bold text-deep-navy font-display">Conversation</h2>
-            </div>
-          </div>
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden p-2 sm:p-4 lg:p-6 gap-4 lg:gap-6 bg-immigo-gray-100">
+        <div className="flex-1 flex flex-col bg-star-white shadow-xl border rounded-2xl overflow-hidden h-full">
           <ConversationHistory messages={state.conversationHistory} />
           <ChatInput onSendMessage={sendTextMessage} disabled={isInputDisabled} />
         </div>
-        <div className="flex flex-col bg-star-white shadow-xl border border-immigo-gray-200 rounded-2xl lg:w-96 lg:h-full">
+        <div className="flex flex-col bg-star-white shadow-xl border rounded-2xl lg:w-96">
           <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
             <StatusIndicator status={state.appStatus} errorMessage={state.errorMessage} />
           </div>
-          <ControlPanel
-            status={state.appStatus}
-            isSessionActive={state.isSessionActive}
-            onStartSession={startSession}
-            onEndSession={endSession}
-            onClearError={handleClearError}
-          />
+          <ControlPanel status={state.appStatus} isSessionActive={state.isSessionActive} onStartSession={startSession} onEndSession={endSession} onClearError={handleClearError} />
         </div>
-      </div>
-
-      <footer className="bg-deep-navy border-t-4 border-art-red-600 px-4 sm:px-8 py-3 text-center sm:text-left">
-        <div className="flex items-center justify-center">
-          <div className="text-immigo-gray-300 text-sm font-medium">
-            <p>&copy; 2025 Immigo. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      </main>
     </div>
   );
 }
 
-// This component now acts as the main entry point and auth guard.
 function App() {
-  const { user, login, loading } = useAuth();
+  const { user, loading } = useAuth();
 
-  // Show a loading state while Supabase is checking for a session.
   if (loading) {
     return <div className="h-screen bg-immigo-gray-50" />;
   }
 
-  // Conditionally render the correct component based on login state.
   return (
     <>
-      {user ? (
+      {user? (
         <ConversationProvider>
           <ConversationUI />
         </ConversationProvider>
       ) : (
-        <LoginPage onLogin={login} />
+        <AuthPage />
       )}
     </>
   );
