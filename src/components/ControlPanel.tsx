@@ -1,6 +1,6 @@
 import React from 'react';
-import { Play, Square, RotateCcw, Mic } from 'lucide-react';
-import { AppStatus } from '../types/conversation';
+import { Mic, StopCircle, Redo2, XCircle } from 'lucide-react';
+import { AppStatus } from '../context/ConversationContext';
 
 interface ControlPanelProps {
   status: AppStatus;
@@ -10,66 +10,83 @@ interface ControlPanelProps {
   onClearError: () => void;
 }
 
-export function ControlPanel({
+export const ControlPanel: React.FC<ControlPanelProps> = ({
   status,
   isSessionActive,
   onStartSession,
   onEndSession,
   onClearError,
-}: ControlPanelProps) {
-  return (
-    <div className="flex flex-col items-center space-y-6 p-8 bg-gradient-to-t from-slate-50 to-white border-t border-slate-200">
-      <div className="flex space-x-6">
-        {!isSessionActive ? (
-          <button
-            onClick={onStartSession}
-            disabled={status === 'processing'}
-            className="group flex items-center space-x-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
-          >
-            <div className="w-6 h-6 bg-white bg-opacity-20 rounded-full flex items-center justify-center group-hover:bg-opacity-30 transition-all duration-300">
-              <Play className="w-4 h-4 ml-0.5" />
-            </div>
-            <span className="text-lg">Start Conversation</span>
-          </button>
-        ) : (
-          <button
-            onClick={onEndSession}
-            className="group flex items-center space-x-3 px-8 py-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
-          >
-            <div className="w-6 h-6 bg-white bg-opacity-20 rounded-full flex items-center justify-center group-hover:bg-opacity-30 transition-all duration-300">
-              <Square className="w-4 h-4" />
-            </div>
-            <span className="text-lg">End Conversation</span>
-          </button>
-        )}
+}) => {
+  const isIdle = status === 'idle' && !isSessionActive;
+  const isListening = status === 'listening';
+  const isSpeaking = status === 'speaking';
+  const isProcessing = status === 'processing';
+  const isError = status === 'error';
 
-        {status === 'error' && (
+  const isStartButtonDisabled = !isIdle && !isError;
+  const isEndButtonDisabled = !isSessionActive || isError;
+  const isRetryButtonDisabled = !isError;
+
+  return (
+    <div className="p-6 bg-gradient-to-t from-patriot-blue-50 to-white border-t-2 border-patriot-blue-200 shadow-lg flex flex-col space-y-4">
+
+      {isError && (
+        <div className="bg-patriot-red-100 border border-patriot-red-400 text-patriot-red-800 px-4 py-3 rounded-lg relative shadow-sm">
+          <div className="flex items-center space-x-2">
+            <XCircle className="h-5 w-5" />
+            <span className="block sm:inline font-semibold">An error occurred!</span>
+          </div>
+          <p className="text-sm mt-1">Please try again or check your connection.</p>
           <button
             onClick={onClearError}
-            className="group flex items-center space-x-2 px-6 py-4 bg-white text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-all duration-300 shadow-md hover:shadow-lg border border-slate-200 transform hover:scale-105 active:scale-95"
+            className="mt-3 w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-patriot-red-600 text-base font-medium text-white hover:bg-patriot-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-patriot-red-500 sm:text-sm transition ease-in-out duration-150"
           >
-            <RotateCcw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-            <span>Retry</span>
+            Clear Error
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="text-center max-w-lg">
-        {!isSessionActive ? (
-          <div className="space-y-2">
-            <p className="text-lg font-medium text-slate-700">Ready to Begin</p>
-            <p className="text-slate-500">Click "Start Conversation" to begin voice chat with AI</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex items-center justify-center space-x-2 text-blue-700">
-              <Mic className="w-5 h-5" />
-              <p className="text-lg font-medium">Listening...</p>
-            </div>
-            <p className="text-slate-500">Speak naturally or say "stop" to end the conversation</p>
-          </div>
-        )}
-      </div>
+      <button
+        onClick={onStartSession}
+        disabled={isStartButtonDisabled}
+        className={`w-full flex items-center justify-center px-6 py-3 border border-transparent text-base font-bold rounded-lg shadow-xl
+          ${isStartButtonDisabled
+            ? 'bg-patriot-gray-300 text-patriot-gray-600 cursor-not-allowed'
+            : 'bg-patriot-blue-600 text-white hover:bg-patriot-blue-700 focus:outline-none focus:ring-4 focus:ring-patriot-blue-300 transform hover:scale-105 transition-all duration-200'
+          }`}
+      >
+        <Mic className="h-6 w-6 mr-3" />
+        {isListening ? 'Listening...' : isSpeaking ? 'AI Speaking...' : isProcessing ? 'Processing...' : 'Start Conversation'}
+      </button>
+
+      <button
+        onClick={onEndSession}
+        disabled={isEndButtonDisabled}
+        className={`w-full flex items-center justify-center px-6 py-3 border border-transparent text-base font-bold rounded-lg shadow-xl
+          ${isEndButtonDisabled
+            ? 'bg-patriot-gray-300 text-patriot-gray-600 cursor-not-allowed'
+            : 'bg-patriot-red-600 text-white hover:bg-patriot-red-700 focus:outline-none focus:ring-4 focus:ring-patriot-red-300 transform hover:scale-105 transition-all duration-200'
+          }`}
+      >
+        <StopCircle className="h-6 w-6 mr-3" />
+        End Conversation
+      </button>
+
+      {/* Optionally, a retry button could be here for specific errors */}
+      {/*
+      <button
+        onClick={() => { /* retry logic * / }}
+        disabled={isRetryButtonDisabled}
+        className={`w-full flex items-center justify-center px-6 py-3 border border-transparent text-base font-bold rounded-lg shadow-xl
+          ${isRetryButtonDisabled
+            ? 'bg-patriot-gray-300 text-patriot-gray-600 cursor-not-allowed'
+            : 'bg-patriot-green-600 text-white hover:bg-patriot-green-700 focus:outline-none focus:ring-4 focus:ring-patriot-green-300 transform hover:scale-105 transition-all duration-200'
+          }`}
+      >
+        <Redo2 className="h-6 w-6 mr-3" />
+        Retry Last Action
+      </button>
+      */}
     </div>
   );
-}
+};
