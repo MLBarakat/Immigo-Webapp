@@ -6,8 +6,8 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  login: (email, password) => Promise<void>;
-  signUp: (email, password) => Promise<void>;
+  login: (email: string, password: string) => Promise<any>;
+  signUp: (email: string, password: string) => Promise<any>;
   logout: () => Promise<void>;
 }
 
@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
-        setUser(session?.user?? null);
+        setUser(session?.user ?? null);
       } catch (error) {
         console.error("Error fetching session:", error);
       } finally {
@@ -35,20 +35,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setUser(session?.user?? null);
+      setUser(session?.user ?? null);
     });
 
     return () => subscription?.unsubscribe();
-  },);
+  }, []);
 
   const login = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    return data;
   };
 
   const signUp = async (email, password) => {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
+    return data;
   };
 
   const logout = async () => {

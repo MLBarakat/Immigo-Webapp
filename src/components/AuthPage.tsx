@@ -34,7 +34,7 @@ export const AuthPage: React.FC = () => {
         <div className="text-center mb-8">
           <img src={ImmigoLogo} alt="Immigo Logo" className="w-24 h-24 mx-auto object-contain mb-4 drop-shadow-lg" />
           <h1 className="text-4xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">
-            {isLogin? 'Welcome Back' : 'Create Account'}
+            {isLogin ? 'Welcome Back' : 'Create Account'}
           </h1>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -60,13 +60,13 @@ export const AuthPage: React.FC = () => {
             disabled={loading}
             className="w-full p-3 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 disabled:bg-immigo-gray-400"
           >
-            {loading? 'Processing...' : isLogin? 'Login' : 'Sign Up'}
+            {loading ? 'Processing...' : isLogin ? 'Login' : 'Sign Up'}
           </button>
         </form>
         <p className="text-center mt-6 text-sm text-immigo-gray-600">
-          {isLogin? "Don't have an account?" : 'Already have an account?'}
+          {isLogin ? "Don't have an account?" : 'Already have an account?'}
           <button onClick={() => setIsLogin(!isLogin)} className="font-bold text-art-blue-600 hover:underline ml-1">
-            {isLogin? 'Sign Up' : 'Login'}
+            {isLogin ? 'Sign Up' : 'Login'}
           </button>
         </p>
       </div>

@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import { MessageSquare } from 'lucide-react';
 import { ConversationProvider, useConversation } from './context/ConversationContext';
 import { useAuth } from './context/AuthContext';
 import { useConversationManager } from './hooks/useConversationManager';
@@ -12,7 +11,13 @@ import { AuthPage } from './components/AuthPage';
 import { ApiClient } from './services/apiClient';
 import ImmigoLogo from './assets/immigo_logo.png';
 
-const pollyVoices = [];
+const pollyVoices = [
+    { id: 'Joanna', name: 'Joanna (US Female)' },
+    { id: 'Matthew', name: 'Matthew (US Male)' },
+    { id: 'Amy', name: 'Amy (British Female)' },
+    { id: 'Geraint', name: 'Geraint (Welsh Male)' },
+    { id: 'Kajal', name: 'Kajal (Indian Female)' },
+];
 
 function ConversationUI() {
   const { state, dispatch } = useConversation();
@@ -23,16 +28,23 @@ function ConversationUI() {
     const fetchHistory = async () => {
       if (session) {
         const apiClient = new ApiClient(session.access_token);
-        const history = await apiClient.getHistory();
-        dispatch({ type: 'SET_HISTORY', payload: history });
+        try {
+            const history = await apiClient.getHistory();
+            dispatch({ type: 'SET_HISTORY', payload: history });
+        } catch (error) {
+            console.error("Failed to fetch history:", error);
+            if (error instanceof Error && error.message.includes("401")) {
+                logout();
+            }
+        }
       }
     };
     fetchHistory();
-  }, [session, dispatch]);
+  }, [session, dispatch, logout]);
 
   const handleClearError = () => dispatch({ type: 'CLEAR_ERROR' });
-  const handleVoiceChange = (e) => dispatch({ type: 'SET_VOICE', payload: e.target.value });
-  const isInputDisabled = state.appStatus!== 'idle' && state.appStatus!== 'error';
+  const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => dispatch({ type: 'SET_VOICE', payload: e.target.value });
+  const isInputDisabled = state.appStatus !== 'idle' && state.appStatus !== 'error';
 
   return (
     <div className="h-screen bg-gradient-to-br from-immigo-gray-50 via-star-white to-immigo-gray-50 flex flex-col font-sans">
@@ -43,15 +55,15 @@ function ConversationUI() {
               <img src={ImmigoLogo} alt="Immigo Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold">Immigo</h1>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">Immigo</h1>
               <p className="text-deep-navy font-semibold text-sm sm:text-lg">Your AI Conversation Partner</p>
             </div>
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4">
-            <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 p-2 rounded-lg">
+            <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 p-2 rounded-lg text-sm">
               {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
             </select>
-            {user && <UserProfile user={{ name: user.email, initials: user.email?.substring(0, 2).toUpperCase() }} onLogout={logout} />}
+            {user && <UserProfile user={{ name: user.email || 'User', initials: user.email?.substring(0, 2).toUpperCase() || 'U' }} onLogout={logout} />}
           </div>
         </div>
       </header>
@@ -80,7 +92,7 @@ function App() {
 
   return (
     <>
-      {user? (
+      {user ? (
         <ConversationProvider>
           <ConversationUI />
         </ConversationProvider>
