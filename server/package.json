@@ -1,7 +1,7 @@
 {
-  "name": "voice-ai-backend",
+  "name": "immigo-backend",
   "version": "1.0.0",
-  "description": "Voice AI Conversation Backend",
+  "description": "Immigo AI Conversation Backend",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

@@ -28,7 +28,7 @@ function ConversationApp() {
             </div>
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-red-600 via-blue-700 to-blue-800 bg-clip-text text-transparent">
-                Voice AI Assistant
+                Immigo
               </h1>
               <p className="text-slate-600 font-medium">
                 Real-time voice conversation with AI
@@ -58,7 +58,7 @@ function ConversationApp() {
           <div className="bg-gradient-to-r from-slate-50 to-white border-b-2 border-slate-200 px-6 py-4">
             <div className="flex items-center space-x-3">
               <MessageSquare className="w-6 h-6 text-blue-600" />
-              <h2 className="text-xl font-bold text-slate-800">Conversation</h2>
+              <h2 className="text-xl font-bold text-slate-800">Chat</h2>
             </div>
           </div>
           <ConversationHistory messages={state.conversationHistory} />
@@ -91,21 +91,6 @@ function ConversationApp() {
           />
         </div>
       </div>
-
-      {/* Footer */}
-      <footer className="bg-gradient-to-r from-slate-800 to-slate-900 border-t-2 border-slate-700 px-8 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-red-500 via-white to-blue-500 rounded-lg flex items-center justify-center">
-              <Flag className="w-4 h-4 text-slate-700" />
-            </div>
-            <p className="text-slate-300 font-medium">Powered by AWS Bedrock & Polly</p>
-          </div>
-          <div className="text-slate-400 text-sm">
-            <p>© 2024 Voice AI Assistant</p>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
