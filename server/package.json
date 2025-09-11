@@ -1,7 +1,7 @@
 {
   "name": "immigo-backend",
   "version": "1.0.0",
-  "description": "Immigo AI Conversation Backend",
+  "description": "ImmiGo AI Conversation Backend",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -16,9 +16,9 @@
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "@supabase/supabase-js": "^2.57.4"
   },
   "keywords": ["voice", "ai", "conversation", "aws", "bedrock", "polly"],
-  "author": "Voice AI Team",
-  "license": "MIT"
+  "author": "ImmiGo Team"
 }
