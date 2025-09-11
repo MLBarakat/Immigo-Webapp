@@ -7,33 +7,61 @@ export default {
   theme: {
     extend: {
       colors: {
-        'crisp-red': {
-          500: '#BF0A30', // A strong, classic red
-          600: '#A5092A',
-          700: '#8A0722',
+        // Vibrant Red from the logo/flag
+        'art-red': {
+          50: '#FFF1F2',
+          100: '#FFE4E6',
+          200: '#FFC0C7',
+          300: '#FF99A4',
+          400: '#FF6F7E',
+          500: '#FF3D51', // Primary Vibrant Red
+          600: '#F02A40',
+          700: '#D91C30',
+          800: '#C01427',
+          900: '#A10D1E',
+          'logo': '#BF0A30', // Exact logo red
         },
-        'crisp-blue': {
-          500: '#002868', // A deep, royal blue
-          600: '#00225A',
-          700: '#001D4B',
-          800: '#00173D',
+        // Deep, Vibrant Blue from the logo/flag
+        'art-blue': {
+          50: '#E6F0FF',
+          100: '#CCDDFE',
+          200: '#99BFFD',
+          300: '#669BFD',
+          400: '#3376FC',
+          500: '#0055FC', // Primary Vibrant Blue
+          600: '#0047D9',
+          700: '#003BAF',
+          800: '#002E8A',
+          900: '#002266',
+          'logo': '#002868', // Exact logo blue
         },
+        // Bright white for clean backgrounds and text
+        'star-white': '#FFFFFF',
+        // Deep navy for strong foundational text and elements
+        'deep-navy': '#0A1D3A',
+        // Accent gold for subtle highlights or processing states
+        'accent-gold': '#FFD700',
+
+        // Green for active/success states
         'immigo-green': {
           100: '#D4EDDA',
           500: '#28A745',
           800: '#155724',
         },
+        // Grays for neutral elements and borders
         'immigo-gray': {
-          100: '#F0F2F5',
-          200: '#E4E6E8',
-          300: '#D1D9E0',
-          500: '#86909E',
-          600: '#5A626C',
-          700: '#343A40',
+          50: '#F8F9FA',
+          100: '#F1F3F5',
+          200: '#E9ECEF',
+          300: '#DEE2E6',
+          500: '#ADB5BD',
+          600: '#6C757D',
+          700: '#495057',
         }
       },
       fontFamily: {
-        sans: ['"Open Sans"', 'sans-serif'],
+        sans: ['"Roboto"', 'sans-serif'],
+        display: ['"Lato"', 'sans-serif'],
       }
     },
   },
