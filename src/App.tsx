@@ -55,10 +55,10 @@ function ConversationApp() {
             </div>
             <div>
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">
-                Immigo
+                ImmiGo
               </h1>
               <p className="text-deep-navy font-semibold text-sm sm:text-lg mt-1 tracking-wide">
-                Your Real-time AI Conversation Partner
+                Your Real-Time AI Conversation Partner
               </p>
             </div>
           </div>
