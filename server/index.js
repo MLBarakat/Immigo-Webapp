@@ -3,23 +3,19 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
-const { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } = require('@aws-sdk/client-bedrock-runtime');
+const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { PollyClient, SynthesizeSpeechCommand } = require('@aws-sdk/client-polly');
 require('dotenv').config();
 
 const app = express();
-const port = process.env.PORT |
-
-| 3001;
+const port = process.env.PORT || 3001;
 
 // Initialize Supabase Admin Client
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // Middleware
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN |
-
-| 'http://localhost:5173' }));
+app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json({ limit: '10mb' }));
 
 const limiter = rateLimit({
@@ -36,13 +32,13 @@ const pollyClient = new PollyClient({ region: process.env.AWS_REGION });
 // Secure Authentication Middleware
 const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader ||!authHeader.startsWith('Bearer ')) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication token is required.' });
   }
   const token = authHeader.split(' ')[1];
   const { data: { user }, error } = await supabase.auth.getUser(token);
 
-  if (error ||!user) {
+  if (error || !user) {
     return res.status(401).json({ error: 'Invalid or expired token.' });
   }
   req.user = user;
@@ -53,7 +49,7 @@ const authenticate = async (req, res, next) => {
 app.get('/api/history', authenticate, async (req, res) => {
   const { data, error } = await supabase
    .from('messages')
-   .select('role, content')
+   .select('role, content, created_at')
    .eq('user_id', req.user.id)
    .order('created_at', { ascending: true });
 
@@ -68,9 +64,24 @@ app.post('/api/conversation', authenticate, async (req, res) => {
   const { message, conversationHistory, voiceId } = req.body;
 
   try {
-    // Bedrock and Polly logic remains here...
-    // For brevity, this is a placeholder for the AI interaction
-    const fullResponseText = `This is a simulated response to: "${message}"`;
+    const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0';
+    const prompt = {
+        anthropic_version: 'bedrock-2023-05-31',
+        max_tokens: 2048,
+        messages: [
+            ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+            { role: 'user', content: message },
+        ],
+    };
+
+    const bedrockResponse = await bedrockClient.send(new InvokeModelCommand({
+        modelId,
+        contentType: 'application/json',
+        body: JSON.stringify(prompt),
+    }));
+
+    const responseBody = JSON.parse(new TextDecoder().decode(bedrockResponse.body));
+    const fullResponseText = responseBody.content[0].text;
 
     // Persist the conversation turn to the database
     const { error: userMessageError } = await supabase
@@ -81,9 +92,8 @@ app.post('/api/conversation', authenticate, async (req, res) => {
      .from('messages')
      .insert({ user_id: req.user.id, role: 'assistant', content: fullResponseText });
 
-    if (userMessageError |
-
-| assistantMessageError) {
+    if (userMessageError || assistantMessageError) {
+      console.error('DB Save Error:', userMessageError || assistantMessageError);
       throw new Error('Failed to save conversation to database.');
     }
 
@@ -92,9 +102,7 @@ app.post('/api/conversation', authenticate, async (req, res) => {
         Engine: 'neural',
         OutputFormat: 'mp3',
         Text: fullResponseText,
-        VoiceId: voiceId |
-
-| 'Joanna',
+        VoiceId: voiceId || 'Joanna',
     });
     const pollyResponse = await pollyClient.send(pollyCommand);
     const audioStream = pollyResponse.AudioStream;
@@ -111,7 +119,7 @@ app.post('/api/conversation', authenticate, async (req, res) => {
 
 const streamToBuffer = (stream) =>
   new Promise((resolve, reject) => {
-    const chunks =;
+    const chunks = [];
     stream.on('data', (chunk) => chunks.push(chunk));
     stream.on('error', reject);
     stream.on('end', () => resolve(Buffer.concat(chunks)));
