@@ -1,57 +1,88 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useConversation } from '../context/ConversationContext';
-import * as audioUtils from '../utils/audioUtils';
-import { Message } from '../types/conversation';
-
-// This is a simplified representation of the updated hook.
-// The key changes are the addition of `sendTextMessage` and the refactoring to use `processMessage`.
+import { ApiClient } from '../services/apiClient';
+import { SpeechRecognitionManager, AudioManager } from '../utils/audioUtils';
+import { v4 as uuidv4 } from 'uuid';
 
 export const useConversationManager = () => {
   const { state, dispatch } = useConversation();
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionManagerRef = useRef(new SpeechRecognitionManager());
+  const audioManagerRef = useRef(new AudioManager());
+  const apiClientRef = useRef(new ApiClient('demo-key')); // Or your actual API key
 
-  const processMessage = useCallback(async (message: string, history: Message[]) => {
-    dispatch({ type: 'SET_APP_STATUS', payload: 'processing' });
+  const processAndRespond = useCallback(async (message: string) => {
+    dispatch({ type: 'START_PROCESSING' });
+
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/conversation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_API_KEY}`,
-        },
-        body: JSON.stringify({ message, conversationHistory: history }),
-      });
+      const response = await apiClientRef.current.sendMessage(message, state.conversationHistory);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'API request failed' }));
-        throw new Error(errorData.message);
-      }
-
-      const data = await response.json();
       dispatch({
         type: 'ADD_MESSAGE',
-        payload: { role: 'assistant', content: data.responseText, timestamp: new Date().toISOString() },
+        payload: {
+          id: uuidv4(),
+          role: 'assistant',
+          content: response.responseText,
+          timestamp: new Date(),
+        },
       });
 
-      dispatch({ type: 'SET_APP_STATUS', payload: 'speaking' });
-      await audioUtils.playAudio(data.responseAudio);
-      dispatch({ type: 'SET_APP_STATUS', payload: 'idle' });
+      const audio = await audioManagerRef.current.playAudioFromBase64(response.responseAudio);
+      dispatch({ type: 'START_SPEAKING', payload: audio });
+
+      audio.onended = () => {
+        dispatch({ type: 'STOP_SPEAKING' });
+        // Restart listening if the session is still active
+        if (state.isSessionActive) {
+          startSession();
+        }
+      };
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       dispatch({ type: 'SET_ERROR', payload: `Failed to get response: ${errorMessage}` });
     }
+  }, [state.conversationHistory, state.isSessionActive, dispatch]);
+
+  const startSession = useCallback(() => {
+    dispatch({ type: 'START_SESSION' });
+    recognitionManagerRef.current.startListening(
+      (transcript, isFinal) => {
+        if (isFinal) {
+          dispatch({
+            type: 'ADD_MESSAGE',
+            payload: { id: uuidv4(), role: 'user', content: transcript, timestamp: new Date() },
+          });
+          recognitionManagerRef.current.stopListening();
+          processAndRespond(transcript);
+        }
+      },
+      (error) => {
+        dispatch({ type: 'SET_ERROR', payload: error });
+      },
+      () => {
+        // onEnd callback
+        if (state.isSessionActive) {
+          // If session is still active, but recognition stopped (e.g., silence), restart it.
+          // This creates the continuous listening loop.
+          startSession();
+        }
+      }
+    );
+    dispatch({ type: 'START_LISTENING' });
+  }, [dispatch, processAndRespond, state.isSessionActive]);
+
+  const endSession = useCallback(() => {
+    recognitionManagerRef.current.stopListening();
+    dispatch({ type: 'END_SESSION' });
   }, [dispatch]);
 
-  const sendTextMessage = async (message: string) => {
+  const sendTextMessage = useCallback(async (message: string) => {
     dispatch({
       type: 'ADD_MESSAGE',
-      payload: { role: 'user', content: message, timestamp: new Date().toISOString() },
+      payload: { id: uuidv4(), role: 'user', content: message, timestamp: new Date() },
     });
-    await processMessage(message, state.conversationHistory);
-  };
+    await processAndRespond(message);
+  }, [dispatch, processAndRespond]);
 
-  // ... (startSession and endSession logic would also be here, updated to use processMessage)
-
-  return { sendTextMessage /*, startSession, endSession */ };
+  return { startSession, endSession, sendTextMessage };
 };
