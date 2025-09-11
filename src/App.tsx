@@ -12,7 +12,7 @@ import { AuthPage } from './components/AuthPage';
 import { ApiClient } from './services/apiClient';
 import ImmigoLogo from './assets/immigo_logo.png';
 
-const pollyVoices =;
+const pollyVoices = [];
 
 function ConversationUI() {
   const { state, dispatch } = useConversation();

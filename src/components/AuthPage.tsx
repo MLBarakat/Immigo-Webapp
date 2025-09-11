@@ -22,9 +22,7 @@ export const AuthPage: React.FC = () => {
         alert('Check your email for the confirmation link!');
       }
     } catch (err: any) {
-      setError(err.message |
-
-| 'An unexpected error occurred.');
+      setError(err.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
     }
