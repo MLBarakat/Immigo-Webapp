@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import ImmigoLogo from '../assets/immigo_logo.png';
 import { TermsModal } from './TermsModal';
 import { User, Mail, KeyRound, Globe, CheckSquare, Square } from 'lucide-react';
+import { analytics } from '../analytics';
 
 export const AuthPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -10,16 +11,16 @@ export const AuthPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [language, setLanguage] = useState('en-US');
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [promoEmails, setPromoEmails] = useState(false);
-  const [newsletter, setNewsletter] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTerms, setShowTerms] = useState(false);
   const { login, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isLogin &&!agreedToTerms) {
+    if (!isLogin && !agreedToTerms) {
       setError("You must agree to the Terms and Conditions to sign up.");
       return;
     }
@@ -27,13 +28,22 @@ export const AuthPage: React.FC = () => {
     setError(null);
     try {
       if (isLogin) {
+        analytics.track('login_attempt', { email });
         await login(email, password);
+        analytics.track('login_success', { email });
       } else {
+        analytics.track('signup_attempt', { email, language });
         await signUp({ email, password, fullName, language });
+        analytics.track('signup_success', { email, language });
         alert('Check your email for the confirmation link to complete your registration!');
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
+      if (isLogin) {
+        analytics.track('login_failed', { email, error: err.message });
+      } else {
+        analytics.track('signup_failed', { email, error: err.message });
+      }
     } finally {
       setLoading(false);
     }
@@ -47,7 +57,7 @@ export const AuthPage: React.FC = () => {
           <div className="text-center mb-8">
             <img src={ImmigoLogo} alt="Immigo Logo" className="w-24 h-24 mx-auto object-contain mb-4 drop-shadow-lg" />
             <h1 className="text-4xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">
-              {isLogin? 'Welcome Back' : 'Create Your Account'}
+              {isLogin ? 'Welcome Back' : 'Create Your Account'}
             </h1>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -81,12 +91,12 @@ export const AuthPage: React.FC = () => {
               <div className="space-y-3 pt-2">
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input type="checkbox" checked={promoEmails} onChange={(e) => setPromoEmails(e.target.checked)} className="hidden" />
-                  {promoEmails? <CheckSquare className="w-5 h-5 text-art-blue-600" /> : <Square className="w-5 h-5 text-immigo-gray-400" />}
+                  {promoEmails ? <CheckSquare className="w-5 h-5 text-art-blue-600" /> : <Square className="w-5 h-5 text-immigo-gray-400" />}
                   <span className="text-sm text-immigo-gray-700">Receive promotional emails and updates.</span>
                 </label>
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="hidden" />
-                  {agreedToTerms? <CheckSquare className="w-5 h-5 text-art-blue-600" /> : <Square className="w-5 h-5 text-immigo-gray-400" />}
+                  {agreedToTerms ? <CheckSquare className="w-5 h-5 text-art-blue-600" /> : <Square className="w-5 h-5 text-immigo-gray-400" />}
                   <span className="text-sm text-immigo-gray-700">
                     I agree to the <button type="button" onClick={() => setShowTerms(true)} className="font-semibold text-art-blue-600 hover:underline">Terms and Conditions</button>.
                   </span>
@@ -95,13 +105,13 @@ export const AuthPage: React.FC = () => {
             )}
             {error && <p className="text-art-red-600 text-sm text-center pt-2">{error}</p>}
             <button type="submit" disabled={loading} className="w-full p-3 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 disabled:bg-immigo-gray-400 mt-4">
-              {loading? 'Processing...' : isLogin? 'Login' : 'Sign Up'}
+              {loading ? 'Processing...' : isLogin ? 'Login' : 'Sign Up'}
             </button>
           </form>
           <p className="text-center mt-6 text-sm text-immigo-gray-600">
-            {isLogin? "Don't have an account?" : 'Already have an account?'}
+            {isLogin ? "Don't have an account?" : 'Already have an account?'}
             <button onClick={() => { setIsLogin(!isLogin); setError(null); }} className="font-bold text-art-blue-600 hover:underline ml-1">
-              {isLogin? 'Sign Up' : 'Login'}
+              {isLogin ? 'Sign Up' : 'Login'}
             </button>
           </p>
         </div>

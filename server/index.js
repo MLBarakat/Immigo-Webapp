@@ -3,7 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
-const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
+const { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { PollyClient, SynthesizeSpeechCommand } = require('@aws-sdk/client-polly');
 require('dotenv').config();
 
@@ -28,6 +28,15 @@ app.use('/api', limiter);
 // AWS Clients
 const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
 const pollyClient = new PollyClient({ region: process.env.AWS_REGION });
+
+// --- Security: Basic Input Sanitization ---
+const sanitizeInput = (text) => {
+    // Remove characters that could be used for prompt injection attacks.
+    // This is a basic example; a production system might use a more robust library.
+    if (!text) return '';
+    return text.replace(/[<>{}[\]|`~@#$%^&*_+=]/g, '');
+};
+
 
 // Secure Authentication Middleware
 const authenticate = async (req, res, next) => {
@@ -61,60 +70,77 @@ app.get('/api/history', authenticate, async (req, res) => {
 });
 
 app.post('/api/conversation', authenticate, async (req, res) => {
-  const { message, conversationHistory, voiceId } = req.body;
+    const { message, conversationHistory, voiceId } = req.body;
+    const sanitizedMessage = sanitizeInput(message);
 
-  try {
-    const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0';
-    const prompt = {
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 2048,
-        messages: [
-            ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
-            { role: 'user', content: message },
-        ],
-    };
-
-    const bedrockResponse = await bedrockClient.send(new InvokeModelCommand({
-        modelId,
-        contentType: 'application/json',
-        body: JSON.stringify(prompt),
-    }));
-
-    const responseBody = JSON.parse(new TextDecoder().decode(bedrockResponse.body));
-    const fullResponseText = responseBody.content[0].text;
-
-    // Persist the conversation turn to the database
-    const { error: userMessageError } = await supabase
-     .from('messages')
-     .insert({ user_id: req.user.id, role: 'user', content: message });
-
-    const { error: assistantMessageError } = await supabase
-     .from('messages')
-     .insert({ user_id: req.user.id, role: 'assistant', content: fullResponseText });
-
-    if (userMessageError || assistantMessageError) {
-      console.error('DB Save Error:', userMessageError || assistantMessageError);
-      throw new Error('Failed to save conversation to database.');
+    if (!sanitizedMessage) {
+        return res.status(400).json({ error: 'Message content is required.' });
     }
 
-    // Polly TTS generation
-    const pollyCommand = new SynthesizeSpeechCommand({
-        Engine: 'neural',
-        OutputFormat: 'mp3',
-        Text: fullResponseText,
-        VoiceId: voiceId || 'Joanna',
-    });
-    const pollyResponse = await pollyClient.send(pollyCommand);
-    const audioStream = pollyResponse.AudioStream;
-    const audioBuffer = await streamToBuffer(audioStream);
-    const responseAudio = audioBuffer.toString('base64');
+    try {
+        const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0';
+        const prompt = {
+            anthropic_version: 'bedrock-2023-05-31',
+            max_tokens: 2048,
+            messages: [
+                ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+                { role: 'user', content: sanitizedMessage },
+            ],
+        };
 
-    res.json({ responseText: fullResponseText, responseAudio });
+        const command = new InvokeModelWithResponseStreamCommand({
+            modelId,
+            contentType: 'application/json',
+            body: JSON.stringify(prompt),
+        });
 
-  } catch (error) {
-    console.error('Error in /api/conversation:', error);
-    res.status(500).json({ error: 'An error occurred while processing your request.' });
-  }
+        const bedrockResponseStream = await bedrockClient.send(command);
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Transfer-Encoding', 'chunked');
+
+        let fullResponseText = "";
+        for await (const event of bedrockResponseStream.body) {
+            if (event.chunk) {
+                const chunk = JSON.parse(new TextDecoder().decode(event.chunk.bytes));
+                if (chunk.type === 'content_block_delta') {
+                    const textChunk = chunk.delta.text;
+                    fullResponseText += textChunk;
+                    res.write(JSON.stringify({ type: 'text_chunk', data: textChunk }) + '\n');
+                }
+            }
+        }
+
+        // Once text is complete, generate audio and send it
+        const pollyCommand = new SynthesizeSpeechCommand({
+            Engine: 'neural',
+            OutputFormat: 'mp3',
+            Text: fullResponseText,
+            VoiceId: voiceId || 'Joanna',
+        });
+        const pollyResponse = await pollyClient.send(pollyCommand);
+        const audioBuffer = await streamToBuffer(pollyResponse.AudioStream);
+        const responseAudio = audioBuffer.toString('base64');
+        res.write(JSON.stringify({ type: 'audio_chunk', data: responseAudio }) + '\n');
+
+
+        // Persist conversation turn to DB concurrently
+        await Promise.all([
+            supabase.from('messages').insert({ user_id: req.user.id, role: 'user', content: sanitizedMessage }),
+            supabase.from('messages').insert({ user_id: req.user.id, role: 'assistant', content: fullResponseText })
+        ]);
+
+        res.end();
+
+    } catch (error) {
+        console.error('Error in /api/conversation:', error);
+        // Ensure response is properly ended on error
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'An error occurred while processing your request.' });
+        } else {
+            res.end();
+        }
+    }
 });
 
 const streamToBuffer = (stream) =>

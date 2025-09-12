@@ -1,51 +1,71 @@
-export class AudioManager {
-  private audioContext: AudioContext | null = null;
-  private gainNode: GainNode | null = null;
+export class StreamAudioManager {
+  private audioContext: AudioContext;
+private audioQueue: ArrayBuffer[] = [];
+private isPlaying = false;
+private onended: (() => void) | null = null;
 
-  constructor() {
-    this.initializeAudioContext();
-  }
-
-  private async initializeAudioContext() {
-    try {
-      this.audioContext = new AudioContext();
-      this.gainNode = this.audioContext.createGain();
-      this.gainNode.connect(this.audioContext.destination);
-    } catch (error) {
-      console.error('Failed to initialize audio context:', error);
+    constructor() {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        this.resumeAudioContext();
     }
-  }
 
-  async playAudioFromBase64(base64Data: string): Promise<HTMLAudioElement> {
-    return new Promise((resolve, reject) => {
-      try {
-        const audio = new Audio(`data:audio/mp3;base64,${base64Data}`);
-        
-        audio.addEventListener('canplay', () => resolve(audio), { once: true });
-        audio.addEventListener('error', reject, { once: true });
-        
-        audio.load();
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  stopAllAudio() {
-    // Stop all audio elements
-    const audioElements = document.querySelectorAll('audio');
-    audioElements.forEach(audio => {
-      audio.pause();
-      audio.currentTime = 0;
-    });
-  }
-
-  async resumeAudioContext() {
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
+    public setOnEnded(callback: () => void) {
+        this.onended = callback;
     }
-  }
+
+    private async resumeAudioContext() {
+        if (this.audioContext.state === 'suspended') {
+          await this.audioContext.resume();
+        }
+    }
+
+    public addChunk(base64Data: string) {
+        this.resumeAudioContext();
+        const binaryString = window.atob(base64Data);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        this.audioQueue.push(bytes.buffer);
+        if (!this.isPlaying) {
+            this.playQueue();
+        }
+    }
+
+    private async playQueue() {
+        if (this.audioQueue.length === 0) {
+            this.isPlaying = false;
+            if (this.onended) {
+                this.onended();
+            }
+            return;
+        }
+
+        this.isPlaying = true;
+        const buffer = this.audioQueue.shift();
+        if (buffer) {
+            try {
+                const audioBuffer = await this.audioContext.decodeAudioData(buffer.slice(0)); // Use slice(0) to create a copy
+                const source = this.audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(this.audioContext.destination);
+                source.onended = () => this.playQueue();
+                source.start();
+            } catch (error) {
+                console.error('Error decoding audio data:', error);
+                this.playQueue(); // Try the next chunk
+            }
+        }
+    }
+
+    public stop() {
+        // In a real implementation, you'd want to stop the current source
+        this.audioQueue = [];
+        this.isPlaying = false;
+    }
 }
+
 
 export class SpeechRecognitionManager {
   private recognition: SpeechRecognition | null = null;
@@ -64,7 +84,7 @@ export class SpeechRecognitionManager {
       return;
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
     this.recognition = new SpeechRecognition();
     
     this.recognition.continuous = true;

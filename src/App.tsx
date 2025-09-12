@@ -59,7 +59,7 @@ function ConversationUI() {
               <img src={ImmigoLogo} alt="Immigo Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">Immigo</h1>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">ImmiGo</h1>
               <p className="text-deep-navy font-semibold text-sm sm:text-lg">Your AI Conversation Partner</p>
             </div>
           </div>
