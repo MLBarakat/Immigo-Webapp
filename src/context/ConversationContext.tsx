@@ -6,32 +6,31 @@ export interface ConversationState {
   appStatus: AppStatus;
   errorMessage: string | null;
   isSessionActive: boolean;
-  currentAudio: HTMLAudioElement | null;
-  abortController: AbortController | null;
+  sessionTime: number; // in seconds
   voiceId: string;
 }
 
 export type ConversationAction =
   | { type: 'START_SESSION' }
   | { type: 'END_SESSION' }
-  | { type: 'SET_STATUS'; payload: AppStatus }
   | { type: 'SET_ERROR'; payload: string }
   | { type: 'CLEAR_ERROR' }
   | { type: 'ADD_MESSAGE'; payload: Message }
+  | { type: 'UPDATE_MESSAGE'; payload: { id: string; content: string } }
+  | { type: 'SET_HISTORY'; payload: Message[] }
   | { type: 'START_LISTENING' }
   | { type: 'START_PROCESSING' }
-  | { type: 'START_SPEAKING'; payload: HTMLAudioElement }
+  | { type: 'START_SPEAKING' }
   | { type: 'STOP_SPEAKING' }
-  | { type: 'SET_ABORT_CONTROLLER'; payload: AbortController | null }
-  | { type: 'SET_VOICE'; payload: string };
+  | { type: 'SET_VOICE'; payload: string }
+  | { type: 'TICK_SESSION_TIMER' };
 
 const initialState: ConversationState = {
   conversationHistory: [],
   appStatus: 'idle',
   errorMessage: null,
-  isSessionActive: false, // Corrected line
-  currentAudio: null,
-  abortController: null,
+  isSessionActive: false,
+  sessionTime: 0,
   voiceId: 'Joanna',
 };
 
@@ -41,32 +40,18 @@ function conversationReducer(state: ConversationState, action: ConversationActio
       return {
         ...state,
         isSessionActive: true,
-        appStatus: 'idle',
+        appStatus: 'listening',
         errorMessage: null,
+        sessionTime: 0,
         conversationHistory: [],
       };
 
     case 'END_SESSION':
-      if (state.currentAudio) {
-        state.currentAudio.pause();
-        state.currentAudio.currentTime = 0;
-      }
-      if (state.abortController) {
-        state.abortController.abort();
-      }
       return {
         ...state,
         isSessionActive: false,
         appStatus: 'idle',
-        currentAudio: null,
-        abortController: null,
-      };
-
-    case 'SET_STATUS':
-      return {
-        ...state,
-        appStatus: action.payload,
-        errorMessage: action.payload === 'error' ? state.errorMessage : null,
+        sessionTime: 0,
       };
 
     case 'SET_ERROR':
@@ -80,8 +65,11 @@ function conversationReducer(state: ConversationState, action: ConversationActio
       return {
         ...state,
         errorMessage: null,
-        appStatus: state.isSessionActive ? 'idle' : 'idle',
+        appStatus: 'idle',
       };
+
+    case 'SET_HISTORY':
+        return { ...state, conversationHistory: action.payload };
 
     case 'ADD_MESSAGE':
       return {
@@ -89,23 +77,29 @@ function conversationReducer(state: ConversationState, action: ConversationActio
         conversationHistory: [...state.conversationHistory, action.payload],
       };
 
-    case 'SET_VOICE':
+    case 'UPDATE_MESSAGE':
       return {
         ...state,
-        voiceId: action.payload,
+        conversationHistory: state.conversationHistory.map(msg =>
+          msg.id === action.payload.id ? { ...msg, content: action.payload.content } : msg
+        ),
       };
+
+    case 'SET_VOICE':
+      return { ...state, voiceId: action.payload };
 
     case 'START_LISTENING':
       return { ...state, appStatus: 'listening', errorMessage: null };
     case 'START_PROCESSING':
       return { ...state, appStatus: 'processing' };
     case 'START_SPEAKING':
-      return { ...state, appStatus: 'speaking', currentAudio: action.payload };
+      return { ...state, appStatus: 'speaking' };
     case 'STOP_SPEAKING':
-      return { ...state, appStatus: 'idle', currentAudio: null };
-    case 'SET_ABORT_CONTROLLER':
-      return { ...state, abortController: action.payload };
-    
+      return { ...state, appStatus: state.isSessionActive ? 'listening' : 'idle' };
+
+    case 'TICK_SESSION_TIMER':
+      return { ...state, sessionTime: state.sessionTime + 1 };
+
     default:
       return state;
   }

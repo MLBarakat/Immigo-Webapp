@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { useConversation } from '../context/ConversationContext';
 import { useAuth } from '../context/AuthContext';
 import { ApiClient } from '../services/apiClient';
@@ -12,9 +12,27 @@ const { session } = useAuth();
 
 const recognitionManagerRef = useRef(new SpeechRecognitionManager());
 const audioManagerRef = useRef(new StreamAudioManager());
+const sessionTimerRef = useRef<number | null>(null);
 
-const processAndRespond = useCallback(async (message: string) => {
-if (!session) return;
+// Effect to manage the session timer
+useEffect(() => {
+        if (state.isSessionActive && sessionTimerRef.current === null) {
+            sessionTimerRef.current = window.setInterval(() => {
+                dispatch({ type: 'TICK_SESSION_TIMER' });
+            }, 1000);
+        } else if (!state.isSessionActive && sessionTimerRef.current !== null) {
+            clearInterval(sessionTimerRef.current);
+            sessionTimerRef.current = null;
+        }
+        return () => {
+            if (sessionTimerRef.current) {
+                clearInterval(sessionTimerRef.current);
+            }
+        };
+    }, [state.isSessionActive, dispatch]);
+
+    const processAndRespond = useCallback(async (message: string) => {
+        if (!session) return;
         analytics.track('message_sent', { message_length: message.length });
         dispatch({ type: 'START_PROCESSING' });
 
@@ -23,21 +41,11 @@ if (!session) return;
             let fullText = '';
 
             const assistantMessageId = uuidv4();
-            const assistantMessagePartial = {
-                id: assistantMessageId,
-                role: 'assistant' as const,
-                content: '...',
-                timestamp: new Date(),
-            };
-            dispatch({ type: 'ADD_MESSAGE', payload: assistantMessagePartial });
-
+            dispatch({ type: 'ADD_MESSAGE', payload: { id: assistantMessageId, role: 'assistant', content: '...', timestamp: new Date() }});
             dispatch({ type: 'START_SPEAKING' });
 
             audioManagerRef.current.setOnEnded(() => {
                 dispatch({ type: 'STOP_SPEAKING' });
-                if (state.isSessionActive) {
-                    startSession();
-                }
             });
 
             await apiClient.sendMessage(
@@ -61,31 +69,25 @@ if (!session) return;
             analytics.track('api_error', { error_message: errorMessage });
             dispatch({ type: 'STOP_SPEAKING' });
         }
-    }, [state.conversationHistory, state.isSessionActive, state.voiceId, session, dispatch]);
+    }, [state.conversationHistory, state.voiceId, session, dispatch]);
 
     const startSession = useCallback(() => {
         analytics.track('session_started');
-        dispatch({ type: 'START_LISTENING' });
+        dispatch({ type: 'START_SESSION' });
         recognitionManagerRef.current.startListening(
             (transcript, isFinal) => {
                 if (isFinal && transcript.trim()) {
                     const userMessage = { id: uuidv4(), role: 'user' as const, content: transcript, timestamp: new Date() };
                     dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
-                    recognitionManagerRef.current.stopListening();
                     processAndRespond(transcript);
                 }
             },
             (error) => {
                 dispatch({ type: 'SET_ERROR', payload: error });
             },
-            () => {
-                if (state.isSessionActive && state.appStatus === 'listening') {
-                    // If listening ended without a final result, just restart it.
-                    startSession();
-                }
-            }
+            () => {}
         );
-    }, [dispatch, processAndRespond, state.isSessionActive, state.appStatus]);
+    }, [dispatch, processAndRespond]);
 
     const endSession = useCallback(() => {
         analytics.track('session_ended');

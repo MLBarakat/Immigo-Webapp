@@ -57,7 +57,7 @@ export const AuthPage: React.FC = () => {
           <div className="text-center mb-8">
             <img src={ImmigoLogo} alt="Immigo Logo" className="w-24 h-24 mx-auto object-contain mb-4 drop-shadow-lg" />
             <h1 className="text-4xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">
-              {isLogin ? 'Welcome Back' : 'Create Your Account'}
+              {isLogin ? 'Welcome to ImmiGo' : 'Create Your Account'}
             </h1>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">

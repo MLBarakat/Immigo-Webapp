@@ -1,13 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ConversationProvider, useConversation } from './context/ConversationContext';
 import { useAuth } from './context/AuthContext';
 import { useConversationManager } from './hooks/useConversationManager';
-import { StatusIndicator } from './components/StatusIndicator';
 import { ConversationHistory } from './components/ConversationHistory';
-import { ControlPanel } from './components/ControlPanel';
 import { ChatInput } from './components/ChatInput';
 import { UserProfile } from './components/UserProfile';
 import { AuthPage } from './components/AuthPage';
+import { WelcomeModal } from './components/WelcomeModal';
+import { ConversationHub } from './components/ConversationHub';
 import { ApiClient } from './services/apiClient';
 import ImmigoLogo from './assets/immigo_logo.png';
 
@@ -23,6 +23,16 @@ function ConversationUI() {
   const { state, dispatch } = useConversation();
   const { user, session, logout } = useAuth();
   const { startSession, endSession, sendTextMessage } = useConversationManager();
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  useEffect(() => {
+    // Show welcome modal only on first login for a session
+    const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome');
+    if (!hasSeenWelcome) {
+      setShowWelcome(true);
+      sessionStorage.setItem('hasSeenWelcome', 'true');
+    }
+  }, []);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -44,46 +54,50 @@ function ConversationUI() {
 
   const handleClearError = () => dispatch({ type: 'CLEAR_ERROR' });
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => dispatch({ type: 'SET_VOICE', payload: e.target.value });
-  const isInputDisabled = state.appStatus!== 'idle' && state.appStatus!== 'error';
-
-  // Extract user's full name from metadata for display
+  const isInputDisabled = state.appStatus !== 'idle' && state.appStatus !== 'error' && !state.isSessionActive;
   const userName = user?.user_metadata?.full_name || user?.email || 'User';
-  const userInitials = userName.split(' ').map(n => n).join('').substring(0, 2).toUpperCase() || 'U';
+  const userInitials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U';
 
   return (
-    <div className="h-screen bg-gradient-to-br from-immigo-gray-50 via-star-white to-immigo-gray-50 flex flex-col font-sans">
-      <header className="bg-star-white shadow-xl border-b-4 border-art-blue-600 px-4 sm:px-8 py-4">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-4">
-            <div className="relative w-12 h-12 sm:w-16 sm:h-16">
-              <img src={ImmigoLogo} alt="Immigo Logo" className="w-full h-full object-contain" />
+    <>
+      {showWelcome && <WelcomeModal userName={userName} onClose={() => setShowWelcome(false)} />}
+      <div className="h-screen bg-gradient-to-br from-immigo-gray-50 via-star-white to-immigo-gray-50 flex flex-col font-sans">
+        <header className="bg-star-white shadow-xl border-b-4 border-art-blue-600 px-4 sm:px-8 py-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="relative w-12 h-12 sm:w-16 sm:h-16">
+                <img src={ImmigoLogo} alt="Immigo Logo" className="w-full h-full object-contain" />
+              </div>
+              <div>
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">ImmiGo</h1>
+                <p className="text-deep-navy font-semibold text-sm sm:text-lg">Your AI Conversation Partner</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">ImmiGo</h1>
-              <p className="text-deep-navy font-semibold text-sm sm:text-lg">Your AI Conversation Partner</p>
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 p-2 rounded-lg text-sm">
+                {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
+              </select>
+              {user && <UserProfile user={{ name: userName, initials: userInitials }} onLogout={logout} />}
             </div>
           </div>
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 p-2 rounded-lg text-sm">
-              {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
-            </select>
-            {user && <UserProfile user={{ name: userName, initials: userInitials }} onLogout={logout} />}
+        </header>
+        <main className="flex-1 flex flex-col lg:flex-row overflow-hidden p-2 sm:p-4 lg:p-6 gap-4 lg:gap-6 bg-immigo-gray-100">
+          <div className="flex-1 flex flex-col bg-star-white shadow-xl border rounded-2xl overflow-hidden h-full">
+            <ConversationHistory messages={state.conversationHistory} />
+            <ConversationHub
+              status={state.appStatus}
+              isSessionActive={state.isSessionActive}
+              sessionTime={state.sessionTime}
+              errorMessage={state.errorMessage}
+              onStartSession={startSession}
+              onEndSession={endSession}
+              onClearError={handleClearError}
+            />
+            <ChatInput onSendMessage={sendTextMessage} disabled={!state.isSessionActive || isInputDisabled} />
           </div>
-        </div>
-      </header>
-      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden p-2 sm:p-4 lg:p-6 gap-4 lg:gap-6 bg-immigo-gray-100">
-        <div className="flex-1 flex flex-col bg-star-white shadow-xl border rounded-2xl overflow-hidden h-full">
-          <ConversationHistory messages={state.conversationHistory} />
-          <ChatInput onSendMessage={sendTextMessage} disabled={isInputDisabled} />
-        </div>
-        <div className="flex flex-col bg-star-white shadow-xl border rounded-2xl lg:w-96">
-          <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
-            <StatusIndicator status={state.appStatus} errorMessage={state.errorMessage} />
-          </div>
-          <ControlPanel status={state.appStatus} isSessionActive={state.isSessionActive} onStartSession={startSession} onEndSession={endSession} onClearError={handleClearError} />
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </>
   );
 }
 
@@ -96,7 +110,7 @@ function App() {
 
   return (
     <>
-      {user? (
+      {user ? (
         <ConversationProvider>
           <ConversationUI />
         </ConversationProvider>
