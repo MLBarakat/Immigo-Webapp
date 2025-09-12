@@ -2,12 +2,19 @@ import React, { createContext, useState, useEffect, useContext, ReactNode } from
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
 
+interface SignUpPayload {
+  email: string;
+  password: string;
+  fullName: string;
+  language: string;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<any>;
-  signUp: (email: string, password: string) => Promise<any>;
+  signUp: (payload: SignUpPayload) => Promise<any>;
   logout: () => Promise<void>;
 }
 
@@ -23,7 +30,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
-        setUser(session?.user ?? null);
+        setUser(session?.user?? null);
       } catch (error) {
         console.error("Error fetching session:", error);
       } finally {
@@ -35,11 +42,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      setUser(session?.user?? null);
     });
 
     return () => subscription?.unsubscribe();
-  }, []);
+  },);
 
   const login = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -47,8 +54,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return data;
   };
 
-  const signUp = async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+  const signUp = async ({ email, password, fullName, language }) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          language: language,
+        },
+      },
+    });
     if (error) throw error;
     return data;
   };

@@ -44,7 +44,11 @@ function ConversationUI() {
 
   const handleClearError = () => dispatch({ type: 'CLEAR_ERROR' });
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => dispatch({ type: 'SET_VOICE', payload: e.target.value });
-  const isInputDisabled = state.appStatus !== 'idle' && state.appStatus !== 'error';
+  const isInputDisabled = state.appStatus!== 'idle' && state.appStatus!== 'error';
+
+  // Extract user's full name from metadata for display
+  const userName = user?.user_metadata?.full_name || user?.email || 'User';
+  const userInitials = userName.split(' ').map(n => n).join('').substring(0, 2).toUpperCase() || 'U';
 
   return (
     <div className="h-screen bg-gradient-to-br from-immigo-gray-50 via-star-white to-immigo-gray-50 flex flex-col font-sans">
@@ -63,7 +67,7 @@ function ConversationUI() {
             <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 p-2 rounded-lg text-sm">
               {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
             </select>
-            {user && <UserProfile user={{ name: user.email || 'User', initials: user.email?.substring(0, 2).toUpperCase() || 'U' }} onLogout={logout} />}
+            {user && <UserProfile user={{ name: userName, initials: userInitials }} onLogout={logout} />}
           </div>
         </div>
       </header>
@@ -92,7 +96,7 @@ function App() {
 
   return (
     <>
-      {user ? (
+      {user? (
         <ConversationProvider>
           <ConversationUI />
         </ConversationProvider>
