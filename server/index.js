@@ -25,18 +25,21 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// AWS Clients
-const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
-const pollyClient = new PollyClient({ region: process.env.AWS_REGION });
+// --- NEW: API Key Authentication Middleware ---
+const apiKeyAuth = (req, res, next) => {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
+    }
+    next();
+};
+app.use('/api', apiKeyAuth); // Apply to all API routes
 
 // --- Security: Basic Input Sanitization ---
 const sanitizeInput = (text) => {
-    // Remove characters that could be used for prompt injection attacks.
-    // This is a basic example; a production system might use a more robust library.
     if (!text) return '';
     return text.replace(/[<>{}[\]|`~@#$%^&*_+=]/g, '');
 };
-
 
 // Secure Authentication Middleware
 const authenticate = async (req, res, next) => {
@@ -111,7 +114,6 @@ app.post('/api/conversation', authenticate, async (req, res) => {
             }
         }
 
-        // Once text is complete, generate audio and send it
         const pollyCommand = new SynthesizeSpeechCommand({
             Engine: 'neural',
             OutputFormat: 'mp3',
@@ -123,8 +125,6 @@ app.post('/api/conversation', authenticate, async (req, res) => {
         const responseAudio = audioBuffer.toString('base64');
         res.write(JSON.stringify({ type: 'audio_chunk', data: responseAudio }) + '\n');
 
-
-        // Persist conversation turn to DB concurrently
         await Promise.all([
             supabase.from('messages').insert({ user_id: req.user.id, role: 'user', content: sanitizedMessage }),
             supabase.from('messages').insert({ user_id: req.user.id, role: 'assistant', content: fullResponseText })
@@ -134,7 +134,6 @@ app.post('/api/conversation', authenticate, async (req, res) => {
 
     } catch (error) {
         console.error('Error in /api/conversation:', error);
-        // Ensure response is properly ended on error
         if (!res.headersSent) {
             res.status(500).json({ error: 'An error occurred while processing your request.' });
         } else {

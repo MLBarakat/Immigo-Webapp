@@ -37,12 +37,17 @@ export const AuthPage: React.FC = () => {
         analytics.track('signup_success', { email, language });
         alert('Check your email for the confirmation link to complete your registration!');
       }
-    } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.');
-      if (isLogin) {
-        analytics.track('login_failed', { email, error: err.message });
+    } catch (err: unknown) { // Changed from 'any' to 'unknown'
+      if (err instanceof Error) {
+        setError(err.message);
+        if (isLogin) {
+          analytics.track('login_failed', { email, error: err.message });
+        } else {
+          analytics.track('signup_failed', { email, error: err.message });
+        }
       } else {
-        analytics.track('signup_failed', { email, error: err.message });
+        setError('An unexpected error occurred.');
+        analytics.track('unknown_error', { email });
       }
     } finally {
       setLoading(false);
