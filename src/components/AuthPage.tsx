@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth'; // Updated import path
 import ImmigoLogo from '../assets/immigo_logo.png';
 import { TermsModal } from './TermsModal';
 import { User, Mail, KeyRound, Globe, CheckSquare, Square } from 'lucide-react';

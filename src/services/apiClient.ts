@@ -3,17 +3,19 @@ import { Message } from '../types/conversation';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export class ApiClient {
-private token: string;
+private headers: HeadersInit;
 
 constructor(token: string) {
-    this.token = token;
+    this.headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'X-API-Key': import.meta.env.VITE_API_KEY || 'demo-key', // Add API Key header
+    };
   }
 
   async getHistory(): Promise<Message[]> {
     const response = await fetch(`${API_BASE_URL}/api/history`, {
-      headers: {
-        'Authorization': `Bearer ${this.token}`,
-      },
+      headers: this.headers,
     });
     if (!response.ok) {
       if (response.status === 401) throw new Error("401 Unauthorized");
@@ -37,10 +39,7 @@ constructor(token: string) {
   ): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/api/conversation`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`,
-      },
+      headers: this.headers,
       body: JSON.stringify({
         message,
         conversationHistory: conversationHistory.slice(-10),

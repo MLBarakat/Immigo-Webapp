@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { useConversation } from '../context/ConversationContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from './useAuth'; // Updated import path
 import { ApiClient } from '../services/apiClient';
 import { SpeechRecognitionManager, StreamAudioManager } from '../utils/audioUtils';
 import { v4 as uuidv4 } from 'uuid';

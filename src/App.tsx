@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ConversationProvider, useConversation } from './context/ConversationContext';
-import { useAuth } from './context/AuthContext';
+import { useAuth } from './hooks/useAuth'; // Updated import path
 import { useConversationManager } from './hooks/useConversationManager';
 import { ConversationHistory } from './components/ConversationHistory';
 import { ChatInput } from './components/ChatInput';
