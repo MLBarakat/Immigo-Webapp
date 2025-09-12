@@ -1,57 +1,55 @@
 import { useCallback, useRef } from 'react';
 import { useConversation } from '../context/ConversationContext';
+import { useAuth } from '../context/AuthContext';
 import { ApiClient } from '../services/apiClient';
 import { SpeechRecognitionManager, AudioManager } from '../utils/audioUtils';
 import { v4 as uuidv4 } from 'uuid';
 
 export const useConversationManager = () => {
-  const { state, dispatch } = useConversation();
-  const recognitionManagerRef = useRef(new SpeechRecognitionManager());
-  const audioManagerRef = useRef(new AudioManager());
-  const apiClientRef = useRef(new ApiClient('demo-key')); // Or your actual API key
+const { state, dispatch } = useConversation();
+const { session } = useAuth();
 
-  const processAndRespond = useCallback(async (message: string) => {
+const recognitionManagerRef = useRef(new SpeechRecognitionManager());
+const audioManagerRef = useRef(new AudioManager());
+
+const processAndRespond = useCallback(async (message: string) => {
+if (!session) return;
     dispatch({ type: 'START_PROCESSING' });
 
     try {
-      const response = await apiClientRef.current.sendMessage(message, state.conversationHistory);
+      const apiClient = new ApiClient(session.access_token);
+      const response = await apiClient.sendMessage(message, state.conversationHistory, state.voiceId);
 
-      dispatch({
-        type: 'ADD_MESSAGE',
-        payload: {
-          id: uuidv4(),
-          role: 'assistant',
-          content: response.responseText,
-          timestamp: new Date(),
-        },
-      });
+      const assistantMessage = {
+        id: uuidv4(),
+        role: 'assistant' as const,
+        content: response.responseText,
+        timestamp: new Date(),
+      };
+      dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
 
       const audio = await audioManagerRef.current.playAudioFromBase64(response.responseAudio);
       dispatch({ type: 'START_SPEAKING', payload: audio });
 
       audio.onended = () => {
         dispatch({ type: 'STOP_SPEAKING' });
-        // Restart listening if the session is still active
         if (state.isSessionActive) {
           startSession();
         }
       };
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       dispatch({ type: 'SET_ERROR', payload: `Failed to get response: ${errorMessage}` });
     }
-  }, [state.conversationHistory, state.isSessionActive, dispatch]);
+  }, [state.conversationHistory, state.isSessionActive, state.voiceId, session, dispatch]);
 
   const startSession = useCallback(() => {
-    dispatch({ type: 'START_SESSION' });
+    dispatch({ type: 'START_LISTENING' });
     recognitionManagerRef.current.startListening(
       (transcript, isFinal) => {
-        if (isFinal) {
-          dispatch({
-            type: 'ADD_MESSAGE',
-            payload: { id: uuidv4(), role: 'user', content: transcript, timestamp: new Date() },
-          });
+        if (isFinal && transcript.trim()) {
+          const userMessage = { id: uuidv4(), role: 'user' as const, content: transcript, timestamp: new Date() };
+          dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
           recognitionManagerRef.current.stopListening();
           processAndRespond(transcript);
         }
@@ -59,16 +57,12 @@ export const useConversationManager = () => {
       (error) => {
         dispatch({ type: 'SET_ERROR', payload: error });
       },
-      () => {
-        // onEnd callback
+      () => { // onEnd callback
         if (state.isSessionActive) {
-          // If session is still active, but recognition stopped (e.g., silence), restart it.
-          // This creates the continuous listening loop.
           startSession();
         }
       }
     );
-    dispatch({ type: 'START_LISTENING' });
   }, [dispatch, processAndRespond, state.isSessionActive]);
 
   const endSession = useCallback(() => {
@@ -77,10 +71,14 @@ export const useConversationManager = () => {
   }, [dispatch]);
 
   const sendTextMessage = useCallback(async (message: string) => {
-    dispatch({
-      type: 'ADD_MESSAGE',
-      payload: { id: uuidv4(), role: 'user', content: message, timestamp: new Date() },
-    });
+    if (!message.trim()) return;
+    const userMessage = {
+      id: uuidv4(),
+      role: 'user' as const,
+      content: message,
+      timestamp: new Date(),
+    };
+    dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
     await processAndRespond(message);
   }, [dispatch, processAndRespond]);
 

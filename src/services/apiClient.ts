@@ -3,65 +3,59 @@ import { Message } from '../types/conversation';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export interface ConversationResponse {
-  responseText: string;
-  responseAudio: string;
+responseText: string;
+responseAudio: string;
 }
 
 export class ApiClient {
-  private apiKey: string;
+private token: string;
 
-  constructor(apiKey: string = 'demo-key') {
-    this.apiKey = apiKey;
+constructor(token: string) {
+    this.token = token;
+  }
+
+  async getHistory(): Promise<Message[]> {
+    const response = await fetch(`${API_BASE_URL}/api/history`, {
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+      },
+    });
+    if (!response.ok) {
+      if (response.status === 401) throw new Error("401 Unauthorized");
+      throw new Error("Failed to fetch history");
+    }
+    const data = await response.json();
+    return data.map(msg => ({
+        id: Math.random().toString(), // Or generate a more robust ID
+        role: msg.role,
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+    }));
   }
 
   async sendMessage(
     message: string,
     conversationHistory: Message[],
-    abortSignal?: AbortSignal
+    voiceId: string
   ): Promise<ConversationResponse> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/conversation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          message,
-          conversationHistory: conversationHistory.slice(-10), // Keep last 10 messages for context
-        }),
-        signal: abortSignal,
-      });
+    const response = await fetch(`${API_BASE_URL}/api/conversation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`,
+      },
+      body: JSON.stringify({
+        message,
+        conversationHistory: conversationHistory.slice(-10), // Send last 10 messages for context
+        voiceId,
+      }),
+    });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data: ConversationResponse = await response.json();
-      return data;
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request was cancelled');
-      }
-      
-      console.error('API request failed:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to send message');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API request failed with status ${response.status}`);
     }
-  }
 
-  async healthCheck(): Promise<boolean> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-      });
-      
-      return response.ok;
-    } catch {
-      return false;
-    }
+    return response.json();
   }
 }
