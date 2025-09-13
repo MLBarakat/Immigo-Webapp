@@ -13,8 +13,8 @@ export interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<any>;
-  signUp: (payload: SignUpPayload) => Promise<any>;
+  login: (email: string, password: string) => Promise<void>;
+  signUp: (payload: SignUpPayload) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -28,11 +28,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const getSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user?? null);
-      } catch (error) {
-        console.error("Error fetching session:", error);
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+      } catch (err) {
+        console.error("Error fetching session:", err);
       } finally {
         setLoading(false);
       }
@@ -40,40 +42,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
     });
 
-    return () => subscription?.unsubscribe();
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
-  const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return data;
+  const login = async (email: string, password: string): Promise<void> => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error("Login failed:", error.message);
+      throw error;
+    }
   };
 
-  const signUp = async ({ email, password, fullName, language }) => {
-    const { data, error } = await supabase.auth.signUp({
+  const signUp = async ({ email, password, fullName, language }: SignUpPayload): Promise<void> => {
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
-          language: language,
+          language,
         },
       },
     });
-    if (error) throw error;
-    return data;
+
+    if (error) {
+      console.error("Sign up failed:", error.message);
+      throw error;
+    }
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
+  const logout = async (): Promise<void> => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Logout failed:", error.message);
+      throw error;
+    }
   };
 
-  const value = { session, user, loading, login, signUp, logout };
+  const value: AuthContextType = { session, user, loading, login, signUp, logout };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

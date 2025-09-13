@@ -9,7 +9,7 @@ constructor(token: string) {
     this.headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
-      'X-API-Key': import.meta.env.VITE_API_KEY || 'demo-key', // Add API Key header
+      'X-API-Key': import.meta.env.VITE_API_KEY,
     };
   }
 

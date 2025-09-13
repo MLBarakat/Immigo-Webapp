@@ -13,9 +13,20 @@ const port = process.env.PORT || 3001;
 // Initialize Supabase Admin Client
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+// --- MODIFIED: More robust CORS configuration ---
+const allowedOrigins = [process.env.CORS_ORIGIN, 'http://127.0.0.1:5173'];
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+}));
+
 // Middleware
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json({ limit: '10mb' }));
 
 const limiter = rateLimit({
@@ -25,7 +36,7 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// --- NEW: API Key Authentication Middleware ---
+// API Key Authentication Middleware
 const apiKeyAuth = (req, res, next) => {
     const apiKey = req.get('X-API-Key');
     if (!apiKey || apiKey !== process.env.API_KEY) {
@@ -33,7 +44,7 @@ const apiKeyAuth = (req, res, next) => {
     }
     next();
 };
-app.use('/api', apiKeyAuth); // Apply to all API routes
+app.use('/api', apiKeyAuth);
 
 // --- Security: Basic Input Sanitization ---
 const sanitizeInput = (text) => {
