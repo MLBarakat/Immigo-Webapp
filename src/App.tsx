@@ -60,8 +60,8 @@ function ConversationUI() {
   return (
     <>
       {showWelcome && <WelcomeModal userName={userName} onClose={() => setShowWelcome(false)} />}
-      <div className="h-screen bg-immigo-gray-100 flex flex-col font-sans">
-        <header className="bg-star-white shadow-md border-b border-immigo-gray-200 px-4 sm:px-8 py-3 flex-shrink-0">
+      <div className="h-screen w-screen overflow-hidden bg-immigo-gray-100 flex flex-col font-sans">
+        <header className="bg-star-white shadow-md border-b border-immigo-gray-200 px-4 sm:px-8 py-3 flex-shrink-0 z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-10 h-10 object-contain" />
@@ -70,35 +70,51 @@ function ConversationUI() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm focus:ring-art-blue-500 focus:border-art-blue-500">
-                {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
-              </select>
+              <div className="hidden lg:block">
+                <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm focus:ring-art-blue-500 focus:border-art-blue-500">
+                  {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
+                </select>
+              </div>
               {user && <UserProfile user={{ name: userName, initials: userInitials }} onLogout={logout} />}
             </div>
           </div>
         </header>
 
-        {/* Main Layout */}
         <div className="flex-1 flex flex-col lg:grid lg:grid-cols-12 overflow-hidden lg:gap-6 lg:p-6">
-
-          {/* Mobile View: Conversation History fills the space above the fixed footer */}
-          <main className="lg:col-span-12 flex-1 flex flex-col bg-star-white lg:shadow-xl lg:border lg:rounded-2xl overflow-hidden h-full">
+          {/* Main Content Area */}
+          <main className="lg:col-span-8 xl:col-span-9 flex flex-col bg-star-white lg:shadow-xl lg:border lg:rounded-2xl overflow-hidden h-full">
             <ConversationHistory messages={state.conversationHistory} />
-
-            {/* Mobile Action Footer */}
-            <div className="lg:hidden">
-                <ConversationHub
-                  status={state.appStatus}
-                  isSessionActive={state.isSessionActive}
-                  sessionTime={state.sessionTime}
-                  errorMessage={state.errorMessage}
-                  onStartSession={startSession}
-                  onEndSession={endSession}
-                  onClearError={handleClearError}
-                />
-                <ChatInput onSendMessage={sendTextMessage} disabled={isInputDisabled} />
+            <div className="hidden lg:block">
+              <ChatInput onSendMessage={sendTextMessage} disabled={isInputDisabled} />
             </div>
           </main>
+
+          {/* Right Sidebar for Desktop */}
+          <aside className="hidden lg:flex lg:col-span-4 xl:col-span-3 h-full">
+            <ConversationHub
+              status={state.appStatus}
+              isSessionActive={state.isSessionActive}
+              sessionTime={state.sessionTime}
+              errorMessage={state.errorMessage}
+              onStartSession={startSession}
+              onEndSession={endSession}
+              onClearError={handleClearError}
+            />
+          </aside>
+        </div>
+
+        {/* Mobile Action Footer */}
+        <div className="lg:hidden flex items-start p-2 bg-gradient-to-t from-immigo-gray-100 to-star-white border-t-2 border-immigo-gray-200 flex-shrink-0">
+            <ChatInput onSendMessage={sendTextMessage} disabled={isInputDisabled} />
+            <ConversationHub
+                status={state.appStatus}
+                isSessionActive={state.isSessionActive}
+                sessionTime={state.sessionTime}
+                errorMessage={state.errorMessage}
+                onStartSession={startSession}
+                onEndSession={endSession}
+                onClearError={handleClearError}
+            />
         </div>
 
         <footer className="w-full text-center py-2 px-6 bg-immigo-gray-200 flex-shrink-0">

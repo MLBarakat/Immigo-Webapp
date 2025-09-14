@@ -18,20 +18,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled })
   };
 
   return (
-    <div className="p-4 bg-gradient-to-t from-immigo-gray-50 to-star-white border-t-2 border-immigo-gray-200">
-      <form onSubmit={handleSubmit} className="flex items-center space-x-3">
+    <div className="flex-1 lg:p-4 p-2">
+      <form onSubmit={handleSubmit} className="relative w-full">
         <input
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Type your message..."
           disabled={disabled}
-          className="flex-1 p-3 border-2 border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 disabled:bg-immigo-gray-100 disabled:opacity-70 text-deep-navy placeholder-immigo-gray-500"
+          className="w-full p-3 pr-12 border-2 border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 disabled:bg-immigo-gray-100 text-deep-navy"
         />
         <button
           type="submit"
           disabled={disabled || !message.trim()}
-          className="p-3 bg-art-blue-600 text-star-white rounded-lg shadow-md hover:bg-art-blue-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500 disabled:bg-immigo-gray-400 disabled:cursor-not-allowed transform hover:scale-105 transition-transform"
+          className="absolute inset-y-0 right-0 flex items-center pr-3 text-immigo-gray-500 hover:text-art-blue-600 disabled:text-immigo-gray-300"
+          aria-label="Send message"
         >
           <Send className="w-6 h-6" />
         </button>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, StopCircle, Waves, Loader, AlertCircle } from 'lucide-react';
+import { Mic, StopCircle, Download, Trash2, Waves, Loader, AlertCircle } from 'lucide-react';
 import { AppStatus } from '../types/conversation';
 
 interface ConversationHubProps {
@@ -37,27 +37,30 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
     return `${mins}:${secs}`;
   };
 
-  const ActionButton = () => {
+  const ActionButton = ({ isMobile = false }) => {
+    const sizeClass = isMobile ? 'w-16 h-16' : 'w-32 h-32';
+    const iconSize = isMobile ? 'w-8 h-8' : 'w-16 h-16';
+
     if (isSessionActive) {
       return (
         <button
           onClick={onEndSession}
-          className="w-16 h-16 lg:w-32 lg:h-32 flex flex-col items-center justify-center rounded-full bg-art-red-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
+          className={`${sizeClass} flex flex-col items-center justify-center rounded-full bg-art-red-600 text-star-white shadow-xl transform hover:scale-105 transition-all`}
           aria-label="End Conversation"
         >
-          <StopCircle className="w-8 h-8 lg:w-16 lg:h-16" />
-          <span className="hidden lg:block mt-1 text-sm font-bold">End</span>
+          <StopCircle className={iconSize} />
+          <span className={`mt-1 text-sm font-bold ${isMobile ? 'hidden' : 'block'}`}>End</span>
         </button>
       );
     }
     return (
       <button
         onClick={onStartSession}
-        className="w-16 h-16 lg:w-32 lg:h-32 flex flex-col items-center justify-center rounded-full bg-art-blue-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
+        className={`${sizeClass} flex flex-col items-center justify-center rounded-full bg-art-blue-600 text-star-white shadow-xl transform hover:scale-105 transition-all`}
         aria-label="Start Conversation"
       >
-        <Mic className="w-8 h-8 lg:w-16 lg:h-16" />
-        <span className="hidden lg:block mt-1 text-sm font-bold">Start</span>
+        <Mic className={iconSize} />
+        <span className={`mt-1 text-sm font-bold ${isMobile ? 'hidden' : 'block'}`}>Start</span>
       </button>
     );
   };
@@ -65,45 +68,53 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   return (
     <>
         {/* Desktop Sidebar View */}
-        <aside className="hidden lg:flex flex-col items-center justify-center p-6 bg-star-white shadow-xl border rounded-2xl h-full space-y-6">
-            <div className="text-center">
-                <p className={`text-xl font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
-                    {status === 'error' ? errorMessage : config.label}
-                </p>
-                {isSessionActive && (
-                    <p className="text-lg text-immigo-gray-600 font-mono mt-1">
-                        {formatTime(sessionTime)}
-                    </p>
-                )}
+        <aside className="hidden lg:flex flex-col p-6 bg-star-white shadow-xl border rounded-2xl h-full">
+            <div className="flex-shrink-0">
+                <h3 className="font-bold text-lg text-deep-navy">Session Tools</h3>
+                <div className="mt-4 space-y-2">
+                    {/* Placeholder buttons for session tools */}
+                    <button className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100">
+                        <Trash2 className="w-5 h-5 text-immigo-gray-600 mr-2" /> Clear Conversation
+                    </button>
+                    <button className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100">
+                        <Download className="w-5 h-5 text-immigo-gray-600 mr-2" /> Download Transcript
+                    </button>
+                </div>
             </div>
-            <ActionButton />
-            {status === 'error' && (
-                <button onClick={onClearError} className="mt-4 px-4 py-2 bg-immigo-gray-600 text-star-white text-sm font-bold rounded-lg hover:bg-immigo-gray-700">
-                    Clear Error & Reset
-                </button>
-            )}
-        </aside>
 
-        {/* Mobile Action Footer View */}
-        <div className="lg:hidden p-2 bg-gradient-to-t from-immigo-gray-100 to-star-white border-t-2 border-immigo-gray-200">
-            <div className="flex justify-between items-center px-2">
-                <div className="text-left">
-                    <p className={`text-sm font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
-                        {status === 'error' ? "Error" : config.label}
+            <div className="flex-1 flex flex-col items-center justify-end">
+                <ActionButton />
+                <div className="text-center mt-4">
+                    <p className={`text-xl font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
+                        {status === 'error' ? errorMessage : config.label}
                     </p>
                     {isSessionActive && (
-                        <p className="text-xs text-immigo-gray-600 font-mono">
+                        <p className="text-lg text-immigo-gray-600 font-mono mt-1">
                             {formatTime(sessionTime)}
                         </p>
                     )}
                 </div>
-                <ActionButton />
+                {status === 'error' && (
+                    <button onClick={onClearError} className="mt-4 px-4 py-2 bg-immigo-gray-600 text-star-white text-sm font-bold rounded-lg hover:bg-immigo-gray-700">
+                        Clear Error
+                    </button>
+                )}
             </div>
-            {status === 'error' && (
-                <button onClick={onClearError} className="w-full mt-2 py-1 bg-art-red-600 text-star-white text-xs font-bold rounded-lg">
-                    Clear Error
-                </button>
-            )}
+        </aside>
+
+        {/* Mobile Voice Hub */}
+        <div className="lg:hidden flex flex-col items-center justify-center pl-2">
+            <ActionButton isMobile={true} />
+            <div className="text-center mt-1">
+                <p className={`text-xs font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
+                    {status === 'error' ? "Error" : config.label}
+                </p>
+                {isSessionActive && (
+                    <p className="text-xs text-immigo-gray-600 font-mono">
+                        {formatTime(sessionTime)}
+                    </p>
+                )}
+            </div>
         </div>
     </>
   );
