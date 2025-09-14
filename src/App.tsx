@@ -23,7 +23,7 @@ const pollyVoices = [
 
 function ConversationUI() {
   const { state, dispatch } = useConversation();
-  const { user, session, logout } = useAuth();
+  const { user, session, logout } = useAuth(); // Get logout function from useAuth
   const { startSession, endSession, sendTextMessage, clearConversation, downloadTranscript } = useConversationManager();
   const [showWelcome, setShowWelcome] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -71,6 +71,7 @@ function ConversationUI() {
         pollyVoices={pollyVoices}
         onClearConversation={clearConversation}
         onDownloadTranscript={downloadTranscript}
+        onLogout={logout} // Pass the logout function here
       />
       <div className="h-screen w-screen overflow-hidden bg-immigo-gray-100 flex flex-col font-sans">
         <header className="bg-star-white shadow-md border-b border-immigo-gray-200 px-4 sm:px-8 py-3 flex-shrink-0 z-10">
@@ -90,7 +91,7 @@ function ConversationUI() {
           </div>
         </header>
 
-        <div className="flex-1 lg:grid lg:grid-cols-12 overflow-hidden lg:gap-6 lg:p-6">
+        <div className="flex-1 flex flex-col lg:grid lg:grid-cols-12 overflow-hidden lg:gap-6 lg:p-6">
           <main className="lg:col-span-8 xl:col-span-9 flex flex-col bg-star-white lg:shadow-xl lg:border lg:rounded-2xl overflow-hidden h-full">
             <ConversationHistory messages={state.conversationHistory} />
             <div className="hidden lg:block">
