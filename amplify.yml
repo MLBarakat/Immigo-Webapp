@@ -3,17 +3,21 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Node: $(node -v)  npm: $(npm -v)"
-        - npm ci --omit=optional --prefer-offline --no-audit --no-fund
-        - echo "Installing server deps"
+        - '# Set Node.js version'
+        - nvm use 18
+        - '# Clean install for frontend dependencies'
+        - rm -rf node_modules package-lock.json
+        - npm ci
+        - '# Clean install for backend dependencies'
         - cd server
-        - npm ci --omit=optional --prefer-offline --no-audit --no-fund
+        - rm -rf node_modules package-lock.json
+        - npm ci
         - cd ..
     build:
       commands:
-        - echo "Building frontend"
         - npm run build
   artifacts:
+    # This correctly points to our Vite build output directory
     baseDirectory: dist
     files:
       - '**/*'
