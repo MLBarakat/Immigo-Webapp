@@ -85,10 +85,10 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
                         {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
                     </select>
                     <button onClick={onClearConversation} className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100" title="Clear Conversation">
-                        <Trash2 className="w-5 h-5 text-immigo-gray-600 mr-2" /> Clear
+                        <Trash2 className="w-5 h-5 text-immigo-gray-600 mr-2" /> Clear Conversation
                     </button>
                     <button onClick={onDownloadTranscript} className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100" title="Download Transcript">
-                        <Download className="w-5 h-5 text-immigo-gray-600 mr-2" /> Download
+                        <Download className="w-5 h-5 text-immigo-gray-600 mr-2" /> Download Script
                     </button>
                 </div>
             </div>
