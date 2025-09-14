@@ -7,10 +7,10 @@ frontend:
         - nvm use node
         - npm cache clean --force
         - '# Install frontend dependencies'
-        - npm ci --omit=optional --prefer-offline --no-audit --no-fund
+        - npm i --omit=optional --prefer-offline --no-audit --no-fund
         - '# Install backend dependencies'
         - cd server
-        - npm ci --omit=optional --prefer-offline --no-audit --no-fund
+        - npm i --omit=optional --prefer-offline --no-audit --no-fund
         - cd ..
     build:
       commands:
