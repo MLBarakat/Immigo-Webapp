@@ -5,8 +5,9 @@ frontend:
       commands:
         - '# Set Node.js version'
         - nvm use 18
+        - '# Install frontend dependencies'
         - npm install --omit=optional --prefer-offline --no-audit --no-fund
-        - '# Clean install for backend dependencies'
+        - '# Install backend dependencies'
         - cd server
         - npm install --omit=optional --prefer-offline --no-audit --no-fund
         - cd ..
