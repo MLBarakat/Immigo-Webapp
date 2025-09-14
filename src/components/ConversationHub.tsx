@@ -10,6 +10,11 @@ interface ConversationHubProps {
   onStartSession: () => void;
   onEndSession: () => void;
   onClearError: () => void;
+  onVoiceChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  voiceId: string;
+  pollyVoices: Array<{ id: string; name: string }>;
+  onClearConversation: () => void;
+  onDownloadTranscript: () => void;
 }
 
 const statusConfig = {
@@ -28,6 +33,11 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   onStartSession,
   onEndSession,
   onClearError,
+  onVoiceChange,
+  voiceId,
+  pollyVoices,
+  onClearConversation,
+  onDownloadTranscript,
 }) => {
   const config = statusConfig[status];
 
@@ -70,14 +80,15 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
         {/* Desktop Sidebar View */}
         <aside className="hidden lg:flex flex-col p-6 bg-star-white shadow-xl border rounded-2xl h-full">
             <div className="flex-shrink-0">
-                <h3 className="font-bold text-lg text-deep-navy">Session Tools</h3>
-                <div className="mt-4 space-y-2">
-                    {/* Placeholder buttons for session tools */}
-                    <button className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100">
-                        <Trash2 className="w-5 h-5 text-immigo-gray-600 mr-2" /> Clear Conversation
+                <div className="space-y-2">
+                    <select value={voiceId} onChange={onVoiceChange} className="w-full bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm focus:ring-art-blue-500 focus:border-art-blue-500">
+                        {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
+                    </select>
+                    <button onClick={onClearConversation} className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100" title="Clear Conversation">
+                        <Trash2 className="w-5 h-5 text-immigo-gray-600 mr-2" /> Clear
                     </button>
-                    <button className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100">
-                        <Download className="w-5 h-5 text-immigo-gray-600 mr-2" /> Download Transcript
+                    <button onClick={onDownloadTranscript} className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100" title="Download Transcript">
+                        <Download className="w-5 h-5 text-immigo-gray-600 mr-2" /> Download
                     </button>
                 </div>
             </div>
@@ -103,7 +114,7 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
         </aside>
 
         {/* Mobile Voice Hub */}
-        <div className="lg:hidden flex flex-col items-center justify-center pl-2">
+        <div className="lg:hidden flex flex-col items-center justify-center pl-2 flex-shrink-0">
             <ActionButton isMobile={true} />
             <div className="text-center mt-1">
                 <p className={`text-xs font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>

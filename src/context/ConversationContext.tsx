@@ -11,13 +11,14 @@ export interface ConversationState {
 }
 
 export type ConversationAction =
-  | { type: 'START_SESSION' }
+  | { type: 'START_SESSION'; payload?: { clearHistory: boolean } }
   | { type: 'END_SESSION' }
   | { type: 'SET_ERROR'; payload: string }
   | { type: 'CLEAR_ERROR' }
   | { type: 'ADD_MESSAGE'; payload: Message }
   | { type: 'UPDATE_MESSAGE'; payload: { id: string; content: string } }
   | { type: 'SET_HISTORY'; payload: Message[] }
+  | { type: 'CLEAR_HISTORY' }
   | { type: 'START_LISTENING' }
   | { type: 'START_PROCESSING' }
   | { type: 'START_SPEAKING' }
@@ -43,39 +44,26 @@ function conversationReducer(state: ConversationState, action: ConversationActio
         appStatus: 'listening',
         errorMessage: null,
         sessionTime: 0,
-        conversationHistory: [],
+        conversationHistory: action.payload?.clearHistory ? [] : state.conversationHistory,
       };
 
     case 'END_SESSION':
-      return {
-        ...state,
-        isSessionActive: false,
-        appStatus: 'idle',
-        sessionTime: 0,
-      };
+      return { ...state, isSessionActive: false, appStatus: 'idle', sessionTime: 0 };
 
     case 'SET_ERROR':
-      return {
-        ...state,
-        appStatus: 'error',
-        errorMessage: action.payload,
-      };
+      return { ...state, appStatus: 'error', errorMessage: action.payload };
 
     case 'CLEAR_ERROR':
-      return {
-        ...state,
-        errorMessage: null,
-        appStatus: 'idle',
-      };
+      return { ...state, errorMessage: null, appStatus: 'idle' };
 
     case 'SET_HISTORY':
         return { ...state, conversationHistory: action.payload };
 
+    case 'CLEAR_HISTORY':
+        return { ...state, conversationHistory: [] };
+
     case 'ADD_MESSAGE':
-      return {
-        ...state,
-        conversationHistory: [...state.conversationHistory, action.payload],
-      };
+      return { ...state, conversationHistory: [...state.conversationHistory, action.payload] };
 
     case 'UPDATE_MESSAGE':
       return {
@@ -114,7 +102,6 @@ const ConversationContext = createContext<ConversationContextType | undefined>(u
 
 export function ConversationProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(conversationReducer, initialState);
-
   return (
     <ConversationContext.Provider value={{ state, dispatch }}>
       {children}

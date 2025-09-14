@@ -18,7 +18,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled })
   };
 
   return (
-    <div className="flex-1 lg:p-4 p-2">
+    <div className="flex-1 p-2 lg:p-4">
       <form onSubmit={handleSubmit} className="relative w-full">
         <input
           type="text"

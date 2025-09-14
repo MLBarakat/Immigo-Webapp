@@ -8,8 +8,10 @@ import { UserProfile } from './components/UserProfile';
 import { AuthPage } from './components/AuthPage';
 import { WelcomeModal } from './components/WelcomeModal';
 import { ConversationHub } from './components/ConversationHub';
+import { MobileMenu } from './components/MobileMenu';
 import { ApiClient } from './services/apiClient';
 import ImmigoLogo from './assets/immigo_logo.png';
+import { Menu } from 'lucide-react';
 
 const pollyVoices = [
     { id: 'Joanna', name: 'Joanna (US Female)' },
@@ -22,8 +24,9 @@ const pollyVoices = [
 function ConversationUI() {
   const { state, dispatch } = useConversation();
   const { user, session, logout } = useAuth();
-  const { startSession, endSession, sendTextMessage } = useConversationManager();
+  const { startSession, endSession, sendTextMessage, clearConversation, downloadTranscript } = useConversationManager();
   const [showWelcome, setShowWelcome] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome');
@@ -53,13 +56,22 @@ function ConversationUI() {
 
   const handleClearError = () => dispatch({ type: 'CLEAR_ERROR' });
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => dispatch({ type: 'SET_VOICE', payload: e.target.value });
-  const isInputDisabled = !state.isSessionActive;
+  const isInputDisabled = ['listening', 'processing', 'speaking'].includes(state.appStatus);
   const userName = user?.user_metadata?.full_name || user?.email || 'User';
   const userInitials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U';
 
   return (
     <>
       {showWelcome && <WelcomeModal userName={userName} onClose={() => setShowWelcome(false)} />}
+      <MobileMenu
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        voiceId={state.voiceId}
+        onVoiceChange={handleVoiceChange}
+        pollyVoices={pollyVoices}
+        onClearConversation={clearConversation}
+        onDownloadTranscript={downloadTranscript}
+      />
       <div className="h-screen w-screen overflow-hidden bg-immigo-gray-100 flex flex-col font-sans">
         <header className="bg-star-white shadow-md border-b border-immigo-gray-200 px-4 sm:px-8 py-3 flex-shrink-0 z-10">
           <div className="flex items-center justify-between">
@@ -70,18 +82,15 @@ function ConversationUI() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="hidden lg:block">
-                <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm focus:ring-art-blue-500 focus:border-art-blue-500">
-                  {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
-                </select>
-              </div>
               {user && <UserProfile user={{ name: userName, initials: userInitials }} onLogout={logout} />}
+              <button onClick={() => setIsMenuOpen(true)} className="lg:hidden p-2 rounded-full hover:bg-immigo-gray-100">
+                <Menu className="w-6 h-6 text-deep-navy" />
+              </button>
             </div>
           </div>
         </header>
 
-        <div className="flex-1 flex flex-col lg:grid lg:grid-cols-12 overflow-hidden lg:gap-6 lg:p-6">
-          {/* Main Content Area */}
+        <div className="flex-1 lg:grid lg:grid-cols-12 overflow-hidden lg:gap-6 lg:p-6">
           <main className="lg:col-span-8 xl:col-span-9 flex flex-col bg-star-white lg:shadow-xl lg:border lg:rounded-2xl overflow-hidden h-full">
             <ConversationHistory messages={state.conversationHistory} />
             <div className="hidden lg:block">
@@ -89,7 +98,6 @@ function ConversationUI() {
             </div>
           </main>
 
-          {/* Right Sidebar for Desktop */}
           <aside className="hidden lg:flex lg:col-span-4 xl:col-span-3 h-full">
             <ConversationHub
               status={state.appStatus}
@@ -99,11 +107,15 @@ function ConversationUI() {
               onStartSession={startSession}
               onEndSession={endSession}
               onClearError={handleClearError}
+              onVoiceChange={handleVoiceChange}
+              voiceId={state.voiceId}
+              pollyVoices={pollyVoices}
+              onClearConversation={clearConversation}
+              onDownloadTranscript={downloadTranscript}
             />
           </aside>
         </div>
 
-        {/* Mobile Action Footer */}
         <div className="lg:hidden flex items-start p-2 bg-gradient-to-t from-immigo-gray-100 to-star-white border-t-2 border-immigo-gray-200 flex-shrink-0">
             <ChatInput onSendMessage={sendTextMessage} disabled={isInputDisabled} />
             <ConversationHub
@@ -114,6 +126,11 @@ function ConversationUI() {
                 onStartSession={startSession}
                 onEndSession={endSession}
                 onClearError={handleClearError}
+                onVoiceChange={handleVoiceChange}
+                voiceId={state.voiceId}
+                pollyVoices={pollyVoices}
+                onClearConversation={clearConversation}
+                onDownloadTranscript={downloadTranscript}
             />
         </div>
 
@@ -127,21 +144,11 @@ function ConversationUI() {
 
 function App() {
   const { user, loading } = useAuth();
-
-  if (loading) {
-    return <div className="h-screen bg-immigo-gray-50" />;
-  }
-
+  if (loading) { return <div className="h-screen bg-immigo-gray-50" />; }
   return (
-    <>
-      {user ? (
-        <ConversationProvider>
-          <ConversationUI />
-        </ConversationProvider>
-      ) : (
-        <AuthPage />
-      )}
-    </>
+    <AuthProvider>
+      {user ? <ConversationUI /> : <AuthPage />}
+    </AuthProvider>
   );
 }
 

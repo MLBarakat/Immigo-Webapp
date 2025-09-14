@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { useConversation } from '../context/ConversationContext';
-import { useAuth } from './useAuth'; // Updated import path
+import { useAuth } from './useAuth';
 import { ApiClient } from '../services/apiClient';
 import { SpeechRecognitionManager, StreamAudioManager } from '../utils/audioUtils';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +14,6 @@ const recognitionManagerRef = useRef(new SpeechRecognitionManager());
 const audioManagerRef = useRef(new StreamAudioManager());
 const sessionTimerRef = useRef<number | null>(null);
 
-// Effect to manage the session timer
 useEffect(() => {
         if (state.isSessionActive && sessionTimerRef.current === null) {
             sessionTimerRef.current = window.setInterval(() => {
@@ -73,7 +72,7 @@ useEffect(() => {
 
     const startSession = useCallback(() => {
         analytics.track('session_started');
-        dispatch({ type: 'START_SESSION' });
+        dispatch({ type: 'START_SESSION', payload: { clearHistory: true } });
         recognitionManagerRef.current.startListening(
             (transcript, isFinal) => {
                 if (isFinal && transcript.trim()) {
@@ -98,6 +97,11 @@ useEffect(() => {
 
     const sendTextMessage = useCallback(async (message: string) => {
         if (!message.trim()) return;
+
+        if (!state.isSessionActive) {
+            dispatch({ type: 'START_SESSION', payload: { clearHistory: false } });
+        }
+
         const userMessage = {
             id: uuidv4(),
             role: 'user' as const,
@@ -106,7 +110,27 @@ useEffect(() => {
         };
         dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
         await processAndRespond(message);
-    }, [dispatch, processAndRespond]);
+    }, [dispatch, processAndRespond, state.isSessionActive]);
 
-    return { startSession, endSession, sendTextMessage };
+    const clearConversation = useCallback(() => {
+        dispatch({ type: 'CLEAR_HISTORY' });
+    }, [dispatch]);
+
+    const downloadTranscript = useCallback(() => {
+        const transcript = state.conversationHistory
+            .map(msg => `${new Date(msg.timestamp).toLocaleTimeString()} - ${msg.role.toUpperCase()}: ${msg.content}`)
+            .join('\n');
+
+        const blob = new Blob([transcript], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `immigo-transcript-${new Date().toISOString()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, [state.conversationHistory]);
+
+    return { startSession, endSession, sendTextMessage, clearConversation, downloadTranscript };
 };
