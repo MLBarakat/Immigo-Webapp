@@ -61,18 +61,16 @@ function ConversationUI() {
     <>
       {showWelcome && <WelcomeModal userName={userName} onClose={() => setShowWelcome(false)} />}
       <div className="h-screen bg-immigo-gray-100 flex flex-col font-sans">
-        <header className="bg-star-white shadow-md border-b border-immigo-gray-200 px-4 sm:px-8 py-4 flex-shrink-0">
-          {/* Header content remains the same */}
+        <header className="bg-star-white shadow-md border-b border-immigo-gray-200 px-4 sm:px-8 py-3 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-12 h-12 object-contain" />
+              <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-10 h-10 object-contain" />
               <div>
-                <h1 className="text-2xl font-bold font-display text-deep-navy">ImmiGo</h1>
-                <p className="text-immigo-gray-600 text-sm">Your AI Conversation Partner</p>
+                <h1 className="text-xl lg:text-2xl font-bold font-display text-deep-navy">ImmiGo</h1>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 p-2 rounded-lg text-sm">
+              <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm focus:ring-art-blue-500 focus:border-art-blue-500">
                 {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
               </select>
               {user && <UserProfile user={{ name: userName, initials: userInitials }} onLogout={logout} />}
@@ -80,25 +78,27 @@ function ConversationUI() {
           </div>
         </header>
 
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden gap-6 p-6">
-          {/* Main Content Area (Left) */}
-          <main className="lg:col-span-8 xl:col-span-9 flex flex-col bg-star-white shadow-xl border rounded-2xl overflow-hidden h-full">
-            <ConversationHistory messages={state.conversationHistory} />
-            <ChatInput onSendMessage={sendTextMessage} disabled={isInputDisabled} />
-          </main>
+        {/* Main Layout */}
+        <div className="flex-1 flex flex-col lg:grid lg:grid-cols-12 overflow-hidden lg:gap-6 lg:p-6">
 
-          {/* Right Sidebar */}
-          <aside className="lg:col-span-4 xl:col-span-3 flex flex-col h-full">
-            <ConversationHub
-              status={state.appStatus}
-              isSessionActive={state.isSessionActive}
-              sessionTime={state.sessionTime}
-              errorMessage={state.errorMessage}
-              onStartSession={startSession}
-              onEndSession={endSession}
-              onClearError={handleClearError}
-            />
-          </aside>
+          {/* Mobile View: Conversation History fills the space above the fixed footer */}
+          <main className="lg:col-span-12 flex-1 flex flex-col bg-star-white lg:shadow-xl lg:border lg:rounded-2xl overflow-hidden h-full">
+            <ConversationHistory messages={state.conversationHistory} />
+
+            {/* Mobile Action Footer */}
+            <div className="lg:hidden">
+                <ConversationHub
+                  status={state.appStatus}
+                  isSessionActive={state.isSessionActive}
+                  sessionTime={state.sessionTime}
+                  errorMessage={state.errorMessage}
+                  onStartSession={startSession}
+                  onEndSession={endSession}
+                  onClearError={handleClearError}
+                />
+                <ChatInput onSendMessage={sendTextMessage} disabled={isInputDisabled} />
+            </div>
+          </main>
         </div>
 
         <footer className="w-full text-center py-2 px-6 bg-immigo-gray-200 flex-shrink-0">

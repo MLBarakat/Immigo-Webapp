@@ -42,49 +42,69 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
       return (
         <button
           onClick={onEndSession}
-          className="w-32 h-32 flex flex-col items-center justify-center rounded-full bg-art-red-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
+          className="w-16 h-16 lg:w-32 lg:h-32 flex flex-col items-center justify-center rounded-full bg-art-red-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
           aria-label="End Conversation"
         >
-          <StopCircle className="w-16 h-16" />
-          <span className="mt-1 text-sm font-bold">End</span>
+          <StopCircle className="w-8 h-8 lg:w-16 lg:h-16" />
+          <span className="hidden lg:block mt-1 text-sm font-bold">End</span>
         </button>
       );
     }
     return (
       <button
         onClick={onStartSession}
-        className="w-32 h-32 flex flex-col items-center justify-center rounded-full bg-art-blue-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
+        className="w-16 h-16 lg:w-32 lg:h-32 flex flex-col items-center justify-center rounded-full bg-art-blue-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
         aria-label="Start Conversation"
       >
-        <Mic className="w-16 h-16" />
-        <span className="mt-1 text-sm font-bold">Start</span>
+        <Mic className="w-8 h-8 lg:w-16 lg:h-16" />
+        <span className="hidden lg:block mt-1 text-sm font-bold">Start</span>
       </button>
     );
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-star-white shadow-xl border rounded-2xl h-full space-y-6">
-      <div className="text-center">
-        <p className={`text-xl font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
-          {status === 'error' ? errorMessage : config.label}
-        </p>
-        {isSessionActive && (
-          <p className="text-lg text-immigo-gray-600 font-mono mt-1">
-            {formatTime(sessionTime)}
-          </p>
-        )}
-      </div>
+    <>
+        {/* Desktop Sidebar View */}
+        <aside className="hidden lg:flex flex-col items-center justify-center p-6 bg-star-white shadow-xl border rounded-2xl h-full space-y-6">
+            <div className="text-center">
+                <p className={`text-xl font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
+                    {status === 'error' ? errorMessage : config.label}
+                </p>
+                {isSessionActive && (
+                    <p className="text-lg text-immigo-gray-600 font-mono mt-1">
+                        {formatTime(sessionTime)}
+                    </p>
+                )}
+            </div>
+            <ActionButton />
+            {status === 'error' && (
+                <button onClick={onClearError} className="mt-4 px-4 py-2 bg-immigo-gray-600 text-star-white text-sm font-bold rounded-lg hover:bg-immigo-gray-700">
+                    Clear Error & Reset
+                </button>
+            )}
+        </aside>
 
-      <ActionButton />
-
-      {status === 'error' && (
-         <button
-            onClick={onClearError}
-            className="mt-4 px-4 py-2 bg-immigo-gray-600 text-star-white text-sm font-bold rounded-lg hover:bg-immigo-gray-700"
-          >
-            Clear Error & Reset
-          </button>
-      )}
-    </div>
+        {/* Mobile Action Footer View */}
+        <div className="lg:hidden p-2 bg-gradient-to-t from-immigo-gray-100 to-star-white border-t-2 border-immigo-gray-200">
+            <div className="flex justify-between items-center px-2">
+                <div className="text-left">
+                    <p className={`text-sm font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
+                        {status === 'error' ? "Error" : config.label}
+                    </p>
+                    {isSessionActive && (
+                        <p className="text-xs text-immigo-gray-600 font-mono">
+                            {formatTime(sessionTime)}
+                        </p>
+                    )}
+                </div>
+                <ActionButton />
+            </div>
+            {status === 'error' && (
+                <button onClick={onClearError} className="w-full mt-2 py-1 bg-art-red-600 text-star-white text-xs font-bold rounded-lg">
+                    Clear Error
+                </button>
+            )}
+        </div>
+    </>
   );
 };
