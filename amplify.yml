@@ -8,9 +8,11 @@ frontend:
         - npm cache clean --force
         - '# Install frontend dependencies'
         - npm i --prefer-offline --no-audit --no-fund
+        - npm rebuild rollup --force
         - '# Install backend dependencies'
         - cd server
         - npm i --prefer-offline --no-audit --no-fund
+        - npm rebuild rollup --force
         - cd ..
     build:
       commands:
