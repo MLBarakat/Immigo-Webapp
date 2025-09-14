@@ -17,7 +17,6 @@ frontend:
       commands:
         - npm run build
   artifacts:
-    # This correctly points to our Vite build output directory
     baseDirectory: dist
     files:
       - '**/*'
@@ -25,3 +24,4 @@ frontend:
     paths:
       - node_modules/**/*
       - server/node_modules/**/*
+      - '!node_modules/path/not/to/cache'
