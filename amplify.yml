@@ -4,7 +4,7 @@ frontend:
     preBuild:
       commands:
         - '# Set Node.js version'
-        - nvm use 18
+        - nvm use node
         - npm cache clean --force
         - '# Install frontend dependencies'
         - npm install --omit=optional --prefer-offline --no-audit --no-fund
