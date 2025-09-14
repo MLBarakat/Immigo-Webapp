@@ -5,12 +5,9 @@ frontend:
       commands:
         - '# Set Node.js version'
         - nvm use 18
-        - '# Clean install for frontend dependencies'
-        - rm -rf node_modules package-lock.json
         - npm ci
         - '# Clean install for backend dependencies'
         - cd server
-        - rm -rf node_modules package-lock.json
         - npm ci
         - cd ..
     build:
