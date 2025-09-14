@@ -3,20 +3,17 @@ frontend:
   phases:
     preBuild:
       commands:
-        - '# Set Node.js version'
-        - nvm use node
-        - npm cache clean --force
-        - '# Install frontend dependencies'
-        - npm i --prefer-offline --no-audit --no-fund
-        - npm rebuild rollup --force
-        - '# Install backend dependencies'
-        - cd server
-        - npm i --prefer-offline --no-audit --no-fund
-        - npm rebuild rollup --force
-        - cd ..
+        - '# Set Node.js to version 18, as specified in README'
+        - nvm use 18
+        - '# Install Yarn globally'
+        - npm install -g yarn
+        - '# Install frontend dependencies with Yarn'
+        - yarn install
+        - '# Install backend dependencies with Yarn'
+        - cd server && yarn install && cd ..
     build:
       commands:
-        - npm run build
+        - yarn build
   artifacts:
     baseDirectory: dist
     files:
@@ -25,4 +22,3 @@ frontend:
     paths:
       - node_modules/**/*
       - server/node_modules/**/*
-      - '!node_modules/path/not/to/cache'
