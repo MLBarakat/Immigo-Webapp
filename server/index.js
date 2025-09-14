@@ -5,15 +5,19 @@ const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 const { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { PollyClient, SynthesizeSpeechCommand } = require('@aws-sdk/client-polly');
-require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Initialize Supabase Admin Client
+// Initialize Supabase Admin Client using environment variables from Amplify Console
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-// --- MODIFIED: More robust CORS configuration ---
+// AWS SDK clients initialized without static credentials.
+// When running on Amplify, the SDK will automatically assume the IAM Role.
+const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
+const pollyClient = new PollyClient({ region: process.env.AWS_REGION });
+
+// More robust CORS configuration
 const allowedOrigins = [process.env.CORS_ORIGIN, 'http://127.0.0.1:5173'];
 app.use(cors({
     origin: function (origin, callback) {
@@ -114,53 +118,4 @@ app.post('/api/conversation', authenticate, async (req, res) => {
         res.setHeader('Transfer-Encoding', 'chunked');
 
         let fullResponseText = "";
-        for await (const event of bedrockResponseStream.body) {
-            if (event.chunk) {
-                const chunk = JSON.parse(new TextDecoder().decode(event.chunk.bytes));
-                if (chunk.type === 'content_block_delta') {
-                    const textChunk = chunk.delta.text;
-                    fullResponseText += textChunk;
-                    res.write(JSON.stringify({ type: 'text_chunk', data: textChunk }) + '\n');
-                }
-            }
-        }
-
-        const pollyCommand = new SynthesizeSpeechCommand({
-            Engine: 'neural',
-            OutputFormat: 'mp3',
-            Text: fullResponseText,
-            VoiceId: voiceId || 'Joanna',
-        });
-        const pollyResponse = await pollyClient.send(pollyCommand);
-        const audioBuffer = await streamToBuffer(pollyResponse.AudioStream);
-        const responseAudio = audioBuffer.toString('base64');
-        res.write(JSON.stringify({ type: 'audio_chunk', data: responseAudio }) + '\n');
-
-        await Promise.all([
-            supabase.from('messages').insert({ user_id: req.user.id, role: 'user', content: sanitizedMessage }),
-            supabase.from('messages').insert({ user_id: req.user.id, role: 'assistant', content: fullResponseText })
-        ]);
-
-        res.end();
-
-    } catch (error) {
-        console.error('Error in /api/conversation:', error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'An error occurred while processing your request.' });
-        } else {
-            res.end();
-        }
-    }
-});
-
-const streamToBuffer = (stream) =>
-  new Promise((resolve, reject) => {
-    const chunks = [];
-    stream.on('data', (chunk) => chunks.push(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-  });
-
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
-});
+        for await (const event of bedrockResponseStream

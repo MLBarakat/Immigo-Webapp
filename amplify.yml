@@ -1,25 +1,17 @@
 version: 1
-backend:
-  phases:
-    build:
-      commands:
-        - '# Execute Amplify-provided script to detect and configure backend.'
-        - amplifyPush --simple
 frontend:
   phases:
     preBuild:
       commands:
-        - '# Install frontend dependencies'
+        - '# Install frontend (root) dependencies'
         - npm install
-        - '# Install backend dependencies'
-        - (cd server && npm install)
+        - '# Install backend (server) dependencies'
+        - cd server && npm install && cd ..
     build:
       commands:
-        - '# Go back to the root directory before building'
-        - cd ..
-        - '# Build the Vite application'
         - npm run build
   artifacts:
+    # This correctly points to our Vite build output directory
     baseDirectory: dist
     files:
       - '**/*'
