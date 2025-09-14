@@ -144,11 +144,21 @@ function ConversationUI() {
 
 function App() {
   const { user, loading } = useAuth();
-  if (loading) { return <div className="h-screen bg-immigo-gray-50" />; }
+  if (loading) {
+    return <div className="h-screen bg-immigo-gray-50" />;
+  }
+
+  // The redundant <AuthProvider> wrapper is removed here.
   return (
-    <AuthProvider>
-      {user ? <ConversationUI /> : <AuthPage />}
-    </AuthProvider>
+    <>
+      {user ? (
+        <ConversationProvider>
+          <ConversationUI />
+        </ConversationProvider>
+      ) : (
+        <AuthPage />
+      )}
+    </>
   );
 }
 
