@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ConversationProvider, useConversation } from './context/ConversationContext';
-import { useAuth } from './hooks/useAuth'; // Updated import path
+import { useAuth } from './hooks/useAuth';
 import { useConversationManager } from './hooks/useConversationManager';
 import { ConversationHistory } from './components/ConversationHistory';
 import { ChatInput } from './components/ChatInput';
@@ -26,7 +26,6 @@ function ConversationUI() {
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    // Show welcome modal only on first login for a session
     const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome');
     if (!hasSeenWelcome) {
       setShowWelcome(true);
@@ -54,26 +53,25 @@ function ConversationUI() {
 
   const handleClearError = () => dispatch({ type: 'CLEAR_ERROR' });
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => dispatch({ type: 'SET_VOICE', payload: e.target.value });
-  const isInputDisabled = state.appStatus !== 'idle' && state.appStatus !== 'error' && !state.isSessionActive;
+  const isInputDisabled = !state.isSessionActive;
   const userName = user?.user_metadata?.full_name || user?.email || 'User';
   const userInitials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U';
 
   return (
     <>
       {showWelcome && <WelcomeModal userName={userName} onClose={() => setShowWelcome(false)} />}
-      <div className="h-screen bg-gradient-to-br from-immigo-gray-50 via-star-white to-immigo-gray-50 flex flex-col font-sans">
-        <header className="bg-star-white shadow-xl border-b-4 border-art-blue-600 px-4 sm:px-8 py-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="h-screen bg-immigo-gray-100 flex flex-col font-sans">
+        <header className="bg-star-white shadow-md border-b border-immigo-gray-200 px-4 sm:px-8 py-4 flex-shrink-0">
+          {/* Header content remains the same */}
+          <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="relative w-12 h-12 sm:w-16 sm:h-16">
-                <img src={ImmigoLogo} alt="Immigo Logo" className="w-full h-full object-contain" />
-              </div>
+              <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-12 h-12 object-contain" />
               <div>
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">ImmiGo</h1>
-                <p className="text-deep-navy font-semibold text-sm sm:text-lg">Your AI Conversation Partner</p>
+                <h1 className="text-2xl font-bold font-display text-deep-navy">ImmiGo</h1>
+                <p className="text-immigo-gray-600 text-sm">Your AI Conversation Partner</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2 sm:space-x-4">
+            <div className="flex items-center space-x-4">
               <select value={state.voiceId} onChange={handleVoiceChange} className="bg-immigo-gray-100 border-2 p-2 rounded-lg text-sm">
                 {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
               </select>
@@ -81,9 +79,16 @@ function ConversationUI() {
             </div>
           </div>
         </header>
-        <main className="flex-1 flex flex-col lg:flex-row overflow-hidden p-2 sm:p-4 lg:p-6 gap-4 lg:gap-6 bg-immigo-gray-100">
-          <div className="flex-1 flex flex-col bg-star-white shadow-xl border rounded-2xl overflow-hidden h-full">
+
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden gap-6 p-6">
+          {/* Main Content Area (Left) */}
+          <main className="lg:col-span-8 xl:col-span-9 flex flex-col bg-star-white shadow-xl border rounded-2xl overflow-hidden h-full">
             <ConversationHistory messages={state.conversationHistory} />
+            <ChatInput onSendMessage={sendTextMessage} disabled={isInputDisabled} />
+          </main>
+
+          {/* Right Sidebar */}
+          <aside className="lg:col-span-4 xl:col-span-3 flex flex-col h-full">
             <ConversationHub
               status={state.appStatus}
               isSessionActive={state.isSessionActive}
@@ -93,9 +98,12 @@ function ConversationUI() {
               onEndSession={endSession}
               onClearError={handleClearError}
             />
-            <ChatInput onSendMessage={sendTextMessage} disabled={!state.isSessionActive || isInputDisabled} />
-          </div>
-        </main>
+          </aside>
+        </div>
+
+        <footer className="w-full text-center py-2 px-6 bg-immigo-gray-200 flex-shrink-0">
+            <p className="text-xs text-immigo-gray-600">&copy; 2025 ImmiGo. All rights reserved.</p>
+        </footer>
       </div>
     </>
   );

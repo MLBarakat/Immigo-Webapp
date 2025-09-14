@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, StopCircle, Waves, Volume2, Loader, AlertCircle } from 'lucide-react';
+import { Mic, StopCircle, Waves, Loader, AlertCircle } from 'lucide-react';
 import { AppStatus } from '../types/conversation';
 
 interface ConversationHubProps {
@@ -13,11 +13,11 @@ interface ConversationHubProps {
 }
 
 const statusConfig = {
-  idle: { icon: Mic, label: 'Ready to talk' },
-  listening: { icon: Waves, label: 'Listening...', animated: true },
-  processing: { icon: Loader, label: 'Processing...', animated: true },
-  speaking: { icon: Volume2, label: 'AI is speaking...', animated: true },
-  error: { icon: AlertCircle, label: 'Error' },
+  idle: { label: 'Ready' },
+  listening: { label: 'Listening...' },
+  processing: { label: 'Processing...' },
+  speaking: { label: 'AI Speaking...' },
+  error: { label: 'Error' },
 };
 
 export const ConversationHub: React.FC<ConversationHubProps> = ({
@@ -30,7 +30,6 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   onClearError,
 }) => {
   const config = statusConfig[status];
-  const IconComponent = config.icon;
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -43,31 +42,35 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
       return (
         <button
           onClick={onEndSession}
-          className="w-24 h-24 flex items-center justify-center rounded-full bg-art-red-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
+          className="w-32 h-32 flex flex-col items-center justify-center rounded-full bg-art-red-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
+          aria-label="End Conversation"
         >
-          <StopCircle className="w-12 h-12" />
+          <StopCircle className="w-16 h-16" />
+          <span className="mt-1 text-sm font-bold">End</span>
         </button>
       );
     }
     return (
       <button
         onClick={onStartSession}
-        className="w-24 h-24 flex items-center justify-center rounded-full bg-art-blue-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
+        className="w-32 h-32 flex flex-col items-center justify-center rounded-full bg-art-blue-600 text-star-white shadow-xl transform hover:scale-105 transition-all"
+        aria-label="Start Conversation"
       >
-        <Mic className="w-12 h-12" />
+        <Mic className="w-16 h-16" />
+        <span className="mt-1 text-sm font-bold">Start</span>
       </button>
     );
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-t from-immigo-gray-50 to-star-white border-t-2 border-immigo-gray-200 shadow-inner space-y-4">
-      <div className="text-center h-12">
-        <p className={`text-lg font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
+    <div className="flex flex-col items-center justify-center p-6 bg-star-white shadow-xl border rounded-2xl h-full space-y-6">
+      <div className="text-center">
+        <p className={`text-xl font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
           {status === 'error' ? errorMessage : config.label}
         </p>
         {isSessionActive && (
-          <p className="text-sm text-immigo-gray-600 font-mono">
-            Session Time: {formatTime(sessionTime)}
+          <p className="text-lg text-immigo-gray-600 font-mono mt-1">
+            {formatTime(sessionTime)}
           </p>
         )}
       </div>
@@ -77,9 +80,9 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
       {status === 'error' && (
          <button
             onClick={onClearError}
-            className="mt-2 px-4 py-2 bg-immigo-gray-600 text-star-white text-sm font-bold rounded-lg hover:bg-immigo-gray-700"
+            className="mt-4 px-4 py-2 bg-immigo-gray-600 text-star-white text-sm font-bold rounded-lg hover:bg-immigo-gray-700"
           >
-            Clear Error
+            Clear Error & Reset
           </button>
       )}
     </div>
