@@ -32,7 +32,7 @@ useEffect(() => {
 
     const processAndRespond = useCallback(async (message: string) => {
         if (!session) return;
-        analytics.track('message_sent', { message_length: message.length });
+        analytics.track('message_sent', { message_length: message.length, language: state.currentLanguageCode }); // Added language tracking
         dispatch({ type: 'START_PROCESSING' });
 
         try {
@@ -57,21 +57,22 @@ useEffect(() => {
                 },
                 (audioChunk) => {
                     audioManagerRef.current.addChunk(audioChunk);
-                }
+                },
+                state.currentLanguageCode // Pass current language to API
             );
 
-            analytics.track('response_received', { response_length: fullText.length });
+            analytics.track('response_received', { response_length: fullText.length, language: state.currentLanguageCode }); // Added language tracking
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
             dispatch({ type: 'SET_ERROR', payload: `Failed to get response: ${errorMessage}` });
-            analytics.track('api_error', { error_message: errorMessage });
+            analytics.track('api_error', { error_message: errorMessage, language: state.currentLanguageCode }); // Added language tracking
             dispatch({ type: 'STOP_SPEAKING' });
         }
-    }, [state.conversationHistory, state.voiceId, session, dispatch]);
+    }, [state.conversationHistory, state.voiceId, state.currentLanguageCode, session, dispatch]); // Added currentLanguageCode to deps
 
     const startSession = useCallback(() => {
-        analytics.track('session_started');
+        analytics.track('session_started', { language: state.currentLanguageCode }); // Added language tracking
         dispatch({ type: 'START_SESSION', payload: { clearHistory: true } });
         recognitionManagerRef.current.startListening(
             (transcript, isFinal) => {
@@ -84,16 +85,17 @@ useEffect(() => {
             (error) => {
                 dispatch({ type: 'SET_ERROR', payload: error });
             },
-            () => {}
+            () => {},
+            state.currentLanguageCode // Pass language code for speech recognition
         );
-    }, [dispatch, processAndRespond]);
+    }, [dispatch, processAndRespond, state.currentLanguageCode]); // Added currentLanguageCode to deps
 
     const endSession = useCallback(() => {
-        analytics.track('session_ended');
+        analytics.track('session_ended', { language: state.currentLanguageCode }); // Added language tracking
         recognitionManagerRef.current.stopListening();
         audioManagerRef.current.stop();
         dispatch({ type: 'END_SESSION' });
-    }, [dispatch]);
+    }, [dispatch, state.currentLanguageCode]); // Added currentLanguageCode to deps
 
     const sendTextMessage = useCallback(async (message: string) => {
         if (!message.trim()) return;
@@ -125,12 +127,12 @@ useEffect(() => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `immigo-transcript-${new Date().toISOString()}.txt`;
+        a.download = `immigo-transcript-${new Date().toISOString()}-${state.currentLanguageCode}.txt`; // Added language to filename
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    }, [state.conversationHistory]);
+    }, [state.conversationHistory, state.currentLanguageCode]); // Added currentLanguageCode to deps
 
     return { startSession, endSession, sendTextMessage, clearConversation, downloadTranscript };
 };

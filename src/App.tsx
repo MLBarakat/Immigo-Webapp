@@ -9,9 +9,18 @@ import { AuthPage } from './components/AuthPage';
 import { WelcomeModal } from './components/WelcomeModal';
 import { ConversationHub } from './components/ConversationHub';
 import { MobileMenu } from './components/MobileMenu';
+import { LanguageSelector } from './components/LanguageSelector'; // Import new component
 import { ApiClient } from './services/apiClient';
 import ImmigoLogo from './assets/immigo_logo.png';
-import { Menu } from 'lucide-react';
+import { Menu, LogOut } from 'lucide-react'; // Import LogOut icon for desktop
+
+// Define available languages with flags
+const availableLanguages = [
+    { code: 'en', name: 'English', flag: '🇺🇸' },
+    { code: 'es', name: 'Español', flag: '🇪🇸' },
+    { code: 'fr', name: 'Français', flag: '🇫🇷' },
+    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+];
 
 const pollyVoices = [
     { id: 'Joanna', name: 'Joanna (US Female)' },
@@ -23,10 +32,11 @@ const pollyVoices = [
 
 function ConversationUI() {
   const { state, dispatch } = useConversation();
-  const { user, session, logout } = useAuth(); // Get logout function from useAuth
+  const { user, session, logout } = useAuth();
   const { startSession, endSession, sendTextMessage, clearConversation, downloadTranscript } = useConversationManager();
   const [showWelcome, setShowWelcome] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [currentLanguageCode, setCurrentLanguageCode] = useState('en'); // New state for language
 
   useEffect(() => {
     const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome');
@@ -54,8 +64,14 @@ function ConversationUI() {
     fetchHistory();
   }, [session, dispatch, logout]);
 
+  // Effect to update context when currentLanguageCode changes
+  useEffect(() => {
+      dispatch({ type: 'SET_LANGUAGE', payload: currentLanguageCode });
+  }, [currentLanguageCode, dispatch]);
+
   const handleClearError = () => dispatch({ type: 'CLEAR_ERROR' });
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => dispatch({ type: 'SET_VOICE', payload: e.target.value });
+  const handleLanguageChange = (newCode: string) => setCurrentLanguageCode(newCode); // Handler for language change
   const isInputDisabled = ['listening', 'processing', 'speaking'].includes(state.appStatus);
   const userName = user?.user_metadata?.full_name || user?.email || 'User';
   const userInitials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U';
@@ -71,7 +87,7 @@ function ConversationUI() {
         pollyVoices={pollyVoices}
         onClearConversation={clearConversation}
         onDownloadTranscript={downloadTranscript}
-        onLogout={logout} // Pass the logout function here
+        onLogout={logout}
       />
       <div className="h-screen w-screen overflow-hidden bg-immigo-gray-100 flex flex-col font-sans">
         <header className="bg-star-white shadow-md border-b border-immigo-gray-200 px-4 sm:px-8 py-3 flex-shrink-0 z-10">
@@ -83,10 +99,26 @@ function ConversationUI() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              {user && <UserProfile user={{ name: userName, initials: userInitials }} onLogout={logout} />}
-              <button onClick={() => setIsMenuOpen(true)} className="lg:hidden p-2 rounded-full hover:bg-immigo-gray-100">
-                <Menu className="w-6 h-6 text-deep-navy" />
-              </button>
+              {user && (
+                <>
+                  {/* Desktop Header Elements */}
+                  <div className="hidden lg:flex items-center space-x-4">
+                    <LanguageSelector
+                        currentLanguageCode={currentLanguageCode}
+                        onLanguageChange={handleLanguageChange}
+                        availableLanguages={availableLanguages}
+                    />
+                    <UserProfile user={{ name: userName, initials: userInitials }} /> {/* Name removed */}
+                    <button onClick={logout} className="p-2 rounded-full hover:bg-immigo-gray-100" title="Logout">
+                        <LogOut className="w-6 h-6 text-deep-navy" />
+                    </button>
+                  </div>
+                  {/* Mobile Menu Toggle */}
+                  <button onClick={() => setIsMenuOpen(true)} className="lg:hidden p-2 rounded-full hover:bg-immigo-gray-100">
+                    <Menu className="w-6 h-6 text-deep-navy" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </header>

@@ -8,6 +8,7 @@ export interface ConversationState {
   isSessionActive: boolean;
   sessionTime: number; // in seconds
   voiceId: string;
+  currentLanguageCode: string; // New: Add current language to state
 }
 
 export type ConversationAction =
@@ -24,6 +25,7 @@ export type ConversationAction =
   | { type: 'START_SPEAKING' }
   | { type: 'STOP_SPEAKING' }
   | { type: 'SET_VOICE'; payload: string }
+  | { type: 'SET_LANGUAGE'; payload: string } // New: Action to set language
   | { type: 'TICK_SESSION_TIMER' };
 
 const initialState: ConversationState = {
@@ -33,10 +35,14 @@ const initialState: ConversationState = {
   isSessionActive: false,
   sessionTime: 0,
   voiceId: 'Joanna',
+  currentLanguageCode: 'en', // New: Default language
 };
 
 function conversationReducer(state: ConversationState, action: ConversationAction): ConversationState {
   switch (action.type) {
+    case 'SET_LANGUAGE':
+            return { ...state, currentLanguageCode: action.payload }; // Handle new action
+
     case 'START_SESSION':
       return {
         ...state,

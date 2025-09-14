@@ -1,81 +1,88 @@
 import { Message } from '../types/conversation';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export class ApiClient {
-private headers: HeadersInit;
+private token: string;
 
 constructor(token: string) {
-    this.headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      'X-API-Key': import.meta.env.VITE_API_KEY,
-    };
-  }
-
-  async getHistory(): Promise<Message[]> {
-    const response = await fetch(`${API_BASE_URL}/api/history`, {
-      headers: this.headers,
-    });
-    if (!response.ok) {
-      if (response.status === 401) throw new Error("401 Unauthorized");
-      throw new Error("Failed to fetch history");
-    }
-    const data = await response.json();
-    return data.map((msg: any) => ({
-        id: Math.random().toString(), // Or generate a more robust ID
-        role: msg.role,
-        content: msg.content,
-        timestamp: new Date(msg.created_at),
-    }));
-  }
-
-  async sendMessage(
-    message: string,
-    conversationHistory: Message[],
-    voiceId: string,
-    onTextChunk: (chunk: string) => void,
-    onAudioChunk: (chunk: string) => void
-  ): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/api/conversation`, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify({
-        message,
-        conversationHistory: conversationHistory.slice(-10),
-        voiceId,
-      }),
-    });
-
-    if (!response.ok || !response.body) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API request failed with status ${response.status}`);
+        this.token = token;
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+    private async fetchWithAuth(url: string, options: RequestInit = {}) {
+        const headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/json',
+        };
+        const response = await fetch(url, { ...options, headers });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: response.statusText }));
+            throw new Error(errorData.message || 'API request failed');
+        }
+        return response;
+    }
 
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    async getHistory(): Promise<Message[]> {
+        const response = await this.fetchWithAuth(`${API_BASE_URL}/history`);
+        const data = await response.json();
+        return data.history;
+    }
 
-        buffer += decoder.decode(value, { stream: true });
+    async sendMessage(
+        message: string,
+        conversationHistory: Message[],
+        voiceId: string,
+        onTextChunk: (chunk: string) => void,
+        onAudioChunk: (chunk: Uint8Array) => void,
+        languageCode: string = 'en' // New: Added languageCode parameter
+    ): Promise<void> {
+        const response = await this.fetchWithAuth(`${API_BASE_URL}/chat-stream`, {
+            method: 'POST',
+            body: JSON.stringify({
+                message,
+                conversationHistory,
+                voiceId,
+                languageCode, // Pass languageCode to the backend
+            }),
+        });
 
-        const chunks = buffer.split('\n');
-        buffer = chunks.pop() || ''; // Keep the last, possibly incomplete, chunk
+        if (!response.body) {
+            throw new Error('Response body is empty');
+        }
 
-        for (const chunkStr of chunks) {
-            if (chunkStr) {
-                try {
-                    const chunk = JSON.parse(chunkStr);
-                    if (chunk.type === 'text_chunk') onTextChunk(chunk.data);
-                    if (chunk.type === 'audio_chunk') onAudioChunk(chunk.data);
-                } catch(e) {
-                    console.error("Failed to parse JSON chunk:", chunkStr);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedChunks = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            accumulatedChunks += decoder.decode(value, { stream: true });
+
+            let boundary = accumulatedChunks.indexOf('\n');
+            while (boundary !== -1) {
+                const line = accumulatedChunks.substring(0, boundary).trim();
+                accumulatedChunks = accumulatedChunks.substring(boundary + 1);
+
+                if (line.startsWith('data:')) {
+                    const jsonStr = line.substring(5).trim();
+                    try {
+                        const data = JSON.parse(jsonStr);
+                        if (data.text_chunk) {
+                            onTextChunk(data.text_chunk);
+                        }
+                        if (data.audio_chunk) {
+                            const audioBytes = new Uint8Array(data.audio_chunk.data);
+                            onAudioChunk(audioBytes);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing JSON from stream:', e, jsonStr);
+                    }
                 }
+                boundary = accumulatedChunks.indexOf('\n');
             }
         }
     }
-  }
 }
