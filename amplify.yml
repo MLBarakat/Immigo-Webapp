@@ -3,15 +3,17 @@ frontend:
   phases:
     preBuild:
       commands:
-        - '# Install frontend (root) dependencies'
-        - npm install
-        - '# Install backend (server) dependencies'
-        - cd server && npm install && cd ..
+        - echo "Node: $(node -v)  npm: $(npm -v)"
+        - npm ci --omit=optional --prefer-offline --no-audit --no-fund
+        - echo "Installing server deps"
+        - cd server
+        - npm ci --omit=optional --prefer-offline --no-audit --no-fund
+        - cd ..
     build:
       commands:
+        - echo "Building frontend"
         - npm run build
   artifacts:
-    # This correctly points to our Vite build output directory
     baseDirectory: dist
     files:
       - '**/*'
