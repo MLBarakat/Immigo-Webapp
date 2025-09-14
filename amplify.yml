@@ -15,6 +15,9 @@ frontend:
         - (cd server && npm install)
     build:
       commands:
+        - '# Go back to the root directory before building'
+        - cd ..
+        - '# Build the Vite application'
         - npm run build
   artifacts:
     baseDirectory: dist
