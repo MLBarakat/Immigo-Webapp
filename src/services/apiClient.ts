@@ -15,7 +15,7 @@ constructor(token: string) {
             ...options.headers,
             'Authorization': `Bearer ${this.token}`,
             'Content-Type': 'application/json',
-            'X-API-Key': API_BASE_URL,
+            'X-API-Key': API_KEY,
         };
         const response = await fetch(url, { ...options, headers });
         if (!response.ok) {
