@@ -4,11 +4,9 @@ frontend:
     preBuild:
       commands:
         - '# Set Node.js to version 18, as specified in README'
-        - nvm use node
-        - '# Install Yarn globally'
-        - npm install -g yarn
+        - nvm use 18
         - '# Install frontend dependencies with Yarn'
-        - yarn install
+        - yarn install --frozen-lockfile --network-concurrency 4
         - '# Install backend dependencies with Yarn'
         - cd server && yarn install && cd ..
     build:
