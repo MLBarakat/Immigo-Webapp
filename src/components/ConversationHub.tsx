@@ -1,8 +1,9 @@
 import React from 'react';
-import { Mic, StopCircle, Download, Trash2 } from 'lucide-react';
-import { AppStatus } from '../types/conversation';
+import { RefreshCcw, Pause, Play, Download, Settings, UserCircle2, MessageSquare, Mic } from 'lucide-react';
+import { AppStatus } from '../context/ConversationContext';
+import { ApiClient } from '../services/apiClient';
+import { UserSettings } from '../types/settings';
 
-// Props are updated to remove voice selection, as it's now in the App Settings modal
 interface ConversationHubProps {
   status: AppStatus;
   isSessionActive: boolean;
@@ -13,15 +14,11 @@ interface ConversationHubProps {
   onClearError: () => void;
   onClearConversation: () => void;
   onDownloadTranscript: () => void;
+  onOpenAppSettings: () => void;
+  onOpenAccountSettings: () => void;
+  apiClient: ApiClient | null;
+  userSettings: Partial<UserSettings>;
 }
-
-const statusConfig = {
-  idle: { label: 'Ready' },
-  listening: { label: 'Listening...' },
-  processing: { label: 'Processing...' },
-  speaking: { label: 'AI Speaking...' },
-  error: { label: 'Error' },
-};
 
 export const ConversationHub: React.FC<ConversationHubProps> = ({
   status,
@@ -33,92 +30,105 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   onClearError,
   onClearConversation,
   onDownloadTranscript,
+  onOpenAppSettings,
+  onOpenAccountSettings,
+  apiClient,
+  userSettings,
 }) => {
-  const config = statusConfig[status];
-
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const ActionButton = ({ isMobile = false }) => {
-    const sizeClass = isMobile ? 'w-16 h-16' : 'w-32 h-32';
-    const iconSize = isMobile ? 'w-8 h-8' : 'w-16 h-16';
+  const statusMessage = () => {
+    switch (status) {
+      case 'idle': return 'Ready to start';
+      case 'listening': return 'AI is listening...';
+      case 'processing': return 'AI is thinking...';
+      case 'speaking': return 'AI is speaking...';
+      case 'error': return `Error: ${errorMessage}`;
+    }
+  };
 
+  const renderActionButton = () => {
     if (isSessionActive) {
       return (
         <button
           onClick={onEndSession}
-          className={`${sizeClass} flex flex-col items-center justify-center rounded-full bg-art-red-600 text-star-white shadow-xl transform hover:scale-105 transition-all`}
-          aria-label="End Conversation"
+          className="bg-art-red-600 hover:bg-art-red-700 text-white rounded-full p-4 flex items-center justify-center shadow-lg transition-all duration-200"
+          aria-label="End session"
         >
-          <StopCircle className={iconSize} />
-          <span className={`mt-1 text-sm font-bold ${isMobile ? 'hidden' : 'block'}`}>End</span>
+          <Pause className="w-7 h-7" />
         </button>
       );
     }
     return (
       <button
         onClick={onStartSession}
-        className={`${sizeClass} flex flex-col items-center justify-center rounded-full bg-art-blue-600 text-star-white shadow-xl transform hover:scale-105 transition-all`}
-        aria-label="Start Conversation"
+        className="bg-art-blue-600 hover:bg-art-blue-700 text-white rounded-full p-4 flex items-center justify-center shadow-lg transition-all duration-200"
+        aria-label="Start session"
       >
-        <Mic className={iconSize} />
-        <span className={`mt-1 text-sm font-bold ${isMobile ? 'hidden' : 'block'}`}>Start</span>
+        <Play className="w-7 h-7" />
       </button>
     );
   };
 
   return (
-    <>
-        {/* Desktop Sidebar View */}
-        <aside className="hidden lg:flex flex-col p-6 bg-star-white shadow-xl border rounded-2xl h-full">
-            <div className="flex-shrink-0">
-                <div className="space-y-2">
-                    <button onClick={onClearConversation} className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100" title="Clear Conversation">
-                        <Trash2 className="w-5 h-5 text-immigo-gray-600 mr-2" /> Clear Conversation
-                    </button>
-                    <button onClick={onDownloadTranscript} className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100" title="Download Transcript">
-                        <Download className="w-5 h-5 text-immigo-gray-600 mr-2" /> Download Script
-                    </button>
-                </div>
-            </div>
+    <div className="flex flex-col w-full h-full bg-star-white rounded-2xl shadow-xl border border-immigo-gray-200 p-6 space-y-6">
+      <div className="text-center space-y-2">
+        <h2 className="text-xl font-bold text-deep-navy font-display">Conversation Hub</h2>
+        <p className={`text-sm ${errorMessage ? 'text-art-red-600' : 'text-immigo-gray-600'}`}>{statusMessage()}</p>
+        {errorMessage && (
+            <button onClick={onClearError} className="text-art-blue-600 text-sm mt-1">Clear Error</button>
+        )}
+      </div>
 
-            <div className="flex-1 flex flex-col items-center justify-end">
-                <ActionButton />
-                <div className="text-center mt-4">
-                    <p className={`text-xl font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
-                        {status === 'error' ? errorMessage : config.label}
-                    </p>
-                    {isSessionActive && (
-                        <p className="text-lg text-immigo-gray-600 font-mono mt-1">
-                            {formatTime(sessionTime)}
-                        </p>
-                    )}
-                </div>
-                {status === 'error' && (
-                    <button onClick={onClearError} className="mt-4 px-4 py-2 bg-immigo-gray-600 text-star-white text-sm font-bold rounded-lg hover:bg-immigo-gray-700">
-                        Clear Error
-                    </button>
-                )}
-            </div>
-        </aside>
+      <div className="flex justify-center items-center my-4">
+        {renderActionButton()}
+      </div>
 
-        {/* Mobile Voice Hub */}
-        <div className="lg:hidden flex flex-col items-center justify-center pl-2 flex-shrink-0">
-            <ActionButton isMobile={true} />
-            <div className="text-center mt-1">
-                <p className={`text-xs font-semibold ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>
-                    {status === 'error' ? "Error" : config.label}
-                </p>
-                {isSessionActive && (
-                    <p className="text-xs text-immigo-gray-600 font-mono">
-                        {formatTime(sessionTime)}
-                    </p>
-                )}
-            </div>
+      <div className="flex justify-around text-center border-t border-b border-immigo-gray-200 py-4">
+        <div>
+          <p className="text-lg font-semibold text-deep-navy">{formatTime(sessionTime)}</p>
+          <p className="text-sm text-immigo-gray-600">Session Time</p>
         </div>
-    </>
+        <div>
+          <p className="text-lg font-semibold text-deep-navy">EN</p> {/* Placeholder for language */}
+          <p className="text-sm text-immigo-gray-600">Language</p>
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-3">
+        {/* Placeholder for future features like "Session Summary" or "AI Insights" */}
+        <div className="flex items-center text-immigo-gray-700">
+            <MessageSquare className="w-5 h-5 mr-2" />
+            <span className="text-sm">Talk about anything...</span>
+        </div>
+        <div className="flex items-center text-immigo-gray-700">
+            <Mic className="w-5 h-5 mr-2" />
+            <span className="text-sm">Mic Mode: {userSettings.mic_mode === 'push_to_talk' ? 'Push-to-Talk' : 'Voice Activity'}</span>
+        </div>
+        <div className="flex items-center text-immigo-gray-700">
+            <RefreshCcw className="w-5 h-5 mr-2" />
+            <span className="text-sm">Interruption: {userSettings.barge_in || 'Balanced'}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-sm font-medium text-deep-navy border-t border-immigo-gray-200 pt-4">
+        <button onClick={onClearConversation} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
+          <RefreshCcw className="w-4 h-4 mr-2" /> Clear
+        </button>
+        <button onClick={onDownloadTranscript} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
+          <Download className="w-4 h-4 mr-2" /> Transcript
+        </button>
+        <button onClick={onOpenAppSettings} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
+          <Settings className="w-4 h-4 mr-2" /> App Settings
+        </button>
+        <button onClick={onOpenAccountSettings} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
+          <UserCircle2 className="w-4 h-4 mr-2" /> Account
+        </button>
+      </div>
+    </div>
   );
 };

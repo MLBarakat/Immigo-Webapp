@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react'; // Removed useCallback, added useMemo
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { createClient } from '@supabase/supabase-js';
@@ -65,7 +65,7 @@ const AppContent: React.FC = () => {
     fetchSettings();
   }, [apiClient]);
 
-  const handleSaveSettings = useCallback(async (settingsToSave: UserSettings) => {
+  const handleSaveSettings = async (settingsToSave: UserSettings) => { // Removed useCallback
     if (apiClient) {
       try {
         await apiClient.updateSettings(settingsToSave);
@@ -76,11 +76,11 @@ const AppContent: React.FC = () => {
         throw error; // Re-throw to allow modal to show error
       }
     }
-  }, [apiClient]);
+  };
 
-  const handleSettingPreview = useCallback((key: keyof UserSettings, value: any) => {
+  const handleSettingChange = (key: keyof UserSettings, value: any) => { // Renamed from handleSettingPreview and made global
     setUserSettings(prev => ({ ...prev, [key]: value }));
-  }, []);
+  };
 
   if (!session) {
     return (
@@ -138,19 +138,19 @@ const AppContent: React.FC = () => {
           <Route path="/account-settings" element={
             <AccountSettingsPage
               onNavigateBack={() => navigate('/')}
-              isDesktop={isDesktop} // NEW prop
+              isDesktop={isDesktop}
             />
           } />
           <Route path="/app-settings" element={
-            !isDesktop && ( // Only render this route for mobile
+            !isDesktop && (
               <ApplicationSettingsModal
-                isOpen={true} // Always open when on this route
+                isOpen={true}
                 onClose={handleCloseAppSettings}
                 settings={userSettings}
                 onSave={handleSaveSettings}
-                onSettingPreview={handleSettingPreview}
+                onSettingChange={handleSettingChange} // <-- PASSED THIS NEW PROP
                 pollyVoices={PollyVoices}
-                isDesktop={isDesktop} // NEW prop
+                isDesktop={isDesktop} // Ensure this prop is passed for mobile route as well
               />
             )
           } />
@@ -163,9 +163,9 @@ const AppContent: React.FC = () => {
             onClose={handleCloseAppSettings}
             settings={userSettings}
             onSave={handleSaveSettings}
-            onSettingPreview={handleSettingPreview}
+            onSettingChange={handleSettingChange} // <-- PASSED THIS NEW PROP
             pollyVoices={PollyVoices}
-            isDesktop={isDesktop} // NEW prop
+            isDesktop={isDesktop}
           />
         )}
 

@@ -1,4 +1,5 @@
 import { Message } from '../types/conversation';
+import { UserSettings } from '../types/settings'; // <-- ADDED
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_KEY = import.meta.env.VITE_API_KEY;
@@ -32,12 +33,13 @@ constructor(token: string) {
     }
 
     async sendMessage(
+        conversationId: string,
         message: string,
-        conversationHistory: Message[],
-        voiceId: string,
-        onTextChunk: (chunk: string) => void,
-        onAudioChunk: (chunk: Uint8Array) => void,
-        languageCode: string = 'en'
+        pollyVoiceId: string,
+        languageCode: string,
+        micMode: 'voice_activity' | 'push_to_talk',
+        bargeIn: 'relaxed' | 'balanced' | 'aggressive',
+        liveFeedbackEnabled: boolean
     ): Promise<void> {
         const response = await this.fetchWithAuth(`${API_BASE_URL}/chat-stream`, {
             method: 'POST',

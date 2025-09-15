@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { X, Info, Play, ExternalLink, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
-import type { UserSettings, ThemeOption, MicMode, BargeIn, ProgressReportFrequency } from '../types/settings';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { X, ExternalLink } from 'lucide-react';
+import type { UserSettings, ThemeOption } from '../types/settings';
+import { ApiClient } from '../services/apiClient';
 
 interface Voice {
   id: string;
@@ -12,64 +13,29 @@ interface ApplicationSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: Partial<UserSettings>;
-  onSave?: (settings: UserSettings) => Promise<void> | void;
-  onSettingPreview?: (key: keyof UserSettings, value: any) => void;
-  pollyVoices?: Voice[];
-  isDesktop: boolean; // NEW prop to control responsive rendering
+  onSave: (settings: UserSettings) => Promise<void>;
+  onSettingChange: (key: keyof UserSettings, value: any) => void; // Renamed from onSettingPreview
+  pollyVoices: Voice[];
+  isDesktop: boolean; // <-- ADDED
 }
 
-const THEME_OPTIONS: { value: ThemeOption; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-];
+const THEME_OPTIONS: { value: ThemeOption; label: string }[] = [ { value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, ];
 
-export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({
-  isOpen,
-  onClose,
-  settings,
-  onSave,
-  onSettingPreview,
-  pollyVoices = [],
-  isDesktop, // Destructure new prop
-}) => {
-  const defaults: UserSettings = {
-    theme: 'system',
-    ai_voice_id: pollyVoices[0]?.id ?? 'Joanna',
-    live_feedback_enabled: true,
-    mic_mode: 'voice_activity',
-    barge_in: 'balanced',
-    progress_report_frequency: 'weekly',
-    font_size: 'default'
-  };
-
+export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, onSettingChange, pollyVoices = [], isDesktop }) => {
+  const defaults: UserSettings = { theme: 'system', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default' };
   const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLDivElement | null>(null); // Only used for desktop modal focus
 
-  // Sync draft with incoming settings when modal opens or settings change
-  useEffect(() => {
-    setDraft({ ...defaults, ...settings });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, JSON.stringify(settings)]); // stringify to deep-compare settings obj
+  useEffect(() => { if (isOpen) { setDraft({ ...defaults, ...settings }); } }, [isOpen, settings, defaults]); // Added defaults to dependency array
 
-  const safeUpdate = useCallback(
-    (key: keyof UserSettings, value: any) => {
-      setDraft(prev => {
-        const next = { ...prev, [key]: value } as UserSettings;
-        onSettingPreview?.(key, value);
-        return next;
-      });
-    },
-    [onSettingPreview]
-  );
+  // Propagate changes from internal draft state to the parent's onSettingChange
+  const handleDraftChange = useCallback((key: keyof UserSettings, value: any) => {
+    setDraft(prev => ({ ...prev, [key]: value }));
+    onSettingChange(key, value); // Also inform the parent component immediately
+  }, [onSettingChange]);
 
   const handleSave = useCallback(async () => {
-    if (!onSave) {
-      onClose();
-      return;
-    }
     setSaving(true);
     try {
       await onSave(draft);
@@ -82,159 +48,89 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
     }
   }, [draft, onSave, onClose]);
 
-  const Toggle: React.FC<{ id: string; checked: boolean; onChange: (v: boolean) => void; }> = ({ id, checked, onChange }) => (
-    <button
-      id={id}
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`w-12 h-6 rounded-full p-1 flex items-center transition-colors ${checked ? 'bg-art-blue-600 justify-end' : 'bg-immigo-gray-300 justify-start'}`}
-    >
-      <span className="sr-only">{checked ? 'Disable' : 'Enable'}</span>
+  const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; }> = ({ checked, onChange }) => (
+    <button role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+      className={`w-12 h-6 rounded-full p-1 flex items-center transition-colors ${checked ? 'bg-art-blue-600 justify-end' : 'bg-immigo-gray-300 justify-start'}`}>
       <div className="w-4 h-4 bg-white rounded-full shadow-md" />
     </button>
   );
 
-  if (!isOpen && isDesktop) return null; // Only hide if it's a desktop modal
-
-  const containerClasses = isDesktop
-    ? "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
-    : "h-screen w-screen bg-immigo-gray-100 flex flex-col font-sans"; // Full screen for mobile
-
-  const contentClasses = isDesktop
-    ? "bg-star-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
-    : "flex-1 bg-star-white flex flex-col overflow-hidden"; // Full height, no rounded corners/shadow for mobile
-
-  const headerClasses = isDesktop
-    ? "flex items-center justify-between p-6 border-b border-immigo-gray-200"
-    : "flex items-center p-4 border-b border-immigo-gray-200 bg-star-white shadow-md flex-shrink-0"; // Mobile header
-
-  const titleClasses = isDesktop
-    ? "text-2xl font-bold text-deep-navy font-display"
-    : "text-xl font-bold text-deep-navy font-display ml-4"; // Mobile title
+  if (!isOpen) return null;
 
   return (
-    <div className={containerClasses} aria-hidden={!isOpen && isDesktop}> {/* aria-hidden for desktop modal */}
-      <div
-        ref={dialogRef} // Ref only relevant for desktop modal focus
-        role={isDesktop ? "dialog" : undefined} // Only dialog role for desktop modal
-        aria-modal={isDesktop ? "true" : undefined}
-        aria-labelledby="app-settings-title"
-        className={contentClasses}
-      >
-        <header className={headerClasses}>
-          {!isDesktop && ( // Back button for mobile
-            <button onClick={onClose} aria-label="Back to previous page" className="p-2 rounded-full hover:bg-immigo-gray-100 text-immigo-gray-600">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-          )}
-          <h2 id="app-settings-title" className={titleClasses}>Application Settings</h2>
-          {isDesktop && ( // Close button for desktop
-            <button data-close-button onClick={onClose} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
-              <X className="w-6 h-6 text-immigo-gray-600" />
-            </button>
-          )}
+    <div className={`fixed inset-0 bg-black bg-opacity-60 flex ${isDesktop ? 'items-center justify-center' : 'items-start'} z-50 p-4`}>
+      <div className={`bg-star-white rounded-2xl shadow-2xl w-full ${isDesktop ? 'max-w-2xl' : 'max-h-full h-full'} flex flex-col ${isDesktop ? 'max-h-[85vh] overflow-hidden' : ''}`}>
+        <header className="flex items-center justify-between p-6 border-b border-immigo-gray-200">
+          <h2 className="text-2xl font-bold text-deep-navy font-display">Application Settings</h2>
+          <button onClick={onClose} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
+            <X className="w-6 h-6 text-immigo-gray-600" />
+          </button>
         </header>
 
-        <main className="p-8 overflow-y-auto space-y-6 flex-1"> {/* flex-1 to allow scrolling within main */}
-          {/* Appearance */}
-          <section className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-deep-navy">Appearance</h3>
-              <p className="text-sm text-immigo-gray-600">Choose how ImmiGo looks. Select light, dark, or match your device.</p>
-            </div>
+        <main className="p-8 overflow-y-auto space-y-6 flex-1">
+          <SettingRow title="Appearance" description="Choose how ImmiGo looks.">
             <div role="radiogroup" className="flex items-center gap-2 p-1 bg-immigo-gray-200 rounded-lg">
               {THEME_OPTIONS.map(opt => (
-                <button key={opt.value} role="radio" aria-checked={draft.theme === opt.value} onClick={() => safeUpdate('theme', opt.value)}
+                <button key={opt.value} role="radio" aria-checked={draft.theme === opt.value} onClick={() => handleDraftChange('theme', opt.value)}
                   className={`px-3 py-1 rounded-md capitalize text-sm ${draft.theme === opt.value ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>
                   {opt.label}
                 </button>
               ))}
             </div>
-          </section>
+          </SettingRow>
 
           <hr className="border-immigo-gray-200" />
 
-          {/* AI Voice */}
-          <section className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-deep-navy">AI Voice</h3>
-              <p className="text-sm text-immigo-gray-600">Select the voice for your AI conversation partner.</p>
-            </div>
-            <select id="ai-voice-select" value={draft.ai_voice_id ?? ''} onChange={(e) => safeUpdate('ai_voice_id', e.target.value)} className="bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm">
-              {pollyVoices.map(v => <option key={v.id} value={v.id}>{v.name}{v.premium ? ' (Premium)' : ''}</option>)}
+          <SettingRow title="AI Voice" description="Select the voice for your AI conversation partner.">
+            <select value={draft.ai_voice_id} onChange={(e) => handleDraftChange('ai_voice_id', e.target.value)} className="bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm">
+              {pollyVoices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
-          </section>
+          </SettingRow>
 
           <hr className="border-immigo-gray-200" />
 
-          {/* Live Feedback */}
-          <section className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-deep-navy">Live Feedback</h3>
-              <p className="text-sm text-immigo-gray-600">Get real-time tips during your conversation.</p>
-            </div>
-            <Toggle id="live-feedback-toggle" checked={!!draft.live_feedback_enabled} onChange={(v) => safeUpdate('live_feedback_enabled', v)} />
-          </section>
+          <SettingRow title="Live Feedback" description="Get real-time tips during your conversation.">
+            <Toggle checked={!!draft.live_feedback_enabled} onChange={(v) => handleDraftChange('live_feedback_enabled', v)} />
+          </SettingRow>
 
           <hr className="border-immigo-gray-200" />
 
-          {/* Microphone Mode */}
-          <section className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-deep-navy">Microphone Mode</h3>
-              <p className="text-sm text-immigo-gray-600">Choose your speaking style.</p>
+          <SettingRow title="Microphone Mode" description="Choose your speaking style.">
+             <div role="radiogroup" className="flex items-center gap-2 p-1 bg-immigo-gray-200 rounded-lg">
+                <button role="radio" aria-checked={draft.mic_mode === 'voice_activity'} onClick={() => handleDraftChange('mic_mode', 'voice_activity')} className={`px-3 py-1 rounded-md text-sm ${draft.mic_mode === 'voice_activity' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Voice Activity</button>
+                <button role="radio" aria-checked={draft.mic_mode === 'push_to_talk'} onClick={() => handleDraftChange('mic_mode', 'push_to_talk')} className={`px-3 py-1 rounded-md text-sm ${draft.mic_mode === 'push_to_talk' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Push-to-Talk</button>
             </div>
-            <div role="radiogroup" className="flex items-center gap-2 p-1 bg-immigo-gray-200 rounded-lg">
-                <button role="radio" aria-checked={draft.mic_mode === 'voice_activity'} onClick={() => safeUpdate('mic_mode', 'voice_activity')} className={`px-3 py-1 rounded-md text-sm ${draft.mic_mode === 'voice_activity' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Voice Activity</button>
-                <button role="radio" aria-checked={draft.mic_mode === 'push_to_talk'} onClick={() => safeUpdate('mic_mode', 'push_to_talk')} className={`px-3 py-1 rounded-md text-sm ${draft.mic_mode === 'push_to_talk' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Push-to-Talk</button>
-            </div>
-          </section>
+          </SettingRow>
 
           <hr className="border-immigo-gray-200" />
 
-          {/* Interruption Style */}
-          <section className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-deep-navy">Interruption Style</h3>
-              <p className="text-sm text-immigo-gray-600">Adjust how easily you can speak over the AI.</p>
+          <SettingRow title="Interruption Style" description="Adjust how easily you can speak over the AI.">
+             <div role="radiogroup" className="flex items-center gap-2 p-1 bg-immigo-gray-200 rounded-lg">
+                <button role="radio" aria-checked={draft.barge_in === 'relaxed'} onClick={() => handleDraftChange('barge_in', 'relaxed')} className={`px-3 py-1 rounded-md text-sm ${draft.barge_in === 'relaxed' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Relaxed</button>
+                <button role="radio" aria-checked={draft.barge_in === 'balanced'} onClick={() => handleDraftChange('barge_in', 'balanced')} className={`px-3 py-1 rounded-md text-sm ${draft.barge_in === 'balanced' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Balanced</button>
+                <button role="radio" aria-checked={draft.barge_in === 'aggressive'} onClick={() => handleDraftChange('barge_in', 'aggressive')} className={`px-3 py-1 rounded-md text-sm ${draft.barge_in === 'aggressive' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Aggressive</button>
             </div>
-            <div role="radiogroup" className="flex items-center gap-2 p-1 bg-immigo-gray-200 rounded-lg">
-                <button role="radio" aria-checked={draft.barge_in === 'relaxed'} onClick={() => safeUpdate('barge_in', 'relaxed')} className={`px-3 py-1 rounded-md text-sm ${draft.barge_in === 'relaxed' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Relaxed</button>
-                <button role="radio" aria-checked={draft.barge_in === 'balanced'} onClick={() => safeUpdate('barge_in', 'balanced')} className={`px-3 py-1 rounded-md text-sm ${draft.barge_in === 'balanced' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Balanced</button>
-                <button role="radio" aria-checked={draft.barge_in === 'aggressive'} onClick={() => safeUpdate('barge_in', 'aggressive')} className={`px-3 py-1 rounded-md text-sm ${draft.barge_in === 'aggressive' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>Aggressive</button>
-            </div>
-          </section>
+          </SettingRow>
 
           <hr className="border-immigo-gray-200" />
 
-          {/* Progress Reports */}
-          <section className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-deep-navy">Progress Reports</h3>
-              <p className="text-sm text-immigo-gray-600">Customize your AI-generated progress summaries.</p>
-            </div>
-            <select value={draft.progress_report_frequency} onChange={(e) => safeUpdate('progress_report_frequency', e.target.value)}
+          <SettingRow title="Progress Reports" description="Customize your AI-generated progress summaries.">
+            <select value={draft.progress_report_frequency} onChange={(e) => handleDraftChange('progress_report_frequency', e.target.value)}
               className="bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm">
               <option value="after_session">After Each Session</option>
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
             </select>
-          </section>
+          </SettingRow>
 
           <hr className="border-immigo-gray-200" />
 
-          {/* Manage Subscription */}
-          <section className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-deep-navy">Manage Subscription</h3>
-              <p className="text-sm text-immigo-gray-600">View your current plan and explore premium features.</p>
-            </div>
+          <SettingRow title="Manage Subscription" description="View your current plan and explore premium features.">
             <button className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-art-blue-600 hover:bg-art-blue-50 rounded-lg">
                 View Plans <ExternalLink className="w-4 h-4" />
             </button>
-          </section>
+          </SettingRow>
         </main>
 
         <footer className="p-4 border-t border-immigo-gray-200 bg-immigo-gray-50 flex items-center justify-between flex-shrink-0">
@@ -250,3 +146,13 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
     </div>
   );
 };
+
+const SettingRow: React.FC<{ title: string; description: string; children: React.ReactNode }> = ({ title, description, children }) => (
+    <div className="flex items-center justify-between">
+        <div>
+            <h3 className="font-semibold text-deep-navy">{title}</h3>
+            <p className="text-sm text-immigo-gray-600">{description}</p>
+        </div>
+        {children}
+    </div>
+);
