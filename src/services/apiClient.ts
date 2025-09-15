@@ -87,4 +87,17 @@ constructor(token: string) {
             }
         }
     }
+
+    async getSettings(): Promise<Partial<UserSettings>> {
+        const response = await this.fetchWithAuth(`${API_BASE_URL}/settings`);
+        return response.json();
+    }
+
+    async updateSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
+        const response = await this.fetchWithAuth(`${API_BASE_URL}/settings`, {
+            method: 'PUT',
+            body: JSON.stringify(settings),
+        });
+        return response.json();
+    }
 }
