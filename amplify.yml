@@ -3,17 +3,17 @@ frontend:
   phases:
     preBuild:
       commands:
-        - cd Immigo-Webapp # Ensure you are in your frontend directory if amplify root is different
-        - yarn install # Install frontend dependencies FIRST
-        - cd ../server # Navigate to server directory
-        - yarn install # Install backend dependencies
-        - cd .. # Go back to the root if needed for subsequent steps
+        - '# Set Node.js to version 18, as specified in README'
+        - nvm use 18
+        - '# Install frontend dependencies with Yarn'
+        - yarn install --frozen-lockfile --network-concurrency 4
+        - '# Install backend dependencies with Yarn'
+        - cd server && yarn install && cd ..
     build:
       commands:
-        - cd Immigo-Webapp # Ensure you are in your frontend directory
-        - yarn build # Build the frontend
+        - yarn build
   artifacts:
-    baseDirectory: Immigo-Webapp/dist
+    baseDirectory: dist
     files:
       - '**/*'
   cache:
