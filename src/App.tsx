@@ -88,7 +88,7 @@ function ConversationUI() {
 
   return (
     <>
-      <WelcomeModal userName={userName} onClose={() => setShowWelcome(false)} />
+      {showWelcome && <WelcomeModal userName={userName} onClose={() => setShowWelcome(false)} />}
       <ApplicationSettingsModal isOpen={isAppSettingsOpen} onClose={() => setIsAppSettingsOpen(false)} />
       <MobileMenu
         isOpen={isMenuOpen}
