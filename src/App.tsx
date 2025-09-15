@@ -9,18 +9,13 @@ import { AuthPage } from './components/AuthPage';
 import { WelcomeModal } from './components/WelcomeModal';
 import { ConversationHub } from './components/ConversationHub';
 import { MobileMenu } from './components/MobileMenu';
-import { LanguageSelector } from './components/LanguageSelector'; // Import new component
+import { LanguageSelector } from './components/LanguageSelector';
+import { FontSizeSelector } from './components/FontSizeSelector';
+import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
+import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { ApiClient } from './services/apiClient';
 import ImmigoLogo from './assets/immigo_logo.png';
-import { Menu, LogOut } from 'lucide-react'; // Import LogOut icon for desktop
-
-// Define available languages with flags
-const availableLanguages = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'es', name: 'Español', flag: '🇪🇸' },
-    { code: 'fr', name: 'Français', flag: '🇫🇷' },
-    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-];
+import { Menu, LogOut, Settings } from 'lucide-react';
 
 const pollyVoices = [
     { id: 'Joanna', name: 'Joanna (US Female)' },
@@ -30,13 +25,30 @@ const pollyVoices = [
     { id: 'Kajal', name: 'Kajal (Indian Female)' },
 ];
 
+function countryCodeToFlagEmoji(countryCode: string): string {
+  return countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => String.fromCodePoint(char.charCodeAt(0) + 0x1F1E6 - 65))
+    .join('');
+}
+
+const availableLanguages = [
+  { code: 'en', name: 'English', flag: countryCodeToFlagEmoji('US') },
+  { code: 'es', name: 'Español', flag: countryCodeToFlagEmoji('ES') },
+  { code: 'fr', name: 'Français', flag: countryCodeToFlagEmoji('FR') },
+  { code: 'ar', name: 'العربية', flag: countryCodeToFlagEmoji('AR') }
+];
+
 function ConversationUI() {
   const { state, dispatch } = useConversation();
   const { user, session, logout } = useAuth();
   const { startSession, endSession, sendTextMessage, clearConversation, downloadTranscript } = useConversationManager();
+
   const [showWelcome, setShowWelcome] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [currentLanguageCode, setCurrentLanguageCode] = useState('en'); // New state for language
+  const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
+  const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
 
   useEffect(() => {
     const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome');
@@ -64,61 +76,54 @@ function ConversationUI() {
     fetchHistory();
   }, [session, dispatch, logout]);
 
-  // Effect to update context when currentLanguageCode changes
-  useEffect(() => {
-      dispatch({ type: 'SET_LANGUAGE', payload: currentLanguageCode });
-  }, [currentLanguageCode, dispatch]);
-
-  const handleClearError = () => dispatch({ type: 'CLEAR_ERROR' });
+  const handleLanguageChange = (newCode: string) => dispatch({ type: 'SET_LANGUAGE', payload: newCode });
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => dispatch({ type: 'SET_VOICE', payload: e.target.value });
-  const handleLanguageChange = (newCode: string) => setCurrentLanguageCode(newCode); // Handler for language change
   const isInputDisabled = ['listening', 'processing', 'speaking'].includes(state.appStatus);
   const userName = user?.user_metadata?.full_name || user?.email || 'User';
   const userInitials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U';
 
+  if (isAccountSettingsOpen) {
+      return <AccountSettingsPage />;
+  }
+
   return (
     <>
-      {showWelcome && <WelcomeModal userName={userName} onClose={() => setShowWelcome(false)} />}
+      <WelcomeModal userName={userName} onClose={() => setShowWelcome(false)} />
+      <ApplicationSettingsModal isOpen={isAppSettingsOpen} onClose={() => setIsAppSettingsOpen(false)} />
       <MobileMenu
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
-        voiceId={state.voiceId}
-        onVoiceChange={handleVoiceChange}
-        pollyVoices={pollyVoices}
         onClearConversation={clearConversation}
         onDownloadTranscript={downloadTranscript}
         onLogout={logout}
+        onOpenAppSettings={() => { setIsMenuOpen(false); setIsAppSettingsOpen(true); }}
+        onOpenAccountSettings={() => { setIsMenuOpen(false); setIsAccountSettingsOpen(true); }}
+        userName={userName}
       />
       <div className="h-screen w-screen overflow-hidden bg-immigo-gray-100 flex flex-col font-sans">
         <header className="bg-star-white shadow-md border-b border-immigo-gray-200 px-4 sm:px-8 py-3 flex-shrink-0 z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-10 h-10 object-contain" />
-              <div>
-                <h1 className="text-xl lg:text-2xl font-bold font-display text-deep-navy">ImmiGo</h1>
-              </div>
+              <h1 className="text-xl lg:text-2xl font-bold font-display text-deep-navy">ImmiGo</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              {user && (
-                <>
-                  {/* Desktop Header Elements */}
-                  <div className="hidden lg:flex items-center space-x-4">
-                    <LanguageSelector
-                        currentLanguageCode={currentLanguageCode}
-                        onLanguageChange={handleLanguageChange}
-                        availableLanguages={availableLanguages}
-                    />
-                    <UserProfile user={{ name: userName, initials: userInitials }} /> {/* Name removed */}
-                    <button onClick={logout} className="p-2 rounded-full hover:bg-immigo-gray-100" title="Logout">
-                        <LogOut className="w-6 h-6 text-deep-navy" />
-                    </button>
-                  </div>
-                  {/* Mobile Menu Toggle */}
-                  <button onClick={() => setIsMenuOpen(true)} className="lg:hidden p-2 rounded-full hover:bg-immigo-gray-100">
-                    <Menu className="w-6 h-6 text-deep-navy" />
-                  </button>
-                </>
-              )}
+            <div className="flex items-center space-x-2">
+              <div className="hidden lg:flex items-center space-x-2">
+                <LanguageSelector currentLanguageCode={state.currentLanguageCode} onLanguageChange={handleLanguageChange} availableLanguages={availableLanguages} />
+                <FontSizeSelector />
+                <button onClick={() => setIsAppSettingsOpen(true)} className="p-2 rounded-full hover:bg-immigo-gray-100" title="Application Settings">
+                  <Settings className="w-6 h-6 text-deep-navy" />
+                </button>
+                <button onClick={() => setIsAccountSettingsOpen(true)} className="p-2 rounded-full hover:bg-immigo-gray-100" title="Account Settings">
+                    <UserProfile user={{ name: userName, initials: userInitials }} />
+                </button>
+                <button onClick={logout} className="p-2 rounded-full hover:bg-immigo-gray-100" title="Logout">
+                    <LogOut className="w-6 h-6 text-deep-navy" />
+                </button>
+              </div>
+              <button onClick={() => setIsMenuOpen(true)} className="lg:hidden p-2 rounded-full hover:bg-immigo-gray-100">
+                <Menu className="w-6 h-6 text-deep-navy" />
+              </button>
             </div>
           </div>
         </header>
@@ -139,10 +144,7 @@ function ConversationUI() {
               errorMessage={state.errorMessage}
               onStartSession={startSession}
               onEndSession={endSession}
-              onClearError={handleClearError}
-              onVoiceChange={handleVoiceChange}
-              voiceId={state.voiceId}
-              pollyVoices={pollyVoices}
+              onClearError={() => dispatch({ type: 'CLEAR_ERROR' })}
               onClearConversation={clearConversation}
               onDownloadTranscript={downloadTranscript}
             />
@@ -158,10 +160,7 @@ function ConversationUI() {
                 errorMessage={state.errorMessage}
                 onStartSession={startSession}
                 onEndSession={endSession}
-                onClearError={handleClearError}
-                onVoiceChange={handleVoiceChange}
-                voiceId={state.voiceId}
-                pollyVoices={pollyVoices}
+                onClearError={() => dispatch({ type: 'CLEAR_ERROR' })}
                 onClearConversation={clearConversation}
                 onDownloadTranscript={downloadTranscript}
             />
@@ -181,7 +180,6 @@ function App() {
     return <div className="h-screen bg-immigo-gray-50" />;
   }
 
-  // The redundant <AuthProvider> wrapper is removed here.
   return (
     <>
       {user ? (

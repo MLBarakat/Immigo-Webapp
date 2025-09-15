@@ -6,9 +6,10 @@ export interface ConversationState {
   appStatus: AppStatus;
   errorMessage: string | null;
   isSessionActive: boolean;
-  sessionTime: number; // in seconds
+  sessionTime: number;
   voiceId: string;
-  currentLanguageCode: string; // New: Add current language to state
+  currentLanguageCode: string;
+  fontSize: 'small' | 'default' | 'large';
 }
 
 export type ConversationAction =
@@ -25,7 +26,8 @@ export type ConversationAction =
   | { type: 'START_SPEAKING' }
   | { type: 'STOP_SPEAKING' }
   | { type: 'SET_VOICE'; payload: string }
-  | { type: 'SET_LANGUAGE'; payload: string } // New: Action to set language
+  | { type: 'SET_LANGUAGE'; payload: string }
+  | { type: 'SET_FONT_SIZE'; payload: 'small' | 'default' | 'large' }
   | { type: 'TICK_SESSION_TIMER' };
 
 const initialState: ConversationState = {
@@ -35,13 +37,17 @@ const initialState: ConversationState = {
   isSessionActive: false,
   sessionTime: 0,
   voiceId: 'Joanna',
-  currentLanguageCode: 'en', // New: Default language
+  currentLanguageCode: 'en',
+  fontSize: 'default',
 };
 
 function conversationReducer(state: ConversationState, action: ConversationAction): ConversationState {
   switch (action.type) {
     case 'SET_LANGUAGE':
-            return { ...state, currentLanguageCode: action.payload }; // Handle new action
+          return { ...state, currentLanguageCode: action.payload };
+
+    case 'SET_FONT_SIZE':
+          return { ...state, fontSize: action.payload };
 
     case 'START_SESSION':
       return {

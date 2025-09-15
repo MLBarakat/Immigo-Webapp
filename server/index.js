@@ -9,15 +9,11 @@ const { PollyClient, SynthesizeSpeechCommand } = require('@aws-sdk/client-polly'
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Initialize Supabase Admin Client using environment variables from Amplify Console
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-// AWS SDK clients initialized without static credentials.
-// When running on Amplify, the SDK will automatically assume the IAM Role.
 const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
 const pollyClient = new PollyClient({ region: process.env.AWS_REGION });
 
-// More robust CORS configuration
 const allowedOrigins = [process.env.CORS_ORIGIN, 'http://127.0.0.1:5173'];
 app.use(cors({
     origin: function (origin, callback) {
@@ -29,7 +25,6 @@ app.use(cors({
     },
 }));
 
-// Middleware
 app.use(helmet());
 app.use(express.json({ limit: '10mb' }));
 
@@ -40,7 +35,6 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// API Key Authentication Middleware
 const apiKeyAuth = (req, res, next) => {
     const apiKey = req.get('X-API-Key');
     if (!apiKey || apiKey !== process.env.API_KEY) {
@@ -50,13 +44,11 @@ const apiKeyAuth = (req, res, next) => {
 };
 app.use('/api', apiKeyAuth);
 
-// --- Security: Basic Input Sanitization ---
 const sanitizeInput = (text) => {
     if (!text) return '';
     return text.replace(/[<>{}[\]|`~@#$%^&*_+=]/g, '');
 };
 
-// Secure Authentication Middleware
 const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -72,7 +64,37 @@ const authenticate = async (req, res, next) => {
   next();
 };
 
-// API Routes
+app.get('/api/settings', authenticate, async (req, res) => {
+    const { data, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .single();
+
+    if (error && error.code !== 'PGRST116') { // Ignore 'no rows' error, it's not a failure
+        console.error('Error fetching settings:', error);
+        return res.status(500).json({ error: 'Failed to fetch settings.' });
+    }
+    res.json(data || {}); // Return empty object if no settings found yet
+});
+
+app.put('/api/settings', authenticate, async (req, res) => {
+    // Prevent user from updating the user_id
+    const { user_id, ...settingsToUpdate } = req.body;
+
+    const { data, error } = await supabase
+        .from('user_settings')
+        .upsert({ user_id: req.user.id, ...settingsToUpdate, updated_at: new Date() })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error updating settings:', error);
+        return res.status(500).json({ error: 'Failed to update settings.' });
+    }
+    res.json(data);
+});
+
 app.get('/api/history', authenticate, async (req, res) => {
   const { data, error } = await supabase
    .from('messages')
@@ -118,4 +140,53 @@ app.post('/api/conversation', authenticate, async (req, res) => {
         res.setHeader('Transfer-Encoding', 'chunked');
 
         let fullResponseText = "";
-        for await (const event of bedrockResponseStream
+        for await (const event of bedrockResponseStream.body) {
+            if (event.chunk) {
+                const chunk = JSON.parse(new TextDecoder().decode(event.chunk.bytes));
+                if (chunk.type === 'content_block_delta') {
+                    const textChunk = chunk.delta.text;
+                    fullResponseText += textChunk;
+                    res.write(JSON.stringify({ type: 'text_chunk', data: textChunk }) + '\n');
+                }
+            }
+        }
+
+        const pollyCommand = new SynthesizeSpeechCommand({
+            Engine: 'neural',
+            OutputFormat: 'mp3',
+            Text: fullResponseText,
+            VoiceId: voiceId || 'Joanna',
+        });
+        const pollyResponse = await pollyClient.send(pollyCommand);
+        const audioBuffer = await streamToBuffer(pollyResponse.AudioStream);
+        const responseAudio = audioBuffer.toString('base64');
+        res.write(JSON.stringify({ type: 'audio_chunk', data: responseAudio }) + '\n');
+
+        await Promise.all([
+            supabase.from('messages').insert({ user_id: req.user.id, role: 'user', content: sanitizedMessage }),
+            supabase.from('messages').insert({ user_id: req.user.id, role: 'assistant', content: fullResponseText })
+        ]);
+
+        res.end();
+
+    } catch (error) {
+        console.error('Error in /api/conversation:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'An error occurred while processing your request.' });
+        } else {
+            res.end();
+        }
+    }
+});
+
+const streamToBuffer = (stream) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});

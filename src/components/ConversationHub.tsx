@@ -1,7 +1,8 @@
 import React from 'react';
-import { Mic, StopCircle, Download, Trash2, Waves, Loader, AlertCircle } from 'lucide-react';
+import { Mic, StopCircle, Download, Trash2 } from 'lucide-react';
 import { AppStatus } from '../types/conversation';
 
+// Props are updated to remove voice selection, as it's now in the App Settings modal
 interface ConversationHubProps {
   status: AppStatus;
   isSessionActive: boolean;
@@ -10,9 +11,6 @@ interface ConversationHubProps {
   onStartSession: () => void;
   onEndSession: () => void;
   onClearError: () => void;
-  onVoiceChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-  voiceId: string;
-  pollyVoices: Array<{ id: string; name: string }>;
   onClearConversation: () => void;
   onDownloadTranscript: () => void;
 }
@@ -33,9 +31,6 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   onStartSession,
   onEndSession,
   onClearError,
-  onVoiceChange,
-  voiceId,
-  pollyVoices,
   onClearConversation,
   onDownloadTranscript,
 }) => {
@@ -81,9 +76,6 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
         <aside className="hidden lg:flex flex-col p-6 bg-star-white shadow-xl border rounded-2xl h-full">
             <div className="flex-shrink-0">
                 <div className="space-y-2">
-                    <select value={voiceId} onChange={onVoiceChange} className="w-full bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm focus:ring-art-blue-500 focus:border-art-blue-500">
-                        {pollyVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
-                    </select>
                     <button onClick={onClearConversation} className="w-full flex items-center p-2 rounded-lg hover:bg-immigo-gray-100" title="Clear Conversation">
                         <Trash2 className="w-5 h-5 text-immigo-gray-600 mr-2" /> Clear Conversation
                     </button>
