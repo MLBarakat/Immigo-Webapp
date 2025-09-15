@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { X, Info, Play, ExternalLink } from 'lucide-react';
+import { X, Info, Play, ExternalLink, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
 import type { UserSettings, ThemeOption, MicMode, BargeIn, ProgressReportFrequency } from '../types/settings';
 
 interface Voice {
@@ -15,14 +15,13 @@ interface ApplicationSettingsModalProps {
   onSave?: (settings: UserSettings) => Promise<void> | void;
   onSettingPreview?: (key: keyof UserSettings, value: any) => void;
   pollyVoices?: Voice[];
-  initialFocusId?: string;
-  autoSave?: boolean;
+  isDesktop: boolean; // NEW prop to control responsive rendering
 }
 
-const THEME_OPTIONS: { value: ThemeOption; label: string; description: string }[] = [
-  { value: 'system', label: 'System', description: "Match your device's theme" },
-  { value: 'light', label: 'Light', description: 'Bright background and UI' },
-  { value: 'dark', label: 'Dark', description: 'Dark background for low-light' },
+const THEME_OPTIONS: { value: ThemeOption; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
 ];
 
 export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({
@@ -32,8 +31,7 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
   onSave,
   onSettingPreview,
   pollyVoices = [],
-  initialFocusId,
-  autoSave = false,
+  isDesktop, // Destructure new prop
 }) => {
   const defaults: UserSettings = {
     theme: 'system',
@@ -48,14 +46,13 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
   const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null); // Only used for desktop modal focus
 
+  // Sync draft with incoming settings when modal opens or settings change
   useEffect(() => {
-    if (isOpen) {
-      setDraft({ ...defaults, ...settings });
-    }
+    setDraft({ ...defaults, ...settings });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, JSON.stringify(settings)]);
+  }, [isOpen, JSON.stringify(settings)]); // stringify to deep-compare settings obj
 
   const safeUpdate = useCallback(
     (key: keyof UserSettings, value: any) => {
@@ -98,25 +95,48 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
     </button>
   );
 
-  if (!isOpen) return null;
+  if (!isOpen && isDesktop) return null; // Only hide if it's a desktop modal
+
+  const containerClasses = isDesktop
+    ? "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
+    : "h-screen w-screen bg-immigo-gray-100 flex flex-col font-sans"; // Full screen for mobile
+
+  const contentClasses = isDesktop
+    ? "bg-star-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
+    : "flex-1 bg-star-white flex flex-col overflow-hidden"; // Full height, no rounded corners/shadow for mobile
+
+  const headerClasses = isDesktop
+    ? "flex items-center justify-between p-6 border-b border-immigo-gray-200"
+    : "flex items-center p-4 border-b border-immigo-gray-200 bg-star-white shadow-md flex-shrink-0"; // Mobile header
+
+  const titleClasses = isDesktop
+    ? "text-2xl font-bold text-deep-navy font-display"
+    : "text-xl font-bold text-deep-navy font-display ml-4"; // Mobile title
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" aria-hidden={!isOpen}>
+    <div className={containerClasses} aria-hidden={!isOpen && isDesktop}> {/* aria-hidden for desktop modal */}
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
+        ref={dialogRef} // Ref only relevant for desktop modal focus
+        role={isDesktop ? "dialog" : undefined} // Only dialog role for desktop modal
+        aria-modal={isDesktop ? "true" : undefined}
         aria-labelledby="app-settings-title"
-        className="bg-star-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
+        className={contentClasses}
       >
-        <header className="flex items-center justify-between p-6 border-b border-immigo-gray-200">
-          <h2 id="app-settings-title" className="text-2xl font-bold text-deep-navy font-display">Application Settings</h2>
-          <button data-close-button onClick={onClose} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
-            <X className="w-6 h-6 text-immigo-gray-600" />
-          </button>
+        <header className={headerClasses}>
+          {!isDesktop && ( // Back button for mobile
+            <button onClick={onClose} aria-label="Back to previous page" className="p-2 rounded-full hover:bg-immigo-gray-100 text-immigo-gray-600">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+          )}
+          <h2 id="app-settings-title" className={titleClasses}>Application Settings</h2>
+          {isDesktop && ( // Close button for desktop
+            <button data-close-button onClick={onClose} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
+              <X className="w-6 h-6 text-immigo-gray-600" />
+            </button>
+          )}
         </header>
 
-        <main className="p-8 overflow-y-auto space-y-6">
+        <main className="p-8 overflow-y-auto space-y-6 flex-1"> {/* flex-1 to allow scrolling within main */}
           {/* Appearance */}
           <section className="flex items-center justify-between">
             <div>
@@ -217,7 +237,7 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
           </section>
         </main>
 
-        <footer className="p-4 border-t border-immigo-gray-200 bg-immigo-gray-50 flex items-center justify-between">
+        <footer className="p-4 border-t border-immigo-gray-200 bg-immigo-gray-50 flex items-center justify-between flex-shrink-0">
           <div className="text-sm text-art-red-600 h-5">{error && <span>{error}</span>}</div>
           <div className="flex items-center gap-3">
             <button onClick={onClose} className="px-4 py-2 rounded-md hover:bg-immigo-gray-200 font-semibold">Cancel</button>
