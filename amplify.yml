@@ -12,7 +12,7 @@ frontend:
     build:
       commands:
         - echo "🔨 Building TypeScript and frontend..."
-        # Compile frontend TypeScript (if you have tsconfig.build.json, else fallback to tsconfig.json)
+        # Compile frontend TypeScript
         - yarn tsc --project tsconfig.build.json
         # Compile backend TypeScript (if needed)
         - (cd server && yarn tsc || echo "No backend tsc step")
