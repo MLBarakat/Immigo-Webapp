@@ -1,6 +1,7 @@
 import { Message } from '../types/conversation';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_KEY = import.meta.env.VITE_API_KEY;
 
 export class ApiClient {
 private token: string;
@@ -14,6 +15,7 @@ constructor(token: string) {
             ...options.headers,
             'Authorization': `Bearer ${this.token}`,
             'Content-Type': 'application/json',
+            'X-API-Key': API_BASE_URL,
         };
         const response = await fetch(url, { ...options, headers });
         if (!response.ok) {
@@ -35,7 +37,7 @@ constructor(token: string) {
         voiceId: string,
         onTextChunk: (chunk: string) => void,
         onAudioChunk: (chunk: Uint8Array) => void,
-        languageCode: string = 'en' // New: Added languageCode parameter
+        languageCode: string = 'en'
     ): Promise<void> {
         const response = await this.fetchWithAuth(`${API_BASE_URL}/chat-stream`, {
             method: 'POST',
@@ -43,7 +45,7 @@ constructor(token: string) {
                 message,
                 conversationHistory,
                 voiceId,
-                languageCode, // Pass languageCode to the backend
+                languageCode,
             }),
         });
 
