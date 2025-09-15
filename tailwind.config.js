@@ -62,6 +62,7 @@ export default {
       fontFamily: {
         sans: ['"Roboto"', 'sans-serif'],
         display: ['"Lato"', 'sans-serif'],
+        emoji: ['"Apple Color Emoji"', '"Segoe UI Emoji"', '"Noto Color Emoji"', '"Segoe UI Symbol"', 'EmojiOneMozilla', 'sans-serif'],
       }
     },
   },

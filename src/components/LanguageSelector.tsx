@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-function countryCodeToFlagEmoji(countryCode: string): string {
-  return countryCode
-    .toUpperCase()
-    .split('')
-    .map(char => String.fromCodePoint(char.charCodeAt(0) + 0x1F1E6 - 65))
+function countryCodeToFlagEmoji(countryCode: string) {
+  return [...countryCode.toUpperCase()]
+    .map(c =>String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65))
     .join('');
 }
 
@@ -12,7 +10,7 @@ const availableLanguages = [
   { code: 'en', name: 'English', flag: countryCodeToFlagEmoji('US') },
   { code: 'es', name: 'Español', flag: countryCodeToFlagEmoji('ES') },
   { code: 'fr', name: 'Français', flag: countryCodeToFlagEmoji('FR') },
-  { code: 'ar', name: 'العربية', flag: countryCodeToFlagEmoji('AR') }
+  { code: 'ع', name: 'العربية', flag: countryCodeToFlagEmoji('SA') }
 ];
 
 interface LanguageSelectorProps {
@@ -40,8 +38,13 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({ currentLangu
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center space-x-2 p-2 rounded-lg hover:bg-immigo-gray-100"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label={`Language: ${currentLanguage.name}`}
       >
-        <span>{currentLanguage.flag}</span>
+        <span className="font-emoji text-lg leading-none" aria-hidden="true">
+          {currentLanguage.flag}
+        </span>
         <span className="font-semibold text-sm">{currentLanguage.code.toUpperCase()}</span>
       </button>
       {isOpen && (
