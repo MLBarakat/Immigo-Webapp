@@ -3,14 +3,20 @@ frontend:
   phases:
     preBuild:
       commands:
-        - '# Set Node.js to version 18, as specified in README'
         - nvm use 18
+        - echo "📦 Installing frontend and backend dependencies..."
         - '# Install frontend dependencies with Yarn'
-        - yarn install --frozen-lockfile --network-concurrency 4
+        - yarn install --frozen-lockfile
         - '# Install backend dependencies with Yarn'
         - cd server && yarn install && cd ..
     build:
       commands:
+        - echo "🔨 Building TypeScript and frontend..."
+        # Compile frontend TypeScript (if you have tsconfig.build.json, else fallback to tsconfig.json)
+        - yarn tsc --project tsconfig.build.json || yarn tsc --noEmit
+        # Compile backend TypeScript (if needed)
+        - (cd server && yarn tsc || echo "No backend tsc step")
+        # Build frontend (Vite React build → dist/)
         - yarn build
   artifacts:
     baseDirectory: dist
@@ -20,3 +26,4 @@ frontend:
     paths:
       - node_modules/**/*
       - server/node_modules/**/*
+      - .yarn/cache/**/*

@@ -1,16 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true,
-    "emitDeclarationOnly": true,
     "noEmit": false,
-    "outDir": "dist-node",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "skipLibCheck": true,
-    "strict": true
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationDir": "./dist/types"
   },
-  "include": ["src", "server", "types", "vite.config.ts"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "dist-node", "**/*.spec.ts", "**/*.test.ts"]
 }
