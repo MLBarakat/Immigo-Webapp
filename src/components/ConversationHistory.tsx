@@ -1,23 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { Message } from '../types/conversation';
-import { RefreshCw } from 'lucide-react'; // Assuming RefreshCw is for a spinner/loading state
+import { Bot, User } from 'lucide-react';
 
 interface ConversationHistoryProps {
   messages: Message[];
-  isTranscribing: boolean;
-  transcript: string;
-  currentBotMessage: string | null;
-  recognitionError: string | null;
-  onClearRecognitionError: () => void;
 }
 
 export const ConversationHistory: React.FC<ConversationHistoryProps> = ({
   messages,
-  isTranscribing,
-  transcript,
-  currentBotMessage,
-  recognitionError,
-  onClearRecognitionError,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -27,60 +17,34 @@ export const ConversationHistory: React.FC<ConversationHistoryProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, transcript, currentBotMessage]); // Scroll when new messages or transcript updates
+  }, [messages]);
 
   return (
     <div className="flex-grow overflow-y-auto p-4 space-y-4 rounded-lg bg-immigo-gray-50 dark:bg-gray-900">
-      {messages.map((msg, index) => (
-        <div key={msg.id || index} className={`flex ${msg.sender === 'User' ? 'justify-end' : 'justify-start'}`}>
+      {messages.map((msg) => (
+        <div key={msg.id} className={`flex items-start gap-3 sm:gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          {msg.role === 'assistant' && (
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-art-blue-600 flex items-center justify-center text-star-white shadow-md flex-shrink-0">
+              <Bot size={20} />
+            </div>
+          )}
           <div
-            className={`max-w-[70%] p-3 rounded-xl shadow-sm ${
-              msg.sender === 'User'
-                ? 'bg-art-blue-600 text-star-white rounded-br-none'
-                : 'bg-immigo-gray-200 dark:bg-gray-700 text-deep-navy dark:text-star-white rounded-bl-none'
+            className={`max-w-xs sm:max-w-md lg:max-w-lg p-3 sm:p-4 rounded-2xl shadow-md ${
+              msg.role === 'user'
+                ? 'bg-art-blue-600 text-star-white rounded-br-lg'
+                : 'bg-star-white text-deep-navy rounded-bl-lg border border-immigo-gray-200'
             }`}
           >
-            <p className="text-sm">{msg.text}</p>
-            <span className="block text-right text-xs mt-1 opacity-75">
-              {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
+            <p className="text-sm leading-relaxed">{msg.content}</p>
+            <p className={`text-xs mt-2 text-right opacity-70 ${msg.role === 'user' ? 'text-immigo-gray-200' : 'text-immigo-gray-500'}`}>{new Date(msg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p>
           </div>
+          {msg.role === 'user' && (
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-deep-navy flex items-center justify-center text-star-white shadow-md flex-shrink-0">
+              <User size={20} />
+            </div>
+          )}
         </div>
       ))}
-
-      {isTranscribing && transcript && (
-        <div className="flex justify-end">
-          <div className="max-w-[70%] p-3 rounded-xl shadow-sm bg-immigo-gray-100 dark:bg-gray-700 text-deep-navy dark:text-star-white opacity-80 italic">
-            <p className="text-sm">{transcript}</p>
-            <span className="block text-right text-xs mt-1 opacity-75">
-              Transcribing...
-            </span>
-          </div>
-        </div>
-      )}
-
-      {currentBotMessage && (
-        <div className="flex justify-start">
-          <div className="max-w-[70%] p-3 rounded-xl shadow-sm bg-immigo-gray-200 dark:bg-gray-700 text-deep-navy dark:text-star-white animate-pulse">
-            <p className="text-sm">{currentBotMessage}</p>
-            <span className="block text-right text-xs mt-1 opacity-75">
-              AI Speaking...
-            </span>
-          </div>
-        </div>
-      )}
-
-      {recognitionError && (
-        <div className="flex justify-center">
-          <div className="max-w-[70%] p-3 rounded-xl shadow-sm bg-art-red-100 text-art-red-600 border border-art-red-300 flex items-center gap-2">
-            <p className="text-sm font-medium">{recognitionError}</p>
-            <button onClick={onClearRecognitionError} className="text-art-red-800 hover:text-art-red-900 font-bold text-lg">
-              &times;
-            </button>
-          </div>
-        </div>
-      )}
-
       <div ref={messagesEndRef} />
     </div>
   );
