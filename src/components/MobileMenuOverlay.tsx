@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Settings, LogOut, Trash2, Download } from 'lucide-react';
+import { DisplayUser } from '../types/user'; // Import the new type
 
 interface MobileMenuOverlayProps {
   isOpen: boolean;
@@ -9,10 +10,7 @@ interface MobileMenuOverlayProps {
   onSignOut: () => void;
   onClearConversation: () => void;
   onDownloadTranscript: () => void;
-  user: {
-    name: string;
-    initials: string;
-  };
+  user: DisplayUser; // Use the new type
 }
 
 export const MobileMenuOverlay: React.FC<MobileMenuOverlayProps> = ({

@@ -1,13 +1,13 @@
 import React from 'react';
 import ImmigoLogo from '../assets/immigo_logo.png';
-import { User } from '@supabase/supabase-js';
 import { Settings, LogOut, Menu } from 'lucide-react';
 import { UserSettings } from '../types/settings';
+import { DisplayUser } from '../types/user'; // Import the new type
 import { LanguageSelector } from './LanguageSelector';
 import { FontSizeSelector } from './FontSizeSelector';
 
 interface HeaderProps {
-  user: User | null;
+  displayUser: DisplayUser; // Use the new type
   userSettings: Partial<UserSettings>;
   onOpenAppSettings: () => void;
   onOpenAccountSettings: () => void;
@@ -17,7 +17,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  user,
+  displayUser,
   userSettings,
   onOpenAppSettings,
   onOpenAccountSettings,
@@ -25,8 +25,6 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleMobileMenu,
   onSettingChange,
 }) => {
-  const userInitials = user?.email ? user.email.charAt(0).toUpperCase() : '?';
-
   return (
     <header className="flex items-center justify-between p-4 bg-star-white dark:bg-gray-800 shadow-sm border-b border-immigo-gray-200 dark:border-gray-700">
       <div className="flex items-center gap-2 md:gap-4">
@@ -36,7 +34,6 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Desktop Navigation */}
       <nav className="hidden md:flex items-center space-x-4">
-        {/* Language Selector */}
         <LanguageSelector
           currentLanguage="EN"
           onLanguageChange={() => console.log('Language change')}
@@ -45,7 +42,6 @@ export const Header: React.FC<HeaderProps> = ({
           currentFontSize={userSettings.font_size || 'default'}
           onFontSizeChange={(size) => onSettingChange('font_size', size)}
         />
-        {/* Settings */}
         <button
           onClick={onOpenAppSettings}
           className="p-2 rounded-full hover:bg-immigo-gray-100 dark:hover:bg-gray-700 text-immigo-gray-600 dark:text-immigo-gray-300"
@@ -53,15 +49,13 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Settings className="w-5 h-5" />
         </button>
-        {/* User Profile Bubble */}
         <button
           onClick={onOpenAccountSettings}
           className="flex items-center justify-center w-9 h-9 bg-art-blue-600 text-star-white rounded-full font-semibold text-sm hover:opacity-90 transition-opacity"
-          aria-label={`User Profile for ${user?.name || 'Guest'}`}
+          aria-label={`User Profile for ${displayUser.name}`}
         >
-          {userInitials}
+          {displayUser.initials}
         </button>
-        {/* Logout */}
         <button
           onClick={onSignOut}
           className="p-2 rounded-full hover:bg-immigo-gray-100 dark:hover:bg-gray-700 text-immigo-gray-600 dark:text-immigo-gray-300"
