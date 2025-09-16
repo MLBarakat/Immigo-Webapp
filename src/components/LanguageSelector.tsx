@@ -6,15 +6,15 @@ interface LanguageSelectorProps {
 }
 
 export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
-    currentLanguage,
-    onLanguageChange,
+  currentLanguage,
+  onLanguageChange,
 }) => {
-   return (
+  return (
     <div className="relative">
       <button
         className="flex items-center px-3 py-2 rounded-lg text-sm font-semibold text-deep-navy dark:text-star-white bg-immigo-gray-100 dark:bg-gray-700 hover:bg-immigo-gray-200 dark:hover:bg-gray-600"
         aria-label="Select Language"
-        onClick={() => console.log('Open language selector')}
+        onClick={() => onLanguageChange(currentLanguage === 'EN' ? 'ES' : 'EN')}
       >
         {currentLanguage}
       </button>
