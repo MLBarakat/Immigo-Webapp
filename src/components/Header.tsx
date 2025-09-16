@@ -8,7 +8,6 @@ import useMediaQuery from '../hooks/useMediaQuery';
 
 interface HeaderProps {
   onOpenAppSettings: () => void;
-  onOpenAccountSettings: () => void;
   onLogout: () => void;
   user: {
     name: string;
@@ -16,7 +15,7 @@ interface HeaderProps {
   };
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenAppSettings, onOpenAccountSettings, onLogout, user }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenAppSettings, onLogout, user }) => {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   return (

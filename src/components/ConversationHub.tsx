@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCcw, Pause, Play, Download, Settings, UserCircle2 } from 'lucide-react';
+import { RefreshCcw, Pause, Play, Download } from 'lucide-react';
 import { AppStatus } from '../context/ConversationContext';
 import { UserSettings } from '../types/settings';
 

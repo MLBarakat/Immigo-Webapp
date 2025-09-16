@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router } from 'react-router-dom';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { ConversationHub } from './components/ConversationHub';
@@ -9,9 +9,8 @@ import { UserSettings } from './types/settings';
 import { ConversationProvider, useConversation } from './context/ConversationContext';
 import { useConversationManager } from './hooks/useConversationManager';
 import useMediaQuery from './hooks/useMediaQuery';
-import { supabase } from './supabaseClient';
 import { AuthPage } from './components/AuthPage';
-import { Header } from './components/Header'; // New Header component
+import { Header } from './components/Header';
 import { ConversationHistory } from './components/ConversationHistory';
 import { ChatInput } from './components/ChatInput';
 import { useAuth } from './hooks/useAuth';

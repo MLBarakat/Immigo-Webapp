@@ -3,10 +3,11 @@ import { ApiClient } from '../services/apiClient';
 
 export type AppStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
 
+// CORRECTED Message interface to match the rest of the application
 export interface Message {
   id: string;
-  type: 'user' | 'ai';
-  text: string;
+  role: 'user' | 'assistant';
+  content: string;
   timestamp: string;
 }
 
@@ -42,7 +43,7 @@ type ConversationAction =
   | { type: 'START_PROCESSING' }
   | { type: 'START_SPEAKING' }
   | { type: 'STOP_SPEAKING' }
-  | { type: 'UPDATE_MESSAGE'; payload: { id: string; text: string } }
+  | { type: 'UPDATE_MESSAGE'; payload: { id: string; content: string } } // Updated payload
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'CLEAR_HISTORY' };
 
@@ -71,6 +72,7 @@ const conversationReducer = (state: ConversationState, action: ConversationActio
     case 'END_SESSION':
       return { ...state, isSessionActive: false, appStatus: 'idle' };
     case 'UPDATE_SESSION_TIME':
+      return { ...state, sessionTime: action.payload };
     case 'TICK_SESSION_TIMER':
       return { ...state, sessionTime: state.sessionTime + 1 };
     case 'SET_ERROR_MESSAGE':
@@ -96,46 +98,4 @@ const conversationReducer = (state: ConversationState, action: ConversationActio
     case 'START_SPEAKING':
       return { ...state, appStatus: 'speaking' };
     case 'STOP_SPEAKING':
-      return { ...state, appStatus: state.isSessionActive ? 'listening' : 'idle' }; // Return to listening if session active
-    case 'UPDATE_MESSAGE':
-      return {
-        ...state,
-        conversationHistory: state.conversationHistory.map(msg =>
-          msg.id === action.payload.id ? { ...msg, text: action.payload.text } : msg
-        ),
-      };
-    default:
-      return state;
-  }
-};
-
-interface ConversationContextType {
-  state: ConversationState;
-  dispatch: React.Dispatch<ConversationAction>;
-  apiClient: ApiClient | null;
-}
-
-const ConversationContext = createContext<ConversationContextType | undefined>(undefined);
-
-interface ConversationProviderProps {
-  children: ReactNode;
-  apiClient: ApiClient | null;
-}
-
-export const ConversationProvider: React.FC<ConversationProviderProps> = ({ children, apiClient }) => {
-  const [state, dispatch] = useReducer(conversationReducer, initialState);
-
-  return (
-    <ConversationContext.Provider value={{ state, dispatch, apiClient }}>
-      {children}
-    </ConversationContext.Provider>
-  );
-};
-
-export const useConversation = () => {
-  const context = useContext(ConversationContext);
-  if (context === undefined) {
-    throw new Error('useConversation must be used within a ConversationProvider');
-  }
-  return context;
-};
+      return { ...state, appStatus: state.isSessionActive ? 'listening' : 'idle' };
