@@ -19,7 +19,7 @@
     "declarationDir": "./dist/types",
     "emitDeclarationOnly": true
   },
-  "include": ["src"],
+  "include": ["src", "src/types"],
   "references": [{ "path": "./tsconfig.node.json" }],
   "exclude": [
     "node_modules",
