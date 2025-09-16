@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { BrowserRouter as Router, useNavigate } from 'react-router-dom'; // Corrected import
+import { BrowserRouter as Router, useNavigate } from 'react-router-dom';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { ConversationHub } from './components/ConversationHub';
@@ -13,7 +13,7 @@ import { AuthPage } from './components/AuthPage';
 import { Header } from './components/Header';
 import { ConversationHistory } from './components/ConversationHistory';
 import { ChatInput } from './components/ChatInput';
-import { useAuth } from './hooks/useAuth';
+import { useAuth, AuthProvider } from './hooks/useAuth';
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -23,7 +23,7 @@ const PollyVoices = [
 ];
 
 const AppContent: React.FC = () => {
-  const navigate = useNavigate(); // Correctly using the hook
+  const navigate = useNavigate();
   const { session, logout } = useAuth();
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
