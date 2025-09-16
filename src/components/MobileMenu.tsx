@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Settings, User, Trash2, Download, LogOut, ChevronRight } from 'lucide-react';
+import { X, Settings, Trash2, Download, LogOut, ChevronRight } from 'lucide-react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface MobileMenuProps {
