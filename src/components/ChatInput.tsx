@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Send, Mic, StopCircle } from 'lucide-react';
 
 interface ChatInputProps {
@@ -18,9 +18,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   stopAudioInput,
   isTranscribing,
   micMode,
-  // isSpeaking, // Uncomment if used directly here
-  // setIsSpeaking, // Uncomment if used directly here
-  // audioLevel // Uncomment if used directly here
+  isSpeaking,
+  setIsSpeaking,
+  audioLevel
 }) => {
   const [message, setMessage] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
