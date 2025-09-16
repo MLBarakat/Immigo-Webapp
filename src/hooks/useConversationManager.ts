@@ -1,8 +1,8 @@
-import { useContext, useCallback, useRef, useEffect } from 'react'; // Added useEffect
+import { useContext, useCallback, useRef, useEffect } from 'react';
 import { useConversation } from '../context/ConversationContext';
 import { ApiClient } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
-import { Message } from '../types/conversation'; // Import Message type
+import { Message } from '../context/ConversationContext';
 
 // Placeholder for useSpeechRecognition and useSpeechSynthesis, assuming they are available or mocked
 // import { useSpeechRecognition } from './useSpeechRecognition';
@@ -26,7 +26,8 @@ console.log("AI would speak:", text);
   const handleTextChunk = useCallback((textChunk: string) => {
     // Logic to update the UI with AI's partial text response
     console.log("Received AI text chunk:", textChunk);
-    dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', text: textChunk } }); // Assuming a temporary ID for streaming
+    // Assuming a temporary ID for streaming
+    dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', content: textChunk } });
   }, [dispatch]);
 
   const handleAudioChunk = useCallback((audioChunk: Uint8Array) => {
@@ -40,7 +41,7 @@ console.log("AI would speak:", text);
     if (state.isSessionActive) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = setInterval(() => {
-        dispatch({ type: 'UPDATE_SESSION_TIME', payload: state.sessionTime + 1 });
+        dispatch({ type: 'TICK_SESSION_TIMER' });
       }, 1000) as unknown as number; // Type assertion for setInterval return
     } else if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -49,7 +50,7 @@ console.log("AI would speak:", text);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [state.isSessionActive, state.sessionTime, dispatch]);
+  }, [state.isSessionActive, dispatch]);
 
 
   const startSession = useCallback(async () => {
@@ -85,8 +86,8 @@ console.log("AI would speak:", text);
 
     const userMessage: Message = {
       id: uuidv4(),
-      type: 'user',
-      text: text,
+      role: 'user',
+      content: text,
       timestamp: new Date().toISOString(),
     };
     dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
@@ -95,7 +96,7 @@ console.log("AI would speak:", text);
       await apiClient.sendMessage(
         currentConversationId.current,
         text,
-        state.aiVoiceId, // Corrected from voiceId
+        state.aiVoiceId,
         state.currentLanguageCode,
         state.micMode,
         state.bargeIn,
@@ -120,7 +121,7 @@ console.log("AI would speak:", text);
   }, [dispatch]);
 
   const downloadTranscript = useCallback(() => {
-    const transcript = state.conversationHistory.map(msg => `${msg.type.toUpperCase()}: ${msg.text}`).join('\n');
+    const transcript = state.conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n');
     const blob = new Blob([transcript], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

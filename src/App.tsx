@@ -1,7 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react'; // Removed useCallback, added useMemo
-import { Auth } from '@supabase/auth-ui-react';
-import { ThemeSupa } from '@supabase/auth-ui-shared';
-import { createClient } from '@supabase/supabase-js';
+import React, { useEffect, useState, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
@@ -11,18 +8,15 @@ import { MobileMenu } from './components/MobileMenu';
 import { ApiClient } from './services/apiClient';
 import { UserSettings } from './types/settings';
 import { ConversationProvider } from './context/ConversationContext';
-import useMediaQuery from './hooks/useMediaQuery'; // NEW
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import useMediaQuery from './hooks/useMediaQuery';
+import { supabase } from './supabaseClient';
+import { AuthPage } from './components/AuthPage'; // Import the custom Auth Page
 
 const PollyVoices = [
-    { id: 'Joanna', name: 'Joanna (US English)' },
-    { id: 'Matthew', name: 'Matthew (US English)' },
-    { id: 'Amy', name: 'Amy (British English)' },
-    { id: 'Brian', name: 'Brian (British English)' },
+  { id: 'Joanna', name: 'Joanna (US English)' },
+  { id: 'Matthew', name: 'Matthew (US English)' },
+  { id: 'Amy', name: 'Amy (British English)' },
+  { id: 'Brian', name: 'Brian (British English)' },
 ];
 
 const AppContent: React.FC = () => {
@@ -30,7 +24,7 @@ const AppContent: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
-  const isDesktop = useMediaQuery('(min-width: 1024px)'); // NEW: Using the hook
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const apiClient = useMemo(() => {
     if (session?.access_token) {
@@ -65,7 +59,7 @@ const AppContent: React.FC = () => {
     fetchSettings();
   }, [apiClient]);
 
-  const handleSaveSettings = async (settingsToSave: UserSettings) => { // Removed useCallback
+  const handleSaveSettings = async (settingsToSave: UserSettings) => {
     if (apiClient) {
       try {
         await apiClient.updateSettings(settingsToSave);
@@ -78,32 +72,16 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleSettingChange = (key: keyof UserSettings, value: any) => { // Renamed from handleSettingPreview and made global
+  const handleSettingChange = (key: keyof UserSettings, value: any) => {
     setUserSettings(prev => ({ ...prev, [key]: value }));
   };
 
   if (!session) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-immigo-gray-100 p-4">
-        <div className="w-full max-w-md bg-star-white p-8 rounded-lg shadow-lg">
-          <Auth
-            supabaseClient={supabase}
-            appearance={{ theme: ThemeSupa }}
-            providers={['google']}
-          />
-        </div>
-      </div>
-    );
+    return <AuthPage />; // Use the custom AuthPage component
   }
 
   const navigateToAccountSettings = () => {
-    if (isDesktop) {
-      // Account settings is a full page, so always navigate for now.
-      // This could be changed to a modal if needed in the future.
-      navigate('/account-settings');
-    } else {
-      navigate('/account-settings');
-    }
+    navigate('/account-settings');
   };
 
   const handleOpenAppSettings = () => {
@@ -125,7 +103,6 @@ const AppContent: React.FC = () => {
   return (
     <ConversationProvider apiClient={apiClient}>
       <div className={`flex flex-col h-screen ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
-        {/* Main content - ConversationHub, potentially with MobileMenu */}
         <Routes>
           <Route path="/" element={
             <ConversationHub
@@ -147,28 +124,26 @@ const AppContent: React.FC = () => {
                 onClose={handleCloseAppSettings}
                 settings={userSettings}
                 onSave={handleSaveSettings}
-                onSettingChange={handleSettingChange} // <-- PASSED THIS NEW PROP
+                onSettingChange={handleSettingChange}
                 pollyVoices={PollyVoices}
-                isDesktop={isDesktop} // Ensure this prop is passed for mobile route as well
+                isDesktop={isDesktop}
               />
             )
           } />
         </Routes>
 
-        {/* Application Settings Modal (Desktop Only) */}
         {isDesktop && isAppSettingsModalOpen && (
           <ApplicationSettingsModal
             isOpen={isAppSettingsModalOpen}
             onClose={handleCloseAppSettings}
             settings={userSettings}
             onSave={handleSaveSettings}
-            onSettingChange={handleSettingChange} // <-- PASSED THIS NEW PROP
+            onSettingChange={handleSettingChange}
             pollyVoices={PollyVoices}
             isDesktop={isDesktop}
           />
         )}
 
-        {/* Mobile Menu for Navigation (Desktop hides it) */}
         {!isDesktop && (
           <MobileMenu
             onOpenAppSettings={handleOpenAppSettings}
