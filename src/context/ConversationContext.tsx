@@ -3,7 +3,6 @@ import { ApiClient } from '../services/apiClient';
 
 export type AppStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
 
-// CORRECTED Message interface to match the rest of the application
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -43,7 +42,7 @@ type ConversationAction =
   | { type: 'START_PROCESSING' }
   | { type: 'START_SPEAKING' }
   | { type: 'STOP_SPEAKING' }
-  | { type: 'UPDATE_MESSAGE'; payload: { id: string; content: string } } // Updated payload
+  | { type: 'UPDATE_MESSAGE'; payload: { id: string; content: string } }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'CLEAR_HISTORY' };
 
@@ -71,16 +70,12 @@ const conversationReducer = (state: ConversationState, action: ConversationActio
       return { ...state, isSessionActive: true, sessionTime: 0, appStatus: 'listening' };
     case 'END_SESSION':
       return { ...state, isSessionActive: false, appStatus: 'idle' };
-    case 'UPDATE_SESSION_TIME':
-      return { ...state, sessionTime: action.payload };
     case 'TICK_SESSION_TIMER':
       return { ...state, sessionTime: state.sessionTime + 1 };
     case 'SET_ERROR_MESSAGE':
-    case 'SET_ERROR':
-      return { ...state, errorMessage: action.payload, appStatus: action.payload ? 'error' : state.appStatus };
+      return { ...state, errorMessage: action.payload, appStatus: action.payload ? 'error' : 'idle' };
     case 'CLEAR_CONVERSATION':
-    case 'CLEAR_HISTORY':
-      return { ...state, conversationHistory: [], appStatus: 'idle', isSessionActive: false, sessionTime: 0, errorMessage: null };
+      return { ...state, conversationHistory: [] };
     case 'SET_LANGUAGE':
       return { ...state, currentLanguageCode: action.payload };
     case 'SET_FONT_SIZE':
@@ -98,4 +93,59 @@ const conversationReducer = (state: ConversationState, action: ConversationActio
     case 'START_SPEAKING':
       return { ...state, appStatus: 'speaking' };
     case 'STOP_SPEAKING':
-      return { ...state, appStatus: state.isSessionActive ? 'listening' : 'idle' };
+      return { ...state, appStatus: 'listening' };
+    case 'UPDATE_MESSAGE':
+      const existingMessage = state.conversationHistory.find(msg => msg.id === action.payload.id);
+      if (existingMessage) {
+        return {
+          ...state,
+          conversationHistory: state.conversationHistory.map(msg =>
+            msg.id === action.payload.id ? { ...msg, content: msg.content + action.payload.content } : msg
+          ),
+        };
+      } else {
+        // Create a new assistant message if it doesn't exist
+        const newAssistantMessage: Message = {
+          id: action.payload.id,
+          role: 'assistant',
+          content: action.payload.content,
+          timestamp: new Date().toISOString(),
+        };
+        return {
+          ...state,
+          conversationHistory: [...state.conversationHistory, newAssistantMessage],
+        };
+      }
+    default:
+      return state;
+  }
+};
+
+interface ConversationContextType {
+  state: ConversationState;
+  dispatch: React.Dispatch<ConversationAction>;
+}
+
+const ConversationContext = createContext<ConversationContextType | undefined>(undefined);
+
+interface ConversationProviderProps {
+  children: ReactNode;
+  apiClient: ApiClient | null;
+}
+
+export const ConversationProvider: React.FC<ConversationProviderProps> = ({ children }) => {
+  const [state, dispatch] = useReducer(conversationReducer, initialState);
+  return (
+    <ConversationContext.Provider value={{ state, dispatch }}>
+      {children}
+    </ConversationContext.Provider>
+  );
+};
+
+export const useConversation = () => {
+  const context = useContext(ConversationContext);
+  if (context === undefined) {
+    throw new Error('useConversation must be used within a ConversationProvider');
+  }
+  return context;
+};
