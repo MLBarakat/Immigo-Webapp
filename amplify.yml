@@ -5,18 +5,14 @@ frontend:
       commands:
         - nvm use 18
         - echo "📦 Installing frontend and backend dependencies..."
-        - '# Install frontend dependencies with Yarn'
         - yarn install --frozen-lockfile
-        - '# Install backend dependencies with Yarn'
         - cd server && yarn install && cd ..
+        - mkdir -p dist/types
     build:
       commands:
         - echo "🔨 Building TypeScript and frontend..."
-        # Compile frontend TypeScript
         - yarn tsc --project tsconfig.build.json
-        # Compile backend TypeScript (if needed)
-        - (cd server && yarn tsc || echo "No backend tsc step")
-        # Build frontend (Vite React build → dist/)
+        - (cd server && yarn tsc --project tsconfig.server.json || echo "No backend tsc step") # Specify backend tsconfig if exists
         - yarn build
   artifacts:
     baseDirectory: dist
