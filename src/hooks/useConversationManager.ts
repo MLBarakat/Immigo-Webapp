@@ -87,7 +87,7 @@ console.log("AI would speak:", text);
       id: uuidv4(),
       type: 'user',
       text: text,
-      timestamp: new Date().toISOString(), // Corrected Date to string conversion
+      timestamp: new Date().toISOString(),
     };
     dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
 
