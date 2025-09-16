@@ -14,11 +14,10 @@ const currentConversationId = useRef<string>(uuidv4());
 const intervalRef = useRef<number | null>(null);
 
 const handleTextChunk = useCallback((textChunk: string) => {
-dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', text: textChunk } });
+dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', content: textChunk } });
   }, [dispatch]);
 
   const handleAudioChunk = useCallback((audioChunk: Uint8Array) => {
-    // Logic to play the audio chunk
     console.log("Received AI audio chunk:", audioChunk);
   }, []);
 
@@ -66,8 +65,8 @@ dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', text: textC
 
     const userMessage: Message = {
       id: uuidv4(),
-      type: 'user',
-      text: text,
+      role: 'user',
+      content: text,
       timestamp: new Date().toISOString(),
     };
     dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
@@ -98,7 +97,7 @@ dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', text: textC
   }, [dispatch]);
 
   const downloadTranscript = useCallback(() => {
-    const transcript = state.conversationHistory.map(msg => `${msg.type.toUpperCase()}: ${msg.text}`).join('\n');
+    const transcript = state.conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n');
     const blob = new Blob([transcript], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

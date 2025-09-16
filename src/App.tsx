@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { BrowserRouter as Router } from 'react-router-dom';
+import { BrowserRouter as Router, useNavigate } from 'react-router-dom'; // Corrected import
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { ConversationHub } from './components/ConversationHub';
@@ -23,7 +23,7 @@ const PollyVoices = [
 ];
 
 const AppContent: React.FC = () => {
-  const navigate = useNavigate();
+  const navigate = useNavigate(); // Correctly using the hook
   const { session, logout } = useAuth();
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
@@ -83,18 +83,14 @@ const AppContent: React.FC = () => {
     <div className={`flex flex-col h-screen bg-immigo-gray-50 font-sans ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
       <Header
         onOpenAppSettings={handleOpenAppSettings}
-        onOpenAccountSettings={handleOpenAccountSettings}
         onLogout={logout}
         user={{ name: session.user?.user_metadata?.full_name || 'User', initials: 'MB' }}
       />
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* Main Content Area */}
         <div className="flex-1 flex flex-col p-4 lg:p-6 overflow-hidden">
           <ConversationHistory messages={state.conversationHistory} />
           <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />
         </div>
-
-        {/* Sidebar for Desktop / Hidden on Mobile */}
         {isDesktop && (
           <aside className="w-full lg:w-96 p-6 flex-shrink-0">
             <ConversationHub
@@ -117,8 +113,6 @@ const AppContent: React.FC = () => {
       <footer className="text-center py-2 bg-immigo-gray-100 border-t border-immigo-gray-200 text-xs text-immigo-gray-600">
         © 2025 ImmiGo. All rights reserved.
       </footer>
-
-      {/* Modals */}
       {isAppSettingsModalOpen && (
         <ApplicationSettingsModal
           isOpen={isAppSettingsModalOpen}
@@ -146,9 +140,11 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => (
   <Router>
-    <ConversationProvider apiClient={null}>
+    <AuthProvider>
+      <ConversationProvider apiClient={null}>
         <AppContent />
-    </ConversationProvider>
+      </ConversationProvider>
+    </AuthProvider>
   </Router>
 );
 
