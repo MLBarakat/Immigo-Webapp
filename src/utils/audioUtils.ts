@@ -73,8 +73,9 @@ export class SpeechRecognitionManager {
   private onEndCallback: () => void = () => {};
 
   constructor() {
-    if ('webkitSpeechRecognition' in window) {
-      this.recognition = new window.webkitSpeechRecognition();
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      this.recognition = new SpeechRecognition();
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
       this.recognition.onstart = () => {
