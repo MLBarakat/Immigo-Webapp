@@ -3,7 +3,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { ConversationHub } from './components/ConversationHub';
-import { MobileMenuOverlay } from './components/MobileMenuOverlay'; // New Import
+import { MobileMenuOverlay } from './components/MobileMenuOverlay';
 import { ApiClient } from './services/apiClient';
 import { UserSettings } from './types/settings';
 import { ConversationProvider, useConversation } from './context/ConversationContext';
@@ -24,10 +24,10 @@ const PollyVoices = [
 ];
 
 const AppContent: React.FC = () => {
-  const { session, logout } = useAuth();
+  const { session, user: authUser, logout } = useAuth();
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // New state for mobile menu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
@@ -82,17 +82,20 @@ const AppContent: React.FC = () => {
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
 
   const user = {
-    name: session.user?.user_metadata?.full_name || 'User',
-    initials: (session.user?.user_metadata?.full_name || 'U').charAt(0).toUpperCase(),
+    name: authUser?.user_metadata?.full_name || authUser?.email || 'User',
+    initials: (authUser?.user_metadata?.full_name || authUser?.email || 'U').charAt(0).toUpperCase(),
   };
 
   return (
     <div className={`flex flex-col h-screen bg-immigo-gray-50 font-sans ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
       <Header
-        onOpenAppSettings={handleOpenAppSettings}
-        onLogout={logout}
         user={user}
-        onToggleMobileMenu={handleToggleMobileMenu} // New prop for mobile menu
+        userSettings={userSettings}
+        onOpenAppSettings={handleOpenAppSettings}
+        onOpenAccountSettings={handleOpenAccountSettings}
+        onSignOut={logout}
+        onToggleMobileMenu={handleToggleMobileMenu}
+        onSettingChange={handleSettingChange}
       />
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         <div className="flex-1 flex flex-col p-4 lg:p-6 overflow-hidden">

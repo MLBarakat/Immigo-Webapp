@@ -6,10 +6,10 @@ interface ChatInputProps {
   startAudioInput: () => void;
   stopAudioInput: () => void;
   isTranscribing: boolean;
-  isSpeaking: boolean;
-  setIsSpeaking: (speaking: boolean) => void; // Added for external control if needed
+//   isSpeaking: boolean;
+//   setIsSpeaking: (speaking: boolean) => void; // Added for external control if needed
   micMode: 'voice_activity' | 'push_to_talk';
-  audioLevel: number; // Placeholder for future visualization
+//   audioLevel: number; // Placeholder for future visualization
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
