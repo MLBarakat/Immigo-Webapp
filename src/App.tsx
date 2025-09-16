@@ -131,7 +131,6 @@ const AppContent: React.FC = () => {
             <ConversationHub
               onOpenAppSettings={handleOpenAppSettings}
               onOpenAccountSettings={navigateToAccountSettings}
-              apiClient={apiClient}
               userSettings={userSettings}
             />
           } />

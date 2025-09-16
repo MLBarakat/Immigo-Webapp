@@ -84,7 +84,7 @@ export class SpeechRecognitionManager {
                 this.isListening = true;
                 console.log('Speech recognition started');
             };
-            this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+            this.recognition.onresult = (event: SpeechRecognitionResult) => {
                 let finalTranscript = '';
                 let interimTranscript = '';
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
