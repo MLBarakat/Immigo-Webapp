@@ -73,15 +73,17 @@ export class SpeechRecognitionManager {
   private onEndCallback: () => void = () => {};
 
   constructor() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      this.recognition = new SpeechRecognition();
+    const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognitionImpl) {
+      this.recognition = new SpeechRecognitionImpl();
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
+
       this.recognition.onstart = () => {
         this.isListening = true;
         console.log('Speech recognition started');
       };
+
       this.recognition.onresult = (event: SpeechRecognitionEvent) => {
         let finalTranscript = '';
         let interimTranscript = '';
@@ -94,16 +96,18 @@ export class SpeechRecognitionManager {
           }
         }
         if (finalTranscript) {
-          this.onResultCallback(finalTranscript, true);
+          this.onResultCallback(finalTranscript.trim(), true);
         } else {
           this.onResultCallback(interimTranscript, false);
         }
       };
+
       this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.error('Speech recognition error:', event.error);
         this.onErrorCallback(event.error);
         this.isListening = false;
       };
+
       this.recognition.onend = () => {
         console.log('Speech recognition ended');
         this.isListening = false;
