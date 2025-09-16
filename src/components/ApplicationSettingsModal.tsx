@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, ExternalLink } from 'lucide-react';
 import type { UserSettings, ThemeOption } from '../types/settings';
 

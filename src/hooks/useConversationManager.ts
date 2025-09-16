@@ -1,12 +1,8 @@
-import { useContext, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { useConversation } from '../context/ConversationContext';
 import { ApiClient } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
 import { Message } from '../context/ConversationContext';
-
-// Placeholder for useSpeechRecognition and useSpeechSynthesis, assuming they are available or mocked
-// import { useSpeechRecognition } from './useSpeechRecognition';
-// import { useSpeechSynthesis } from './useSpeechSynthesis';
 
 interface UseConversationManagerProps {
 apiClient: ApiClient | null;
@@ -17,32 +13,21 @@ const { state, dispatch } = useConversation();
 const currentConversationId = useRef<string>(uuidv4());
 const intervalRef = useRef<number | null>(null);
 
-// Placeholder for audio output - replace with actual speech synthesis integration
-const speakText = useCallback((text: string) => {
-console.log("AI would speak:", text);
-    // Actual speech synthesis logic would go here
-  }, []);
-
-  const handleTextChunk = useCallback((textChunk: string) => {
-    // Logic to update the UI with AI's partial text response
-    console.log("Received AI text chunk:", textChunk);
-    // Assuming a temporary ID for streaming
-    dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', content: textChunk } });
+const handleTextChunk = useCallback((textChunk: string) => {
+dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', text: textChunk } });
   }, [dispatch]);
 
   const handleAudioChunk = useCallback((audioChunk: Uint8Array) => {
     // Logic to play the audio chunk
     console.log("Received AI audio chunk:", audioChunk);
-    // This would typically involve an AudioContext and playing buffers
   }, []);
 
-  // Timer for session duration
   useEffect(() => {
     if (state.isSessionActive) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = setInterval(() => {
         dispatch({ type: 'TICK_SESSION_TIMER' });
-      }, 1000) as unknown as number; // Type assertion for setInterval return
+      }, 1000) as unknown as number;
     } else if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -52,17 +37,14 @@ console.log("AI would speak:", text);
     };
   }, [state.isSessionActive, dispatch]);
 
-
   const startSession = useCallback(async () => {
     if (!apiClient) {
       dispatch({ type: 'SET_ERROR_MESSAGE', payload: 'API Client not available.' });
       return;
     }
     dispatch({ type: 'START_SESSION' });
-    currentConversationId.current = uuidv4(); // Generate new ID for new session
+    currentConversationId.current = uuidv4();
     console.log("Session started. Conversation ID:", currentConversationId.current);
-
-    // Potentially send a "session start" message to backend if required
   }, [apiClient, dispatch]);
 
   const endSession = useCallback(() => {
@@ -72,9 +54,7 @@ console.log("AI would speak:", text);
       intervalRef.current = null;
     }
     console.log("Session ended.");
-    // Potentially send a "session end" message to backend
   }, [dispatch]);
-
 
   const sendUserMessage = useCallback(async (text: string) => {
     if (!apiClient) {
@@ -86,8 +66,8 @@ console.log("AI would speak:", text);
 
     const userMessage: Message = {
       id: uuidv4(),
-      role: 'user',
-      content: text,
+      type: 'user',
+      text: text,
       timestamp: new Date().toISOString(),
     };
     dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
@@ -101,27 +81,24 @@ console.log("AI would speak:", text);
         state.micMode,
         state.bargeIn,
         state.liveFeedbackEnabled,
-        handleTextChunk, // Callback for text stream
-        handleAudioChunk // Callback for audio stream
+        handleTextChunk,
+        handleAudioChunk
       );
-      // No explicit AI message addition here, as streaming callbacks will handle it
-      dispatch({ type: 'STOP_SPEAKING' }); // Assume stopping speaking and listening again
+      dispatch({ type: 'STOP_SPEAKING' });
     } catch (error: any) {
       console.error('Error sending message:', error);
       dispatch({ type: 'SET_ERROR_MESSAGE', payload: error.message || 'Failed to send message.' });
-      dispatch({ type: 'STOP_SPEAKING' }); // Ensure status resets even on error
+      dispatch({ type: 'STOP_SPEAKING' });
     }
   }, [apiClient, dispatch, state.aiVoiceId, state.currentLanguageCode, state.micMode, state.bargeIn, state.liveFeedbackEnabled, handleTextChunk, handleAudioChunk]);
-
 
   const clearConversation = useCallback(async () => {
     dispatch({ type: 'CLEAR_CONVERSATION' });
     console.log("Conversation cleared.");
-    // Potentially clear history on backend as well
   }, [dispatch]);
 
   const downloadTranscript = useCallback(() => {
-    const transcript = state.conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n');
+    const transcript = state.conversationHistory.map(msg => `${msg.type.toUpperCase()}: ${msg.text}`).join('\n');
     const blob = new Blob([transcript], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -134,20 +111,12 @@ console.log("AI would speak:", text);
   }, [state.conversationHistory]);
 
   return {
+    ...state,
     startSession,
     endSession,
     sendUserMessage,
     clearConversation,
     downloadTranscript,
-    conversationHistory: state.conversationHistory,
-    appStatus: state.appStatus,
-    isSessionActive: state.isSessionActive,
-    sessionTime: state.sessionTime,
-    errorMessage: state.errorMessage,
-    currentLanguageCode: state.currentLanguageCode,
-    aiVoiceId: state.aiVoiceId,
-    liveFeedbackEnabled: state.liveFeedbackEnabled,
-    micMode: state.micMode,
-    bargeIn: state.bargeIn,
+    clearError: () => dispatch({ type: 'SET_ERROR_MESSAGE', payload: null }),
   };
 };

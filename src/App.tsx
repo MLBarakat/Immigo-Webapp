@@ -7,10 +7,11 @@ import { ConversationHub } from './components/ConversationHub';
 import { MobileMenu } from './components/MobileMenu';
 import { ApiClient } from './services/apiClient';
 import { UserSettings } from './types/settings';
-import { ConversationProvider } from './context/ConversationContext';
+import { ConversationProvider, useConversation } from './context/ConversationContext';
+import { useConversationManager } from './hooks/useConversationManager';
 import useMediaQuery from './hooks/useMediaQuery';
 import { supabase } from './supabaseClient';
-import { AuthPage } from './components/AuthPage'; // Import the custom Auth Page
+import { AuthPage } from './components/AuthPage';
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -33,15 +34,16 @@ const AppContent: React.FC = () => {
     return null;
   }, [session]);
 
+  const conversationManager = useConversationManager({ apiClient });
+  const { dispatch } = useConversation();
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
@@ -64,10 +66,9 @@ const AppContent: React.FC = () => {
       try {
         await apiClient.updateSettings(settingsToSave);
         setUserSettings(settingsToSave);
-        console.log('Settings saved:', settingsToSave);
       } catch (error) {
         console.error('Failed to save settings:', error);
-        throw error; // Re-throw to allow modal to show error
+        throw error;
       }
     }
   };
@@ -77,88 +78,74 @@ const AppContent: React.FC = () => {
   };
 
   if (!session) {
-    return <AuthPage />; // Use the custom AuthPage component
+    return <AuthPage />;
   }
 
-  const navigateToAccountSettings = () => {
-    navigate('/account-settings');
-  };
-
-  const handleOpenAppSettings = () => {
-    if (isDesktop) {
-      setIsAppSettingsModalOpen(true);
-    } else {
-      navigate('/app-settings');
-    }
-  };
-
-  const handleCloseAppSettings = () => {
-    if (isDesktop) {
-      setIsAppSettingsModalOpen(false);
-    } else {
-      navigate(-1); // Go back for mobile full-screen
-    }
-  };
+  const navigateToAccountSettings = () => navigate('/account-settings');
+  const handleOpenAppSettings = () => isDesktop ? setIsAppSettingsModalOpen(true) : navigate('/app-settings');
+  const handleCloseAppSettings = () => isDesktop ? setIsAppSettingsModalOpen(false) : navigate(-1);
 
   return (
-    <ConversationProvider apiClient={apiClient}>
-      <div className={`flex flex-col h-screen ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
-        <Routes>
-          <Route path="/" element={
-            <ConversationHub
-              onOpenAppSettings={handleOpenAppSettings}
-              onOpenAccountSettings={navigateToAccountSettings}
-              userSettings={userSettings}
-            />
-          } />
-          <Route path="/account-settings" element={
-            <AccountSettingsPage
-              onNavigateBack={() => navigate('/')}
-              isDesktop={isDesktop}
-            />
-          } />
-          <Route path="/app-settings" element={
-            !isDesktop && (
-              <ApplicationSettingsModal
-                isOpen={true}
-                onClose={handleCloseAppSettings}
-                settings={userSettings}
-                onSave={handleSaveSettings}
-                onSettingChange={handleSettingChange}
-                pollyVoices={PollyVoices}
-                isDesktop={isDesktop}
-              />
-            )
-          } />
-        </Routes>
-
-        {isDesktop && isAppSettingsModalOpen && (
-          <ApplicationSettingsModal
-            isOpen={isAppSettingsModalOpen}
-            onClose={handleCloseAppSettings}
-            settings={userSettings}
-            onSave={handleSaveSettings}
-            onSettingChange={handleSettingChange}
-            pollyVoices={PollyVoices}
-            isDesktop={isDesktop}
-          />
-        )}
-
-        {!isDesktop && (
-          <MobileMenu
+    <div className={`flex flex-col h-screen ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
+      <Routes>
+        <Route path="/" element={
+          <ConversationHub
+            status={conversationManager.appStatus}
+            isSessionActive={conversationManager.isSessionActive}
+            sessionTime={conversationManager.sessionTime}
+            errorMessage={conversationManager.errorMessage}
+            onStartSession={conversationManager.startSession}
+            onEndSession={conversationManager.endSession}
+            onClearError={() => dispatch({ type: 'SET_ERROR_MESSAGE', payload: null })}
+            onClearConversation={conversationManager.clearConversation}
+            onDownloadTranscript={conversationManager.downloadTranscript}
             onOpenAppSettings={handleOpenAppSettings}
             onOpenAccountSettings={navigateToAccountSettings}
-            onSignOut={() => supabase.auth.signOut()}
+            userSettings={userSettings}
           />
-        )}
-      </div>
-    </ConversationProvider>
+        } />
+        <Route path="/account-settings" element={<AccountSettingsPage onNavigateBack={() => navigate('/')} isDesktop={isDesktop} />} />
+        <Route path="/app-settings" element={
+          !isDesktop && (
+            <ApplicationSettingsModal
+              isOpen={true}
+              onClose={handleCloseAppSettings}
+              settings={userSettings}
+              onSave={handleSaveSettings}
+              onSettingChange={handleSettingChange}
+              pollyVoices={PollyVoices}
+              isDesktop={isDesktop}
+            />
+          )
+        } />
+      </Routes>
+      {isDesktop && isAppSettingsModalOpen && (
+        <ApplicationSettingsModal
+          isOpen={isAppSettingsModalOpen}
+          onClose={handleCloseAppSettings}
+          settings={userSettings}
+          onSave={handleSaveSettings}
+          onSettingChange={handleSettingChange}
+          pollyVoices={PollyVoices}
+          isDesktop={isDesktop}
+        />
+      )}
+      {!isDesktop && (
+        <MobileMenu
+          onOpenAppSettings={handleOpenAppSettings}
+          onOpenAccountSettings={navigateToAccountSettings}
+          onSignOut={() => supabase.auth.signOut()}
+        />
+      )}
+    </div>
   );
 };
 
 const App: React.FC = () => (
   <Router>
-    <AppContent />
+    <ConversationProvider apiClient={null}>
+      <AppContent />
+    </ConversationProvider>
   </Router>
 );
 
