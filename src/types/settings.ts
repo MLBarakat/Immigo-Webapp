@@ -2,6 +2,7 @@ export type ThemeOption = 'system' | 'light' | 'dark';
 export type MicMode = 'voice_activity' | 'push_to_talk';
 export type BargeIn = 'relaxed' | 'balanced' | 'aggressive';
 export type ProgressReportFrequency = 'after_session' | 'daily' | 'weekly' | 'monthly';
+export type FontSize = 'small' | 'default' | 'large';
 
 export interface UserSettings {
   theme: ThemeOption;
@@ -10,5 +11,5 @@ export interface UserSettings {
   mic_mode: MicMode;
   barge_in: BargeIn;
   progress_report_frequency: ProgressReportFrequency;
-  font_size?: 'small' | 'default' | 'large';
+  font_size?: FontSize;
 }
