@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
-
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { ConversationHub } from './components/ConversationHub';
@@ -12,6 +11,10 @@ import { useConversationManager } from './hooks/useConversationManager';
 import useMediaQuery from './hooks/useMediaQuery';
 import { supabase } from './supabaseClient';
 import { AuthPage } from './components/AuthPage';
+import { Header } from './components/Header'; // New Header component
+import { ConversationHistory } from './components/ConversationHistory';
+import { ChatInput } from './components/ChatInput';
+import { useAuth } from './hooks/useAuth';
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -22,8 +25,9 @@ const PollyVoices = [
 
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
-  const [session, setSession] = useState<any>(null);
+  const { session, logout } = useAuth();
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
+  const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
@@ -35,17 +39,7 @@ const AppContent: React.FC = () => {
   }, [session]);
 
   const conversationManager = useConversationManager({ apiClient });
-  const { dispatch } = useConversation();
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  const { state, dispatch } = useConversation();
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -81,45 +75,52 @@ const AppContent: React.FC = () => {
     return <AuthPage />;
   }
 
-  const navigateToAccountSettings = () => navigate('/account-settings');
-  const handleOpenAppSettings = () => isDesktop ? setIsAppSettingsModalOpen(true) : navigate('/app-settings');
-  const handleCloseAppSettings = () => isDesktop ? setIsAppSettingsModalOpen(false) : navigate(-1);
+  const handleOpenAppSettings = () => setIsAppSettingsModalOpen(true);
+  const handleCloseAppSettings = () => setIsAppSettingsModalOpen(false);
+  const handleOpenAccountSettings = () => setIsAccountSettingsModalOpen(true);
+  const handleCloseAccountSettings = () => setIsAccountSettingsModalOpen(false);
 
   return (
-    <div className={`flex flex-col h-screen ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
-      <Routes>
-        <Route path="/" element={
-          <ConversationHub
-            status={conversationManager.appStatus}
-            isSessionActive={conversationManager.isSessionActive}
-            sessionTime={conversationManager.sessionTime}
-            errorMessage={conversationManager.errorMessage}
-            onStartSession={conversationManager.startSession}
-            onEndSession={conversationManager.endSession}
-            onClearError={() => dispatch({ type: 'SET_ERROR_MESSAGE', payload: null })}
-            onClearConversation={conversationManager.clearConversation}
-            onDownloadTranscript={conversationManager.downloadTranscript}
-            onOpenAppSettings={handleOpenAppSettings}
-            onOpenAccountSettings={navigateToAccountSettings}
-            userSettings={userSettings}
-          />
-        } />
-        <Route path="/account-settings" element={<AccountSettingsPage onNavigateBack={() => navigate('/')} isDesktop={isDesktop} />} />
-        <Route path="/app-settings" element={
-          !isDesktop && (
-            <ApplicationSettingsModal
-              isOpen={true}
-              onClose={handleCloseAppSettings}
-              settings={userSettings}
-              onSave={handleSaveSettings}
-              onSettingChange={handleSettingChange}
-              pollyVoices={PollyVoices}
-              isDesktop={isDesktop}
+    <div className={`flex flex-col h-screen bg-immigo-gray-50 font-sans ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
+      <Header
+        onOpenAppSettings={handleOpenAppSettings}
+        onOpenAccountSettings={handleOpenAccountSettings}
+        onLogout={logout}
+        user={{ name: session.user?.user_metadata?.full_name || 'User', initials: 'MB' }}
+      />
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col p-4 lg:p-6 overflow-hidden">
+          <ConversationHistory messages={state.conversationHistory} />
+          <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />
+        </div>
+
+        {/* Sidebar for Desktop / Hidden on Mobile */}
+        {isDesktop && (
+          <aside className="w-full lg:w-96 p-6 flex-shrink-0">
+            <ConversationHub
+              status={state.appStatus}
+              isSessionActive={state.isSessionActive}
+              sessionTime={state.sessionTime}
+              errorMessage={state.errorMessage}
+              onStartSession={conversationManager.startSession}
+              onEndSession={conversationManager.endSession}
+              onClearError={() => dispatch({ type: 'SET_ERROR_MESSAGE', payload: null })}
+              onClearConversation={conversationManager.clearConversation}
+              onDownloadTranscript={conversationManager.downloadTranscript}
+              onOpenAppSettings={handleOpenAppSettings}
+              onOpenAccountSettings={handleOpenAccountSettings}
+              userSettings={userSettings}
             />
-          )
-        } />
-      </Routes>
-      {isDesktop && isAppSettingsModalOpen && (
+          </aside>
+        )}
+      </main>
+      <footer className="text-center py-2 bg-immigo-gray-100 border-t border-immigo-gray-200 text-xs text-immigo-gray-600">
+        © 2025 ImmiGo. All rights reserved.
+      </footer>
+
+      {/* Modals */}
+      {isAppSettingsModalOpen && (
         <ApplicationSettingsModal
           isOpen={isAppSettingsModalOpen}
           onClose={handleCloseAppSettings}
@@ -130,11 +131,14 @@ const AppContent: React.FC = () => {
           isDesktop={isDesktop}
         />
       )}
-      {!isDesktop && (
+      {isAccountSettingsModalOpen && (
+        <AccountSettingsPage onNavigateBack={handleCloseAccountSettings} isDesktop={isDesktop} />
+      )}
+       {!isDesktop && (
         <MobileMenu
           onOpenAppSettings={handleOpenAppSettings}
-          onOpenAccountSettings={navigateToAccountSettings}
-          onSignOut={() => supabase.auth.signOut()}
+          onOpenAccountSettings={handleOpenAccountSettings}
+          onSignOut={logout}
         />
       )}
     </div>
@@ -144,7 +148,7 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => (
   <Router>
     <ConversationProvider apiClient={null}>
-      <AppContent />
+        <AppContent />
     </ConversationProvider>
   </Router>
 );

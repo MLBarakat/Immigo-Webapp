@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCcw, Pause, Play, Download, Settings, UserCircle2, MessageSquare, Mic } from 'lucide-react';
+import { RefreshCcw, Pause, Play, Download, Settings, UserCircle2 } from 'lucide-react';
 import { AppStatus } from '../context/ConversationContext';
 import { UserSettings } from '../types/settings';
 
@@ -28,9 +28,6 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   onClearError,
   onClearConversation,
   onDownloadTranscript,
-  onOpenAppSettings,
-  onOpenAccountSettings,
-  userSettings,
 }) => {
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -45,86 +42,59 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
       case 'processing': return 'AI is thinking...';
       case 'speaking': return 'AI is speaking...';
       case 'error': return `Error: ${errorMessage}`;
+      default: return 'Ready';
     }
   };
 
   const renderActionButton = () => {
+    const buttonClasses = "w-24 h-24 text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-300 transform hover:scale-110";
     if (isSessionActive) {
       return (
         <button
           onClick={onEndSession}
-          className="bg-art-red-600 hover:bg-art-red-700 text-white rounded-full p-4 flex items-center justify-center shadow-lg transition-all duration-200"
+          className={`${buttonClasses} bg-art-red-600 hover:bg-art-red-700`}
           aria-label="End session"
         >
-          <Pause className="w-7 h-7" />
+          <Pause className="w-10 h-10" />
         </button>
       );
     }
     return (
       <button
         onClick={onStartSession}
-        className="bg-art-blue-600 hover:bg-art-blue-700 text-white rounded-full p-4 flex items-center justify-center shadow-lg transition-all duration-200"
+        className={`${buttonClasses} bg-art-blue-600 hover:bg-art-blue-700`}
         aria-label="Start session"
       >
-        <Play className="w-7 h-7" />
+        <Play className="w-10 h-10" />
       </button>
     );
   };
 
   return (
     <div className="flex flex-col w-full h-full bg-star-white rounded-2xl shadow-xl border border-immigo-gray-200 p-6 space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-xl font-bold text-deep-navy font-display">Conversation Hub</h2>
-        <p className={`text-sm ${errorMessage ? 'text-art-red-600' : 'text-immigo-gray-600'}`}>{statusMessage()}</p>
-        {errorMessage && (
-            <button onClick={onClearError} className="text-art-blue-600 text-sm mt-1">Clear Error</button>
-        )}
-      </div>
+      <div className="flex flex-col items-center justify-between space-y-4 flex-grow">
+          <div className="flex flex-col items-center space-y-2">
+            <button onClick={onClearConversation} className="flex items-center text-sm font-semibold text-immigo-gray-700 hover:text-deep-navy">
+                <RefreshCcw className="w-4 h-4 mr-2" /> Clear Conversation
+            </button>
+            <button onClick={onDownloadTranscript} className="flex items-center text-sm font-semibold text-immigo-gray-700 hover:text-deep-navy">
+                <Download className="w-4 h-4 mr-2" /> Download Transcript
+            </button>
+          </div>
 
-      <div className="flex justify-center items-center my-4">
-        {renderActionButton()}
-      </div>
+          <div className="flex flex-col items-center justify-center space-y-4">
+              {renderActionButton()}
+              <div className="text-center">
+                <p className={`text-lg font-semibold ${errorMessage ? 'text-art-red-600' : 'text-deep-navy'}`}>{statusMessage()}</p>
+                <p className="text-sm text-immigo-gray-600">{formatTime(sessionTime)}</p>
+                {errorMessage && (
+                    <button onClick={onClearError} className="text-art-blue-600 text-sm mt-1">Clear Error</button>
+                )}
+              </div>
+          </div>
 
-      <div className="flex justify-around text-center border-t border-b border-immigo-gray-200 py-4">
-        <div>
-          <p className="text-lg font-semibold text-deep-navy">{formatTime(sessionTime)}</p>
-          <p className="text-sm text-immigo-gray-600">Session Time</p>
-        </div>
-        <div>
-          <p className="text-lg font-semibold text-deep-navy">EN</p> {/* Placeholder for language */}
-          <p className="text-sm text-immigo-gray-600">Language</p>
-        </div>
-      </div>
-
-      <div className="flex-1 space-y-3">
-        {/* Placeholder for future features like "Session Summary" or "AI Insights" */}
-        <div className="flex items-center text-immigo-gray-700">
-            <MessageSquare className="w-5 h-5 mr-2" />
-            <span className="text-sm">Talk about anything...</span>
-        </div>
-        <div className="flex items-center text-immigo-gray-700">
-            <Mic className="w-5 h-5 mr-2" />
-            <span className="text-sm">Mic Mode: {userSettings.mic_mode === 'push_to_talk' ? 'Push-to-Talk' : 'Voice Activity'}</span>
-        </div>
-        <div className="flex items-center text-immigo-gray-700">
-            <RefreshCcw className="w-5 h-5 mr-2" />
-            <span className="text-sm">Interruption: {userSettings.barge_in || 'Balanced'}</span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 text-sm font-medium text-deep-navy border-t border-immigo-gray-200 pt-4">
-        <button onClick={onClearConversation} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
-          <RefreshCcw className="w-4 h-4 mr-2" /> Clear
-        </button>
-        <button onClick={onDownloadTranscript} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
-          <Download className="w-4 h-4 mr-2" /> Transcript
-        </button>
-        <button onClick={onOpenAppSettings} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
-          <Settings className="w-4 h-4 mr-2" /> App Settings
-        </button>
-        <button onClick={onOpenAccountSettings} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
-          <UserCircle2 className="w-4 h-4 mr-2" /> Account
-        </button>
+          {/* Spacer to push content to top and bottom */}
+          <div className="flex-grow" />
       </div>
     </div>
   );
