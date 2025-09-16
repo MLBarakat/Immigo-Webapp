@@ -1,93 +1,71 @@
 import { Message } from '../types/conversation';
-import { UserSettings } from '../types/settings'; // <-- ADDED
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const API_KEY = import.meta.env.VITE_API_KEY;
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export class ApiClient {
-private token: string;
+private headers: HeadersInit;
 
 constructor(token: string) {
-        this.token = token;
+    this.headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'X-API-Key': import.meta.env.VITE_API_KEY,
+    };
+  }
+
+  async getHistory(): Promise<Message[]> {
+    const response = await fetch(`${API_BASE_URL}/api/history`, {
+      headers: this.headers,
+    });
+    if (!response.ok) {
+      throw new Error("Failed to fetch history");
+    }
+    return response.json();
+  }
+
+  async sendMessage(
+    message: string,
+    conversationHistory: Message[],
+    voiceId: string,
+    onTextChunk: (chunk: string) => void,
+    onAudioChunk: (chunk: string) => void
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/api/conversation`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({ message, conversationHistory: conversationHistory.slice(-10), voiceId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API request failed with status ${response.status}`);
     }
 
-    private async fetchWithAuth(url: string, options: RequestInit = {}) {
-        const headers = {
-            ...options.headers,
-            'Authorization': `Bearer ${this.token}`,
-            'Content-Type': 'application/json',
-            'X-API-Key': API_KEY,
-        };
-        const response = await fetch(url, { ...options, headers });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: response.statusText }));
-            throw new Error(errorData.message || 'API request failed');
-        }
-        return response;
+    if (!response.body) {
+        throw new Error("Response body is null or undefined.");
     }
 
-    async getHistory(): Promise<Message[]> {
-        const response = await this.fetchWithAuth(`${API_BASE_URL}/history`);
-        const data = await response.json();
-        return data.history;
-    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    async sendMessage(
-        conversationId: string,
-        userMessageText: string,
-        pollyVoiceId: string,
-        languageCode: string,
-        micMode: 'voice_activity' | 'push_to_talk',
-        bargeIn: 'relaxed' | 'balanced' | 'aggressive',
-        liveFeedbackEnabled: boolean,
-        onTextChunk: (textChunk: string) => void,
-        onAudioChunk: (audioChunk: Uint8Array) => void
-    ): Promise<void> {
-        const response = await this.fetchWithAuth(`${API_BASE_URL}/chat-stream`, {
-            method: 'POST',
-            body: JSON.stringify({
-                conversationId,
-                message: userMessageText,
-                pollyVoiceId,
-                languageCode,
-                micMode,
-                bargeIn,
-                liveFeedbackEnabled,
-            }),
-        });
-
-        if (!response.body) {
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split('\n');
+        buffer = chunks.pop() || '';
+        for (const chunkStr of chunks) {
+            if (chunkStr) {
                 try {
-                    const parsedChunk = JSON.parse(chunk);
-                    if (parsedChunk.type === 'text') {
-                        onTextChunk(parsedChunk.data);
-                    } else if (parsedChunk.type === 'audio') {
-                        const audioData = new Uint8Array(parsedChunk.data); // Assuming data is base64 or arraybuffer
-                        onAudioChunk(audioData);
-                    }
-                } catch (e) {
-                    onTextChunk(chunk);
+                    const chunk = JSON.parse(chunkStr);
+                    if (chunk.type === 'text_chunk') onTextChunk(chunk.data);
+                    if (chunk.type === 'audio_chunk') onAudioChunk(chunk.data);
+                } catch(e) {
+                    console.error("Failed to parse JSON chunk:", chunkStr);
                 }
             }
         }
     }
-
-    async getSettings(): Promise<Partial<UserSettings>> {
-        const response = await this.fetchWithAuth(`${API_BASE_URL}/settings`);
-        return response.json();
-    }
-
-    async updateSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
-        const response = await this.fetchWithAuth(`${API_BASE_URL}/settings`, {
-            method: 'PUT',
-            body: JSON.stringify(settings),
-        });
-        return response.json();
-    }
+  }
 }

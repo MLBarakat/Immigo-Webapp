@@ -1,7 +1,6 @@
 import React from 'react';
-import { RefreshCcw, Pause, Play, Download, Settings, UserCircle2, MessageSquare, Mic } from 'lucide-react';
-import { AppStatus } from '../context/ConversationContext';
-import { UserSettings } from '../types/settings';
+import { Mic, Pause, Square, WifiOff, Volume2, VolumeX, AlertCircle, Timer } from 'lucide-react';
+import { AppStatus } from '../types/conversation';
 
 interface ConversationHubProps {
   status: AppStatus;
@@ -11,11 +10,6 @@ interface ConversationHubProps {
   onStartSession: () => void;
   onEndSession: () => void;
   onClearError: () => void;
-  onClearConversation: () => void;
-  onDownloadTranscript: () => void;
-  onOpenAppSettings: () => void;
-  onOpenAccountSettings: () => void;
-  userSettings: Partial<UserSettings>;
 }
 
 export const ConversationHub: React.FC<ConversationHubProps> = ({
@@ -26,11 +20,6 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   onStartSession,
   onEndSession,
   onClearError,
-  onClearConversation,
-  onDownloadTranscript,
-  onOpenAppSettings,
-  onOpenAccountSettings,
-  userSettings,
 }) => {
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -38,94 +27,66 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const statusMessage = () => {
+  const renderStatusIcon = () => {
     switch (status) {
-      case 'idle': return 'Ready to start';
-      case 'listening': return 'AI is listening...';
-      case 'processing': return 'AI is thinking...';
-      case 'speaking': return 'AI is speaking...';
-      case 'error': return `Error: ${errorMessage}`;
+      case 'listening': return <Mic className="w-6 h-6 text-white" />;
+      case 'processing': return <Volume2 className="w-6 h-6 text-white" />;
+      case 'speaking': return <Volume2 className="w-6 h-6 text-white" />;
+      case 'error': return <AlertCircle className="w-6 h-6 text-white" />;
+      case 'idle':
+      default: return <VolumeX className="w-6 h-6 text-white" />;
     }
   };
 
-  const renderActionButton = () => {
-    if (isSessionActive) {
-      return (
-        <button
-          onClick={onEndSession}
-          className="bg-art-red-600 hover:bg-art-red-700 text-white rounded-full p-4 flex items-center justify-center shadow-lg transition-all duration-200"
-          aria-label="End session"
-        >
-          <Pause className="w-7 h-7" />
-        </button>
-      );
+  const renderStatusMessage = () => {
+    if (errorMessage) {
+      return <span className="text-art-red-100 font-semibold">{errorMessage}</span>;
     }
-    return (
-      <button
-        onClick={onStartSession}
-        className="bg-art-blue-600 hover:bg-art-blue-700 text-white rounded-full p-4 flex items-center justify-center shadow-lg transition-all duration-200"
-        aria-label="Start session"
-      >
-        <Play className="w-7 h-7" />
-      </button>
-    );
+    switch (status) {
+      case 'listening': return <span className="text-immigo-gray-100 font-semibold">Listening...</span>;
+      case 'processing': return <span className="text-immigo-gray-100 font-semibold">Thinking...</span>;
+      case 'speaking': return <span className="text-immigo-gray-100 font-semibold">Speaking...</span>;
+      case 'idle': return <span className="text-immigo-gray-400">Tap the mic to start.</span>;
+      case 'error': return <span className="text-art-red-100 font-semibold">Error!</span>;
+      default: return <span className="text-immigo-gray-400">Idle.</span>;
+    }
   };
+
+  const handleMainButtonClick = () => {
+    if (errorMessage) {
+      onClearError();
+    } else if (isSessionActive) {
+      onEndSession();
+    } else {
+      onStartSession();
+    }
+  };
+
+  const mainButtonText = errorMessage ? "Clear Error" : (isSessionActive ? "End Session" : "Start Session");
+  const mainButtonIcon = isSessionActive ? <Square className="w-6 h-6" /> : <Mic className="w-6 h-6" />;
+  const mainButtonClass = errorMessage ? "bg-art-red-600 hover:bg-art-red-700" : "bg-art-blue-600 hover:bg-art-blue-700";
 
   return (
-    <div className="flex flex-col w-full h-full bg-star-white rounded-2xl shadow-xl border border-immigo-gray-200 p-6 space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-xl font-bold text-deep-navy font-display">Conversation Hub</h2>
-        <p className={`text-sm ${errorMessage ? 'text-art-red-600' : 'text-immigo-gray-600'}`}>{statusMessage()}</p>
-        {errorMessage && (
-            <button onClick={onClearError} className="text-art-blue-600 text-sm mt-1">Clear Error</button>
-        )}
-      </div>
-
-      <div className="flex justify-center items-center my-4">
-        {renderActionButton()}
-      </div>
-
-      <div className="flex justify-around text-center border-t border-b border-immigo-gray-200 py-4">
-        <div>
-          <p className="text-lg font-semibold text-deep-navy">{formatTime(sessionTime)}</p>
-          <p className="text-sm text-immigo-gray-600">Session Time</p>
+    <div className="flex flex-col items-center justify-center p-4 bg-immigo-gray-900 text-white rounded-b-2xl shadow-inner mt-auto">
+      {isSessionActive && (
+        <div className="flex items-center text-sm mb-2 text-immigo-gray-300">
+          <Timer className="w-4 h-4 mr-1" />
+          <span>{formatTime(sessionTime)}</span>
         </div>
-        <div>
-          <p className="text-lg font-semibold text-deep-navy">EN</p> {/* Placeholder for language */}
-          <p className="text-sm text-immigo-gray-600">Language</p>
-        </div>
+      )}
+      <div className={`relative flex items-center justify-center w-24 h-24 rounded-full ${errorMessage ? 'bg-art-red-700' : 'bg-immigo-gray-700'} mb-4`}>
+        {renderStatusIcon()}
       </div>
-
-      <div className="flex-1 space-y-3">
-        {/* Placeholder for future features like "Session Summary" or "AI Insights" */}
-        <div className="flex items-center text-immigo-gray-700">
-            <MessageSquare className="w-5 h-5 mr-2" />
-            <span className="text-sm">Talk about anything...</span>
-        </div>
-        <div className="flex items-center text-immigo-gray-700">
-            <Mic className="w-5 h-5 mr-2" />
-            <span className="text-sm">Mic Mode: {userSettings.mic_mode === 'push_to_talk' ? 'Push-to-Talk' : 'Voice Activity'}</span>
-        </div>
-        <div className="flex items-center text-immigo-gray-700">
-            <RefreshCcw className="w-5 h-5 mr-2" />
-            <span className="text-sm">Interruption: {userSettings.barge_in || 'Balanced'}</span>
-        </div>
+      <div className="text-center text-sm mb-4">
+        {renderStatusMessage()}
       </div>
-
-      <div className="grid grid-cols-2 gap-3 text-sm font-medium text-deep-navy border-t border-immigo-gray-200 pt-4">
-        <button onClick={onClearConversation} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
-          <RefreshCcw className="w-4 h-4 mr-2" /> Clear
-        </button>
-        <button onClick={onDownloadTranscript} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
-          <Download className="w-4 h-4 mr-2" /> Transcript
-        </button>
-        <button onClick={onOpenAppSettings} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
-          <Settings className="w-4 h-4 mr-2" /> App Settings
-        </button>
-        <button onClick={onOpenAccountSettings} className="flex items-center justify-center p-2 rounded-lg hover:bg-immigo-gray-100 transition-colors">
-          <UserCircle2 className="w-4 h-4 mr-2" /> Account
-        </button>
-      </div>
+      <button
+        onClick={handleMainButtonClick}
+        className={`flex items-center justify-center px-6 py-3 rounded-full text-lg font-bold text-white transition-colors duration-200 ${mainButtonClass}`}
+      >
+        {mainButtonIcon}
+        <span className="ml-2">{mainButtonText}</span>
+      </button>
     </div>
   );
 };

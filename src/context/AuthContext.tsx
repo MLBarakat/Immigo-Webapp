@@ -1,100 +1,82 @@
-import React, { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../supabaseClient';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { createClient, Session, User } from '@supabase/supabase-js';
 
-interface SignUpPayload {
-  email: string;
-  password: string;
-  fullName: string;
-  language: string;
+// Initialize Supabase client
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Supabase URL or Anon Key is missing from environment variables.');
+  throw new Error('Supabase configuration missing.');
 }
 
-export interface AuthContextType {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signUp: (payload: SignUpPayload) => Promise<void>;
   logout: () => Promise<void>;
 }
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const logout = useCallback(async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Error logging out:", error.message);
+    } else {
+      setSession(null);
+      setUser(null);
+    }
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     const getSession = async () => {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-
-        setSession(data.session);
-        setUser(data.session?.user ?? null);
-      } catch (err) {
-        console.error("Error fetching session:", err);
-      } finally {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error("Error getting session:", error.message);
         setLoading(false);
+        return;
       }
+      setSession(data.session);
+      setUser(data.session?.user || null);
+      setLoading(false);
     };
 
     getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-    });
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        setSession(currentSession);
+        setUser(currentSession?.user || null);
+        setLoading(false);
+      }
+    );
 
     return () => {
-      subscription?.unsubscribe();
+      authListener?.unsubscribe();
     };
   }, []);
 
-  const login = async (email: string, password: string): Promise<void> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      console.error("Login failed:", error.message);
-      throw error;
-    }
-  };
+  return (
+    <AuthContext.Provider value={{ session, user, loading, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
 
-  const signUp = async ({ email, password, fullName, language }: SignUpPayload): Promise<void> => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          language,
-        },
-      },
-    });
-
-    if (error) {
-      console.error("Sign up failed:", error.message);
-      throw error;
-    }
-  };
-
-  const logout = async (): Promise<void> => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error("Logout failed:", error.message);
-      throw error;
-    }
-  };
-
-  // Memoize the context value
-  const value = useMemo(() => ({
-      session,
-      user,
-      loading,
-      login,
-      signUp,
-      logout
-  }), [session, user, loading]);
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

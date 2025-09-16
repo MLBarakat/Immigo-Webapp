@@ -1,92 +1,33 @@
-export class StreamAudioManager {
-  private audioContext: AudioContext;
-private audioQueue: ArrayBuffer[] = [];
-private isPlaying = false;
-private onended: (() => void) | null = null;
-
-    constructor() {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        this.resumeAudioContext();
-    }
-
-    public setOnEnded(callback: () => void) {
-        this.onended = callback;
-    }
-
-    private async resumeAudioContext() {
-        if (this.audioContext.state === 'suspended') {
-          await this.audioContext.resume();
-        }
-    }
-
-    public addChunk(base64Data: string) {
-        this.resumeAudioContext();
-        const binaryString = window.atob(base64Data);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-        this.audioQueue.push(bytes.buffer);
-        if (!this.isPlaying) {
-            this.playQueue();
-        }
-    }
-
-    private async playQueue() {
-        if (this.audioQueue.length === 0) {
-            this.isPlaying = false;
-            if (this.onended) {
-                this.onended();
-            }
-            return;
-        }
-
-        this.isPlaying = true;
-        const buffer = this.audioQueue.shift();
-        if (buffer) {
-            try {
-                const audioBuffer = await this.audioContext.decodeAudioData(buffer.slice(0)); // Use slice(0) to create a copy
-                const source = this.audioContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(this.audioContext.destination);
-                source.onended = () => this.playQueue();
-                source.start();
-            } catch (error) {
-                console.error('Error decoding audio data:', error);
-                this.playQueue(); // Try the next chunk
-            }
-        }
-    }
-
-    public stop() {
-        // In a real implementation, you'd want to stop the current source
-        this.audioQueue = [];
-        this.isPlaying = false;
-    }
+// Ensure SpeechRecognition types are available globally or imported
+// This is usually handled by 'dom.speechRecognition' in tsconfig.json 'lib' array
+declare global {
+  interface Window {
+    webkitSpeechRecognition: typeof SpeechRecognition;
+}
 }
 
+type SpeechRecognitionCallback = (transcript: string, isFinal: boolean) => void;
+type SpeechRecognitionErrorCallback = (error: string) => void;
+type SpeechRecognitionEndCallback = () => void;
 
 export class SpeechRecognitionManager {
-    private recognition: SpeechRecognition | null = null;
-    private isListening: boolean = false;
-    private interimTranscript: string = '';
-    private onResultCallback: (transcript: string, isFinal: boolean) => void = () => {};
-    private onErrorCallback: (error: string) => void = () => {};
-    private onEndCallback: () => void = () => {};
+private recognition: SpeechRecognition | null = null;
+private onResultCallback: SpeechRecognitionCallback = () => {};
+private onErrorCallback: SpeechRecognitionErrorCallback = () => {};
+private onEndCallback: SpeechRecognitionEndCallback = () => {};
 
-    constructor() {
-        if ('webkitSpeechRecognition' in window) {
-            this.recognition = new (window as any).webkitSpeechRecognition();
+constructor() {
+        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+            const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+            this.recognition = new SpeechRecognitionAPI();
             this.recognition.continuous = true;
             this.recognition.interimResults = true;
-            this.recognition.onstart = () => {
-                this.isListening = true;
-                console.log('Speech recognition started');
-            };
-            this.recognition.onresult = (event: SpeechRecognitionResult) => {
-                let finalTranscript = '';
+            this.recognition.lang = 'en-US';
+
+            this.recognition.onresult = (event: SpeechRecognitionEvent) => {
                 let interimTranscript = '';
+                let finalTranscript = '';
+
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript;
                     if (event.results[i].isFinal) {
@@ -97,50 +38,145 @@ export class SpeechRecognitionManager {
                 }
                 if (finalTranscript) {
                     this.onResultCallback(finalTranscript, true);
-                    this.interimTranscript = '';
-                } else {
-                    this.interimTranscript = interimTranscript;
+                } else if (interimTranscript) {
                     this.onResultCallback(interimTranscript, false);
                 }
             };
+
             this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-                console.error('Speech recognition error:', event.error);
+                console.error('Speech Recognition Error:', event.error);
                 this.onErrorCallback(event.error);
-                this.isListening = false;
             };
+
             this.recognition.onend = () => {
-                console.log('Speech recognition ended');
-                this.isListening = false;
+                console.log('Speech Recognition Ended');
                 this.onEndCallback();
             };
         } else {
-            console.warn('Speech recognition not supported in this browser.');
+            console.warn('Speech Recognition API not supported in this browser.');
+            // Provide a dummy implementation or throw an error if functionality is critical
         }
     }
 
-    startListening(
-        onResult: (transcript: string, isFinal: boolean) => void,
-        onError: (error: string) => void,
-        onEnd: () => void,
-        languageCode: string = 'en-US' // New: Add languageCode parameter
+    public startListening(
+        onResult: SpeechRecognitionCallback,
+        onError: SpeechRecognitionErrorCallback,
+        onEnd: SpeechRecognitionEndCallback
     ) {
-        if (this.recognition && !this.isListening) {
+        if (this.recognition) {
             this.onResultCallback = onResult;
             this.onErrorCallback = onError;
             this.onEndCallback = onEnd;
-            this.recognition.lang = languageCode; // Set the recognition language
-            this.recognition.start();
+            try {
+                this.recognition.start();
+                console.log('Speech Recognition Started');
+            } catch (e) {
+                console.error('Error starting speech recognition:', e);
+                this.onErrorCallback('Failed to start microphone. Please check permissions.');
+            }
+        } else {
+            this.onErrorCallback('Speech Recognition not supported.');
         }
     }
 
-    stopListening() {
-        if (this.recognition && this.isListening) {
+    public stopListening() {
+        if (this.recognition) {
             this.recognition.stop();
-            this.isListening = false;
+            console.log('Speech Recognition Stopped');
+        }
+    }
+}
+
+type AudioChunkCallback = (chunk: string) => void;
+type AudioEndedCallback = () => void;
+
+export class StreamAudioManager {
+    private audioQueue: string[] = [];
+    private audioContext: AudioContext | null = null;
+    private isPlaying: boolean = false;
+    private onEndedCallback: AudioEndedCallback = () => {};
+
+    constructor() {
+        this.initAudioContext();
+    }
+
+    private initAudioContext() {
+        if (!this.audioContext) {
+            // Check if AudioContext is already running from another source
+            if (window.AudioContext) {
+                this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            } else {
+                console.warn('Web Audio API not supported in this browser.');
+            }
         }
     }
 
-    isCurrentlyListening() {
-      return this.isListening;
+    public addChunk(base64AudioChunk: string) {
+        this.audioQueue.push(base64AudioChunk);
+        if (!this.isPlaying) {
+            this.playNextChunk();
+        }
+    }
+
+    public setOnEnded(callback: AudioEndedCallback) {
+        this.onEndedCallback = callback;
+    }
+
+    private async playNextChunk() {
+        if (this.audioQueue.length === 0) {
+            this.isPlaying = false;
+            this.onEndedCallback(); // Call onEnded when queue is empty
+            return;
+        }
+
+        this.isPlaying = true;
+        const chunk = this.audioQueue.shift();
+        if (!chunk) {
+            this.playNextChunk();
+            return;
+        }
+
+        try {
+            if (!this.audioContext) {
+                this.initAudioContext(); // Try to initialize again if null
+                if (!this.audioContext) {
+                    console.error('AudioContext not available.');
+                    this.isPlaying = false;
+                    this.onEndedCallback();
+                    return;
+                }
+            }
+            const audioData = Uint8Array.from(atob(chunk), c => c.charCodeAt(0)).buffer;
+            const buffer = await this.audioContext.decodeAudioData(audioData);
+            const source = this.audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(this.audioContext.destination);
+            source.onended = () => {
+                this.playNextChunk();
+            };
+            source.start(0);
+        } catch (error) {
+            console.error('Error playing audio chunk:', error);
+            this.playNextChunk(); // Try to play the next chunk even if one fails
+        }
+    }
+
+    public stop() {
+        this.audioQueue = [];
+        this.isPlaying = false;
+        // Optionally stop currently playing audio if needed, but not directly supported by Web Audio API easily.
+        // A more complex implementation involving AudioNodes would be needed.
+        if (this.audioContext && this.audioContext.state === 'running') {
+          this.audioContext.suspend();
+        }
+    }
+
+    public resume() {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+          this.audioContext.resume();
+        }
+        if (!this.isPlaying && this.audioQueue.length > 0) {
+            this.playNextChunk();
+        }
     }
 }
