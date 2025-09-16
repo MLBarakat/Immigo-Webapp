@@ -3,7 +3,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { ConversationHub } from './components/ConversationHub';
-import { MobileMenu } from './components/MobileMenu';
+import { MobileMenuOverlay } from './components/MobileMenuOverlay'; // New Import
 import { ApiClient } from './services/apiClient';
 import { UserSettings } from './types/settings';
 import { ConversationProvider, useConversation } from './context/ConversationContext';
@@ -27,6 +27,7 @@ const AppContent: React.FC = () => {
   const { session, logout } = useAuth();
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // New state for mobile menu
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
@@ -78,13 +79,20 @@ const AppContent: React.FC = () => {
   const handleCloseAppSettings = () => setIsAppSettingsModalOpen(false);
   const handleOpenAccountSettings = () => setIsAccountSettingsModalOpen(true);
   const handleCloseAccountSettings = () => setIsAccountSettingsModalOpen(false);
+  const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
+
+  const user = {
+    name: session.user?.user_metadata?.full_name || 'User',
+    initials: (session.user?.user_metadata?.full_name || 'U').charAt(0).toUpperCase(),
+  };
 
   return (
     <div className={`flex flex-col h-screen bg-immigo-gray-50 font-sans ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
       <Header
         onOpenAppSettings={handleOpenAppSettings}
         onLogout={logout}
-        user={{ name: session.user?.user_metadata?.full_name || 'User', initials: 'MB' }}
+        user={user}
+        onToggleMobileMenu={handleToggleMobileMenu} // New prop for mobile menu
       />
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         <div className="flex-1 flex flex-col p-4 lg:p-6 overflow-hidden">
@@ -127,13 +135,16 @@ const AppContent: React.FC = () => {
       {isAccountSettingsModalOpen && (
         <AccountSettingsPage onNavigateBack={handleCloseAccountSettings} isDesktop={isDesktop} />
       )}
-       {!isDesktop && (
-        <MobileMenu
-          onOpenAppSettings={handleOpenAppSettings}
-          onOpenAccountSettings={handleOpenAccountSettings}
-          onSignOut={logout}
-        />
-      )}
+      <MobileMenuOverlay
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        onOpenAppSettings={handleOpenAppSettings}
+        onOpenAccountSettings={handleOpenAccountSettings}
+        onSignOut={logout}
+        onClearConversation={conversationManager.clearConversation}
+        onDownloadTranscript={conversationManager.downloadTranscript}
+        user={user}
+      />
     </div>
   );
 };

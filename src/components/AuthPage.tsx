@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../hooks/useAuth'; // Updated import path
+import { useAuth } from '../hooks/useAuth';
 import ImmigoLogo from '../assets/immigo_logo.png';
 import { TermsModal } from './TermsModal';
 import { User, Mail, KeyRound, Globe, CheckSquare, Square } from 'lucide-react';
@@ -37,7 +37,7 @@ export const AuthPage: React.FC = () => {
         analytics.track('signup_success', { email, language });
         alert('Check your email for the confirmation link to complete your registration!');
       }
-    } catch (err: unknown) { // Changed from 'any' to 'unknown'
+    } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
         if (isLogin) {
@@ -57,33 +57,36 @@ export const AuthPage: React.FC = () => {
   return (
     <>
       {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
-      <div className="min-h-screen bg-gradient-to-br from-immigo-gray-50 via-star-white to-immigo-gray-50 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md bg-star-white p-8 rounded-2xl shadow-2xl border border-immigo-gray-200">
+      <div className="min-h-screen bg-immigo-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-star-white p-8 rounded-2xl shadow-xl border border-immigo-gray-200">
           <div className="text-center mb-8">
-            <img src={ImmigoLogo} alt="Immigo Logo" className="w-24 h-24 mx-auto object-contain mb-4 drop-shadow-lg" />
-            <h1 className="text-4xl font-extrabold font-display bg-gradient-to-r from-art-red-700 via-art-blue-700 to-deep-navy bg-clip-text text-transparent drop-shadow-lg">
-              {isLogin ? 'Welcome to ImmiGo' : 'Create Your Account'}
+            <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-20 h-20 mx-auto object-contain mb-4" />
+            <h1 className="text-3xl font-bold text-deep-navy font-display">
+              {isLogin ? 'Welcome Back' : 'Create Your Account'}
             </h1>
+            <p className="text-immigo-gray-600 mt-2">
+              {isLogin ? 'Sign in to continue your journey.' : 'Get started with your personal AI coach.'}
+            </p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-500" />
-                <input type="text" placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full p-3 pl-10 border-2 border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500" required />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" />
+                <input type="text" placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full p-3 pl-10 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500" required />
               </div>
             )}
             <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-500" />
-                <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-3 pl-10 border-2 border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500" required />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" />
+                <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-3 pl-10 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500" required />
             </div>
             <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-500" />
-                <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 pl-10 border-2 border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500" required />
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" />
+                <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 pl-10 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500" required />
             </div>
             {!isLogin && (
               <div className="relative">
-                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-500" />
-                <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full p-3 pl-10 border-2 border-immigo-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-art-blue-500">
+                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" />
+                <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full p-3 pl-10 border border-immigo-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-art-blue-500">
                   <option value="en-US">English (US)</option>
                   <option value="en-GB">English (UK)</option>
                   <option value="es-ES">Spanish</option>
@@ -94,11 +97,6 @@ export const AuthPage: React.FC = () => {
             )}
             {!isLogin && (
               <div className="space-y-3 pt-2">
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input type="checkbox" checked={promoEmails} onChange={(e) => setPromoEmails(e.target.checked)} className="hidden" />
-                  {promoEmails ? <CheckSquare className="w-5 h-5 text-art-blue-600" /> : <Square className="w-5 h-5 text-immigo-gray-400" />}
-                  <span className="text-sm text-immigo-gray-700">Receive promotional emails and updates.</span>
-                </label>
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="hidden" />
                   {agreedToTerms ? <CheckSquare className="w-5 h-5 text-art-blue-600" /> : <Square className="w-5 h-5 text-immigo-gray-400" />}

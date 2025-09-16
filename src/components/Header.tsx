@@ -13,15 +13,16 @@ interface HeaderProps {
     name: string;
     initials: string;
   };
+  onToggleMobileMenu: () => void; // New prop for mobile menu
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenAppSettings, onLogout, user }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenAppSettings, onLogout, user, onToggleMobileMenu }) => {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   return (
     <header className="flex items-center justify-between p-3 bg-star-white border-b border-immigo-gray-200 shadow-sm flex-shrink-0">
       <div className="flex items-center space-x-3">
-        <img src={ImmigoLogo} alt="Immigo Logo" className="w-10 h-10 object-contain" />
+        <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-10 h-10 object-contain" />
         <h1 className="text-2xl font-bold text-deep-navy font-display hidden sm:block">ImmiGo</h1>
       </div>
 
@@ -38,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAppSettings, onLogout, use
           </button>
         </div>
       ) : (
-        <button className="p-2 text-immigo-gray-600 hover:text-deep-navy hover:bg-immigo-gray-100 rounded-full">
+        <button onClick={onToggleMobileMenu} className="p-2 text-immigo-gray-600 hover:text-deep-navy hover:bg-immigo-gray-100 rounded-full">
           <Menu className="w-6 h-6" />
         </button>
       )}
