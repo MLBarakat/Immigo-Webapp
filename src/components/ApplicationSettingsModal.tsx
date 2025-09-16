@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, ExternalLink } from 'lucide-react';
 import type { UserSettings, ThemeOption } from '../types/settings';
-import { ApiClient } from '../services/apiClient';
 
 interface Voice {
   id: string;
@@ -14,9 +13,9 @@ interface ApplicationSettingsModalProps {
   onClose: () => void;
   settings: Partial<UserSettings>;
   onSave: (settings: UserSettings) => Promise<void>;
-  onSettingChange: (key: keyof UserSettings, value: any) => void; // Renamed from onSettingPreview
+  onSettingChange: (key: keyof UserSettings, value: any) => void;
   pollyVoices: Voice[];
-  isDesktop: boolean; // <-- ADDED
+  isDesktop: boolean;
 }
 
 const THEME_OPTIONS: { value: ThemeOption; label: string }[] = [ { value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, ];

@@ -1,138 +1,152 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useContext, useCallback, useRef, useEffect } from 'react'; // Added useEffect
 import { useConversation } from '../context/ConversationContext';
-import { useAuth } from './useAuth';
 import { ApiClient } from '../services/apiClient';
-import { SpeechRecognitionManager, StreamAudioManager } from '../utils/audioUtils';
 import { v4 as uuidv4 } from 'uuid';
-import { analytics } from '../analytics';
+import { Message } from '../types/conversation'; // Import Message type
 
-export const useConversationManager = () => {
+// Placeholder for useSpeechRecognition and useSpeechSynthesis, assuming they are available or mocked
+// import { useSpeechRecognition } from './useSpeechRecognition';
+// import { useSpeechSynthesis } from './useSpeechSynthesis';
+
+interface UseConversationManagerProps {
+apiClient: ApiClient | null;
+}
+
+export const useConversationManager = ({ apiClient }: UseConversationManagerProps) => {
 const { state, dispatch } = useConversation();
-const { session } = useAuth();
+const currentConversationId = useRef<string>(uuidv4());
+const intervalRef = useRef<number | null>(null);
 
-const recognitionManagerRef = useRef(new SpeechRecognitionManager());
-const audioManagerRef = useRef(new StreamAudioManager());
-const sessionTimerRef = useRef<number | null>(null);
+// Placeholder for audio output - replace with actual speech synthesis integration
+const speakText = useCallback((text: string) => {
+console.log("AI would speak:", text);
+    // Actual speech synthesis logic would go here
+  }, []);
 
-useEffect(() => {
-        if (state.isSessionActive && sessionTimerRef.current === null) {
-            sessionTimerRef.current = window.setInterval(() => {
-                dispatch({ type: 'TICK_SESSION_TIMER' });
-            }, 1000);
-        } else if (!state.isSessionActive && sessionTimerRef.current !== null) {
-            clearInterval(sessionTimerRef.current);
-            sessionTimerRef.current = null;
-        }
-        return () => {
-            if (sessionTimerRef.current) {
-                clearInterval(sessionTimerRef.current);
-            }
-        };
-    }, [state.isSessionActive, dispatch]);
+  const handleTextChunk = useCallback((textChunk: string) => {
+    // Logic to update the UI with AI's partial text response
+    console.log("Received AI text chunk:", textChunk);
+    dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', text: textChunk } }); // Assuming a temporary ID for streaming
+  }, [dispatch]);
 
-    const processAndRespond = useCallback(async (message: string) => {
-        if (!session) return;
-        analytics.track('message_sent', { message_length: message.length, language: state.currentLanguageCode }); // Added language tracking
-        dispatch({ type: 'START_PROCESSING' });
+  const handleAudioChunk = useCallback((audioChunk: Uint8Array) => {
+    // Logic to play the audio chunk
+    console.log("Received AI audio chunk:", audioChunk);
+    // This would typically involve an AudioContext and playing buffers
+  }, []);
 
-        try {
-            const apiClient = new ApiClient(session.access_token);
-            let fullText = '';
+  // Timer for session duration
+  useEffect(() => {
+    if (state.isSessionActive) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = setInterval(() => {
+        dispatch({ type: 'UPDATE_SESSION_TIME', payload: state.sessionTime + 1 });
+      }, 1000) as unknown as number; // Type assertion for setInterval return
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [state.isSessionActive, state.sessionTime, dispatch]);
 
-            const assistantMessageId = uuidv4();
-            dispatch({ type: 'ADD_MESSAGE', payload: { id: assistantMessageId, role: 'assistant', content: '...', timestamp: new Date() }});
-            dispatch({ type: 'START_SPEAKING' });
 
-            audioManagerRef.current.setOnEnded(() => {
-                dispatch({ type: 'STOP_SPEAKING' });
-            });
+  const startSession = useCallback(async () => {
+    if (!apiClient) {
+      dispatch({ type: 'SET_ERROR_MESSAGE', payload: 'API Client not available.' });
+      return;
+    }
+    dispatch({ type: 'START_SESSION' });
+    currentConversationId.current = uuidv4(); // Generate new ID for new session
+    console.log("Session started. Conversation ID:", currentConversationId.current);
 
-            await apiClient.sendMessage(
-                message,
-                state.conversationHistory,
-                state.voiceId,
-                (textChunk) => {
-                    fullText += textChunk;
-                    dispatch({ type: 'UPDATE_MESSAGE', payload: { id: assistantMessageId, content: fullText } });
-                },
-                (audioChunk) => {
-                    audioManagerRef.current.addChunk(audioChunk);
-                },
-                state.currentLanguageCode // Pass current language to API
-            );
+    // Potentially send a "session start" message to backend if required
+  }, [apiClient, dispatch]);
 
-            analytics.track('response_received', { response_length: fullText.length, language: state.currentLanguageCode }); // Added language tracking
+  const endSession = useCallback(() => {
+    dispatch({ type: 'END_SESSION' });
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    console.log("Session ended.");
+    // Potentially send a "session end" message to backend
+  }, [dispatch]);
 
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-            dispatch({ type: 'SET_ERROR', payload: `Failed to get response: ${errorMessage}` });
-            analytics.track('api_error', { error_message: errorMessage, language: state.currentLanguageCode }); // Added language tracking
-            dispatch({ type: 'STOP_SPEAKING' });
-        }
-    }, [state.conversationHistory, state.voiceId, state.currentLanguageCode, session, dispatch]); // Added currentLanguageCode to deps
 
-    const startSession = useCallback(() => {
-        analytics.track('session_started', { language: state.currentLanguageCode }); // Added language tracking
-        dispatch({ type: 'START_SESSION', payload: { clearHistory: true } });
-        recognitionManagerRef.current.startListening(
-            (transcript, isFinal) => {
-                if (isFinal && transcript.trim()) {
-                    const userMessage = { id: uuidv4(), role: 'user' as const, content: transcript, timestamp: new Date() };
-                    dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
-                    processAndRespond(transcript);
-                }
-            },
-            (error) => {
-                dispatch({ type: 'SET_ERROR', payload: error });
-            },
-            () => {},
-            state.currentLanguageCode // Pass language code for speech recognition
-        );
-    }, [dispatch, processAndRespond, state.currentLanguageCode]); // Added currentLanguageCode to deps
+  const sendUserMessage = useCallback(async (text: string) => {
+    if (!apiClient) {
+      dispatch({ type: 'SET_ERROR_MESSAGE', payload: 'API Client not available.' });
+      return;
+    }
 
-    const endSession = useCallback(() => {
-        analytics.track('session_ended', { language: state.currentLanguageCode }); // Added language tracking
-        recognitionManagerRef.current.stopListening();
-        audioManagerRef.current.stop();
-        dispatch({ type: 'END_SESSION' });
-    }, [dispatch, state.currentLanguageCode]); // Added currentLanguageCode to deps
+    dispatch({ type: 'START_PROCESSING' });
 
-    const sendTextMessage = useCallback(async (message: string) => {
-        if (!message.trim()) return;
+    const userMessage: Message = {
+      id: uuidv4(),
+      type: 'user',
+      text: text,
+      timestamp: new Date().toISOString(), // Corrected Date to string conversion
+    };
+    dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
 
-        if (!state.isSessionActive) {
-            dispatch({ type: 'START_SESSION', payload: { clearHistory: false } });
-        }
+    try {
+      await apiClient.sendMessage(
+        currentConversationId.current,
+        text,
+        state.aiVoiceId, // Corrected from voiceId
+        state.currentLanguageCode,
+        state.micMode,
+        state.bargeIn,
+        state.liveFeedbackEnabled,
+        handleTextChunk, // Callback for text stream
+        handleAudioChunk // Callback for audio stream
+      );
+      // No explicit AI message addition here, as streaming callbacks will handle it
+      dispatch({ type: 'STOP_SPEAKING' }); // Assume stopping speaking and listening again
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      dispatch({ type: 'SET_ERROR_MESSAGE', payload: error.message || 'Failed to send message.' });
+      dispatch({ type: 'STOP_SPEAKING' }); // Ensure status resets even on error
+    }
+  }, [apiClient, dispatch, state.aiVoiceId, state.currentLanguageCode, state.micMode, state.bargeIn, state.liveFeedbackEnabled, handleTextChunk, handleAudioChunk]);
 
-        const userMessage = {
-            id: uuidv4(),
-            role: 'user' as const,
-            content: message,
-            timestamp: new Date(),
-        };
-        dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
-        await processAndRespond(message);
-    }, [dispatch, processAndRespond, state.isSessionActive]);
 
-    const clearConversation = useCallback(() => {
-        dispatch({ type: 'CLEAR_HISTORY' });
-    }, [dispatch]);
+  const clearConversation = useCallback(async () => {
+    dispatch({ type: 'CLEAR_CONVERSATION' });
+    console.log("Conversation cleared.");
+    // Potentially clear history on backend as well
+  }, [dispatch]);
 
-    const downloadTranscript = useCallback(() => {
-        const transcript = state.conversationHistory
-            .map(msg => `${new Date(msg.timestamp).toLocaleTimeString()} - ${msg.role.toUpperCase()}: ${msg.content}`)
-            .join('\n');
+  const downloadTranscript = useCallback(() => {
+    const transcript = state.conversationHistory.map(msg => `${msg.type.toUpperCase()}: ${msg.text}`).join('\n');
+    const blob = new Blob([transcript], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `immigo_transcript_${new Date().toISOString()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [state.conversationHistory]);
 
-        const blob = new Blob([transcript], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `immigo-transcript-${new Date().toISOString()}-${state.currentLanguageCode}.txt`; // Added language to filename
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, [state.conversationHistory, state.currentLanguageCode]); // Added currentLanguageCode to deps
-
-    return { startSession, endSession, sendTextMessage, clearConversation, downloadTranscript };
+  return {
+    startSession,
+    endSession,
+    sendUserMessage,
+    clearConversation,
+    downloadTranscript,
+    conversationHistory: state.conversationHistory,
+    appStatus: state.appStatus,
+    isSessionActive: state.isSessionActive,
+    sessionTime: state.sessionTime,
+    errorMessage: state.errorMessage,
+    currentLanguageCode: state.currentLanguageCode,
+    aiVoiceId: state.aiVoiceId,
+    liveFeedbackEnabled: state.liveFeedbackEnabled,
+    micMode: state.micMode,
+    bargeIn: state.bargeIn,
+  };
 };

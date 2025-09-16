@@ -37,8 +37,14 @@ type ConversationAction =
   | { type: 'SET_AI_VOICE'; payload: string }
   | { type: 'SET_LIVE_FEEDBACK'; payload: boolean }
   | { type: 'SET_MIC_MODE'; payload: 'voice_activity' | 'push_to_talk' }
-  | { type: 'SET_BARGE_IN'; payload: 'relaxed' | 'balanced' | 'aggressive' };
-
+  | { type: 'SET_BARGE_IN'; payload: 'relaxed' | 'balanced' | 'aggressive' }
+  | { type: 'TICK_SESSION_TIMER' }
+  | { type: 'START_PROCESSING' }
+  | { type: 'START_SPEAKING' }
+  | { type: 'STOP_SPEAKING' }
+  | { type: 'UPDATE_MESSAGE'; payload: { id: string; text: string } }
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'CLEAR_HISTORY' };
 
 const initialState: ConversationState = {
   conversationHistory: [],
@@ -48,10 +54,10 @@ const initialState: ConversationState = {
   errorMessage: null,
   currentLanguageCode: 'en',
   fontSize: 'default',
-  aiVoiceId: 'Joanna', // Default AI voice
-  liveFeedbackEnabled: true, // Default live feedback
-  micMode: 'voice_activity', // Default mic mode
-  bargeIn: 'balanced', // Default interruption style
+  aiVoiceId: 'Joanna',
+  liveFeedbackEnabled: true,
+  micMode: 'voice_activity',
+  bargeIn: 'balanced',
 };
 
 const conversationReducer = (state: ConversationState, action: ConversationAction): ConversationState => {
@@ -65,10 +71,13 @@ const conversationReducer = (state: ConversationState, action: ConversationActio
     case 'END_SESSION':
       return { ...state, isSessionActive: false, appStatus: 'idle' };
     case 'UPDATE_SESSION_TIME':
-      return { ...state, sessionTime: action.payload };
+    case 'TICK_SESSION_TIMER':
+      return { ...state, sessionTime: state.sessionTime + 1 };
     case 'SET_ERROR_MESSAGE':
+    case 'SET_ERROR':
       return { ...state, errorMessage: action.payload, appStatus: action.payload ? 'error' : state.appStatus };
     case 'CLEAR_CONVERSATION':
+    case 'CLEAR_HISTORY':
       return { ...state, conversationHistory: [], appStatus: 'idle', isSessionActive: false, sessionTime: 0, errorMessage: null };
     case 'SET_LANGUAGE':
       return { ...state, currentLanguageCode: action.payload };
@@ -79,9 +88,22 @@ const conversationReducer = (state: ConversationState, action: ConversationActio
     case 'SET_LIVE_FEEDBACK':
       return { ...state, liveFeedbackEnabled: action.payload };
     case 'SET_MIC_MODE':
-        return { ...state, micMode: action.payload };
+      return { ...state, micMode: action.payload };
     case 'SET_BARGE_IN':
-        return { ...state, bargeIn: action.payload };
+      return { ...state, bargeIn: action.payload };
+    case 'START_PROCESSING':
+      return { ...state, appStatus: 'processing' };
+    case 'START_SPEAKING':
+      return { ...state, appStatus: 'speaking' };
+    case 'STOP_SPEAKING':
+      return { ...state, appStatus: state.isSessionActive ? 'listening' : 'idle' }; // Return to listening if session active
+    case 'UPDATE_MESSAGE':
+      return {
+        ...state,
+        conversationHistory: state.conversationHistory.map(msg =>
+          msg.id === action.payload.id ? { ...msg, text: action.payload.text } : msg
+        ),
+      };
     default:
       return state;
   }
@@ -90,14 +112,14 @@ const conversationReducer = (state: ConversationState, action: ConversationActio
 interface ConversationContextType {
   state: ConversationState;
   dispatch: React.Dispatch<ConversationAction>;
-  apiClient: ApiClient | null; // <-- ADDED
+  apiClient: ApiClient | null;
 }
 
 const ConversationContext = createContext<ConversationContextType | undefined>(undefined);
 
 interface ConversationProviderProps {
   children: ReactNode;
-  apiClient: ApiClient | null; // <-- ADDED
+  apiClient: ApiClient | null;
 }
 
 export const ConversationProvider: React.FC<ConversationProviderProps> = ({ children, apiClient }) => {

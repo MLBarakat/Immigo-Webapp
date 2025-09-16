@@ -34,58 +34,46 @@ constructor(token: string) {
 
     async sendMessage(
         conversationId: string,
-        message: string,
+        userMessageText: string,
         pollyVoiceId: string,
         languageCode: string,
         micMode: 'voice_activity' | 'push_to_talk',
         bargeIn: 'relaxed' | 'balanced' | 'aggressive',
-        liveFeedbackEnabled: boolean
+        liveFeedbackEnabled: boolean,
+        onTextChunk: (textChunk: string) => void,
+        onAudioChunk: (audioChunk: Uint8Array) => void
     ): Promise<void> {
         const response = await this.fetchWithAuth(`${API_BASE_URL}/chat-stream`, {
             method: 'POST',
             body: JSON.stringify({
-                message,
-                conversationHistory,
-                voiceId,
+                conversationId,
+                message: userMessageText,
+                pollyVoiceId,
                 languageCode,
+                micMode,
+                bargeIn,
+                liveFeedbackEnabled,
             }),
         });
 
         if (!response.body) {
-            throw new Error('Response body is empty');
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let accumulatedChunks = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            accumulatedChunks += decoder.decode(value, { stream: true });
-
-            let boundary = accumulatedChunks.indexOf('\n');
-            while (boundary !== -1) {
-                const line = accumulatedChunks.substring(0, boundary).trim();
-                accumulatedChunks = accumulatedChunks.substring(boundary + 1);
-
-                if (line.startsWith('data:')) {
-                    const jsonStr = line.substring(5).trim();
-                    try {
-                        const data = JSON.parse(jsonStr);
-                        if (data.text_chunk) {
-                            onTextChunk(data.text_chunk);
-                        }
-                        if (data.audio_chunk) {
-                            const audioBytes = new Uint8Array(data.audio_chunk.data);
-                            onAudioChunk(audioBytes);
-                        }
-                    } catch (e) {
-                        console.error('Error parsing JSON from stream:', e, jsonStr);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                try {
+                    const parsedChunk = JSON.parse(chunk);
+                    if (parsedChunk.type === 'text') {
+                        onTextChunk(parsedChunk.data);
+                    } else if (parsedChunk.type === 'audio') {
+                        const audioData = new Uint8Array(parsedChunk.data); // Assuming data is base64 or arraybuffer
+                        onAudioChunk(audioData);
                     }
+                } catch (e) {
+                    onTextChunk(chunk);
                 }
-                boundary = accumulatedChunks.indexOf('\n');
             }
         }
     }

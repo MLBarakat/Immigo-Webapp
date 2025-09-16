@@ -1,7 +1,6 @@
 import React from 'react';
 import { RefreshCcw, Pause, Play, Download, Settings, UserCircle2, MessageSquare, Mic } from 'lucide-react';
 import { AppStatus } from '../context/ConversationContext';
-import { ApiClient } from '../services/apiClient';
 import { UserSettings } from '../types/settings';
 
 interface ConversationHubProps {
@@ -16,7 +15,6 @@ interface ConversationHubProps {
   onDownloadTranscript: () => void;
   onOpenAppSettings: () => void;
   onOpenAccountSettings: () => void;
-  apiClient: ApiClient | null;
   userSettings: Partial<UserSettings>;
 }
 
@@ -32,7 +30,6 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   onDownloadTranscript,
   onOpenAppSettings,
   onOpenAccountSettings,
-  apiClient,
   userSettings,
 }) => {
   const formatTime = (seconds: number) => {
