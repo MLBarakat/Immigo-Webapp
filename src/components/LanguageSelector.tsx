@@ -2,9 +2,13 @@ import React from 'react';
 
 interface LanguageSelectorProps {
   currentLanguage: string;
+  onLanguageChange: (newLanguage: string) => void;
 }
 
-export const LanguageSelector: React.FC<LanguageSelectorProps> = ({ currentLanguage }) => {
+export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
+    currentLanguage,
+    onLanguageChange,
+}) => {
    return (
     <div className="relative">
       <button
