@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Settings, User, LogOut, Trash2, Download } from 'lucide-react';
+import { X, Settings, LogOut, Trash2, Download } from 'lucide-react';
 
 interface MobileMenuOverlayProps {
   isOpen: boolean;

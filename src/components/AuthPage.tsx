@@ -12,7 +12,6 @@ export const AuthPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [language, setLanguage] = useState('en-US');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [promoEmails, setPromoEmails] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState(false);
