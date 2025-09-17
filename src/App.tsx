@@ -15,7 +15,7 @@ import { ConversationHistory } from './components/ConversationHistory';
 import { ChatInput } from './components/ChatInput';
 import { useAuth } from './hooks/useAuth';
 import { AuthProvider } from './context/AuthContext';
-import { DisplayUser } from './types/user'; // Import the new type
+import { DisplayUser } from './types/user';
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -31,6 +31,13 @@ const AppContent: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
   const isDesktop = useMediaQuery('(min-width: 1024px)');
+
+  // HOTFIX: Add state for props required by ConversationHistory
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [currentBotMessage, setCurrentBotMessage] = useState<string | null>(null);
+  const [recognitionError, setRecognitionError] = useState<string | null>(null);
+
 
   const apiClient = useMemo(() => {
     if (session?.access_token) {
@@ -81,8 +88,8 @@ const AppContent: React.FC = () => {
   const handleOpenAccountSettings = () => setIsAccountSettingsModalOpen(true);
   const handleCloseAccountSettings = () => setIsAccountSettingsModalOpen(false);
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
+  const handleClearRecognitionError = () => setRecognitionError(null); // HOTFIX function
 
-  // Create a user object that conforms to the new DisplayUser type
   const user: DisplayUser = {
     name: authUser?.user_metadata?.full_name || authUser?.email || 'User',
     initials: (authUser?.user_metadata?.full_name || authUser?.email || 'U').charAt(0).toUpperCase(),
@@ -91,7 +98,7 @@ const AppContent: React.FC = () => {
   return (
     <div className={`flex flex-col h-screen bg-immigo-gray-50 font-sans ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
       <Header
-        displayUser={user} // Pass the correctly typed object
+        displayUser={user}
         userSettings={userSettings}
         onOpenAppSettings={handleOpenAppSettings}
         onOpenAccountSettings={handleOpenAccountSettings}
@@ -101,7 +108,14 @@ const AppContent: React.FC = () => {
       />
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         <div className="flex-1 flex flex-col p-4 lg:p-6 overflow-hidden">
-          <ConversationHistory messages={state.conversationHistory} />
+          <ConversationHistory
+            messages={state.conversationHistory}
+            isTranscribing={isTranscribing}
+            transcript={transcript}
+            currentBotMessage={currentBotMessage}
+            recognitionError={recognitionError}
+            onClearRecognitionError={handleClearRecognitionError}
+          />
           <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />
         </div>
         {isDesktop && (
@@ -148,7 +162,7 @@ const AppContent: React.FC = () => {
         onSignOut={logout}
         onClearConversation={conversationManager.clearConversation}
         onDownloadTranscript={conversationManager.downloadTranscript}
-        user={user} // Pass the correctly typed object
+        user={user}
       />
     </div>
   );
