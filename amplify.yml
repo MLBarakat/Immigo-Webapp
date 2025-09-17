@@ -3,14 +3,12 @@ frontend:
   phases:
     preBuild:
       commands:
-        - nvm use 18
-        - echo "📦 Installing frontend and backend dependencies..."
+        - nvm use node
         - yarn install --frozen-lockfile
         - cd server && yarn install && cd ..
         - mkdir -p dist/types
     build:
       commands:
-        - echo "🔨 Building TypeScript and frontend..."
         - yarn tsc --project tsconfig.build.json
         - (cd server && yarn tsc --project tsconfig.server.json || echo "No backend tsc step") # Specify backend tsconfig if exists
         - yarn build
