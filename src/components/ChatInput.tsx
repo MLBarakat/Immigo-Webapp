@@ -1,24 +1,13 @@
-import React, { useState, useRef } from 'react';
-import { Send, Mic, StopCircle } from 'lucide-react';
-import { MicMode } from '../types/settings';
+import React, { useState } from 'react';
+import { Send } from 'lucide-react';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
   disabled: boolean;
-  // Voice-related props are now optional to support progressive feature implementation.
-  startAudioInput?: () => void;
-  stopAudioInput?: () => void;
-  isTranscribing?: boolean;
-  micMode?: MicMode;
 }
 
-export const ChatInput: React.FC<ChatInputProps> = ({
-  onSendMessage,
-  disabled,
-  isTranscribing = false, // Default to false if not provided
-}) => {
-  const [message, setMessage] = useState<string>('');
-  const inputRef = useRef<HTMLInputElement>(null);
+export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled }) => {
+  const [message, setMessage] = useState('');
 
   const handleSendMessage = () => {
     if (message.trim()) {
@@ -27,45 +16,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleSendMessage();
     }
   };
 
   return (
-    <div className="flex items-center p-4 bg-star-white dark:bg-gray-800 border-t border-immigo-gray-200 dark:border-gray-700 md:rounded-b-lg">
-      <button
-        disabled={disabled}
-        className={`p-3 rounded-full mr-3 transition-colors duration-200 ease-in-out ${
-          isTranscribing
-            ? 'bg-art-red-600 hover:bg-art-red-700 text-star-white'
-            : 'bg-immigo-gray-100 hover:bg-immigo-gray-200 text-immigo-gray-600'
-        }`}
-        aria-label={isTranscribing ? 'Stop audio input' : 'Start audio input'}
-      >
-        {isTranscribing ? <StopCircle className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-      </button>
-
-      <input
-        type="text"
-        className="flex-grow p-3 border-2 border-immigo-gray-300 rounded-lg focus:outline-none focus:border-art-blue-600 text-deep-navy placeholder-immigo-gray-400 disabled:bg-immigo-gray-100"
-        placeholder="Type a message..."
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyPress={handleKeyPress}
-        ref={inputRef}
-        disabled={disabled}
-      />
-
-      <button
-        onClick={handleSendMessage}
-        className="ml-3 p-3 rounded-full bg-art-blue-600 hover:bg-art-blue-700 text-star-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        aria-label="Send message"
-        disabled={!message.trim() || disabled}
-      >
-        <Send className="w-6 h-6" />
-      </button>
+    <div className="p-4 bg-star-white border-t border-immigo-gray-200">
+      <div className="relative">
+        <textarea
+          rows={2}
+          className="w-full p-3 pr-14 border-2 border-immigo-gray-300 rounded-lg resize-none focus:outline-none focus:border-art-blue-600"
+          placeholder="Type a message..."
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
+          disabled={disabled}
+        />
+        <button
+          onClick={handleSendMessage}
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-art-blue-600 text-star-white hover:bg-art-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Send message"
+          disabled={!message.trim() || disabled}
+        >
+          <Send className="w-5 h-5" />
+        </button>
+      </div>
     </div>
   );
 };
