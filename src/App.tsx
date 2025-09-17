@@ -32,12 +32,10 @@ const AppContent: React.FC = () => {
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
-  // State for props required by ConversationHistory. Setters are omitted as they are not yet used.
   const [isTranscribing] = useState(false);
   const [transcript] = useState('');
   const [currentBotMessage] = useState<string | null>(null);
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
-
 
   const apiClient = useMemo(() => {
     if (session?.access_token) {
