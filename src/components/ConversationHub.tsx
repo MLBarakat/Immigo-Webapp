@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCcw, Pause, Play, Download } from 'lucide-react';
+import { RefreshCcw, Pause, Play, Download, Mic, StopCircle } from 'lucide-react';
 import { AppStatus } from '../context/ConversationContext';
 import { UserSettings } from '../types/settings';
 
@@ -36,65 +36,48 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   };
 
   const statusMessage = () => {
-    switch (status) {
-      case 'idle': return 'Ready to start';
-      case 'listening': return 'AI is listening...';
-      case 'processing': return 'AI is thinking...';
-      case 'speaking': return 'AI is speaking...';
-      case 'error': return `Error: ${errorMessage}`;
-      default: return 'Ready';
-    }
+    if (isSessionActive) return "Session Live";
+    return "Session Ready";
   };
 
-  const renderActionButton = () => {
-    const buttonClasses = "w-24 h-24 text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-300 transform hover:scale-110";
-    if (isSessionActive) {
-      return (
-        <button
-          onClick={onEndSession}
-          className={`${buttonClasses} bg-art-red-600 hover:bg-art-red-700`}
-          aria-label="End session"
-        >
-          <Pause className="w-10 h-10" />
-        </button>
-      );
-    }
-    return (
-      <button
-        onClick={onStartSession}
-        className={`${buttonClasses} bg-art-blue-600 hover:bg-art-blue-700`}
-        aria-label="Start session"
-      >
-        <Play className="w-10 h-10" />
-      </button>
-    );
-  };
+  const statusColor = isSessionActive ? 'text-art-red-600' : 'text-immigo-gray-600';
 
   return (
-    <div className="flex flex-col w-full h-full bg-star-white rounded-2xl shadow-xl border border-immigo-gray-200 p-6 space-y-6">
-      <div className="flex flex-col items-center justify-between space-y-4 flex-grow">
-          <div className="flex flex-col items-center space-y-2">
-            <button onClick={onClearConversation} className="flex items-center text-sm font-semibold text-immigo-gray-700 hover:text-deep-navy">
-                <RefreshCcw className="w-4 h-4 mr-2" /> Clear Conversation
-            </button>
-            <button onClick={onDownloadTranscript} className="flex items-center text-sm font-semibold text-immigo-gray-700 hover:text-deep-navy">
-                <Download className="w-4 h-4 mr-2" /> Download Transcript
-            </button>
-          </div>
+    <div className="flex flex-col w-full h-full bg-star-white rounded-lg shadow-md p-6 space-y-6">
+      {/* Application Tools */}
+      <div className="flex flex-col space-y-2">
+        <button onClick={onClearConversation} className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium text-immigo-gray-700">
+          <Trash2 className="w-4 h-4 mr-2" /> Clear Conversation
+        </button>
+        <button onClick={onDownloadTranscript} className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium text-immigo-gray-700">
+          <Download className="w-4 h-4 mr-2" /> Download Script
+        </button>
+      </div>
 
-          <div className="flex flex-col items-center justify-center space-y-4">
-              {renderActionButton()}
-              <div className="text-center">
-                <p className={`text-lg font-semibold ${errorMessage ? 'text-art-red-600' : 'text-deep-navy'}`}>{statusMessage()}</p>
-                <p className="text-sm text-immigo-gray-600">{formatTime(sessionTime)}</p>
-                {errorMessage && (
-                    <button onClick={onClearError} className="text-art-blue-600 text-sm mt-1">Clear Error</button>
-                )}
-              </div>
-          </div>
+      {/* Spacer */}
+      <div className="flex-grow" />
 
-          {/* Spacer to push content to top and bottom */}
-          <div className="flex-grow" />
+      {/* Dynamic Button and Status */}
+      <div className="flex flex-col items-center space-y-4">
+        <button
+          onClick={isSessionActive ? onEndSession : onStartSession}
+          className={`w-full h-20 rounded-xl text-xl font-bold flex items-center justify-center text-star-white shadow-lg transition-colors ${
+            isSessionActive ? 'bg-art-red-600 hover:bg-art-red-700' : 'bg-art-blue-600 hover:bg-art-blue-700'
+          }`}
+        >
+          {isSessionActive ? (
+            <><StopCircle className="w-6 h-6 mr-3" /> Stop Conversation</>
+          ) : (
+            <><Mic className="w-6 h-6 mr-3" /> Start Conversation</>
+          )}
+        </button>
+        <div className="text-center">
+          <p className={`text-sm font-semibold ${statusColor}`}>{statusMessage()}</p>
+          <p className="text-lg font-mono text-deep-navy">{formatTime(sessionTime)}</p>
+          {errorMessage && (
+            <p className="text-xs text-art-red-600 mt-1">{errorMessage}</p>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import { AuthPage } from './components/AuthPage';
 import { Header } from './components/Header';
 import { ConversationHistory } from './components/ConversationHistory';
 import { ChatInput } from './components/ChatInput';
+import { VoiceHub } from './components/VoiceHub';
 import { useAuth } from './hooks/useAuth';
 import { AuthProvider } from './context/AuthContext';
 import { DisplayUser } from './types/user';
@@ -30,17 +31,10 @@ const AppContent: React.FC = () => {
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
-  const isDesktop = useMediaQuery('(min-width: 1024px)');
-
-  const [isTranscribing] = useState(false);
-  const [transcript] = useState('');
-  const [currentBotMessage] = useState<string | null>(null);
-  const [recognitionError, setRecognitionError] = useState<string | null>(null);
+  const isDesktop = useMediaQuery('(min-width: 768px)'); // Using md breakpoint as per spec
 
   const apiClient = useMemo(() => {
-    if (session?.access_token) {
-      return new ApiClient(session.access_token);
-    }
+    if (session?.access_token) { return new ApiClient(session.access_token); }
     return null;
   }, [session]);
 
@@ -53,9 +47,7 @@ const AppContent: React.FC = () => {
         try {
           const settings = await apiClient.getSettings();
           setUserSettings(settings);
-        } catch (error) {
-          console.error('Failed to fetch user settings:', error);
-        }
+        } catch (error) { console.error('Failed to fetch user settings:', error); }
       }
     };
     fetchSettings();
@@ -77,16 +69,13 @@ const AppContent: React.FC = () => {
     setUserSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  if (!session) {
-    return <AuthPage />;
-  }
+  if (!session) { return <AuthPage />; }
 
   const handleOpenAppSettings = () => setIsAppSettingsModalOpen(true);
   const handleCloseAppSettings = () => setIsAppSettingsModalOpen(false);
   const handleOpenAccountSettings = () => setIsAccountSettingsModalOpen(true);
   const handleCloseAccountSettings = () => setIsAccountSettingsModalOpen(false);
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
-  const handleClearRecognitionError = () => setRecognitionError(null);
 
   const user: DisplayUser = {
     name: authUser?.user_metadata?.full_name || authUser?.email || 'User',
@@ -94,30 +83,37 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className={`flex flex-col h-screen bg-immigo-gray-50 font-sans ${userSettings.theme === 'dark' ? 'dark' : ''}`}>
+    <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
       <Header
         displayUser={user}
-        userSettings={userSettings}
         onOpenAppSettings={handleOpenAppSettings}
         onOpenAccountSettings={handleOpenAccountSettings}
         onSignOut={logout}
         onToggleMobileMenu={handleToggleMobileMenu}
-        onSettingChange={handleSettingChange}
       />
-      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        <div className="flex-1 flex flex-col p-4 lg:p-6 overflow-hidden">
-          <ConversationHistory
-            messages={state.conversationHistory}
-            isTranscribing={isTranscribing}
-            transcript={transcript}
-            currentBotMessage={currentBotMessage}
-            recognitionError={recognitionError}
-            onClearRecognitionError={handleClearRecognitionError}
-          />
-          <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />
+      <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 md:p-6 gap-6">
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col bg-star-white rounded-lg shadow-md overflow-hidden">
+          <ConversationHistory messages={state.conversationHistory} />
+          {!isDesktop && (
+            <div className="flex items-center p-2 bg-star-white border-t border-immigo-gray-200">
+              <div className="flex-grow">
+                <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />
+              </div>
+              <VoiceHub
+                isSessionActive={state.isSessionActive}
+                sessionTime={state.sessionTime}
+                onStartSession={conversationManager.startSession}
+                onEndSession={conversationManager.endSession}
+              />
+            </div>
+          )}
+          {isDesktop && <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />}
         </div>
+
+        {/* Desktop Sidebar */}
         {isDesktop && (
-          <aside className="w-full lg:w-96 p-6 flex-shrink-0">
+          <aside className="w-72 flex-shrink-0">
             <ConversationHub
               status={state.appStatus}
               isSessionActive={state.isSessionActive}
@@ -135,33 +131,16 @@ const AppContent: React.FC = () => {
           </aside>
         )}
       </main>
-      <footer className="text-center py-2 bg-immigo-gray-100 border-t border-immigo-gray-200 text-xs text-immigo-gray-600">
-        © 2025 ImmiGo. All rights reserved.
+      <footer className="text-center py-3 bg-star-white text-immigo-gray-600 text-sm border-t border-immigo-gray-200">
+        © {new Date().getFullYear()} ImmiGo. {isDesktop ? 'All rights reserved.' : ''}
       </footer>
       {isAppSettingsModalOpen && (
-        <ApplicationSettingsModal
-          isOpen={isAppSettingsModalOpen}
-          onClose={handleCloseAppSettings}
-          settings={userSettings}
-          onSave={handleSaveSettings}
-          onSettingChange={handleSettingChange}
-          pollyVoices={PollyVoices}
-          isDesktop={isDesktop}
-        />
+        <ApplicationSettingsModal isOpen={isAppSettingsModalOpen} onClose={handleCloseAppSettings} settings={userSettings} onSave={handleSaveSettings} onSettingChange={handleSettingChange} pollyVoices={PollyVoices} isDesktop={isDesktop} />
       )}
       {isAccountSettingsModalOpen && (
         <AccountSettingsPage onNavigateBack={handleCloseAccountSettings} isDesktop={isDesktop} />
       )}
-      <MobileMenuOverlay
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-        onOpenAppSettings={handleOpenAppSettings}
-        onOpenAccountSettings={handleOpenAccountSettings}
-        onSignOut={logout}
-        onClearConversation={conversationManager.clearConversation}
-        onDownloadTranscript={conversationManager.downloadTranscript}
-        user={user}
-      />
+      <MobileMenuOverlay isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} onOpenAppSettings={handleOpenAppSettings} onOpenAccountSettings={handleOpenAccountSettings} onSignOut={logout} onClearConversation={conversationManager.clearConversation} onDownloadTranscript={conversationManager.downloadTranscript} user={user} />
     </div>
   );
 };
