@@ -25,19 +25,13 @@ const PollyVoices = [
   { id: 'Brian', name: 'Brian (British English)' },
 ];
 
-const AppContent: React.FC = () => {
+function AppContent(): JSX.Element {
   const { session, user: authUser, logout } = useAuth();
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
   const isDesktop = useMediaQuery('(min-width: 768px)');
-
-  // State for props required by child components
-  const [isTranscribing] = useState(false);
-  const [transcript] = useState('');
-  const [currentBotMessage] = useState<string | null>(null);
-  const [recognitionError, setRecognitionError] = useState<string | null>(null);
 
   const apiClient = useMemo(() => {
     if (session?.access_token) { return new ApiClient(session.access_token); }
@@ -71,7 +65,7 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleSettingChange = (key: keyof UserSettings, value: any) => {
+  const handleSettingChange = (key: keyof UserSettings, value: unknown) => {
     setUserSettings(prev => ({ ...prev, [key]: value }));
   };
 
@@ -82,7 +76,6 @@ const AppContent: React.FC = () => {
   const handleOpenAccountSettings = () => setIsAccountSettingsModalOpen(true);
   const handleCloseAccountSettings = () => setIsAccountSettingsModalOpen(false);
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
-  const handleClearRecognitionError = () => setRecognitionError(null);
 
   const user: DisplayUser = {
     name: authUser?.user_metadata?.full_name || authUser?.email || 'User',
@@ -93,25 +86,17 @@ const AppContent: React.FC = () => {
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
       <Header
         displayUser={user}
-        userSettings={userSettings}
         onOpenAppSettings={handleOpenAppSettings}
         onOpenAccountSettings={handleOpenAccountSettings}
         onSignOut={logout}
         onToggleMobileMenu={handleToggleMobileMenu}
-        onSettingChange={handleSettingChange}
       />
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 md:p-6 gap-6">
-        {/* Main Content Area */}
         <div className="flex-1 flex flex-col bg-star-white rounded-lg shadow-md overflow-hidden">
-          <ConversationHistory
-            messages={state.conversationHistory}
-            isTranscribing={isTranscribing}
-            transcript={transcript}
-            currentBotMessage={currentBotMessage}
-            recognitionError={recognitionError}
-            onClearRecognitionError={handleClearRecognitionError}
-          />
-          {!isDesktop && (
+          <ConversationHistory messages={state.conversationHistory} displayUser={user} />
+          {isDesktop ? (
+            <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />
+          ) : (
             <div className="flex items-center p-2 bg-star-white border-t border-immigo-gray-200">
               <div className="flex-grow">
                 <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />
@@ -124,10 +109,8 @@ const AppContent: React.FC = () => {
               />
             </div>
           )}
-          {isDesktop && <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />}
         </div>
 
-        {/* Desktop Sidebar */}
         {isDesktop && (
           <aside className="w-72 flex-shrink-0">
             <ConversationHub
@@ -140,9 +123,6 @@ const AppContent: React.FC = () => {
               onClearError={() => dispatch({ type: 'SET_ERROR_MESSAGE', payload: null })}
               onClearConversation={conversationManager.clearConversation}
               onDownloadTranscript={conversationManager.downloadTranscript}
-              onOpenAppSettings={handleOpenAppSettings}
-              onOpenAccountSettings={handleOpenAccountSettings}
-              userSettings={userSettings}
             />
           </aside>
         )}
@@ -159,16 +139,18 @@ const AppContent: React.FC = () => {
       <MobileMenuOverlay isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} onOpenAppSettings={handleOpenAppSettings} onOpenAccountSettings={handleOpenAccountSettings} onSignOut={logout} onClearConversation={conversationManager.clearConversation} onDownloadTranscript={conversationManager.downloadTranscript} user={user} />
     </div>
   );
-};
+}
 
-const App: React.FC = () => (
-  <Router>
-    <AuthProvider>
-      <ConversationProvider apiClient={null}>
-        <AppContent />
-      </ConversationProvider>
-    </AuthProvider>
-  </Router>
-);
+function App(): JSX.Element {
+  return (
+    <Router>
+      <AuthProvider>
+        <ConversationProvider apiClient={null}>
+          <AppContent />
+        </ConversationProvider>
+      </AuthProvider>
+    </Router>
+  );
+}
 
 export default App;

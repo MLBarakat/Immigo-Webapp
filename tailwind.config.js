@@ -14,8 +14,8 @@ export default {
         'immigo-gray': { 50: '#F9FAFB', 100: '#F1F3F5', 200: '#E5E7EB', 300: '#DEE2E6', 500: '#ADB5BD', 600: '#4B5563', 700: '#495057', }
       },
       fontFamily: {
-        sans: ['"Inter"', 'sans-serif'], // CORRECTED FONT
-        display: ['"Inter"', 'sans-serif'], // CORRECTED FONT
+        sans: ['"Inter"', 'sans-serif'],
+        display: ['"Inter"', 'sans-serif'],
         emoji: ['"Apple Color Emoji"', '"Segoe UI Emoji"', '"Noto Color Emoji"', '"Segoe UI Symbol"', 'EmojiOneMozilla', 'sans-serif'],
       }
     },
