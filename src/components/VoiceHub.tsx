@@ -29,7 +29,7 @@ export const VoiceHub: React.FC<VoiceHubProps> = ({ isSessionActive, sessionTime
         {isSessionActive ? <StopCircle className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
       </button>
       <div className="text-center mt-2">
-        <p className={`text-xs font-semibold ${statusColor}`}>{statusMessage()}</p>
+        <p className={`text-xs font-semibold ${statusColor}`}>{statusMessage}</p>
         <p className="text-sm font-mono text-deep-navy">{formatTime(sessionTime)}</p>
       </div>
     </div>

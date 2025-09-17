@@ -31,7 +31,13 @@ const AppContent: React.FC = () => {
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
-  const isDesktop = useMediaQuery('(min-width: 768px)'); // Using md breakpoint as per spec
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+
+  // State for props required by child components
+  const [isTranscribing] = useState(false);
+  const [transcript] = useState('');
+  const [currentBotMessage] = useState<string | null>(null);
+  const [recognitionError, setRecognitionError] = useState<string | null>(null);
 
   const apiClient = useMemo(() => {
     if (session?.access_token) { return new ApiClient(session.access_token); }
@@ -76,6 +82,7 @@ const AppContent: React.FC = () => {
   const handleOpenAccountSettings = () => setIsAccountSettingsModalOpen(true);
   const handleCloseAccountSettings = () => setIsAccountSettingsModalOpen(false);
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
+  const handleClearRecognitionError = () => setRecognitionError(null);
 
   const user: DisplayUser = {
     name: authUser?.user_metadata?.full_name || authUser?.email || 'User',
@@ -86,15 +93,24 @@ const AppContent: React.FC = () => {
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
       <Header
         displayUser={user}
+        userSettings={userSettings}
         onOpenAppSettings={handleOpenAppSettings}
         onOpenAccountSettings={handleOpenAccountSettings}
         onSignOut={logout}
         onToggleMobileMenu={handleToggleMobileMenu}
+        onSettingChange={handleSettingChange}
       />
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 md:p-6 gap-6">
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col bg-star-white rounded-lg shadow-md overflow-hidden">
-          <ConversationHistory messages={state.conversationHistory} />
+          <ConversationHistory
+            messages={state.conversationHistory}
+            isTranscribing={isTranscribing}
+            transcript={transcript}
+            currentBotMessage={currentBotMessage}
+            recognitionError={recognitionError}
+            onClearRecognitionError={handleClearRecognitionError}
+          />
           {!isDesktop && (
             <div className="flex items-center p-2 bg-star-white border-t border-immigo-gray-200">
               <div className="flex-grow">

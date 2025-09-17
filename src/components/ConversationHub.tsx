@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCcw, Pause, Play, Download, Mic, StopCircle } from 'lucide-react';
+import { Download, Mic, StopCircle, Trash2 } from 'lucide-react';
 import { AppStatus } from '../context/ConversationContext';
 import { UserSettings } from '../types/settings';
 
@@ -19,13 +19,11 @@ interface ConversationHubProps {
 }
 
 export const ConversationHub: React.FC<ConversationHubProps> = ({
-  status,
   isSessionActive,
   sessionTime,
   errorMessage,
   onStartSession,
   onEndSession,
-  onClearError,
   onClearConversation,
   onDownloadTranscript,
 }) => {
@@ -35,11 +33,7 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const statusMessage = () => {
-    if (isSessionActive) return "Session Live";
-    return "Session Ready";
-  };
-
+  const statusMessage = isSessionActive ? "Session Live" : "Session Ready";
   const statusColor = isSessionActive ? 'text-art-red-600' : 'text-immigo-gray-600';
 
   return (
@@ -72,7 +66,7 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
           )}
         </button>
         <div className="text-center">
-          <p className={`text-sm font-semibold ${statusColor}`}>{statusMessage()}</p>
+          <p className={`text-sm font-semibold ${statusColor}`}>{statusMessage}</p>
           <p className="text-lg font-mono text-deep-navy">{formatTime(sessionTime)}</p>
           {errorMessage && (
             <p className="text-xs text-art-red-600 mt-1">{errorMessage}</p>
