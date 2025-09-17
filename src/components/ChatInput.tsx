@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Mic, StopCircle } from 'lucide-react';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
   disabled: boolean;
+  startAudioInput: () => void;
+  stopAudioInput: () => void;
+  isTranscribing: boolean;
 }
 
-export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled }) => {
+export function ChatInput({ onSendMessage, disabled, startAudioInput, stopAudioInput, isTranscribing }: ChatInputProps): JSX.Element {
   const [message, setMessage] = useState('');
 
   const handleSendMessage = () => {
@@ -23,9 +26,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled })
     }
   };
 
+  const handleMicClick = () => {
+    if (isTranscribing) {
+      stopAudioInput();
+    } else {
+      startAudioInput();
+    }
+  };
+
   return (
-    <div className="p-4 bg-star-white border-t border-immigo-gray-200">
-      <div className="relative">
+    <div className="p-2 md:p-4 bg-star-white border-t border-immigo-gray-200 flex items-center gap-2">
+       <button
+        onClick={handleMicClick}
+        disabled={disabled}
+        className={`p-3 rounded-full transition-colors flex-shrink-0 ${
+          isTranscribing ? 'bg-art-red-100 text-art-red-600' : 'hover:bg-immigo-gray-100'
+        }`}
+      >
+        {isTranscribing ? <StopCircle className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+      </button>
+      <div className="relative flex-grow">
         <textarea
           rows={2}
           className="w-full p-3 pr-14 border-2 border-immigo-gray-300 rounded-lg resize-none focus:outline-none focus:border-art-blue-600"
@@ -46,4 +66,4 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled })
       </div>
     </div>
   );
-};
+}
