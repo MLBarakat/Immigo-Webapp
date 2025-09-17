@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Message } from '../types/conversation';
 import { DisplayUser } from '../types/user';
 import ImmigoLogo from '../assets/immigo_logo.png';
