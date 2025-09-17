@@ -32,10 +32,10 @@ const AppContent: React.FC = () => {
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
-  // HOTFIX: Add state for props required by ConversationHistory
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [currentBotMessage, setCurrentBotMessage] = useState<string | null>(null);
+  // State for props required by ConversationHistory. Setters are omitted as they are not yet used.
+  const [isTranscribing] = useState(false);
+  const [transcript] = useState('');
+  const [currentBotMessage] = useState<string | null>(null);
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
 
 
@@ -88,7 +88,7 @@ const AppContent: React.FC = () => {
   const handleOpenAccountSettings = () => setIsAccountSettingsModalOpen(true);
   const handleCloseAccountSettings = () => setIsAccountSettingsModalOpen(false);
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
-  const handleClearRecognitionError = () => setRecognitionError(null); // HOTFIX function
+  const handleClearRecognitionError = () => setRecognitionError(null);
 
   const user: DisplayUser = {
     name: authUser?.user_metadata?.full_name || authUser?.email || 'User',
