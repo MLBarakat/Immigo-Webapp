@@ -1,66 +1,34 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useMemo } from 'react';
 import { useConversation } from '../context/ConversationContext';
 import { ApiClient } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
 import { Message } from '../context/ConversationContext';
+import { SpeechRecognitionManager } from '../utils/audioUtils';
 
 interface UseConversationManagerProps {
 apiClient: ApiClient | null;
 }
 
-export const useConversationManager = ({ apiClient }: UseConversationManagerProps) => {
-const { state, dispatch } = useConversation();
-const currentConversationId = useRef<string>(uuidv4());
-const intervalRef = useRef<number | null>(null);
+export function useConversationManager({ apiClient }: UseConversationManagerProps) {
+  const { state, dispatch } = useConversation();
+  const currentConversationId = useRef<string>(uuidv4());
+  const intervalRef = useRef<number | null>(null);
 
-const handleTextChunk = useCallback((textChunk: string) => {
-dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', content: textChunk } });
+  const speechManager = useMemo(() => new SpeechRecognitionManager(), []);
+
+  const handleTextChunk = useCallback((textChunk: string) => {
+    dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', content: textChunk } });
   }, [dispatch]);
 
   const handleAudioChunk = useCallback((audioChunk: Uint8Array) => {
     console.log("Received AI audio chunk:", audioChunk);
   }, []);
 
-  useEffect(() => {
-    if (state.isSessionActive) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = setInterval(() => {
-        dispatch({ type: 'TICK_SESSION_TIMER' });
-      }, 1000) as unknown as number;
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [state.isSessionActive, dispatch]);
-
-  const startSession = useCallback(async () => {
-    if (!apiClient) {
-      dispatch({ type: 'SET_ERROR_MESSAGE', payload: 'API Client not available.' });
-      return;
-    }
-    dispatch({ type: 'START_SESSION' });
-    currentConversationId.current = uuidv4();
-    console.log("Session started. Conversation ID:", currentConversationId.current);
-  }, [apiClient, dispatch]);
-
-  const endSession = useCallback(() => {
-    dispatch({ type: 'END_SESSION' });
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    console.log("Session ended.");
-  }, [dispatch]);
-
   const sendUserMessage = useCallback(async (text: string) => {
-    if (!apiClient) {
-      dispatch({ type: 'SET_ERROR_MESSAGE', payload: 'API Client not available.' });
-      return;
-    }
+    if (!apiClient || text.trim() === '') return;
 
+    speechManager.stopListening(); // Stop listening when sending a message
+    dispatch({ type: 'STOP_TRANSCRIPTION' });
     dispatch({ type: 'START_PROCESSING' });
 
     const userMessage: Message = {
@@ -83,17 +51,70 @@ dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', content: te
         handleTextChunk,
         handleAudioChunk
       );
-      dispatch({ type: 'STOP_SPEAKING' });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send message.';
       console.error('Error sending message:', error);
-      dispatch({ type: 'SET_ERROR_MESSAGE', payload: error.message || 'Failed to send message.' });
-      dispatch({ type: 'STOP_SPEAKING' });
+      dispatch({ type: 'SET_ERROR_MESSAGE', payload: errorMessage });
+    } finally {
+      dispatch({ type: 'SET_APP_STATUS', payload: state.isSessionActive ? 'listening' : 'idle' });
     }
-  }, [apiClient, dispatch, state.aiVoiceId, state.currentLanguageCode, state.micMode, state.bargeIn, state.liveFeedbackEnabled, handleTextChunk, handleAudioChunk]);
+  }, [apiClient, dispatch, state.aiVoiceId, state.currentLanguageCode, state.micMode, state.bargeIn, state.liveFeedbackEnabled, handleTextChunk, handleAudioChunk, speechManager, state.isSessionActive]);
 
-  const clearConversation = useCallback(async () => {
+  const handleTranscriptionResult = useCallback((transcript: string, isFinal: boolean) => {
+    dispatch({ type: 'SET_TRANSCRIPT', payload: transcript });
+    if (isFinal) {
+      sendUserMessage(transcript);
+    }
+  }, [dispatch, sendUserMessage]);
+
+  const handleTranscriptionError = useCallback((error: string) => {
+    dispatch({ type: 'SET_ERROR_MESSAGE', payload: `Speech recognition error: ${error}` });
+    dispatch({ type: 'STOP_TRANSCRIPTION' });
+  }, [dispatch]);
+
+  const startAudioInput = useCallback(() => {
+    if (!state.isSessionActive) return;
+    dispatch({ type: 'START_TRANSCRIPTION' });
+    speechManager.startListening(
+      handleTranscriptionResult,
+      handleTranscriptionError,
+      () => dispatch({ type: 'STOP_TRANSCRIPTION' }),
+      state.currentLanguageCode
+    );
+  }, [state.isSessionActive, speechManager, handleTranscriptionResult, handleTranscriptionError, dispatch, state.currentLanguageCode]);
+
+  const stopAudioInput = useCallback(() => {
+    speechManager.stopListening();
+    dispatch({ type: 'STOP_TRANSCRIPTION' });
+  }, [speechManager, dispatch]);
+
+  useEffect(() => {
+    if (state.isSessionActive) {
+      intervalRef.current = setInterval(() => dispatch({ type: 'TICK_SESSION_TIMER' }), 1000) as unknown as number;
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      speechManager.stopListening();
+    };
+  }, [state.isSessionActive, dispatch, speechManager]);
+
+  const startSession = useCallback(() => {
+    if (!apiClient) {
+      dispatch({ type: 'SET_ERROR_MESSAGE', payload: 'API Client not available.' });
+      return;
+    }
+    dispatch({ type: 'START_SESSION' });
+    currentConversationId.current = uuidv4();
+  }, [apiClient, dispatch]);
+
+  const endSession = useCallback(() => {
+    dispatch({ type: 'END_SESSION' });
+  }, [dispatch]);
+
+  const clearConversation = useCallback(() => {
     dispatch({ type: 'CLEAR_CONVERSATION' });
-    console.log("Conversation cleared.");
   }, [dispatch]);
 
   const downloadTranscript = useCallback(() => {
@@ -103,9 +124,7 @@ dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', content: te
     const a = document.createElement('a');
     a.href = url;
     a.download = `immigo_transcript_${new Date().toISOString()}.txt`;
-    document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, [state.conversationHistory]);
 
@@ -116,6 +135,8 @@ dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', content: te
     sendUserMessage,
     clearConversation,
     downloadTranscript,
+    startAudioInput,
+    stopAudioInput,
     clearError: () => dispatch({ type: 'SET_ERROR_MESSAGE', payload: null }),
   };
-};
+}
