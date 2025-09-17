@@ -4,22 +4,26 @@ import { Settings, LogOut, Menu } from 'lucide-react';
 import { DisplayUser } from '../types/user';
 import { LanguageSelector } from './LanguageSelector';
 import { FontSizeSelector } from './FontSizeSelector';
-import { useAuth } from '../hooks/useAuth';
+import { UserSettings } from '../types/settings';
 
 interface HeaderProps {
   displayUser: DisplayUser;
+  userSettings: Partial<UserSettings>;
   onOpenAppSettings: () => void;
   onOpenAccountSettings: () => void;
   onSignOut: () => void;
   onToggleMobileMenu: () => void;
+  onSettingChange: (key: keyof UserSettings, value: any) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   displayUser,
+  userSettings,
   onOpenAppSettings,
   onOpenAccountSettings,
   onSignOut,
   onToggleMobileMenu,
+  onSettingChange,
 }) => {
   return (
     <header className="flex items-center justify-between p-4 bg-star-white shadow-sm border-b border-immigo-gray-200">
@@ -31,7 +35,10 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Desktop Navigation */}
       <nav className="hidden md:flex items-center space-x-4">
         <LanguageSelector currentLanguage="EN" onLanguageChange={() => {}} />
-        <FontSizeSelector currentFontSize="default" onFontSizeChange={() => {}} />
+        <FontSizeSelector
+          currentFontSize={userSettings.font_size || 'default'}
+          onFontSizeChange={(size) => onSettingChange('font_size', size)}
+        />
         <button onClick={onOpenAppSettings} className="p-2 rounded-full hover:bg-immigo-gray-100">
           <Settings className="w-6 h-6 text-immigo-gray-600" />
         </button>
