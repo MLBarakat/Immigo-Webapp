@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
@@ -32,6 +32,12 @@ function AppContent(): JSX.Element {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
   const isDesktop = useMediaQuery('(min-width: 768px)');
+
+  // State required for ConversationHistory
+  const [isTranscribing] = useState(false);
+  const [transcript] = useState('');
+  const [currentBotMessage] = useState<string | null>(null);
+  const [recognitionError, setRecognitionError] = useState<string | null>(null);
 
   const apiClient = useMemo(() => {
     if (session?.access_token) { return new ApiClient(session.access_token); }
@@ -76,6 +82,7 @@ function AppContent(): JSX.Element {
   const handleOpenAccountSettings = () => setIsAccountSettingsModalOpen(true);
   const handleCloseAccountSettings = () => setIsAccountSettingsModalOpen(false);
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
+  const handleClearRecognitionError = () => setRecognitionError(null);
 
   const user: DisplayUser = {
     name: authUser?.user_metadata?.full_name || authUser?.email || 'User',
@@ -86,14 +93,24 @@ function AppContent(): JSX.Element {
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
       <Header
         displayUser={user}
+        userSettings={userSettings}
         onOpenAppSettings={handleOpenAppSettings}
         onOpenAccountSettings={handleOpenAccountSettings}
         onSignOut={logout}
         onToggleMobileMenu={handleToggleMobileMenu}
+        onSettingChange={handleSettingChange}
       />
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 md:p-6 gap-6">
         <div className="flex-1 flex flex-col bg-star-white rounded-lg shadow-md overflow-hidden">
-          <ConversationHistory messages={state.conversationHistory} displayUser={user} />
+          <ConversationHistory
+            messages={state.conversationHistory}
+            displayUser={user}
+            isTranscribing={isTranscribing}
+            transcript={transcript}
+            currentBotMessage={currentBotMessage}
+            recognitionError={recognitionError}
+            onClearRecognitionError={handleClearRecognitionError}
+          />
           {isDesktop ? (
             <ChatInput onSendMessage={conversationManager.sendUserMessage} disabled={!state.isSessionActive} />
           ) : (
@@ -123,6 +140,9 @@ function AppContent(): JSX.Element {
               onClearError={() => dispatch({ type: 'SET_ERROR_MESSAGE', payload: null })}
               onClearConversation={conversationManager.clearConversation}
               onDownloadTranscript={conversationManager.downloadTranscript}
+              onOpenAppSettings={handleOpenAppSettings}
+              onOpenAccountSettings={handleOpenAccountSettings}
+              userSettings={userSettings}
             />
           </aside>
         )}
