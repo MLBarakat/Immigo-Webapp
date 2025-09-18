@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import { createContext, useState, useEffect, ReactNode, useMemo, useContext } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
 import { UserProfile } from '../types/user';
@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       console.error("Failed to update user language in profile:", error.message);
       throw error;
     }
-    setProfile(prevProfile => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
+    setProfile((prevProfile: UserProfile | null) => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
   };
 
   const value = useMemo(() => ({
