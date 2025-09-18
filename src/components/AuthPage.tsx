@@ -55,7 +55,7 @@ export function AuthPage(): JSX.Element {
               {isLogin ? 'Welcome Back' : 'Create Your Account'}
             </h1>
             <p className="text-immigo-gray-600 mt-2">
-              {isLogin ? 'Sign in to continue your journey.' : 'Get started with your personal AI coach.'}
+              {isLogin ? 'Continue the journey with personal AI coach' : 'Get started with your personal AI coach'}
             </p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
