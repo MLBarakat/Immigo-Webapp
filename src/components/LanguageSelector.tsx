@@ -1,18 +1,18 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { ChevronDown } from "lucide-react";
 
-interface Language {
+export interface Language {
   readonly code: string;
   readonly name: string;
   readonly flag: string;
   readonly label: string;
 }
 
-const SUPPORTED_LANGUAGES: readonly Language[] = [
-  { code: "en-US", name: "English (US)", label: "EN", flag: "🇺🇸" },
-  { code: "es-ES", name: "Español", label: "ES", flag: "🇪🇸" },
-  { code: "fr-FR", name: "Francés", label: "FR", flag: "🇫🇷" },
-  { code: "ar-SA", name: "العربية", label: "ع", flag: "🇸🇦" },
+export const SUPPORTED_LANGUAGES: readonly Language[] = [
+  { code: "en-US", name: "English (US)", label: "US", flag: "🇺🇸" },
+  { code: "es-ES", name: "Spanish", label: "ES", flag: "🇪🇸" },
+  { code: "fr-FR", name: "French", label: "FR", flag: "🇫🇷" },
+  { code: "ar-SA", name: "العربية", label: "SA", flag: "🇸🇦" },
 ];
 
 interface LanguageSelectorProps {

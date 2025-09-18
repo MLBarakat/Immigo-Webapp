@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import ImmigoLogo from '../assets/immigo_logo.png';
 import { TermsModal } from './TermsModal';
 import { User, Mail, KeyRound, Globe, CheckSquare, Square } from 'lucide-react';
 import { analytics } from '../analytics';
+import { SUPPORTED_LANGUAGES } from './LanguageSelector'; // IMPORTED from single source of truth
 
-export const AuthPage: React.FC = () => {
+export function AuthPage(): JSX.Element {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,26 +28,16 @@ export const AuthPage: React.FC = () => {
     setError(null);
     try {
       if (isLogin) {
-        analytics.track('login_attempt', { email });
         await login(email, password);
-        analytics.track('login_success', { email });
       } else {
-        analytics.track('signup_attempt', { email, language });
         await signUp({ email, password, fullName, language });
-        analytics.track('signup_success', { email, language });
         alert('Check your email for the confirmation link to complete your registration!');
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
-        if (isLogin) {
-          analytics.track('login_failed', { email, error: err.message });
-        } else {
-          analytics.track('signup_failed', { email, error: err.message });
-        }
       } else {
         setError('An unexpected error occurred.');
-        analytics.track('unknown_error', { email });
       }
     } finally {
       setLoading(false);
@@ -86,11 +77,9 @@ export const AuthPage: React.FC = () => {
               <div className="relative">
                 <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" />
                 <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full p-3 pl-10 border border-immigo-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-art-blue-500">
-                  <option value="en-US">English (US)</option>
-                  <option value="en-GB">English (UK)</option>
-                  <option value="es-ES">Spanish</option>
-                  <option value="fr-FR">French</option>
-                  <option value="de-DE">German</option>
+                  {SUPPORTED_LANGUAGES.map(lang => (
+                    <option key={lang.code} value={lang.code}>{lang.name}</option>
+                  ))}
                 </select>
               </div>
             )}
@@ -120,4 +109,4 @@ export const AuthPage: React.FC = () => {
       </div>
     </>
   );
-};
+}
