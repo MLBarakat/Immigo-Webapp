@@ -1,4 +1,3 @@
-import React from 'react';
 import { Download, Mic, StopCircle, Trash2 } from 'lucide-react';
 import { AppStatus } from '../context/ConversationContext';
 import { UserSettings } from '../types/settings';
@@ -18,7 +17,7 @@ interface ConversationHubProps {
   userSettings: Partial<UserSettings>;
 }
 
-export const ConversationHub: React.FC<ConversationHubProps> = ({
+export function ConversationHub({
   isSessionActive,
   sessionTime,
   errorMessage,
@@ -26,7 +25,7 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
   onEndSession,
   onClearConversation,
   onDownloadTranscript,
-}) => {
+}: ConversationHubProps): JSX.Element {
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -38,7 +37,6 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
 
   return (
     <div className="flex flex-col w-full h-full bg-star-white rounded-lg shadow-md p-6 space-y-6">
-      {/* Application Tools */}
       <div className="flex flex-col space-y-2">
         <button onClick={onClearConversation} className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium text-immigo-gray-700">
           <Trash2 className="w-4 h-4 mr-2" /> Clear Conversation
@@ -48,10 +46,8 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
         </button>
       </div>
 
-      {/* Spacer */}
       <div className="flex-grow" />
 
-      {/* Dynamic Button and Status */}
       <div className="flex flex-col items-center space-y-4">
         <button
           onClick={isSessionActive ? onEndSession : onStartSession}
@@ -75,4 +71,4 @@ export const ConversationHub: React.FC<ConversationHubProps> = ({
       </div>
     </div>
   );
-};
+}

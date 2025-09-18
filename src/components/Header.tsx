@@ -1,4 +1,3 @@
-import React from 'react';
 import ImmigoLogo from '../assets/immigo_logo.png';
 import { Settings, LogOut, Menu } from 'lucide-react';
 import { DisplayUser } from '../types/user';
@@ -16,7 +15,7 @@ interface HeaderProps {
   onSettingChange: (key: keyof UserSettings, value: any) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
+export function Header({
   displayUser,
   userSettings,
   onOpenAppSettings,
@@ -24,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSignOut,
   onToggleMobileMenu,
   onSettingChange,
-}) => {
+}: HeaderProps): JSX.Element {
   return (
     <header className="flex items-center justify-between p-4 bg-star-white shadow-sm border-b border-immigo-gray-200">
       <div className="flex items-center gap-4">
@@ -32,7 +31,6 @@ export const Header: React.FC<HeaderProps> = ({
         <h1 className="text-2xl font-bold font-display text-deep-navy">ImmiGo</h1>
       </div>
 
-      {/* Desktop Navigation */}
       <nav className="hidden md:flex items-center space-x-4">
         <LanguageSelector currentLanguage="EN" onLanguageChange={() => {}} />
         <FontSizeSelector
@@ -50,7 +48,6 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
       </nav>
 
-      {/* Mobile Menu Toggle */}
       <div className="md:hidden">
         <button onClick={onToggleMobileMenu} className="p-2 rounded-full hover:bg-immigo-gray-100">
           <Menu className="w-6 h-6 text-immigo-gray-600" />
@@ -58,4 +55,4 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
     </header>
   );
-};
+}
