@@ -47,7 +47,6 @@ function AppContent(): JSX.Element {
         try {
           const settings = await apiClient.getSettings();
           setUserSettings(settings);
-          // Set initial language from saved settings
           if (settings.language) {
             dispatch({ type: 'SET_LANGUAGE', payload: settings.language });
           }
@@ -67,16 +66,13 @@ function AppContent(): JSX.Element {
   };
 
   const handleSettingChange = async (key: keyof UserSettings, value: unknown) => {
-    // Optimistically update local state
     const newSettings = { ...userSettings, [key]: value };
     setUserSettings(newSettings);
-    // Persist change to the backend
     if (apiClient) {
       try {
         await apiClient.updateSettings({ [key]: value });
       } catch (error) {
         console.error("Failed to save setting:", error);
-        // Optionally revert optimistic update here
       }
     }
   };
@@ -90,9 +86,7 @@ function AppContent(): JSX.Element {
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
 
   const handleLanguageChange = (newLanguageCode: string) => {
-    // Update the global context for the current session
     dispatch({ type: 'SET_LANGUAGE', payload: newLanguageCode });
-    // Save the setting for future sessions
     handleSettingChange('language', newLanguageCode);
   };
 
@@ -117,6 +111,7 @@ function AppContent(): JSX.Element {
           <ConversationHistory
             messages={conversationManager.conversationHistory}
             displayUser={user}
+            isTranscribing={conversationManager.isTranscribing}
             transcript={conversationManager.transcript}
           />
           {isDesktop ? (
@@ -148,6 +143,9 @@ function AppContent(): JSX.Element {
               onClearError={conversationManager.clearError}
               onClearConversation={conversationManager.clearConversation}
               onDownloadTranscript={conversationManager.downloadTranscript}
+              onOpenAppSettings={handleOpenAppSettings}
+              onOpenAccountSettings={handleOpenAccountSettings}
+              userSettings={userSettings}
             />
           </aside>
         )}

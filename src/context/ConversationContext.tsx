@@ -16,7 +16,8 @@ interface ConversationState {
   isSessionActive: boolean;
   sessionTime: number;
   errorMessage: string | null;
-  transcript: string; // For displaying interim speech results
+  transcript: string;
+  currentLanguageCode: string;
 }
 
 type ConversationAction =
@@ -29,7 +30,8 @@ type ConversationAction =
   | { type: 'CLEAR_TRANSCRIPT' }
   | { type: 'SET_ERROR_MESSAGE'; payload: string | null }
   | { type: 'CLEAR_CONVERSATION' }
-  | { type: 'TICK_SESSION_TIMER' };
+  | { type: 'TICK_SESSION_TIMER' }
+  | { type: 'SET_LANGUAGE'; payload: string };
 
 const initialState: ConversationState = {
   conversationHistory: [],
@@ -38,6 +40,7 @@ const initialState: ConversationState = {
   sessionTime: 0,
   errorMessage: null,
   transcript: '',
+  currentLanguageCode: 'en-US',
 };
 
 const conversationReducer = (state: ConversationState, action: ConversationAction): ConversationState => {
@@ -73,6 +76,8 @@ const conversationReducer = (state: ConversationState, action: ConversationActio
         const newAssistantMessage: Message = { id: action.payload.id, role: 'assistant', content: action.payload.content, timestamp: new Date().toISOString() };
         return { ...state, conversationHistory: [...state.conversationHistory, newAssistantMessage] };
       }
+    case 'SET_LANGUAGE':
+      return { ...state, currentLanguageCode: action.payload };
     default:
       return state;
   }

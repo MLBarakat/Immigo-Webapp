@@ -13,6 +13,8 @@ interface HeaderProps {
   onSignOut: () => void;
   onToggleMobileMenu: () => void;
   onSettingChange: (key: keyof UserSettings, value: any) => void;
+  currentLanguageCode: string;
+  onLanguageChange: (newLanguageCode: string) => void;
 }
 
 export function Header({
@@ -23,6 +25,8 @@ export function Header({
   onSignOut,
   onToggleMobileMenu,
   onSettingChange,
+  currentLanguageCode,
+  onLanguageChange,
 }: HeaderProps): JSX.Element {
   return (
     <header className="flex items-center justify-between p-4 bg-star-white shadow-sm border-b border-immigo-gray-200">
@@ -32,7 +36,10 @@ export function Header({
       </div>
 
       <nav className="hidden md:flex items-center space-x-4">
-        <LanguageSelector currentLanguageCode="en-US" onLanguageChange={() => {}} />
+        <LanguageSelector
+          currentLanguageCode={currentLanguageCode}
+          onLanguageChange={onLanguageChange}
+        />
         <FontSizeSelector
           currentFontSize={userSettings.font_size || 'default'}
           onFontSizeChange={(size) => onSettingChange('font_size', size)}

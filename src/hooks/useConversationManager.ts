@@ -43,7 +43,7 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
         currentConversationId.current,
         text,
         userSettings.ai_voice_id || 'Joanna',
-        'en-US',
+        state.currentLanguageCode,
         userSettings.mic_mode || 'voice_activity',
         userSettings.barge_in || 'balanced',
         !!userSettings.live_feedback_enabled,
@@ -70,7 +70,7 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
         dispatch({ type: 'SET_APP_STATUS', payload: 'idle' });
       }
     }
-  }, [apiClient, dispatch, state.isSessionActive, userSettings, handleTextChunk, handleAudioChunk, speechManager]);
+  }, [apiClient, dispatch, state.isSessionActive, userSettings, state.currentLanguageCode, handleTextChunk, handleAudioChunk]);
 
   const startSession = useCallback(() => {
     dispatch({ type: 'START_SESSION' });
@@ -82,13 +82,10 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
         }
       },
       (error) => dispatch({ type: 'SET_ERROR_MESSAGE', payload: error }),
-      () => {
-        if (state.isSessionActive) {
-          dispatch({ type: 'SET_APP_STATUS', payload: 'listening' });
-        }
-      }
+      () => { if (state.isSessionActive) dispatch({ type: 'SET_APP_STATUS', payload: 'listening' }); },
+      state.currentLanguageCode
     );
-  }, [dispatch, sendUserMessage, speechManager, state.isSessionActive]);
+  }, [dispatch, sendUserMessage, speechManager, state.isSessionActive, state.currentLanguageCode]);
 
   const endSession = useCallback(() => {
     speechManager.stopListening();
