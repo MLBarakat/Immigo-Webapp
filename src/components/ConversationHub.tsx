@@ -38,10 +38,10 @@ export function ConversationHub({
   return (
     <div className="flex flex-col w-full h-full bg-star-white rounded-lg shadow-md p-6 space-y-6">
       <div className="flex flex-col space-y-2">
-        <button onClick={onClearConversation} className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium text-immigo-gray-700">
+        <button onClick={onClearConversation} className="flex items-center justify-center p-3 rounded-lg bg-immigo-gray-100 hover:bg-immigo-gray-200 text-sm font-medium text-art-red-600">
           <Trash2 className="w-4 h-4 mr-2" /> Clear Conversation
         </button>
-        <button onClick={onDownloadTranscript} className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium text-immigo-gray-700">
+        <button onClick={onDownloadTranscript} className="flex items-center justify-center p-3 rounded-lg bg-immigo-gray-100 hover:bg-immigo-gray-200 text-sm font-medium text-immigo-gray-700">
           <Download className="w-4 h-4 mr-2" /> Download Script
         </button>
       </div>
