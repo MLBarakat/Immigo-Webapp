@@ -98,11 +98,17 @@ function AppContent(): JSX.Element {
             transcript={conversationManager.transcript}
           />
           {isDesktop ? (
-            <ChatInput onSendMessage={conversationManager.sendTextMessage} disabled={conversationManager.appStatus !== 'idle'} />
+            <ChatInput
+              onSendMessage={conversationManager.sendTextMessage}
+              disabled={conversationManager.appStatus !== 'idle'}
+            />
           ) : (
             <div className="flex items-center p-2 bg-star-white border-t border-immigo-gray-200">
               <div className="flex-grow">
-                <ChatInput onSendMessage={conversationManager.sendTextMessage} disabled={conversationManager.appStatus !== 'idle'} />
+                <ChatInput
+                  onSendMessage={conversationManager.sendTextMessage}
+                  disabled={conversationManager.appStatus !== 'idle'}
+                />
               </div>
               <VoiceHub
                 isSessionActive={conversationManager.isSessionActive}

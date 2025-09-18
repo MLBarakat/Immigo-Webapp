@@ -36,7 +36,6 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
     dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
 
     try {
-      // Create a temporary AI message to show "Thinking..."
       const tempAiMessage: Message = { id: 'ai-temp-message', role: 'assistant', content: '...', timestamp: new Date().toISOString() };
       dispatch({ type: 'ADD_MESSAGE', payload: tempAiMessage });
 
@@ -44,7 +43,7 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
         currentConversationId.current,
         text,
         userSettings.ai_voice_id || 'Joanna',
-        'en-US', // This could be dynamic from settings
+        'en-US',
         userSettings.mic_mode || 'voice_activity',
         userSettings.barge_in || 'balanced',
         !!userSettings.live_feedback_enabled,
@@ -55,7 +54,6 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message.';
       dispatch({ type: 'SET_ERROR_MESSAGE', payload: errorMessage });
     } finally {
-      // After AI finishes, go back to listening if the session is still active
       if (state.isSessionActive) {
         dispatch({ type: 'SET_APP_STATUS', payload: 'listening' });
         speechManager.startListening(
@@ -85,7 +83,6 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
       },
       (error) => dispatch({ type: 'SET_ERROR_MESSAGE', payload: error }),
       () => {
-        // When listening ends, if the session is still meant to be active, restart it.
         if (state.isSessionActive) {
           dispatch({ type: 'SET_APP_STATUS', payload: 'listening' });
         }
@@ -123,16 +120,20 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
     URL.revokeObjectURL(url);
   }, [state.conversationHistory]);
 
-  // This is a text-only send function for the chat input
   const sendTextMessage = useCallback(async (text: string) => {
-    if (state.appStatus !== 'idle') return; // Only allow text when idle
+    if (state.appStatus !== 'idle') return;
     await sendUserMessage(text);
   }, [state.appStatus, sendUserMessage]);
 
+  const isTranscribing = state.appStatus === 'listening';
+
   return {
     ...state,
+    isTranscribing,
     startSession,
     endSession,
+    startAudioInput: startSession,
+    stopAudioInput: endSession,
     sendTextMessage,
     clearConversation,
     downloadTranscript,
