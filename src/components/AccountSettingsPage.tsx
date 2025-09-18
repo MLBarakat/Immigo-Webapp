@@ -17,10 +17,10 @@ export const AccountSettingsPage: React.FC<AccountSettingsPageProps> = ({ onNavi
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-deep-navy">My Profile</h2>
-            <p className="text-immigo-gray-600">Manage your personal information.</p>
+            <p className="text-immigo-gray-600">Manage your personal information</p>
             <form className="space-y-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-immigo-gray-700">Name</label>
+                <label htmlFor="name" className="block text-sm font-medium text-immigo-gray-700">Full Name</label>
                 <input type="text" id="name" defaultValue="John Doe" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
               </div>
               <div>
@@ -35,7 +35,7 @@ export const AccountSettingsPage: React.FC<AccountSettingsPageProps> = ({ onNavi
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-deep-navy">Security & Login</h2>
-            <p className="text-immigo-gray-600">Manage your password and security settings.</p>
+            <p className="text-immigo-gray-600">Manage your password and security settings</p>
             <form className="space-y-4">
               <div>
                 <label htmlFor="current-password" className="block text-sm font-medium text-immigo-gray-700">Current Password</label>
@@ -57,7 +57,7 @@ export const AccountSettingsPage: React.FC<AccountSettingsPageProps> = ({ onNavi
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-deep-navy">Social Connections</h2>
-            <p className="text-immigo-gray-600">Connect your ImmiGo account with other services.</p>
+            <p className="text-immigo-gray-600">Connect your ImmiGo account with other services</p>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 border border-immigo-gray-200 rounded-md">
                 <span>Google Account</span>
@@ -73,7 +73,7 @@ export const AccountSettingsPage: React.FC<AccountSettingsPageProps> = ({ onNavi
       case 'delete':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-art-red-700">Delete My Account</h2>
+            <h2 className="text-2xl font-bold text-art-red-700">Delete Account</h2>
             <p className="text-immigo-gray-600">Permanently delete your ImmiGo account and all associated data. This action cannot be undone.</p>
             <button className="px-4 py-2 bg-art-red-600 text-white rounded-md font-semibold hover:bg-art-red-700">Delete Account</button>
           </div>
