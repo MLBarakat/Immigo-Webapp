@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
@@ -6,7 +6,7 @@ import { ConversationHub } from './components/ConversationHub';
 import { MobileMenuOverlay } from './components/MobileMenuOverlay';
 import { ApiClient } from './services/apiClient';
 import { UserSettings } from './types/settings';
-import { ConversationProvider } from './context/ConversationContext';
+import { ConversationProvider, useConversation } from './context/ConversationContext';
 import { useConversationManager } from './hooks/useConversationManager';
 import useMediaQuery from './hooks/useMediaQuery';
 import { AuthPage } from './components/AuthPage';
@@ -38,7 +38,7 @@ function AppContent(): JSX.Element {
     return null;
   }, [session]);
 
-  const conversationManager = useConversationManager({ apiClient });
+  const conversationManager = useConversationManager({ apiClient, userSettings });
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -82,45 +82,30 @@ function AppContent(): JSX.Element {
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
       <Header
         displayUser={user}
-        userSettings={userSettings}
         onOpenAppSettings={handleOpenAppSettings}
         onOpenAccountSettings={handleOpenAccountSettings}
         onSignOut={logout}
         onToggleMobileMenu={handleToggleMobileMenu}
-        onSettingChange={handleSettingChange}
       />
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 md:p-6 gap-6">
         <div className="flex-1 flex flex-col bg-star-white rounded-lg shadow-md overflow-hidden">
           <ConversationHistory
             messages={conversationManager.conversationHistory}
             displayUser={user}
-            isTranscribing={conversationManager.isTranscribing}
             transcript={conversationManager.transcript}
           />
           {isDesktop ? (
-            <ChatInput
-              onSendMessage={conversationManager.sendUserMessage}
-              disabled={!conversationManager.isSessionActive}
-              startAudioInput={conversationManager.startAudioInput}
-              stopAudioInput={conversationManager.stopAudioInput}
-              isTranscribing={conversationManager.isTranscribing}
-            />
+            <ChatInput onSendMessage={conversationManager.sendTextMessage} disabled={conversationManager.appStatus !== 'idle'} />
           ) : (
             <div className="flex items-center p-2 bg-star-white border-t border-immigo-gray-200">
               <div className="flex-grow">
-                <ChatInput
-                  onSendMessage={conversationManager.sendUserMessage}
-                  disabled={!conversationManager.isSessionActive}
-                  startAudioInput={conversationManager.startAudioInput}
-                  stopAudioInput={conversationManager.stopAudioInput}
-                  isTranscribing={conversationManager.isTranscribing}
-                />
+                <ChatInput onSendMessage={conversationManager.sendTextMessage} disabled={conversationManager.appStatus !== 'idle'} />
               </div>
               <VoiceHub
                 isSessionActive={conversationManager.isSessionActive}
                 sessionTime={conversationManager.sessionTime}
-                onStartSession={conversationManager.startAudioInput}
-                onEndSession={conversationManager.stopAudioInput}
+                onStartSession={conversationManager.startSession}
+                onEndSession={conversationManager.endSession}
               />
             </div>
           )}
@@ -138,9 +123,6 @@ function AppContent(): JSX.Element {
               onClearError={conversationManager.clearError}
               onClearConversation={conversationManager.clearConversation}
               onDownloadTranscript={conversationManager.downloadTranscript}
-              onOpenAppSettings={handleOpenAppSettings}
-              onOpenAccountSettings={handleOpenAccountSettings}
-              userSettings={userSettings}
             />
           </aside>
         )}

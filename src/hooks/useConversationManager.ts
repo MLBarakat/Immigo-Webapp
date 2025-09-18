@@ -4,12 +4,14 @@ import { ApiClient } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
 import { Message } from '../context/ConversationContext';
 import { SpeechRecognitionManager } from '../utils/audioUtils';
+import { UserSettings } from '../types/settings';
 
 interface UseConversationManagerProps {
 apiClient: ApiClient | null;
+userSettings: Partial<UserSettings>;
 }
 
-export function useConversationManager({ apiClient }: UseConversationManagerProps) {
+export function useConversationManager({ apiClient, userSettings }: UseConversationManagerProps) {
   const { state, dispatch } = useConversation();
   const currentConversationId = useRef<string>(uuidv4());
   const intervalRef = useRef<number | null>(null);
@@ -21,72 +23,80 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
   }, [dispatch]);
 
   const handleAudioChunk = useCallback((audioChunk: Uint8Array) => {
-    console.log("Received AI audio chunk:", audioChunk);
+    console.log("Received AI audio chunk:", audioChunk); // Placeholder for audio playback
   }, []);
 
   const sendUserMessage = useCallback(async (text: string) => {
     if (!apiClient || text.trim() === '') return;
 
-    speechManager.stopListening(); // Stop listening when sending a message
-    dispatch({ type: 'STOP_TRANSCRIPTION' });
-    dispatch({ type: 'START_PROCESSING' });
+    dispatch({ type: 'CLEAR_TRANSCRIPT' });
+    dispatch({ type: 'SET_APP_STATUS', payload: 'processing' });
 
-    const userMessage: Message = {
-      id: uuidv4(),
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-    };
+    const userMessage: Message = { id: uuidv4(), role: 'user', content: text, timestamp: new Date().toISOString() };
     dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
 
     try {
+      // Create a temporary AI message to show "Thinking..."
+      const tempAiMessage: Message = { id: 'ai-temp-message', role: 'assistant', content: '...', timestamp: new Date().toISOString() };
+      dispatch({ type: 'ADD_MESSAGE', payload: tempAiMessage });
+
       await apiClient.sendMessage(
         currentConversationId.current,
         text,
-        state.aiVoiceId,
-        state.currentLanguageCode,
-        state.micMode,
-        state.bargeIn,
-        state.liveFeedbackEnabled,
+        userSettings.ai_voice_id || 'Joanna',
+        'en-US', // This could be dynamic from settings
+        userSettings.mic_mode || 'voice_activity',
+        userSettings.barge_in || 'balanced',
+        !!userSettings.live_feedback_enabled,
         handleTextChunk,
         handleAudioChunk
       );
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message.';
-      console.error('Error sending message:', error);
       dispatch({ type: 'SET_ERROR_MESSAGE', payload: errorMessage });
     } finally {
-      dispatch({ type: 'SET_APP_STATUS', payload: state.isSessionActive ? 'listening' : 'idle' });
+      // After AI finishes, go back to listening if the session is still active
+      if (state.isSessionActive) {
+        dispatch({ type: 'SET_APP_STATUS', payload: 'listening' });
+        speechManager.startListening(
+          (transcript, isFinal) => {
+            dispatch({ type: 'SET_TRANSCRIPT', payload: transcript });
+            if (isFinal) {
+              sendUserMessage(transcript);
+            }
+          },
+          (error) => dispatch({ type: 'SET_ERROR_MESSAGE', payload: error }),
+          () => { if (state.isSessionActive) dispatch({ type: 'SET_APP_STATUS', payload: 'listening' }); }
+        );
+      } else {
+        dispatch({ type: 'SET_APP_STATUS', payload: 'idle' });
+      }
     }
-  }, [apiClient, dispatch, state.aiVoiceId, state.currentLanguageCode, state.micMode, state.bargeIn, state.liveFeedbackEnabled, handleTextChunk, handleAudioChunk, speechManager, state.isSessionActive]);
+  }, [apiClient, dispatch, state.isSessionActive, userSettings, handleTextChunk, handleAudioChunk, speechManager]);
 
-  const handleTranscriptionResult = useCallback((transcript: string, isFinal: boolean) => {
-    dispatch({ type: 'SET_TRANSCRIPT', payload: transcript });
-    if (isFinal) {
-      sendUserMessage(transcript);
-    }
-  }, [dispatch, sendUserMessage]);
-
-  const handleTranscriptionError = useCallback((error: string) => {
-    dispatch({ type: 'SET_ERROR_MESSAGE', payload: `Speech recognition error: ${error}` });
-    dispatch({ type: 'STOP_TRANSCRIPTION' });
-  }, [dispatch]);
-
-  const startAudioInput = useCallback(() => {
-    if (!state.isSessionActive) return;
-    dispatch({ type: 'START_TRANSCRIPTION' });
+  const startSession = useCallback(() => {
+    dispatch({ type: 'START_SESSION' });
     speechManager.startListening(
-      handleTranscriptionResult,
-      handleTranscriptionError,
-      () => dispatch({ type: 'STOP_TRANSCRIPTION' }),
-      state.currentLanguageCode
+      (transcript, isFinal) => {
+        dispatch({ type: 'SET_TRANSCRIPT', payload: transcript });
+        if (isFinal) {
+          sendUserMessage(transcript);
+        }
+      },
+      (error) => dispatch({ type: 'SET_ERROR_MESSAGE', payload: error }),
+      () => {
+        // When listening ends, if the session is still meant to be active, restart it.
+        if (state.isSessionActive) {
+          dispatch({ type: 'SET_APP_STATUS', payload: 'listening' });
+        }
+      }
     );
-  }, [state.isSessionActive, speechManager, handleTranscriptionResult, handleTranscriptionError, dispatch, state.currentLanguageCode]);
+  }, [dispatch, sendUserMessage, speechManager, state.isSessionActive]);
 
-  const stopAudioInput = useCallback(() => {
+  const endSession = useCallback(() => {
     speechManager.stopListening();
-    dispatch({ type: 'STOP_TRANSCRIPTION' });
-  }, [speechManager, dispatch]);
+    dispatch({ type: 'END_SESSION' });
+  }, [dispatch, speechManager]);
 
   useEffect(() => {
     if (state.isSessionActive) {
@@ -100,22 +110,7 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     };
   }, [state.isSessionActive, dispatch, speechManager]);
 
-  const startSession = useCallback(() => {
-    if (!apiClient) {
-      dispatch({ type: 'SET_ERROR_MESSAGE', payload: 'API Client not available.' });
-      return;
-    }
-    dispatch({ type: 'START_SESSION' });
-    currentConversationId.current = uuidv4();
-  }, [apiClient, dispatch]);
-
-  const endSession = useCallback(() => {
-    dispatch({ type: 'END_SESSION' });
-  }, [dispatch]);
-
-  const clearConversation = useCallback(() => {
-    dispatch({ type: 'CLEAR_CONVERSATION' });
-  }, [dispatch]);
+  const clearConversation = useCallback(() => { dispatch({ type: 'CLEAR_CONVERSATION' }); }, [dispatch]);
 
   const downloadTranscript = useCallback(() => {
     const transcript = state.conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n');
@@ -128,15 +123,19 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     URL.revokeObjectURL(url);
   }, [state.conversationHistory]);
 
+  // This is a text-only send function for the chat input
+  const sendTextMessage = useCallback(async (text: string) => {
+    if (state.appStatus !== 'idle') return; // Only allow text when idle
+    await sendUserMessage(text);
+  }, [state.appStatus, sendUserMessage]);
+
   return {
     ...state,
     startSession,
     endSession,
-    sendUserMessage,
+    sendTextMessage,
     clearConversation,
     downloadTranscript,
-    startAudioInput,
-    stopAudioInput,
     clearError: () => dispatch({ type: 'SET_ERROR_MESSAGE', payload: null }),
   };
 }
