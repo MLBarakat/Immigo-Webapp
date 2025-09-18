@@ -9,10 +9,10 @@ export interface Language {
 }
 
 export const SUPPORTED_LANGUAGES: readonly Language[] = [
-  { code: "en-US", name: "English (US)", label: "US", flag: "🇺🇸" },
-  { code: "es-ES", name: "Spanish", label: "ES", flag: "🇪🇸" },
-  { code: "fr-FR", name: "French", label: "FR", flag: "🇫🇷" },
-  { code: "ar-SA", name: "العربية", label: "SA", flag: "🇸🇦" },
+  { code: "en-US", name: "English (US)", label: "EN", flag: "🇺🇸" },
+  { code: "es-ES", name: "Español", label: "ES", flag: "🇪🇸" },
+  { code: "fr-FR", name: "Francés", label: "FR", flag: "🇫🇷" },
+  { code: "ar-SA", name: "العربية", label: "ع", flag: "🇸🇦" },
 ];
 
 interface LanguageSelectorProps {
