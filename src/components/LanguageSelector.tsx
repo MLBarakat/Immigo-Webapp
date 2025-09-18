@@ -8,10 +8,10 @@ interface Language {
 }
 
 const SUPPORTED_LANGUAGES: readonly Language[] = [
-  { code: "en-US", name: "English (US)", flag: "🇺🇸" },
-  { code: "es-ES", name: "Spanish", flag: "🇪🇸" },
-  { code: "fr-FR", name: "French", flag: "🇫🇷" },
-  { code: "ar-AR", name: "العربية", flag: "🇸🇦" },
+  { code: "en-US", name: "English (US)", label: "EN",flag: "🇺🇸" },
+  { code: "es-ES", name: "Spanish", label: "ES", flag: "🇪🇸" },
+  { code: "fr-FR", name: "French", label: "FR", flag: "🇫🇷" },
+  { code: "ar-AR", name: "العربية", label: "ع", flag: "🇸🇦" },
 ];
 
 interface LanguageSelectorProps {
@@ -191,7 +191,7 @@ export function LanguageSelector({
         </span>
 
         {/* Language name hidden on very small screens */}
-        <span className="hidden sm:inline">{selectedLanguage.name}</span>
+        <span className="hidden sm:inline">{selectedLanguage.label}</span>
 
         <ChevronDown
           aria-hidden="true"
