@@ -5,6 +5,7 @@ interface Language {
   readonly code: string;
   readonly name: string;
   readonly flag: string;
+  readonly label: string;
 }
 
 const SUPPORTED_LANGUAGES: readonly Language[] = [
