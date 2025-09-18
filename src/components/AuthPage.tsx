@@ -3,7 +3,6 @@ import { useAuth } from '../hooks/useAuth';
 import ImmigoLogo from '../assets/immigo_logo.png';
 import { TermsModal } from './TermsModal';
 import { User, Mail, KeyRound, Globe, CheckSquare, Square } from 'lucide-react';
-import { analytics } from '../analytics';
 import { SUPPORTED_LANGUAGES } from './LanguageSelector'; // IMPORTED from single source of truth
 
 export function AuthPage(): JSX.Element {
