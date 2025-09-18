@@ -6,7 +6,7 @@ import { ConversationHub } from './components/ConversationHub';
 import { MobileMenuOverlay } from './components/MobileMenuOverlay';
 import { ApiClient } from './services/apiClient';
 import { UserSettings } from './types/settings';
-import { ConversationProvider } from './context/ConversationContext';
+import { ConversationProvider, useConversation } from './context/ConversationContext';
 import { useConversationManager } from './hooks/useConversationManager';
 import useMediaQuery from './hooks/useMediaQuery';
 import { AuthPage } from './components/AuthPage';
@@ -38,6 +38,7 @@ function AppContent(): JSX.Element {
     return null;
   }, [session]);
 
+  const { state, dispatch } = useConversation();
   const conversationManager = useConversationManager({ apiClient, userSettings });
 
   useEffect(() => {
@@ -46,11 +47,15 @@ function AppContent(): JSX.Element {
         try {
           const settings = await apiClient.getSettings();
           setUserSettings(settings);
+          // Set initial language from saved settings
+          if (settings.language) {
+            dispatch({ type: 'SET_LANGUAGE', payload: settings.language });
+          }
         } catch (error) { console.error('Failed to fetch user settings:', error); }
       }
     };
     fetchSettings();
-  }, [apiClient]);
+  }, [apiClient, dispatch]);
 
   const handleSaveSettings = async (settingsToSave: UserSettings) => {
     if (apiClient) {
@@ -61,8 +66,19 @@ function AppContent(): JSX.Element {
     }
   };
 
-  const handleSettingChange = (key: keyof UserSettings, value: unknown) => {
-    setUserSettings(prev => ({ ...prev, [key]: value }));
+  const handleSettingChange = async (key: keyof UserSettings, value: unknown) => {
+    // Optimistically update local state
+    const newSettings = { ...userSettings, [key]: value };
+    setUserSettings(newSettings);
+    // Persist change to the backend
+    if (apiClient) {
+      try {
+        await apiClient.updateSettings({ [key]: value });
+      } catch (error) {
+        console.error("Failed to save setting:", error);
+        // Optionally revert optimistic update here
+      }
+    }
   };
 
   if (!session) { return <AuthPage />; }
@@ -73,42 +89,42 @@ function AppContent(): JSX.Element {
   const handleCloseAccountSettings = () => setIsAccountSettingsModalOpen(false);
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
 
+  const handleLanguageChange = (newLanguageCode: string) => {
+    // Update the global context for the current session
+    dispatch({ type: 'SET_LANGUAGE', payload: newLanguageCode });
+    // Save the setting for future sessions
+    handleSettingChange('language', newLanguageCode);
+  };
+
   const user: DisplayUser = {
-    name: authUser?.user_metadata?.full_name || authUser?.email || 'User',
-    initials: (authUser?.user_metadata?.full_name || authUser?.email || 'U').charAt(0).toUpperCase(),
+    name: authUser?.user_metadata?.full_name as string || authUser?.email || 'User',
+    initials: (authUser?.user_metadata?.full_name as string || authUser?.email || 'U').charAt(0).toUpperCase(),
   };
 
   return (
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
       <Header
         displayUser={user}
-        userSettings={userSettings}
         onOpenAppSettings={handleOpenAppSettings}
         onOpenAccountSettings={handleOpenAccountSettings}
         onSignOut={logout}
         onToggleMobileMenu={handleToggleMobileMenu}
-        onSettingChange={handleSettingChange}
+        currentLanguageCode={state.currentLanguageCode}
+        onLanguageChange={handleLanguageChange}
       />
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 md:p-6 gap-6">
         <div className="flex-1 flex flex-col bg-star-white rounded-lg shadow-md overflow-hidden">
           <ConversationHistory
             messages={conversationManager.conversationHistory}
             displayUser={user}
-            isTranscribing={conversationManager.isTranscribing}
             transcript={conversationManager.transcript}
           />
           {isDesktop ? (
-            <ChatInput
-              onSendMessage={conversationManager.sendTextMessage}
-              disabled={conversationManager.appStatus !== 'idle'}
-            />
+            <ChatInput onSendMessage={conversationManager.sendTextMessage} disabled={conversationManager.appStatus !== 'idle'} />
           ) : (
             <div className="flex items-center p-2 bg-star-white border-t border-immigo-gray-200">
               <div className="flex-grow">
-                <ChatInput
-                  onSendMessage={conversationManager.sendTextMessage}
-                  disabled={conversationManager.appStatus !== 'idle'}
-                />
+                <ChatInput onSendMessage={conversationManager.sendTextMessage} disabled={conversationManager.appStatus !== 'idle'} />
               </div>
               <VoiceHub
                 isSessionActive={conversationManager.isSessionActive}
@@ -132,9 +148,6 @@ function AppContent(): JSX.Element {
               onClearError={conversationManager.clearError}
               onClearConversation={conversationManager.clearConversation}
               onDownloadTranscript={conversationManager.downloadTranscript}
-              onOpenAppSettings={handleOpenAppSettings}
-              onOpenAccountSettings={handleOpenAccountSettings}
-              userSettings={userSettings}
             />
           </aside>
         )}

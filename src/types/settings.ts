@@ -12,4 +12,5 @@ export interface UserSettings {
   barge_in: BargeIn;
   progress_report_frequency: ProgressReportFrequency;
   font_size?: FontSize;
+  language?: string;
 }
