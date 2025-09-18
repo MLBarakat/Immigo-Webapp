@@ -1,6 +1,7 @@
-import { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import { createContext, useState, useEffect, ReactNode, useMemo, useContext } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
+import { UserProfile } from '../types/user';
 
 interface SignUpPayload {
   email: string;
@@ -12,11 +13,12 @@ interface SignUpPayload {
 export interface AuthContextType {
   session: Session | null;
   user: User | null;
+  profile: UserProfile | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signUp: (payload: SignUpPayload) => Promise<void>;
   logout: () => Promise<void>;
-  updateUserLanguage: (newLanguageCode: string) => Promise<void>; // NEW
+  updateUserLanguage: (newLanguageCode: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,26 +26,52 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null); // NEW
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getSession = async () => {
+    const getSessionAndProfile = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
-        setSession(data.session);
-        setUser(data.session?.user ?? null);
+        setSession(session);
+        const currentUser = session?.user;
+        setUser(currentUser ?? null);
+
+        if (currentUser) {
+          // Fetch the user profile from the 'profiles' table
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .single();
+
+          if (profileError) {
+            console.error("Error fetching user profile:", profileError.message);
+          } else {
+            setProfile(profileData);
+          }
+        }
       } catch (err) {
-        console.error("Error fetching session:", err);
+        console.error("Error in session/profile fetch:", err);
       } finally {
         setLoading(false);
       }
     };
-    getSession();
+
+    getSessionAndProfile();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
+      // If user logs out, clear profile. If they log in, refetch it.
+      if (!newSession?.user) {
+        setProfile(null);
+      } else {
+        getSessionAndProfile();
+      }
     });
+
     return () => {
       subscription?.unsubscribe();
     };
@@ -58,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, language } },
+      options: { data: { full_name: fullName, language } }, // This still goes to auth metadata
     });
     if (error) throw error;
   };
@@ -69,28 +97,32 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   };
 
   const updateUserLanguage = async (newLanguageCode: string): Promise<void> => {
-    const { error } = await supabase.auth.updateUser({
-      data: { language: newLanguageCode },
-    });
+    if (!user) throw new Error("User not authenticated.");
+
+    // Update the 'language' field in the 'profiles' table
+    const { error } = await supabase
+      .from('profiles')
+      .update({ language: newLanguageCode })
+      .eq('id', user.id);
+
     if (error) {
-      console.error("Failed to update user language:", error.message);
+      console.error("Failed to update user language in profile:", error.message);
       throw error;
     }
-    const { data, error: refreshError } = await supabase.auth.refreshSession();
-    if(refreshError) throw refreshError;
-    if (data.user) setUser(data.user);
+    // Optimistically update local profile state
+    setProfile(prevProfile => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
   };
-
 
   const value = useMemo(() => ({
       session,
       user,
+      profile,
       loading,
       login,
       signUp,
       logout,
       updateUserLanguage,
-  }), [session, user, loading]);
+  }), [session, user, profile, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

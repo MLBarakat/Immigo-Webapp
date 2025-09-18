@@ -26,7 +26,7 @@ const PollyVoices = [
 ];
 
 function AppContent(): JSX.Element {
-  const { session, user: authUser, logout, updateUserLanguage } = useAuth();
+  const { session, user: authUser, profile, logout, updateUserLanguage } = useAuth();
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -42,7 +42,8 @@ function AppContent(): JSX.Element {
   const conversationManager = useConversationManager({ apiClient, userSettings });
 
   useEffect(() => {
-    const lang = authUser?.user_metadata?.language as string;
+    // Set language from the user's profile when it loads
+    const lang = profile?.language;
     if (lang) {
       dispatch({ type: 'SET_LANGUAGE', payload: lang });
     }
@@ -56,7 +57,7 @@ function AppContent(): JSX.Element {
       }
     };
     fetchSettings();
-  }, [apiClient, dispatch, authUser]);
+  }, [apiClient, dispatch, profile]);
 
   const handleSaveSettings = async (settingsToSave: UserSettings) => {
     if (apiClient) {
@@ -112,6 +113,7 @@ function AppContent(): JSX.Element {
         currentLanguageCode={state.currentLanguageCode}
         onLanguageChange={handleLanguageChange}
       />
+      {/* ... rest of App.tsx */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 md:p-6 gap-6">
         <div className="flex-1 flex flex-col bg-star-white rounded-lg shadow-md overflow-hidden">
           <ConversationHistory

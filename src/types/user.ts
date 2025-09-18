@@ -4,5 +4,5 @@
 */
 export interface DisplayUser {
     name: string;
-initials: string;
+    initials: string;
 }
