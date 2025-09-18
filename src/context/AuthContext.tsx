@@ -1,7 +1,7 @@
-import { createContext, useState, useEffect, ReactNode, useMemo, useContext } from 'react';
+import { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
-import { UserProfile } from '../types/user';
+import { UserProfile } from '../components/UserProfile';
 
 interface SignUpPayload {
   email: string;
