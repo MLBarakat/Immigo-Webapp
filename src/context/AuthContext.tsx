@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, ReactNode, useMemo, useContext } from 'react';
+import { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
 import { UserProfile } from '../types/user';
@@ -26,7 +26,7 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null); // NEW
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,7 +39,6 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         setUser(currentUser ?? null);
 
         if (currentUser) {
-          // Fetch the user profile from the 'profiles' table
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('*')
@@ -64,7 +63,6 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      // If user logs out, clear profile. If they log in, refetch it.
       if (!newSession?.user) {
         setProfile(null);
       } else {
@@ -86,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, language } }, // This still goes to auth metadata
+      options: { data: { full_name: fullName, language } },
     });
     if (error) throw error;
   };
@@ -99,7 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const updateUserLanguage = async (newLanguageCode: string): Promise<void> => {
     if (!user) throw new Error("User not authenticated.");
 
-    // Update the 'language' field in the 'profiles' table
     const { error } = await supabase
       .from('profiles')
       .update({ language: newLanguageCode })
@@ -109,7 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       console.error("Failed to update user language in profile:", error.message);
       throw error;
     }
-    // Optimistically update local profile state
     setProfile(prevProfile => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
   };
 
