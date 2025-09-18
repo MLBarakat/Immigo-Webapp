@@ -1,18 +1,19 @@
-import ImmigoLogo from '../assets/immigo_logo.png';
 import { Settings, LogOut, Menu } from 'lucide-react';
 import { DisplayUser } from '../types/user';
 import { LanguageSelector } from './LanguageSelector';
 import { FontSizeSelector } from './FontSizeSelector';
 import { UserSettings } from '../types/settings';
+import { ImmiGOLabel } from './ImmiGOLabel';
 
 interface HeaderProps {
+  // ... (props remain the same)
   displayUser: DisplayUser;
   userSettings: Partial<UserSettings>;
   onOpenAppSettings: () => void;
   onOpenAccountSettings: () => void;
   onSignOut: () => void;
   onToggleMobileMenu: () => void;
-  onSettingChange: (key: keyof UserSettings, value: any) => void;
+  onSettingChange: (key: keyof UserSettings, value: unknown) => void;
   currentLanguageCode: string;
   onLanguageChange: (newLanguageCode: string) => void;
 }
@@ -31,8 +32,8 @@ export function Header({
   return (
     <header className="flex items-center justify-between p-4 bg-star-white shadow-sm border-b border-immigo-gray-200">
       <div className="flex items-center gap-4">
-        <img src={ImmigoLogo} alt="ImmiGo Logo" className="h-10 w-10" />
-        <h1 className="text-2xl font-bold font-display text-deep-navy">ImmiGo</h1>
+        {/* REPLACED static logo and text with the new component */}
+        <ImmiGOLabel className="flex items-baseline font-sans font-bold text-3xl select-none" />
       </div>
 
       <nav className="hidden md:flex items-center space-x-4">
