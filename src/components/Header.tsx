@@ -32,7 +32,7 @@ export function Header({
       </div>
 
       <nav className="hidden md:flex items-center space-x-4">
-        <LanguageSelector currentLanguage="EN" onLanguageChange={() => {}} />
+        <LanguageSelector currentLanguageCode="en-US" onLanguageChange={() => {}} />
         <FontSizeSelector
           currentFontSize={userSettings.font_size || 'default'}
           onFontSizeChange={(size) => onSettingChange('font_size', size)}
