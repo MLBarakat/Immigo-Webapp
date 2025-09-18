@@ -26,7 +26,7 @@ const PollyVoices = [
 ];
 
 function AppContent(): JSX.Element {
-  const { session, user: authUser, logout } = useAuth();
+  const { session, user: authUser, logout, updateUserLanguage } = useAuth(); // GET new function
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -42,19 +42,22 @@ function AppContent(): JSX.Element {
   const conversationManager = useConversationManager({ apiClient, userSettings });
 
   useEffect(() => {
+    // Set language from the user's auth profile when app loads
+    const lang = authUser?.user_metadata?.language as string;
+    if (lang) {
+      dispatch({ type: 'SET_LANGUAGE', payload: lang });
+    }
+
     const fetchSettings = async () => {
       if (apiClient) {
         try {
           const settings = await apiClient.getSettings();
           setUserSettings(settings);
-          if (settings.language) {
-            dispatch({ type: 'SET_LANGUAGE', payload: settings.language });
-          }
         } catch (error) { console.error('Failed to fetch user settings:', error); }
       }
     };
     fetchSettings();
-  }, [apiClient, dispatch]);
+  }, [apiClient, dispatch, authUser]);
 
   const handleSaveSettings = async (settingsToSave: UserSettings) => {
     if (apiClient) {
@@ -86,8 +89,13 @@ function AppContent(): JSX.Element {
   const handleToggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
 
   const handleLanguageChange = (newLanguageCode: string) => {
+    // Update the global context for the current session
     dispatch({ type: 'SET_LANGUAGE', payload: newLanguageCode });
-    handleSettingChange('language', newLanguageCode);
+    // Persist the change to the user's auth profile
+    updateUserLanguage(newLanguageCode).catch(error => {
+      console.error("UI failed to sync language update:", error);
+      // Optionally handle UI feedback for failed save
+    });
   };
 
   const user: DisplayUser = {
@@ -108,12 +116,12 @@ function AppContent(): JSX.Element {
         currentLanguageCode={state.currentLanguageCode}
         onLanguageChange={handleLanguageChange}
       />
+      {/* ... rest of App.tsx */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 md:p-6 gap-6">
         <div className="flex-1 flex flex-col bg-star-white rounded-lg shadow-md overflow-hidden">
           <ConversationHistory
             messages={conversationManager.conversationHistory}
             displayUser={user}
-            isTranscribing={conversationManager.isTranscribing}
             transcript={conversationManager.transcript}
           />
           {isDesktop ? (
@@ -145,9 +153,6 @@ function AppContent(): JSX.Element {
               onClearError={conversationManager.clearError}
               onClearConversation={conversationManager.clearConversation}
               onDownloadTranscript={conversationManager.downloadTranscript}
-              onOpenAppSettings={handleOpenAppSettings}
-              onOpenAccountSettings={handleOpenAccountSettings}
-              userSettings={userSettings}
             />
           </aside>
         )}
