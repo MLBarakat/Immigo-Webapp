@@ -99,10 +99,12 @@ function AppContent(): JSX.Element {
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
       <Header
         displayUser={user}
+        userSettings={userSettings}
         onOpenAppSettings={handleOpenAppSettings}
         onOpenAccountSettings={handleOpenAccountSettings}
         onSignOut={logout}
         onToggleMobileMenu={handleToggleMobileMenu}
+        onSettingChange={handleSettingChange}
         currentLanguageCode={state.currentLanguageCode}
         onLanguageChange={handleLanguageChange}
       />
