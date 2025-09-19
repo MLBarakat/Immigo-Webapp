@@ -128,18 +128,16 @@ const STATUS_MAP: Record<AppStatus, { component: JSX.Element; color: string }> =
 
 
 export function AnimatedStatusButton({ status }: AnimatedStatusButtonProps): JSX.Element {
-    const { component, color } = STATUS_MAP[status];
+    const { component, color } = STATUS_MAP[status] ?? STATUS_MAP['idle'];
 
     return (
         <div
             className={`
-                aspect-square rounded-full bg-gray-900/50 backdrop-blur-sm
+                w-full h-full aspect-square rounded-full bg-gray-900/50 backdrop-blur-sm
                 border-2 ${color}
                 shadow-2xl shadow-black/30
                 flex items-center justify-center
-                transition-colors duration-500
-                p-4 sm:p-6 md:p-8
-                w-[150px] h-[150px] sm:w-[200px] sm:h-[200px]
+                transition-colors duration-500 p-4
             `}
         >
             <div className="w-full h-full status-enter-active">{component}</div>
