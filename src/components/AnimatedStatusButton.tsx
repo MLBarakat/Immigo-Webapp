@@ -134,7 +134,7 @@ export function AnimatedStatusButton({ status }: AnimatedStatusButtonProps): JSX
         <div
             className={`
                 w-full h-full aspect-square rounded-full bg-star-white backdrop-blur-sm
-                border-2 ${color}
+                border-4 ${color}
                 shadow-2xl shadow-black/30
                 flex items-center justify-center
                 transition-colors duration-500 p-4
