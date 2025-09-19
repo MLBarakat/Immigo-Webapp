@@ -42,7 +42,6 @@ function AppContent(): JSX.Element {
   const conversationManager = useConversationManager({ apiClient, userSettings });
 
   useEffect(() => {
-    // Set language from the user's profile when it loads
     const lang = profile?.language;
     if (lang) {
       dispatch({ type: 'SET_LANGUAGE', payload: lang });
@@ -113,7 +112,6 @@ function AppContent(): JSX.Element {
         currentLanguageCode={state.currentLanguageCode}
         onLanguageChange={handleLanguageChange}
       />
-      {/* ... rest of App.tsx */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 md:p-6 gap-6">
         <div className="flex-1 flex flex-col bg-star-white rounded-lg shadow-md overflow-hidden">
           <ConversationHistory
@@ -130,6 +128,7 @@ function AppContent(): JSX.Element {
                 <ChatInput onSendMessage={conversationManager.sendTextMessage} disabled={conversationManager.appStatus !== 'idle'} />
               </div>
               <VoiceHub
+                status={conversationManager.appStatus}
                 isSessionActive={conversationManager.isSessionActive}
                 sessionTime={conversationManager.sessionTime}
                 onStartSession={conversationManager.startSession}

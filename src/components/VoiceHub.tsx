@@ -1,37 +1,54 @@
-import React from 'react';
-import { Mic, StopCircle } from 'lucide-react';
+import { AppStatus } from '../context/ConversationContext';
+import { AnimatedStatusButton } from './AnimatedStatusButton';
 
 interface VoiceHubProps {
-  isSessionActive: boolean;
-  sessionTime: number;
-  onStartSession: () => void;
-  onEndSession: () => void;
+  readonly status: AppStatus;
+  readonly isSessionActive: boolean;
+  readonly sessionTime: number;
+  readonly onStartSession: () => void;
+  readonly onEndSession: () => void;
 }
 
-export const VoiceHub: React.FC<VoiceHubProps> = ({ isSessionActive, sessionTime, onStartSession, onEndSession }) => {
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
+export function VoiceHub({ status, isSessionActive, sessionTime, onStartSession, onEndSession }: VoiceHubProps): JSX.Element {
+    const handleButtonClick = () => {
+        if (isSessionActive) {
+            onEndSession();
+        } else {
+            onStartSession();
+        }
+    };
 
-  const statusMessage = isSessionActive ? "Session Live" : "Session Ready";
-  const statusColor = isSessionActive ? 'text-art-red-600' : 'text-immigo-gray-600';
+    const formatTime = (seconds: number) => {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    };
 
-  return (
-    <div className="flex flex-col items-center justify-center pl-4">
-      <button
-        onClick={isSessionActive ? onEndSession : onStartSession}
-        className={`w-16 h-16 rounded-full flex items-center justify-center text-star-white shadow-lg transition-colors ${
-          isSessionActive ? 'bg-art-red-600 hover:bg-art-red-700' : 'bg-art-blue-600 hover:bg-art-blue-700'
-        }`}
-      >
-        {isSessionActive ? <StopCircle className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
-      </button>
-      <div className="text-center mt-2">
-        <p className={`text-xs font-semibold ${statusColor}`}>{statusMessage}</p>
-        <p className="text-sm font-mono text-deep-navy">{formatTime(sessionTime)}</p>
-      </div>
-    </div>
-  );
-};
+    const statusMessage = () => {
+        switch (status) {
+            case 'idle': return 'Ready';
+            case 'listening': return 'Listening';
+            case 'processing': return 'Thinking';
+            case 'speaking': return 'Speaking';
+            case 'error': return 'Error';
+            default: return 'Ready';
+        }
+    };
+
+    const statusColor = isSessionActive ? 'text-art-red-600' : 'text-immigo-gray-600';
+
+    return (
+        <div className="flex flex-col items-center justify-center pl-2">
+            <button onClick={handleButtonClick} className="flex items-center justify-center w-20 h-20">
+                {/* Scaled down version for mobile */}
+                <div className="transform scale-75">
+                    <AnimatedStatusButton status={status} />
+                </div>
+            </button>
+            <div className="text-center mt-1">
+                <p className={`text-xs font-semibold capitalize ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>{statusMessage()}</p>
+                <p className={`text-sm font-mono ${statusColor}`}>{formatTime(sessionTime)}</p>
+            </div>
+        </div>
+    );
+}
