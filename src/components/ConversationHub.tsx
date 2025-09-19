@@ -1,6 +1,7 @@
 import { Download, Trash2 } from 'lucide-react';
 import { AppStatus } from '../context/ConversationContext';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
+import { UserSettings } from '../types/settings';
 
 interface ConversationHubProps {
   readonly status: AppStatus;
@@ -12,6 +13,9 @@ interface ConversationHubProps {
   readonly onClearError: () => void;
   readonly onClearConversation: () => void;
   readonly onDownloadTranscript: () => void;
+  readonly onOpenAppSettings: () => void;
+  readonly onOpenAccountSettings: () => void;
+  readonly userSettings: Partial<UserSettings>;
 }
 
 export function ConversationHub({
