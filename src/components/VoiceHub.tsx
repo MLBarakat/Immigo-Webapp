@@ -39,7 +39,7 @@ export function VoiceHub({ status, isSessionActive, sessionTime, onStartSession,
 
     return (
         <div className="flex flex-col items-center justify-center pl-2">
-            <button onClick={handleButtonClick} className="w-16 h-16 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
+            <button onClick={handleButtonClick} className="w-12 h-12 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
                 <AnimatedStatusButton status={status} />
             </button>
             <div className="text-center mt-1">
