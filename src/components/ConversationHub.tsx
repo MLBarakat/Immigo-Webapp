@@ -57,7 +57,7 @@ export function ConversationHub({
 
   return (
     <div className="flex flex-col justify-center w-full h-full bg-star-white rounded-lg shadow-md p-6">
-      <div className="space-y-4">
+      <div className="space-y-4 justify-between">
         <div className="flex flex-col space-y-2">
           <button onClick={onClearConversation} className="flex items-center justify-center p-3 rounded-lg bg-immigo-gray-100 hover:bg-immigo-gray-200 text-sm font-medium text-art-red-600">
             <Trash2 className="w-4 h-4 mr-2" /> Clear Conversation
