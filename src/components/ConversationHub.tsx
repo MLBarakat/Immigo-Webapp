@@ -56,25 +56,30 @@ export function ConversationHub({
   const statusColor = isSessionActive ? 'text-art-red-600' : 'text-immigo-gray-600';
 
   return (
-    <div className="flex flex-col w-full h-full bg-star-white rounded-lg shadow-md p-6 space-y-6">
-      <div className="flex flex-col space-y-2">
-        <button onClick={onClearConversation} className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium text-immigo-gray-700">
-          <Trash2 className="w-4 h-4 mr-2" /> Clear Conversation
-        </button>
-        <button onClick={onDownloadTranscript} className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium text-immigo-gray-700">
-          <Download className="w-4 h-4 mr-2" /> Download Script
-        </button>
-      </div>
+    // The key change is justify-center, which vertically centers the content.
+    <div className="flex flex-col justify-center w-full h-full bg-star-white rounded-lg shadow-md p-6">
+      {/* This inner div groups all content so it's centered as a single block. */}
+      <div>
+        <div className="flex flex-col space-y-2">
+          <button onClick={onClearConversation} className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium text-immigo-gray-700">
+            <Trash2 className="w-4 h-4 mr-2" /> Clear Conversation
+          </button>
+          <button onClick={onDownloadTranscript} className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium text-immigo-gray-700">
+            <Download className="w-4 h-4 mr-2" /> Download Script
+          </button>
+        </div>
 
-      <div className="flex-grow" />
+        {/* This margin creates the visual separation between the two groups of controls. */}
+        <div className="my-8" />
 
-      <div className="flex flex-col items-center space-y-4">
-        <button onClick={handleButtonClick} className="w-60 h-60 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
-            <AnimatedStatusButton status={status} />
-        </button>
-        <div className="text-center">
-          <p className={`text-sm font-semibold capitalize ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>{statusMessage()}</p>
-          <p className={`text-lg font-mono ${statusColor}`}>{formatTime(sessionTime)}</p>
+        <div className="flex flex-col items-center space-y-4">
+          <button onClick={handleButtonClick} className="w-48 h-48 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
+              <AnimatedStatusButton status={status} />
+          </button>
+          <div className="text-center">
+            <p className={`text-sm font-semibold capitalize ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>{statusMessage()}</p>
+            <p className={`text-lg font-mono ${statusColor}`}>{formatTime(sessionTime)}</p>
+          </div>
         </div>
       </div>
     </div>
