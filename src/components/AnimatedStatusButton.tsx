@@ -17,7 +17,7 @@ function IdleAnimation() {
   );
 
   return (
-    <div className="w-full h-full text-art-blue-600 flex items-center justify-center">
+    <div className="w-full h-full text-art-blue-300 flex items-center justify-center">
       <div className="w-2/3 h-2/3 relative">
         <svg className="absolute w-full h-full" viewBox="0 0 24 24">
           <defs>
@@ -37,7 +37,7 @@ function IdleAnimation() {
 
 function ListeningAnimation() {
   return (
-    <div className="w-full h-full flex justify-center items-center gap-1.5 text-art-blue-600">
+    <div className="w-full h-full flex justify-center items-center gap-1.5 text-art-blue-300">
       <div className="w-1.5 h-1/3 bg-current rounded-full waveform-bar" style={{ animationDelay: '0s' }}></div>
       <div className="w-1.5 h-1/2 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.2s' }}></div>
       <div className="w-1.5 h-3/4 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.4s' }}></div>
@@ -49,7 +49,7 @@ function ListeningAnimation() {
 
 function ProcessingAnimation() {
     return (
-        <div className="w-full h-full flex items-center justify-center text-art-blue-600 intro-hourglass">
+        <div className="w-full h-full flex items-center justify-center text-art-blue-300 intro-hourglass">
             <svg viewBox="0 0 100 100" className="w-full h-full">
                 <circle cx="50" cy="50" r="4" fill="currentColor" opacity="0.8" />
                 <circle cx="50" cy="50" r="35" stroke="currentColor" strokeWidth="1" opacity="0.3" fill="none" />
@@ -66,7 +66,7 @@ function ProcessingAnimation() {
 function SpeakingAnimation() {
     return (
         <div className="w-full h-full flex items-center justify-center">
-            <svg viewBox="0 0 100 100" className="w-full h-full text-art-blue-600 orb intro-orb">
+            <svg viewBox="0 0 100 100" className="w-full h-full text-art-blue-300 orb intro-orb">
                 <defs>
                     <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
                         <circle cx="1" cy="1" r="0.5" fill="currentColor" opacity="0.7" />
@@ -119,10 +119,10 @@ function ErrorAnimation() {
 
 
 const STATUS_MAP: Record<AppStatus, { component: JSX.Element; color: string }> = {
-  idle: { component: <IdleAnimation />, color: 'border-art-blue-600' },
-  listening: { component: <ListeningAnimation />, color: 'border-art-blue-600' },
-  processing: { component: <ProcessingAnimation />, color: 'border-art-blue-600' },
-  speaking: { component: <SpeakingAnimation />, color: 'border-art-blue-600' },
+  idle: { component: <IdleAnimation />, color: 'border-art-blue-300' },
+  listening: { component: <ListeningAnimation />, color: 'border-art-blue-300' },
+  processing: { component: <ProcessingAnimation />, color: 'border-art-blue-300' },
+  speaking: { component: <SpeakingAnimation />, color: 'border-art-blue-300' },
   error: { component: <ErrorAnimation />, color: 'border-art-red-600' },
 };
 
@@ -133,8 +133,8 @@ export function AnimatedStatusButton({ status }: AnimatedStatusButtonProps): JSX
     return (
         <div
             className={`
-                w-full h-full aspect-square rounded-full backdrop-blur-sm
-                border-2 ${color}
+                w-full h-full aspect-square rounded-full bg-star-white backdrop-blur-sm
+                border-3 ${color}
                 shadow-2xl shadow-black/30
                 flex items-center justify-center
                 transition-colors duration-500 p-4
