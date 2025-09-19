@@ -67,7 +67,7 @@ export function ConversationHub({
         </div>
 
         <div className="flex flex-col items-center space-y-4">
-            <button onClick={handleButtonClick} className="w-40 h-40 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
+            <button onClick={handleButtonClick} className="w-30 h-30 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
                 <AnimatedStatusButton status={status} />
             </button>
             <div className="text-center">
