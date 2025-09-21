@@ -18,7 +18,6 @@ function IdleAnimation() {
 
   return (
     <div className="w-full h-full text-art-blue-400 flex items-center justify-center">
-      {/* FIX: Increased icon container size from w-2/3 to w-3/4 for better visibility */}
       <div className="w-3/4 h-3/4 relative">
         <svg className="absolute w-full h-full" viewBox="0 0 24 24">
           <defs>
@@ -40,11 +39,12 @@ function IdleAnimation() {
 function ListeningAnimation() {
   return (
     <div className="w-full h-full flex justify-center items-center gap-1.5 text-art-blue-400">
-      <div className="w-1.5 h-1/3 bg-current rounded-full waveform-bar" style={{ animationDelay: '0s' }}></div>
-      <div className="w-1.5 h-1/2 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.2s' }}></div>
-      <div className="w-1.5 h-3/4 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.4s' }}></div>
-      <div className="w-1.5 h-2/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.6s' }}></div>
-      <div className="w-1.5 h-2/3 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.8s' }}></div>
+      {/* FIX: Increased the relative heights of the bars to make them more visible */}
+      <div className="w-1.5 h-2/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0s' }}></div>
+      <div className="w-1.5 h-3/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.2s' }}></div>
+      <div className="w-1.5 h-4/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.4s' }}></div>
+      <div className="w-1.5 h-3/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.6s' }}></div>
+      <div className="w-1.5 h-2/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.8s' }}></div>
     </div>
   );
 }
@@ -70,7 +70,8 @@ function ProcessingAnimation() {
 function SpeakingAnimation() {
     return (
         <div className="w-full h-full flex items-center justify-center">
-            <svg viewBox="0 0 100 100" className="w-full h-full text-art-blue-400 orb intro-orb">
+             {/* FIX: Increased the size of the SVG from w-full to w-11/12 for more presence */}
+            <svg viewBox="0 0 100 100" className="w-11/12 h-11/12 text-art-blue-400 orb intro-orb">
                 <defs>
                     <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
                         <circle cx="1" cy="1" r="0.5" fill="currentColor" opacity="0.7" />
@@ -114,7 +115,6 @@ function ErrorAnimation() {
 
     return (
         <div ref={ref} className={`w-full h-full relative flex items-center justify-center scan-target ${isGlitching ? 'is-glitching' : ''}`}>
-            {/* FIX: Increased icon container size from w-2/3 to w-3/4 for better visibility */}
             <svg viewBox="0 0 100 100" className="w-3/4 h-3/4 text-immigo-gray-400 intro-error">
                 <path d="M50,10 A40,40 0 1,1 49.9,10.001 M50,30 L50,55 M50,65 L50,70" stroke="currentColor" strokeWidth="6" fill="none" strokeLinecap="round" />
             </svg>
@@ -143,7 +143,7 @@ export function AnimatedStatusButton({ status }: AnimatedStatusButtonProps): JSX
                 flex items-center justify-center
                 shadow-md
                 transition-colors duration-500
-                p-2 md:p-4 // FIX: Responsive padding
+                p-2 md:p-4
             `}
         >
             <div className="w-full h-full status-enter-active">{component}</div>
