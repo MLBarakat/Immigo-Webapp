@@ -31,28 +31,28 @@ export function ConversationHistory({ messages, displayUser, isTranscribing, tra
           <div
             className={`max-w-[70%] p-3 rounded-xl shadow-sm ${
               msg.role === 'user'
-                ? 'bg-art-blue-600 text-star-white rounded-br-none'
-                : 'bg-immigo-gray-200 text-deep-navy rounded-bl-none'
+                ? 'bg-immigo-gray-200 text-deep-navy rounded-bl-none'
+                : 'bg-art-blue-600 text-star-white rounded-br-none'
             }`}
           >
             <p className="text-sm">{msg.content}</p>
           </div>
           {msg.role === 'user' && (
-            <div className="w-10 h-10 rounded-full bg-deep-navy text-star-white flex items-center justify-center font-bold flex-shrink-0">
+            <div className="w-10 h-10 rounded-full bg-art-blue-600 text-star-white flex items-center justify-center font-bold flex-shrink-0">
               {displayUser.initials}
             </div>
           )}
         </div>
       ))}
-       {isTranscribing && transcript && (
-        <div className="flex items-start gap-4 justify-end">
-          <div className="max-w-[70%] p-3 rounded-xl shadow-sm bg-art-blue-600 text-star-white rounded-br-none opacity-70 italic">
-            <p className="text-sm">{transcript}</p>
-          </div>
-           <div className="w-10 h-10 rounded-full bg-deep-navy text-star-white flex items-center justify-center font-bold flex-shrink-0 animate-pulse">
-              {displayUser.initials}
+      {isTranscribing && transcript && (
+          <div className="flex items-start gap-4 justify-end">
+            <div className="max-w-[70%] p-3 rounded-xl shadow-sm bg-art-blue-600 text-star-white rounded-br-none opacity-70 italic">
+                <p className="text-sm">{transcript}</p>
             </div>
-        </div>
+            <div className="w-10 h-10 rounded-full bg-art-blue-600 text-star-white flex items-center justify-center font-bold flex-shrink-0 animate-pulse">
+                {displayUser.initials}
+            </div>
+          </div>
       )}
       <div ref={messagesEndRef} />
     </div>
