@@ -5,9 +5,9 @@ interface AnimatedStatusButtonProps {
   readonly status: AppStatus;
 }
 
-// Sub-component for the Idle state
+// Sub-components for each animation state
 function IdleAnimation() {
-  const BaseMicIcon = ({ className }: { className?: string }) => (
+  const BaseMicIcon = ({ className }: { readonly className?: string }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"></path>
       <path d="M19 10v1a7 7 0 11-14 0v-1"></path>
@@ -35,30 +35,28 @@ function IdleAnimation() {
   );
 }
 
-// Sub-component for the Listening state
 function ListeningAnimation() {
   return (
-    <div className="w-full h-full flex justify-center items-center gap-1.5 text-art-blue-400">
-      {/* FIX: Increased the relative heights of the bars to make them more visible */}
-      <div className="w-1.5 h-2/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0s' }}></div>
-      <div className="w-1.5 h-3/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.2s' }}></div>
-      <div className="w-1.5 h-4/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.4s' }}></div>
-      <div className="w-1.5 h-3/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.6s' }}></div>
-      <div className="w-1.5 h-2/5 bg-current rounded-full waveform-bar" style={{ animationDelay: '0.8s' }}></div>
+    <div className="w-full h-full flex justify-center items-center text-art-blue-400 p-[25%]">
+      <svg width="100%" height="100%" viewBox="0 0 24 24">
+        <rect className="waveform-bar" x="1" y="0" width="4" height="24" rx="2" fill="currentColor" style={{ animationDelay: '0s' }} />
+        <rect className="waveform-bar" x="7" y="0" width="4" height="24" rx="2" fill="currentColor" style={{ animationDelay: '0.2s' }} />
+        <rect className="waveform-bar" x="13" y="0" width="4" height="24" rx="2" fill="currentColor" style={{ animationDelay: '0.4s' }} />
+        <rect className="waveform-bar" x="19" y="0" width="4" height="24" rx="2" fill="currentColor" style={{ animationDelay: '0.6s' }} />
+      </svg>
     </div>
   );
 }
 
-// Sub-component for the Processing state
 function ProcessingAnimation() {
     return (
         <div className="w-full h-full flex items-center justify-center text-art-blue-400 intro-hourglass">
             <svg viewBox="0 0 100 100" className="w-full h-full">
-                <circle cx="50" cy="50" r="4" fill="currentColor" opacity="0.8" />
-                <circle cx="50" cy="50" r="35" stroke="currentColor" strokeWidth="1" opacity="0.3" fill="none" />
+                <circle cx="50" cy="50" r="6" fill="currentColor" opacity="0.8" />
+                <circle cx="50" cy="50" r="40" stroke="currentColor" strokeWidth="1.5" opacity="0.3" fill="none"/>
                 <g transform="translate(50, 50)">
                     {[...Array(8)].map((_, i) => (
-                        <circle key={i} cx="0" cy="0" r="3" fill="currentColor" className="gravity-particle" style={{ animationDelay: `${i * 0.375}s` }} />
+                        <circle key={i} cx="0" cy="0" r="4" fill="currentColor" className="gravity-particle" style={{ animationDelay: `${i * 0.375}s` }} />
                     ))}
                 </g>
             </svg>
@@ -66,26 +64,24 @@ function ProcessingAnimation() {
     );
 }
 
-// Sub-component for the Speaking state
 function SpeakingAnimation() {
     return (
         <div className="w-full h-full flex items-center justify-center">
-             {/* FIX: Increased the size of the SVG from w-full to w-11/12 for more presence */}
-            <svg viewBox="0 0 100 100" className="w-11/12 h-11/12 text-art-blue-400 orb intro-orb">
+            <svg viewBox="0 0 100 100" className="w-full h-full text-art-blue-400 orb intro-orb">
                 <defs>
-                    <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
-                        <circle cx="1" cy="1" r="0.5" fill="currentColor" opacity="0.7" />
+                    <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                        <circle cx="1" cy="1" r="0.75" fill="currentColor" opacity="0.7"/>
                     </pattern>
                 </defs>
-                <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="2" />
                 <g className="orb-surface" style={{ transformOrigin: '50% 50%' }}>
-                    <circle cx="50" cy="50" r="44" fill="url(#grid)" />
+                    <circle cx="50" cy="50" r="46" fill="url(#grid)" />
                 </g>
             </svg>
         </div>
     );
 }
-// Sub-component for the Error state
+
 function ErrorAnimation() {
     const ref = useRef<HTMLDivElement>(null);
     const [isGlitching, setIsGlitching] = useState(false);
@@ -116,7 +112,7 @@ function ErrorAnimation() {
     return (
         <div ref={ref} className={`w-full h-full relative flex items-center justify-center scan-target ${isGlitching ? 'is-glitching' : ''}`}>
             <svg viewBox="0 0 100 100" className="w-3/4 h-3/4 text-immigo-gray-400 intro-error">
-                <path d="M50,10 A40,40 0 1,1 49.9,10.001 M50,30 L50,55 M50,65 L50,70" stroke="currentColor" strokeWidth="6" fill="none" strokeLinecap="round" />
+                <path d="M50,10 A40,40 0 1,1 49.9,10.001 M50,30 L50,55 M50,65 L50,70" stroke="currentColor" strokeWidth="8" fill="none" strokeLinecap="round" />
             </svg>
             <div className="scanline"></div>
         </div>
