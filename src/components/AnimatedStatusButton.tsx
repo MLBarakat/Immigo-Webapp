@@ -5,7 +5,7 @@ interface AnimatedStatusButtonProps {
   readonly status: AppStatus;
 }
 
-// Sub-components for each animation state
+// Sub-component for the Idle state
 function IdleAnimation() {
   const BaseMicIcon = ({ className }: { className?: string }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -18,7 +18,8 @@ function IdleAnimation() {
 
   return (
     <div className="w-full h-full text-art-blue-400 flex items-center justify-center">
-      <div className="w-2/3 h-2/3 relative">
+      {/* FIX: Increased icon container size from w-2/3 to w-3/4 for better visibility */}
+      <div className="w-3/4 h-3/4 relative">
         <svg className="absolute w-full h-full" viewBox="0 0 24 24">
           <defs>
             <clipPath id="mic-clip-idle">
@@ -35,6 +36,7 @@ function IdleAnimation() {
   );
 }
 
+// Sub-component for the Listening state
 function ListeningAnimation() {
   return (
     <div className="w-full h-full flex justify-center items-center gap-1.5 text-art-blue-400">
@@ -47,6 +49,7 @@ function ListeningAnimation() {
   );
 }
 
+// Sub-component for the Processing state
 function ProcessingAnimation() {
     return (
         <div className="w-full h-full flex items-center justify-center text-art-blue-400 intro-hourglass">
@@ -63,6 +66,7 @@ function ProcessingAnimation() {
     );
 }
 
+// Sub-component for the Speaking state
 function SpeakingAnimation() {
     return (
         <div className="w-full h-full flex items-center justify-center">
@@ -80,6 +84,7 @@ function SpeakingAnimation() {
         </div>
     );
 }
+// Sub-component for the Error state
 function ErrorAnimation() {
     const ref = useRef<HTMLDivElement>(null);
     const [isGlitching, setIsGlitching] = useState(false);
@@ -109,14 +114,14 @@ function ErrorAnimation() {
 
     return (
         <div ref={ref} className={`w-full h-full relative flex items-center justify-center scan-target ${isGlitching ? 'is-glitching' : ''}`}>
-            <svg viewBox="0 0 100 100" className="w-2/3 h-2/3 text-immigo-gray-400 intro-error">
+            {/* FIX: Increased icon container size from w-2/3 to w-3/4 for better visibility */}
+            <svg viewBox="0 0 100 100" className="w-3/4 h-3/4 text-immigo-gray-400 intro-error">
                 <path d="M50,10 A40,40 0 1,1 49.9,10.001 M50,30 L50,55 M50,65 L50,70" stroke="currentColor" strokeWidth="6" fill="none" strokeLinecap="round" />
             </svg>
             <div className="scanline"></div>
         </div>
     );
 }
-
 
 const STATUS_MAP: Record<AppStatus, { component: JSX.Element; color: string }> = {
   idle: { component: <IdleAnimation />, color: 'border-art-blue-400' },
@@ -137,7 +142,8 @@ export function AnimatedStatusButton({ status }: AnimatedStatusButtonProps): JSX
                 border-4 ${color}
                 flex items-center justify-center
                 shadow-md
-                transition-colors duration-500 p-4
+                transition-colors duration-500
+                p-2 md:p-4 // FIX: Responsive padding
             `}
         >
             <div className="w-full h-full status-enter-active">{component}</div>
