@@ -176,9 +176,9 @@ function AppContent(): JSX.Element {
 function App(): JSX.Element {
   return (
     <Router>
+      <ScrollToTop />
       <AuthProvider>
         <ConversationProvider apiClient={null}>
-          <ScrollToTop />
           <AppContent />
         </ConversationProvider>
       </AuthProvider>
