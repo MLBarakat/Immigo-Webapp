@@ -18,6 +18,7 @@ import { VoiceHub } from './components/VoiceHub';
 import { useAuth } from './hooks/useAuth';
 import { AuthProvider } from './context/AuthContext';
 import { DisplayUser } from './types/user';
+import { ScrollToTop } from './components/ScrollToTop';
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -177,6 +178,7 @@ function App(): JSX.Element {
     <Router>
       <AuthProvider>
         <ConversationProvider apiClient={null}>
+          <ScrollToTop />
           <AppContent />
         </ConversationProvider>
       </AuthProvider>
