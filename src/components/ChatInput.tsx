@@ -24,7 +24,7 @@ export function ChatInput({ onSendMessage, disabled }: ChatInputProps): JSX.Elem
   };
 
   return (
-    <div className="p-2 md:p-4 bg-star-white border-t border-immigo-gray-200">
+    <div className="p-2 md:p-4 bg-star-white">
       <div className="relative">
         <textarea
           rows={2}
