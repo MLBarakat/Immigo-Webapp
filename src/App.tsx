@@ -11,6 +11,7 @@ import { useConversationManager } from './hooks/useConversationManager';
 import useMediaQuery from './hooks/useMediaQuery';
 import { AuthPage } from './components/AuthPage';
 import { Header } from './components/Header';
+import { Footer } from './components/Footer';
 import { ConversationHistory } from './components/ConversationHistory';
 import { ChatInput } from './components/ChatInput';
 import { VoiceHub } from './components/VoiceHub';
@@ -159,9 +160,7 @@ function AppContent(): JSX.Element {
           </aside>
         )}
       </main>
-      <footer className="text-center py-3 bg-star-white text-immigo-gray-600 text-sm border-t border-immigo-gray-200">
-        © {new Date().getFullYear()} ImmiGo. {isDesktop ? 'All rights reserved.' : ''}
-      </footer>
+      <Footer />
       {isAppSettingsModalOpen && (
         <ApplicationSettingsModal isOpen={isAppSettingsModalOpen} onClose={handleCloseAppSettings} settings={userSettings} onSave={handleSaveSettings} onSettingChange={handleSettingChange} pollyVoices={PollyVoices} isDesktop={isDesktop} />
       )}

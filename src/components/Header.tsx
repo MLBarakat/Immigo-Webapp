@@ -30,7 +30,7 @@ export function Header({
   onLanguageChange,
 }: HeaderProps): JSX.Element {
   return (
-    <header className="flex items-center justify-between p-4 bg-star-white shadow-sm border-b border-deep-navy">
+    <header className="flex items-center justify-between p-4 bg-star-white shadow-sm border-b border-2 border-deep-navy">
       <div className="flex items-center gap-4">
         <img src={ImmigoLogo} alt="ImmiGo Logo" className="h-10 w-10" />
         <ImmiGOLabel className="flex items-baseline font-sans font-bold text-3xl select-none" />
