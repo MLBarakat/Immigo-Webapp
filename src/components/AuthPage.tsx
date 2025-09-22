@@ -54,7 +54,7 @@ export function AuthPage(): JSX.Element {
           <div className="text-center mb-8">
             <div className="flex items-center gap-1">
                 <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-20 h-20 mx-auto object-contain mb-4" />
-                <ImmiGOLabel />
+                <ImmiGOLabel className="flex items-baseline font-sans font-bold text-3xl select-none"/>
             </div>
             <p className="text-immigo-gray-600 mt-2">
               {isLogin ? 'Sign in to continue your journey' : 'Get started with your personal AI coach'}
