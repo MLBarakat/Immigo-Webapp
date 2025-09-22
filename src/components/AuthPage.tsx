@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import ImmigoLogo from '../assets/immigo_logo.png';
+import ImmigoLogo from '../assets/immigo_logo.svg';
 import { TermsModal } from './TermsModal';
 import { User, Mail, KeyRound, Globe, CheckSquare, Square } from 'lucide-react';
 import { SUPPORTED_LANGUAGES } from './LanguageSelector';
@@ -52,17 +52,15 @@ export function AuthPage(): JSX.Element {
       <div className="min-h-screen bg-immigo-gray-50 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md bg-star-white p-8 rounded-2xl shadow-xl border border-immigo-gray-200">
           <div className="text-center mb-8">
-            <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-20 h-20 mx-auto object-contain mb-4" />
-            <ImmiGOLabel />
-            <h1 className="text-2xl font-semibold text-deep-navy mt-4">
-              {isLogin ? 'Welcome Back' : 'Create Your Account'}
-            </h1>
+            <div className="flex items-center gap-1">
+                <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-20 h-20 mx-auto object-contain mb-4" />
+                <ImmiGOLabel />
+            </div>
             <p className="text-immigo-gray-600 mt-2">
-              {isLogin ? 'Sign in to continue your journey.' : 'Get started with your personal AI coach.'}
+              {isLogin ? 'Sign in to continue your journey' : 'Get started with your personal AI coach'}
             </p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* ... (form remains the same) */}
             {!isLogin && (
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" />

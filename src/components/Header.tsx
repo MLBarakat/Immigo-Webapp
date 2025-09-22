@@ -31,7 +31,7 @@ export function Header({
 }: HeaderProps): JSX.Element {
   return (
     <header className="flex items-center justify-between p-4 bg-star-white shadow-sm border-b-2 border-immigo-gray-300">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <img src={ImmigoLogo} alt="ImmiGo Logo" className="h-10 w-10 object-contain" />
         <ImmiGOLabel className="flex items-baseline font-sans font-bold text-3xl select-none" />
       </div>
