@@ -52,7 +52,7 @@ export function AuthPage(): JSX.Element {
       <div className="min-h-screen bg-immigo-gray-50 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md bg-star-white p-8 rounded-2xl shadow-xl border border-immigo-gray-200">
           <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-1 mb-4">
+            <div className="flex items-center justify-center mb-4">
                 <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-20 h-20 object-contain" />
                 <ImmiGOLabel className="flex font-bold text-6xl"/>
             </div>
