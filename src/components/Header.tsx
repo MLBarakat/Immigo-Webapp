@@ -1,4 +1,4 @@
-import ImmigoLogo from '../assets/immigo_logo.png';
+import ImmigoLogo from '../assets/immigo_logo.svg';
 import { Settings, LogOut, Menu } from 'lucide-react';
 import { DisplayUser } from '../types/user';
 import { LanguageSelector } from './LanguageSelector';
