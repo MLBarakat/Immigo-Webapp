@@ -52,9 +52,9 @@ export function AuthPage(): JSX.Element {
       <div className="min-h-screen bg-immigo-gray-50 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md bg-star-white p-8 rounded-2xl shadow-xl border border-immigo-gray-200">
           <div className="text-center mb-8">
-            <div className="flex items-center gap-1">
-                <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-20 h-20 mx-auto object-contain mb-4" />
-                <ImmiGOLabel className="flex items-baseline font-sans font-bold text-3xl select-none"/>
+            <div className="flex items-center justify-center gap-1 mb-4">
+                <img src={ImmigoLogo} alt="ImmiGo Logo" className="w-20 h-20 object-contain" />
+                <ImmiGOLabel className="flex text-6xl"/>
             </div>
             <p className="text-immigo-gray-600 mt-2">
               {isLogin ? 'Sign in to continue your journey' : 'Get started with your personal AI coach'}
