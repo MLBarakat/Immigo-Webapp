@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { ApiClient } from '../services/apiClient';
 
 export type AppStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
 
@@ -18,20 +17,20 @@ interface ConversationState {
   errorMessage: string | null;
   transcript: string;
   currentLanguageCode: string;
+  assistantMessageId: string | null; // Track the current streaming message ID
 }
 
 type ConversationAction =
   | { type: 'START_SESSION' }
   | { type: 'END_SESSION' }
-  | { type: 'SET_APP_STATUS'; payload: AppStatus }
-  | { type: 'ADD_MESSAGE'; payload: Message }
-  | { type: 'UPDATE_MESSAGE'; payload: { id: string; content: string } }
   | { type: 'SET_TRANSCRIPT'; payload: string }
-  | { type: 'CLEAR_TRANSCRIPT' }
-  | { type: 'SET_ERROR_MESSAGE'; payload: string | null }
   | { type: 'CLEAR_CONVERSATION' }
   | { type: 'TICK_SESSION_TIMER' }
-  | { type: 'SET_LANGUAGE'; payload: string };
+  | { type: 'SET_LANGUAGE'; payload: string }
+  | { type: 'SEND_MESSAGE_START'; payload: { userMessage: Message; assistantMessageId: string } }
+  | { type: 'RECEIVE_ASSISTANT_CHUNK'; payload: { content: string } }
+  | { type: 'FINISH_ASSISTANT_RESPONSE' }
+  | { type: 'SEND_MESSAGE_FAILURE'; payload: string };
 
 const initialState: ConversationState = {
   conversationHistory: [],
@@ -41,6 +40,7 @@ const initialState: ConversationState = {
   errorMessage: null,
   transcript: '',
   currentLanguageCode: 'en-US',
+  assistantMessageId: null,
 };
 
 const conversationReducer = (state: ConversationState, action: ConversationAction): ConversationState => {
@@ -49,35 +49,51 @@ const conversationReducer = (state: ConversationState, action: ConversationActio
       return { ...state, isSessionActive: true, sessionTime: 0, appStatus: 'listening', errorMessage: null };
     case 'END_SESSION':
       return { ...state, isSessionActive: false, appStatus: 'idle', sessionTime: 0 };
-    case 'SET_APP_STATUS':
-      return { ...state, appStatus: action.payload };
-    case 'ADD_MESSAGE':
-      return { ...state, conversationHistory: [...state.conversationHistory, action.payload] };
     case 'SET_TRANSCRIPT':
-      return { ...state, transcript: action.payload };
-    case 'CLEAR_TRANSCRIPT':
-      return { ...state, transcript: '' };
-    case 'SET_ERROR_MESSAGE':
-      return { ...state, errorMessage: action.payload, appStatus: 'error' };
+      return { ...state, transcript: action.payload, appStatus: 'listening' };
     case 'CLEAR_CONVERSATION':
       return { ...state, conversationHistory: [] };
     case 'TICK_SESSION_TIMER':
       return { ...state, sessionTime: state.isSessionActive ? state.sessionTime + 1 : 0 };
-    case 'UPDATE_MESSAGE':
-      const existingMessage = state.conversationHistory.find(msg => msg.id === action.payload.id);
-      if (existingMessage) {
-        return {
-          ...state,
-          conversationHistory: state.conversationHistory.map(msg =>
-            msg.id === action.payload.id ? { ...msg, content: msg.content + action.payload.content } : msg
-          ),
-        };
-      } else {
-        const newAssistantMessage: Message = { id: action.payload.id, role: 'assistant', content: action.payload.content, timestamp: new Date().toISOString() };
-        return { ...state, conversationHistory: [...state.conversationHistory, newAssistantMessage] };
-      }
     case 'SET_LANGUAGE':
       return { ...state, currentLanguageCode: action.payload };
+
+    case 'SEND_MESSAGE_START':
+      const newAssistantMessage: Message = { id: action.payload.assistantMessageId, role: 'assistant', content: '', timestamp: new Date().toISOString() };
+      return {
+        ...state,
+        appStatus: 'processing',
+        transcript: '',
+        errorMessage: null,
+        conversationHistory: [...state.conversationHistory, action.payload.userMessage, newAssistantMessage],
+        assistantMessageId: action.payload.assistantMessageId,
+      };
+
+    case 'RECEIVE_ASSISTANT_CHUNK':
+      if (!state.assistantMessageId) return state;
+      return {
+        ...state,
+        appStatus: 'speaking',
+        conversationHistory: state.conversationHistory.map(msg =>
+          msg.id === state.assistantMessageId ? { ...msg, content: msg.content + action.payload.content } : msg
+        ),
+      };
+
+    case 'FINISH_ASSISTANT_RESPONSE':
+      return {
+        ...state,
+        appStatus: state.isSessionActive ? 'listening' : 'idle',
+        assistantMessageId: null,
+      };
+
+    case 'SEND_MESSAGE_FAILURE':
+      return {
+        ...state,
+        appStatus: 'error',
+        errorMessage: action.payload,
+        assistantMessageId: null,
+      };
+
     default:
       return state;
   }
@@ -88,7 +104,7 @@ interface ConversationContextType {
   dispatch: React.Dispatch<ConversationAction>;
 }
 const ConversationContext = createContext<ConversationContextType | undefined>(undefined);
-interface ConversationProviderProps { children: ReactNode; apiClient: ApiClient | null; }
+interface ConversationProviderProps { children: ReactNode; }
 
 export function ConversationProvider({ children }: ConversationProviderProps): JSX.Element {
   const [state, dispatch] = useReducer(conversationReducer, initialState);

@@ -5,11 +5,22 @@ const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 const { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { PollyClient, SynthesizeSpeechCommand } = require('@aws-sdk/client-polly');
+const { v4: uuidv4 } = require('uuid'); // Added for request tracking
 
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3001;
+
+// Simple structured logger
+const logger = {
+  info: (message, context = {}) => {
+    console.log(JSON.stringify({ level: 'INFO', timestamp: new Date().toISOString(), message, ...context }));
+  },
+  error: (message, context = {}) => {
+    console.error(JSON.stringify({ level: 'ERROR', timestamp: new Date().toISOString(), message, ...context }));
+  }
+};
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -112,10 +123,14 @@ app.get('/api/history', authenticate, async (req, res) => {
 });
 
 app.post('/api/conversation', authenticate, async (req, res) => {
+  const requestId = uuidv4();
   const { message, conversationHistory, voiceId } = req.body;
-  const sanitizedMessage = sanitizeInput(message);
 
+  logger.info('Conversation request received', { requestId, userId: req.user.id });
+
+  const sanitizedMessage = sanitizeInput(message);
   if (!sanitizedMessage) {
+    logger.error('Validation failed: Message content is required', { requestId, userId: req.user.id });
     return res.status(400).json({ error: 'Message content is required.' });
   }
 
@@ -153,6 +168,8 @@ app.post('/api/conversation', authenticate, async (req, res) => {
       }
     }
 
+    logger.info('Bedrock stream finished', { requestId, responseLength: fullResponseText.length });
+
     const pollyCommand = new SynthesizeSpeechCommand({
       Engine: 'neural',
       OutputFormat: 'mp3',
@@ -164,17 +181,29 @@ app.post('/api/conversation', authenticate, async (req, res) => {
     const responseAudio = audioBuffer.toString('base64');
     res.write(JSON.stringify({ type: 'audio', data: responseAudio }) + '\n');
 
+    logger.info('Polly synthesis finished', { requestId });
+
     await Promise.all([
       supabase.from('messages').insert({ user_id: req.user.id, role: 'user', content: sanitizedMessage }),
       supabase.from('messages').insert({ user_id: req.user.id, role: 'assistant', content: fullResponseText })
     ]);
 
+    logger.info('Messages saved to Supabase', { requestId });
+
     res.end();
 
-  } catch (error) {
-    console.error('Error in /api/conversation:', error);
+  } catch (err) {
+    const errorDetails = {
+      requestId,
+      userId: req.user.id,
+      errorMessage: err.message,
+      stack: err.stack,
+      name: err.name,
+    };
+    logger.error('Unhandled error in /api/conversation', errorDetails);
+
     if (!res.headersSent) {
-      res.status(500).json({ error: 'An error occurred while processing your request.' });
+      res.status(500).json({ error: 'An internal server error occurred. Please try again later.', errorId: requestId });
     } else {
       res.end();
     }

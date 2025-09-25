@@ -18,27 +18,17 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
 
   const speechManager = useMemo(() => new SpeechRecognitionManager(), []);
 
-  const handleTextChunk = useCallback((textChunk: string) => {
-    dispatch({ type: 'UPDATE_MESSAGE', payload: { id: 'ai-temp-message', content: textChunk } });
-  }, [dispatch]);
-
-  const handleAudioChunk = useCallback((audioChunk: Uint8Array) => {
-    console.log("Received AI audio chunk:", audioChunk); // Placeholder for audio playback
-  }, []);
-
-  const sendUserMessage = useCallback(async (text: string) => {
-    if (!apiClient || text.trim() === '') return;
-
-    dispatch({ type: 'CLEAR_TRANSCRIPT' });
-    dispatch({ type: 'SET_APP_STATUS', payload: 'processing' });
+  const sendTextMessage = useCallback(async (text: string) => {
+    if (!apiClient || !text.trim() || state.appStatus === 'processing' || state.appStatus === 'speaking') {
+      return;
+    }
 
     const userMessage: Message = { id: uuidv4(), role: 'user', content: text, timestamp: new Date().toISOString() };
-    dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
+    const assistantMessageId = uuidv4();
+
+    dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage, assistantMessageId } });
 
     try {
-      const tempAiMessage: Message = { id: 'ai-temp-message', role: 'assistant', content: '...', timestamp: new Date().toISOString() };
-      dispatch({ type: 'ADD_MESSAGE', payload: tempAiMessage });
-
       await apiClient.sendMessage(
         currentConversationId.current,
         text,
@@ -47,45 +37,43 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
         userSettings.mic_mode || 'voice_activity',
         userSettings.barge_in || 'balanced',
         !!userSettings.live_feedback_enabled,
-        handleTextChunk,
-        handleAudioChunk
+        (textChunk) => dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: textChunk } }),
+        (audioChunk) => console.log("Received AI audio chunk:", audioChunk) // Placeholder for audio playback
       );
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message.';
-      dispatch({ type: 'SET_ERROR_MESSAGE', payload: errorMessage });
+      dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: errorMessage });
     } finally {
-      if (state.isSessionActive) {
-        dispatch({ type: 'SET_APP_STATUS', payload: 'listening' });
-        speechManager.startListening(
-          (transcript, isFinal) => {
-            dispatch({ type: 'SET_TRANSCRIPT', payload: transcript });
-            if (isFinal) {
-              sendUserMessage(transcript);
-            }
-          },
-          (error) => dispatch({ type: 'SET_ERROR_MESSAGE', payload: error }),
-          () => { if (state.isSessionActive) dispatch({ type: 'SET_APP_STATUS', payload: 'listening' }); }
-        );
-      } else {
-        dispatch({ type: 'SET_APP_STATUS', payload: 'idle' });
-      }
+      dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
     }
-  }, [apiClient, dispatch, state.isSessionActive, userSettings, state.currentLanguageCode, handleTextChunk, handleAudioChunk]);
+  }, [apiClient, dispatch, userSettings, state.currentLanguageCode, state.appStatus]);
+
+  // Effect to automatically restart listening after AI finishes speaking in an active session
+  useEffect(() => {
+    if (state.isSessionActive && state.appStatus === 'listening') {
+      speechManager.startListening(
+        (transcript, isFinal) => {
+          dispatch({ type: 'SET_TRANSCRIPT', payload: transcript });
+          if (isFinal) {
+            sendTextMessage(transcript);
+          }
+        },
+        (error) => dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: error }),
+        () => {
+          if (state.isSessionActive) {
+            // If recognition ends unexpectedly, restart it.
+            dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+          }
+        },
+        state.currentLanguageCode
+      );
+    }
+  }, [state.isSessionActive, state.appStatus, speechManager, sendTextMessage, dispatch, state.currentLanguageCode]);
+
 
   const startSession = useCallback(() => {
     dispatch({ type: 'START_SESSION' });
-    speechManager.startListening(
-      (transcript, isFinal) => {
-        dispatch({ type: 'SET_TRANSCRIPT', payload: transcript });
-        if (isFinal) {
-          sendUserMessage(transcript);
-        }
-      },
-      (error) => dispatch({ type: 'SET_ERROR_MESSAGE', payload: error }),
-      () => { if (state.isSessionActive) dispatch({ type: 'SET_APP_STATUS', payload: 'listening' }); },
-      state.currentLanguageCode
-    );
-  }, [dispatch, sendUserMessage, speechManager, state.isSessionActive, state.currentLanguageCode]);
+  }, [dispatch]);
 
   const endSession = useCallback(() => {
     speechManager.stopListening();
@@ -107,7 +95,7 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
   const clearConversation = useCallback(() => { dispatch({ type: 'CLEAR_CONVERSATION' }); }, [dispatch]);
 
   const downloadTranscript = useCallback(() => {
-    const transcript = state.conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n');
+    const transcript = state.conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
     const blob = new Blob([transcript], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -117,23 +105,16 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
     URL.revokeObjectURL(url);
   }, [state.conversationHistory]);
 
-  const sendTextMessage = useCallback(async (text: string) => {
-    if (state.appStatus !== 'idle') return;
-    await sendUserMessage(text);
-  }, [state.appStatus, sendUserMessage]);
-
-  const isTranscribing = state.appStatus === 'listening';
+  const isTranscribing = state.appStatus === 'listening' && !!state.transcript;
 
   return {
     ...state,
     isTranscribing,
     startSession,
     endSession,
-    startAudioInput: startSession,
-    stopAudioInput: endSession,
     sendTextMessage,
     clearConversation,
     downloadTranscript,
-    clearError: () => dispatch({ type: 'SET_ERROR_MESSAGE', payload: null }),
+    clearError: () => dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: '' }),
   };
 }
