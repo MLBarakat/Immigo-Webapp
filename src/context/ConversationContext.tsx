@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { ApiClient } from '../services/apiClient';
 
 export type AppStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
 
@@ -17,7 +18,7 @@ interface ConversationState {
   errorMessage: string | null;
   transcript: string;
   currentLanguageCode: string;
-  assistantMessageId: string | null; // Track the current streaming message ID
+  assistantMessageId: string | null;
 }
 
 type ConversationAction =
@@ -104,7 +105,7 @@ interface ConversationContextType {
   dispatch: React.Dispatch<ConversationAction>;
 }
 const ConversationContext = createContext<ConversationContextType | undefined>(undefined);
-interface ConversationProviderProps { children: ReactNode; }
+interface ConversationProviderProps { children: ReactNode; apiClient: ApiClient | null; }
 
 export function ConversationProvider({ children }: ConversationProviderProps): JSX.Element {
   const [state, dispatch] = useReducer(conversationReducer, initialState);
