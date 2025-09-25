@@ -123,5 +123,5 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       updateUserLanguage,
   }), [session, user, profile, loading]);
 
-  return <AuthContext.Provider value={value}>{children}</Auth-Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
