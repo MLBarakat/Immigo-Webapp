@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Message } from '../context/ConversationContext';
 import { SpeechRecognitionManager } from '../utils/audioUtils';
 import { UserSettings } from '../types/settings';
+import { analytics } from '../analytics'; // Import analytics service
 
 interface UseConversationManagerProps {
 apiClient: ApiClient | null;
@@ -48,7 +49,6 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
     }
   }, [apiClient, dispatch, userSettings, state.currentLanguageCode, state.appStatus]);
 
-  // Effect to automatically restart listening after AI finishes speaking in an active session
   useEffect(() => {
     if (state.isSessionActive && state.appStatus === 'listening') {
       speechManager.startListening(
@@ -61,7 +61,6 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
         (error) => dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: error }),
         () => {
           if (state.isSessionActive) {
-            // If recognition ends unexpectedly, restart it.
             dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
           }
         },
@@ -73,12 +72,14 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
 
   const startSession = useCallback(() => {
     dispatch({ type: 'START_SESSION' });
+    analytics.track('session_started'); // Event tracking
   }, [dispatch]);
 
   const endSession = useCallback(() => {
     speechManager.stopListening();
     dispatch({ type: 'END_SESSION' });
-  }, [dispatch, speechManager]);
+    analytics.track('session_ended', { duration_seconds: state.sessionTime }); // Event tracking
+  }, [dispatch, speechManager, state.sessionTime]);
 
   useEffect(() => {
     if (state.isSessionActive) {
@@ -92,7 +93,10 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
     };
   }, [state.isSessionActive, dispatch, speechManager]);
 
-  const clearConversation = useCallback(() => { dispatch({ type: 'CLEAR_CONVERSATION' }); }, [dispatch]);
+  const clearConversation = useCallback(() => {
+    dispatch({ type: 'CLEAR_CONVERSATION' });
+    analytics.track('conversation_cleared'); // Event tracking
+  }, [dispatch]);
 
   const downloadTranscript = useCallback(() => {
     const transcript = state.conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
@@ -103,6 +107,7 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
     a.download = `immigo_transcript_${new Date().toISOString()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+    analytics.track('transcript_downloaded'); // Event tracking
   }, [state.conversationHistory]);
 
   const isTranscribing = state.appStatus === 'listening' && !!state.transcript;

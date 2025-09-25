@@ -20,6 +20,7 @@ import { AuthProvider } from './context/AuthContext';
 import { DisplayUser } from './types/user';
 import { ScrollToTop } from './components/ScrollToTop';
 import { FeedbackModal } from './components/FeedbackModal';
+import { analytics } from './analytics'; // Import analytics service
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -105,6 +106,8 @@ function AppContent(): JSX.Element {
   const handleRequestFeedback = async () => {
     if (!apiClient || conversationManager.conversationHistory.length === 0) return;
 
+    analytics.track('feedback_requested'); // Event tracking
+
     setIsFetchingFeedback(true);
     setIsFeedbackModalOpen(true);
     setFeedbackError(null);
@@ -113,9 +116,11 @@ function AppContent(): JSX.Element {
     try {
       const data = await apiClient.getAnalysis(conversationManager.conversationHistory);
       setFeedbackData(data);
+      analytics.track('feedback_received_success'); // Event tracking
     } catch (error) {
       console.error("Failed to get feedback:", error);
       setFeedbackError(error instanceof Error ? error.message : "An unknown error occurred.");
+      analytics.track('feedback_received_failure'); // Event tracking
     } finally {
       setIsFetchingFeedback(false);
     }
