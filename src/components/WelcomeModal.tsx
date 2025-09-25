@@ -43,7 +43,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose })
 
         <main className="p-8 text-center">
             <div className="w-16 h-16 bg-art-blue-100 text-art-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <StepIcon className="w-8 h-8" /> {/* HOTFIX: Use the capitalized variable */}
+                <StepIcon className="w-8 h-8" />
             </div>
             <h3 className="text-2xl font-bold text-deep-navy mb-2">{steps[step].title}</h3>
             <p className="text-immigo-gray-600 min-h-[72px]">{steps[step].description}</p>
