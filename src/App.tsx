@@ -4,7 +4,7 @@ import { ApplicationSettingsModal } from './components/ApplicationSettingsModal'
 import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { ConversationHub } from './components/ConversationHub';
 import { MobileMenuOverlay } from './components/MobileMenuOverlay';
-import { ApiClient } from './services/apiClient';
+import { ApiClient, FeedbackResponse } from './services/apiClient';
 import { UserSettings } from './types/settings';
 import { ConversationProvider, useConversation } from './context/ConversationContext';
 import { useConversationManager } from './hooks/useConversationManager';
@@ -19,6 +19,7 @@ import { useAuth } from './hooks/useAuth';
 import { AuthProvider } from './context/AuthContext';
 import { DisplayUser } from './types/user';
 import { ScrollToTop } from './components/ScrollToTop';
+import { FeedbackModal } from './components/FeedbackModal';
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -34,6 +35,11 @@ function AppContent(): JSX.Element {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({});
   const isDesktop = useMediaQuery('(min-width: 768px)');
+
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [feedbackData, setFeedbackData] = useState<FeedbackResponse | null>(null);
+  const [isFetchingFeedback, setIsFetchingFeedback] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const apiClient = useMemo(() => {
     if (session?.access_token) { return new ApiClient(session.access_token); }
@@ -94,6 +100,29 @@ function AppContent(): JSX.Element {
     updateUserLanguage(newLanguageCode).catch(error => {
       console.error("UI failed to sync language update:", error);
     });
+  };
+
+  const handleRequestFeedback = async () => {
+    if (!apiClient || conversationManager.conversationHistory.length === 0) return;
+
+    setIsFetchingFeedback(true);
+    setIsFeedbackModalOpen(true);
+    setFeedbackError(null);
+    setFeedbackData(null);
+
+    try {
+      const data = await apiClient.getAnalysis(conversationManager.conversationHistory);
+      setFeedbackData(data);
+    } catch (error) {
+      console.error("Failed to get feedback:", error);
+      setFeedbackError(error instanceof Error ? error.message : "An unknown error occurred.");
+    } finally {
+      setIsFetchingFeedback(false);
+    }
+  };
+
+  const handleCloseFeedbackModal = () => {
+    setIsFeedbackModalOpen(false);
   };
 
   const user: DisplayUser = {
@@ -157,6 +186,8 @@ function AppContent(): JSX.Element {
               onOpenAppSettings={handleOpenAppSettings}
               onOpenAccountSettings={handleOpenAccountSettings}
               userSettings={userSettings}
+              onGetFeedback={handleRequestFeedback}
+              isFeedbackDisabled={conversationManager.conversationHistory.length === 0}
             />
           </aside>
         )}
@@ -167,6 +198,15 @@ function AppContent(): JSX.Element {
       )}
       {isAccountSettingsModalOpen && (
         <AccountSettingsPage onNavigateBack={handleCloseAccountSettings} isDesktop={isDesktop} />
+      )}
+      {isFeedbackModalOpen && (
+        <FeedbackModal
+          isOpen={isFeedbackModalOpen}
+          onClose={handleCloseFeedbackModal}
+          isLoading={isFetchingFeedback}
+          feedback={feedbackData}
+          error={feedbackError}
+        />
       )}
       <MobileMenuOverlay isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} onOpenAppSettings={handleOpenAppSettings} onOpenAccountSettings={handleOpenAccountSettings} onSignOut={logout} onClearConversation={conversationManager.clearConversation} onDownloadTranscript={conversationManager.downloadTranscript} user={user} />
     </div>

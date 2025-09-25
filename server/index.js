@@ -3,9 +3,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
-const { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } = require('@aws-sdk/client-bedrock-runtime');
+const { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { PollyClient, SynthesizeSpeechCommand } = require('@aws-sdk/client-polly');
-const { v4: uuidv4 } = require('uuid'); // Added for request tracking
+const { v4: uuidv4 } = require('uuid');
 
 require('dotenv').config();
 
@@ -111,7 +111,7 @@ app.put('/api/settings', authenticate, async (req, res) => {
 app.get('/api/history', authenticate, async (req, res) => {
   const { data, error } = await supabase
     .from('messages')
-    .select('id, role, content, timestamp:created_at') // CORRECTED QUERY
+    .select('id, role, content, timestamp:created_at')
     .eq('user_id', req.user.id)
     .order('created_at', { ascending: true });
 
@@ -119,7 +119,7 @@ app.get('/api/history', authenticate, async (req, res) => {
     console.error('Error fetching history:', error);
     return res.status(500).json({ error: 'Failed to fetch conversation history.' });
   }
-  res.json({ history: data }); // Return as { history: [...] }
+  res.json({ history: data });
 });
 
 app.post('/api/conversation', authenticate, async (req, res) => {
@@ -207,6 +207,55 @@ app.post('/api/conversation', authenticate, async (req, res) => {
     } else {
       res.end();
     }
+  }
+});
+
+// NEW ENDPOINT FOR FEEDBACK ANALYSIS
+app.post('/api/conversation/analyze', authenticate, async (req, res) => {
+  const requestId = uuidv4();
+  const { conversationHistory } = req.body;
+
+  logger.info('Analysis request received', { requestId, userId: req.user.id });
+
+  if (!conversationHistory || conversationHistory.length === 0) {
+    return res.status(400).json({ error: 'Conversation history is required for analysis.' });
+  }
+
+  try {
+    const transcript = conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n');
+
+    const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0';
+    const prompt = {
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: 1024,
+      system: "You are an expert English language coach for USCIS interview preparation. Analyze the following conversation transcript. The user is practicing for their interview. Provide constructive feedback on their grammar, clarity, and word choice. Be encouraging and provide 2-3 specific, actionable suggestions for improvement. Respond in JSON format with two keys: 'summary' (a brief, encouraging paragraph) and 'suggestions' (an array of strings).",
+      messages: [{ role: 'user', content: `Here is the transcript:\n\n${transcript}` }],
+    };
+
+    const command = new InvokeModelCommand({
+      modelId,
+      contentType: 'application/json',
+      body: JSON.stringify(prompt),
+      accept: 'application/json',
+    });
+
+    const apiResponse = await bedrockClient.send(command);
+    const responseBody = JSON.parse(new TextDecoder().decode(apiResponse.body));
+    const feedbackText = responseBody.content[0].text;
+
+    logger.info('Analysis generated successfully', { requestId, userId: req.user.id });
+
+    // Parse the JSON string from the model and send it to the client
+    res.json(JSON.parse(feedbackText));
+
+  } catch (err) {
+    const errorDetails = {
+      requestId,
+      userId: req.user.id,
+      errorMessage: err.message,
+    };
+    logger.error('Error in /api/conversation/analyze', errorDetails);
+    res.status(500).json({ error: 'Failed to analyze conversation.', errorId: requestId });
   }
 });
 

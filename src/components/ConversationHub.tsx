@@ -1,4 +1,4 @@
-import { Download, Trash2 } from 'lucide-react';
+import { Download, Trash2, Sparkles } from 'lucide-react';
 import { AppStatus } from '../context/ConversationContext';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
 import { UserSettings } from '../types/settings';
@@ -15,6 +15,8 @@ interface ConversationHubProps {
   readonly onDownloadTranscript: () => void;
   readonly onOpenAppSettings: () => void;
   readonly onOpenAccountSettings: () => void;
+  readonly onGetFeedback: () => void;
+  readonly isFeedbackDisabled: boolean;
   readonly userSettings: Partial<UserSettings>;
 }
 
@@ -27,6 +29,8 @@ export function ConversationHub({
   onEndSession,
   onClearConversation,
   onDownloadTranscript,
+  onGetFeedback,
+  isFeedbackDisabled,
 }: ConversationHubProps): JSX.Element {
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -58,11 +62,14 @@ export function ConversationHub({
   return (
     <div className="flex flex-col justify-between w-full h-full bg-star-white rounded-lg shadow-md p-6">
         <div className="flex flex-col space-y-2">
-            <button onClick={onClearConversation} className="flex items-center justify-center p-3 rounded-lg bg-immigo-gray-100 hover:bg-immigo-gray-200 text-sm font-medium text-art-red-600">
-                <Trash2 className="w-4 h-4 mr-2" /> Clear Conversation
+            <button onClick={onGetFeedback} disabled={isFeedbackDisabled} className="flex items-center justify-center p-3 rounded-lg bg-art-blue-50 hover:bg-art-blue-100 text-sm font-medium text-art-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                <Sparkles className="w-4 h-4 mr-2" /> Get Feedback
             </button>
             <button onClick={onDownloadTranscript} className="flex items-center justify-center p-3 rounded-lg bg-immigo-gray-100 hover:bg-immigo-gray-200 text-sm font-medium text-immigo-gray-700">
                 <Download className="w-4 h-4 mr-2" /> Download Script
+            </button>
+            <button onClick={onClearConversation} className="flex items-center justify-center p-3 rounded-lg bg-immigo-gray-100 hover:bg-immigo-gray-200 text-sm font-medium text-art-red-600">
+                <Trash2 className="w-4 h-4 mr-2" /> Clear Conversation
             </button>
         </div>
 

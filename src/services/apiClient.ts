@@ -4,6 +4,11 @@ import { UserSettings } from '../types/settings';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_KEY = import.meta.env.VITE_API_KEY;
 
+export interface FeedbackResponse {
+summary: string;
+suggestions: string[];
+}
+
 export class ApiClient {
 private token: string;
 
@@ -43,7 +48,7 @@ constructor(token: string) {
     onTextChunk: (textChunk: string) => void,
     onAudioChunk: (audioChunk: Uint8Array) => void
   ): Promise<void> {
-    const response = await this.fetchWithAuth(`${API_BASE_URL}/conversation`, { // CORRECTED ENDPOINT
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/conversation`, {
       method: 'POST',
       body: JSON.stringify({
         conversationId,
@@ -68,16 +73,22 @@ constructor(token: string) {
           if (parsedChunk.type === 'text') {
             onTextChunk(parsedChunk.data);
           } else if (parsedChunk.type === 'audio') {
-            const audioData = new Uint8Array(parsedChunk.data); // Assuming data is base64 or arraybuffer
+            const audioData = new Uint8Array(parsedChunk.data);
             onAudioChunk(audioData);
           }
         } catch (e) {
-          // This might happen if chunks are not perfectly formed JSON objects;
-          // you might need more robust chunk parsing logic here.
           console.error("Error parsing stream chunk: ", e);
         }
       }
     }
+  }
+
+  async getAnalysis(conversationHistory: readonly Message[]): Promise<FeedbackResponse> {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/conversation/analyze`, {
+      method: 'POST',
+      body: JSON.stringify({ conversationHistory }),
+    });
+    return response.json();
   }
 
   async getSettings(): Promise<Partial<UserSettings>> {
