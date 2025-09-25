@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import ImmigoLogo from '../assets/immigo_logo.svg';
 import { TermsModal } from './TermsModal';
-import { User, Mail, KeyRound, Globe, CheckSquare, Square, AlertCircle } from 'lucide-react';
+import { User, Mail, KeyRound, Globe, AlertCircle } from 'lucide-react';
 import { SUPPORTED_LANGUAGES } from './LanguageSelector';
 import { ImmiGOLabel } from './ImmiGOLabel';
 
