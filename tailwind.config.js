@@ -3,6 +3,11 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  safelist: [
+    'text-sm',
+    'text-base',
+    'text-lg',
+  ],
   theme: {
     extend: {
       colors: {

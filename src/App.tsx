@@ -20,7 +20,7 @@ import { AuthProvider } from './context/AuthContext';
 import { DisplayUser } from './types/user';
 import { ScrollToTop } from './components/ScrollToTop';
 import { FeedbackModal } from './components/FeedbackModal';
-import { analytics } from './analytics'; // Import analytics service
+import { analytics } from './analytics';
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -49,6 +49,31 @@ function AppContent(): JSX.Element {
 
   const { state, dispatch } = useConversation();
   const conversationManager = useConversationManager({ apiClient, userSettings });
+
+  // EFFECT TO APPLY THEME AND FONT SIZE
+  useEffect(() => {
+    // Theme application
+    const root = window.document.documentElement;
+    const isDark =
+      userSettings.theme === 'dark' ||
+      (userSettings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+    root.classList.toggle('dark', isDark);
+
+    // Font size application
+    const body = window.document.body;
+    body.classList.remove('text-sm', 'text-base', 'text-lg'); // Clear old classes
+    switch (userSettings.font_size) {
+      case 'small':
+        body.classList.add('text-sm');
+        break;
+      case 'large':
+        body.classList.add('text-lg');
+        break;
+      default:
+        body.classList.add('text-base');
+    }
+  }, [userSettings.theme, userSettings.font_size]);
 
   useEffect(() => {
     const lang = profile?.language;
@@ -106,7 +131,7 @@ function AppContent(): JSX.Element {
   const handleRequestFeedback = async () => {
     if (!apiClient || conversationManager.conversationHistory.length === 0) return;
 
-    analytics.track('feedback_requested'); // Event tracking
+    analytics.track('feedback_requested');
 
     setIsFetchingFeedback(true);
     setIsFeedbackModalOpen(true);
@@ -116,11 +141,11 @@ function AppContent(): JSX.Element {
     try {
       const data = await apiClient.getAnalysis(conversationManager.conversationHistory);
       setFeedbackData(data);
-      analytics.track('feedback_received_success'); // Event tracking
+      analytics.track('feedback_received_success');
     } catch (error) {
       console.error("Failed to get feedback:", error);
       setFeedbackError(error instanceof Error ? error.message : "An unknown error occurred.");
-      analytics.track('feedback_received_failure'); // Event tracking
+      analytics.track('feedback_received_failure');
     } finally {
       setIsFetchingFeedback(false);
     }
