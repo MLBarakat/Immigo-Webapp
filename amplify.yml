@@ -10,8 +10,9 @@ frontend:
     build:
       commands:
         - yarn tsc --project tsconfig.build.json
-        - (cd server && yarn tsc --project tsconfig.server.json || echo "No backend tsc step") # Specify backend tsconfig if exists
+        - (cd server && yarn tsc --project tsconfig.server.json || echo "No backend tsc step")
         - yarn build
+        - (cd server && pm2 start index.js --name "immigo-backend")
   artifacts:
     baseDirectory: dist
     files:
