@@ -65,81 +65,75 @@ private onended: (() => void) | null = null;
   }
 }
 
-export class SpeechRecognitionManager {
-  private recognition: SpeechRecognition | null = null;
-  private isListening: boolean = false;
-  private onResultCallback: (transcript: string, isFinal: boolean) => void = () => {};
+// Replaces SpeechRecognitionManager
+export class DeepgramManager {
+  private socket: WebSocket | null = null;
+  private mediaRecorder: MediaRecorder | null = null;
+  private onTranscriptCallback: (transcript: string) => void = () => {};
   private onErrorCallback: (error: string) => void = () => {};
-  private onEndCallback: () => void = () => {};
 
-  constructor() {
-    const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognitionImpl) {
-      this.recognition = new SpeechRecognitionImpl();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true;
-
-      this.recognition.onstart = () => {
-        this.isListening = true;
-        console.log('Speech recognition started');
-      };
-
-      this.recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-        if (finalTranscript) {
-          this.onResultCallback(finalTranscript.trim(), true);
-        } else {
-          this.onResultCallback(interimTranscript, false);
-        }
-      };
-
-      this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('Speech recognition error:', event.error);
-        this.onErrorCallback(event.error);
-        this.isListening = false;
-      };
-
-      this.recognition.onend = () => {
-        console.log('Speech recognition ended');
-        this.isListening = false;
-        this.onEndCallback();
-      };
-    } else {
-      console.warn('Speech recognition not supported in this browser.');
-    }
-  }
-
-  startListening(
-    onResult: (transcript: string, isFinal: boolean) => void,
-    onError: (error: string) => void,
-    onEnd: () => void,
-    languageCode: string = 'en-US'
+  public async startListening(
+    onTranscript: (transcript: string) => void,
+    onError: (error: string) => void
   ) {
-    if (this.recognition && !this.isListening) {
-      this.onResultCallback = onResult;
-      this.onErrorCallback = onError;
-      this.onEndCallback = onEnd;
-      this.recognition.lang = languageCode;
-      this.recognition.start();
+    this.onTranscriptCallback = onTranscript;
+    this.onErrorCallback = onError;
+
+    try {
+      // Establish WebSocket connection to the backend server
+      this.socket = new WebSocket('ws://localhost:3001'); // Ensure this URL is correct for your setup
+
+      this.socket.onopen = async () => {
+        console.log('WebSocket connection opened.');
+
+        // Get microphone access
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // Setup MediaRecorder
+        this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+        this.mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0 && this.socket?.readyState === WebSocket.OPEN) {
+            this.socket.send(event.data);
+          }
+        };
+
+        this.mediaRecorder.start(250); // Start recording and send data every 250ms
+        console.log('MediaRecorder started.');
+      };
+
+      this.socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'transcript' && message.data) {
+          this.onTranscriptCallback(message.data);
+        }
+      };
+
+      this.socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        this.onErrorCallback('WebSocket connection error.');
+      };
+
+      this.socket.onclose = () => {
+        console.log('WebSocket connection closed.');
+        this.stopListening();
+      };
+
+    } catch (err) {
+      console.error('Error starting microphone:', err);
+      this.onErrorCallback('Could not access the microphone.');
     }
   }
 
-  stopListening() {
-    if (this.recognition && this.isListening) {
-      this.recognition.stop();
+  public stopListening() {
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      this.mediaRecorder.stop();
+      this.mediaRecorder = null;
+      console.log('MediaRecorder stopped.');
     }
-  }
-
-  isCurrentlyListening() {
-    return this.isListening;
+    if (this.socket) {
+      this.socket.close();
+      this.socket = null;
+    }
   }
 }

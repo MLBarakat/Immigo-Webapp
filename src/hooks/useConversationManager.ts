@@ -3,9 +3,9 @@ import { useConversation } from '../context/ConversationContext';
 import { ApiClient } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
 import { Message } from '../context/ConversationContext';
-import { SpeechRecognitionManager } from '../utils/audioUtils';
+import { DeepgramManager } from '../utils/audioUtils'; // Updated import
 import { UserSettings } from '../types/settings';
-import { analytics } from '../analytics'; // Import analytics service
+import { analytics } from '../analytics';
 
 interface UseConversationManagerProps {
 apiClient: ApiClient | null;
@@ -17,7 +17,8 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
   const currentConversationId = useRef<string>(uuidv4());
   const intervalRef = useRef<number | null>(null);
 
-  const speechManager = useMemo(() => new SpeechRecognitionManager(), []);
+  // Use the new DeepgramManager
+  const deepgramManager = useMemo(() => new DeepgramManager(), []);
 
   const sendTextMessage = useCallback(async (text: string) => {
     if (!apiClient || !text.trim() || state.appStatus === 'processing' || state.appStatus === 'speaking') {
@@ -39,7 +40,7 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
         userSettings.barge_in || 'balanced',
         !!userSettings.live_feedback_enabled,
         (textChunk) => dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: textChunk } }),
-        (audioChunk) => console.log("Received AI audio chunk:", audioChunk) // Placeholder for audio playback
+        (audioChunk) => console.log("Received AI audio chunk:", audioChunk)
       );
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message.';
@@ -49,37 +50,21 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
     }
   }, [apiClient, dispatch, userSettings, state.currentLanguageCode, state.appStatus]);
 
-  useEffect(() => {
-    if (state.isSessionActive && state.appStatus === 'listening') {
-      speechManager.startListening(
-        (transcript, isFinal) => {
-          dispatch({ type: 'SET_TRANSCRIPT', payload: transcript });
-          if (isFinal) {
-            sendTextMessage(transcript);
-          }
-        },
-        (error) => dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: error }),
-        () => {
-          if (state.isSessionActive) {
-            dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
-          }
-        },
-        state.currentLanguageCode
-      );
-    }
-  }, [state.isSessionActive, state.appStatus, speechManager, sendTextMessage, dispatch, state.currentLanguageCode]);
-
-
   const startSession = useCallback(() => {
     dispatch({ type: 'START_SESSION' });
-    analytics.track('session_started'); // Event tracking
-  }, [dispatch]);
+    analytics.track('session_started');
+    // The sendTextMessage function is passed directly as the callback
+    deepgramManager.startListening(
+      sendTextMessage,
+      (error) => dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: error })
+    );
+  }, [dispatch, deepgramManager, sendTextMessage]);
 
   const endSession = useCallback(() => {
-    speechManager.stopListening();
+    deepgramManager.stopListening();
     dispatch({ type: 'END_SESSION' });
-    analytics.track('session_ended', { duration_seconds: state.sessionTime }); // Event tracking
-  }, [dispatch, speechManager, state.sessionTime]);
+    analytics.track('session_ended', { duration_seconds: state.sessionTime });
+  }, [dispatch, deepgramManager, state.sessionTime]);
 
   useEffect(() => {
     if (state.isSessionActive) {
@@ -89,13 +74,13 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      speechManager.stopListening();
+      deepgramManager.stopListening(); // Ensure cleanup on component unmount
     };
-  }, [state.isSessionActive, dispatch, speechManager]);
+  }, [state.isSessionActive, dispatch, deepgramManager]);
 
   const clearConversation = useCallback(() => {
     dispatch({ type: 'CLEAR_CONVERSATION' });
-    analytics.track('conversation_cleared'); // Event tracking
+    analytics.track('conversation_cleared');
   }, [dispatch]);
 
   const downloadTranscript = useCallback(() => {
@@ -107,7 +92,7 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
     a.download = `immigo_transcript_${new Date().toISOString()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
-    analytics.track('transcript_downloaded'); // Event tracking
+    analytics.track('transcript_downloaded');
   }, [state.conversationHistory]);
 
   const isTranscribing = state.appStatus === 'listening' && !!state.transcript;
