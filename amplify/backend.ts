@@ -3,6 +3,7 @@ import { auth } from './auth/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { myApiFunction } from './functions/resource';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import { secret } from '@aws-amplify/backend';
 
 const backend = defineBackend({
 auth,
@@ -22,7 +23,7 @@ api.root.addProxy({
   defaultIntegration: lambdaIntegration,
   anyMethod: true,
   defaultMethodOptions: {
-    authorizationType: apigateway.AuthorizationType.IAM, // Secure the API
+    authorizationType: apigateway.AuthorizationType.IAM,
   },
 });
 
@@ -32,7 +33,7 @@ const bedrockPolicy = new PolicyStatement({
     'bedrock:InvokeModel',
     'bedrock:InvokeModelWithResponseStream',
   ],
-  resources: ['*'], // Best practice: Restrict to specific model ARNs in production
+  resources: ['*'],
 });
 backend.myApiFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 
@@ -42,21 +43,11 @@ const pollyPolicy = new PolicyStatement({
 });
 backend.myApiFunction.resources.lambda.addToRolePolicy(pollyPolicy);
 
-
-// Helper function to safely get environment variables
-const getEnvVar = (name: string): string => {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-};
-
-// Pass environment variables to the Lambda function
-backend.myApiFunction.addEnvironment('SUPABASE_URL', getEnvVar('SUPABASE_URL'));
-backend.myApiFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', getEnvVar('SUPABASE_SERVICE_ROLE_KEY'));
-backend.myApiFunction.addEnvironment('DEEPGRAM_API_KEY', getEnvVar('DEEPGRAM_API_KEY'));
-backend.myApiFunction.addEnvironment('API_KEY', getEnvVar('API_KEY'));
+// Pass the secrets to the Lambda function's environment
+backend.myApiFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
+backend.myApiFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
+backend.myApiFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
+backend.myApiFunction.addEnvironment('API_KEY', secret('API_KEY'));
 
 // Add the API endpoint URL to the output
 backend.addOutput({
