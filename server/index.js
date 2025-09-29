@@ -14,8 +14,8 @@ require('dotenv').config();
 
 // --- Server Setup ---
 const app = express();
-const server = createServer(app); // Create an HTTP server from the Express app
-const wss = new WebSocketServer({ server }); // Attach the WebSocket server to the HTTP server
+const server = createServer(app);
+const wss = new WebSocketServer({ server });
 const port = process.env.PORT || 3001;
 
 // --- Client Initializations ---
@@ -55,7 +55,7 @@ wss.on('connection', (ws) => {
   logger.info('Client connected via WebSocket');
 
   const deepgramConnection = deepgram.listen.live({
-    model: 'nova-2',
+    model: 'nova-3',
     language: 'en-US',
     smart_format: true,
     interim_results: false,
@@ -126,7 +126,6 @@ const streamToBuffer = (stream) =>
     stream.on('end', () => resolve(Buffer.concat(chunks)));
   });
 
-// --- Existing HTTP REST Endpoints ---
 app.use('/api', apiKeyAuth);
 
 app.get('/api/settings', authenticate, async (req, res) => {

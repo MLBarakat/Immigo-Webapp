@@ -13,6 +13,7 @@
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
     "@supabase/supabase-js": "^2.43.4",
+    "aws-amplify": "^6.15.6",
     "lucide-react": "^0.381.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -22,6 +23,8 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@aws-amplify/backend": "^1.16.1",
+    "@aws-amplify/backend-cli": "^1.8.0",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@types/uuid": "^9.0.8",
@@ -29,12 +32,16 @@
     "@typescript-eslint/parser": "^7.2.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
+    "aws-cdk-lib": "^2.204.0",
+    "constructs": "^10.4.2",
+    "esbuild": "^0.25.10",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.6",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
-    "typescript": "^5.2.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2",
     "vite": "^5.2.0"
   }
 }
