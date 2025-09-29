@@ -4,6 +4,7 @@ frontend:
     preBuild:
       commands:
         - rm -rf node_modules
+        - yarn cache clean
         - yarn install
     build:
       commands:
