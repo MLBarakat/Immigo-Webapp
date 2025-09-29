@@ -36,7 +36,7 @@ router.post('/conversation/analyze', authenticate, async (req: Request, res: Res
         const prompt = {
             anthropic_version: 'bedrock-2023-05-31',
             max_tokens: 1024,
-            system: "You are an expert English language coach...",
+            system: "You are an expert English language coach for USCIS interview preparation...",
             messages: [{ role: 'user', content: `Here is the transcript:\n\n${transcript}` }],
         };
 
@@ -134,13 +134,7 @@ router.post('/conversation', authenticate, async (req: Request, res: Response) =
         res.end();
 
     } catch (err: any) {
-        const errorDetails = {
-            requestId,
-            userId: req.user.id,
-            errorMessage: err.message,
-            stack: err.stack,
-            name: err.name,
-        };
+        const errorDetails = { requestId, userId: req.user.id, errorMessage: err.message };
         logger.error('Unhandled error in /api/conversation', errorDetails);
 
         if (!res.headersSent) {
