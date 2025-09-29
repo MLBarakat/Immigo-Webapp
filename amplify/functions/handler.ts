@@ -5,7 +5,7 @@ import helmet from 'helmet';
 
 // Import your new, separated route handlers
 import settingsRouter from './routes/settings';
-import historyRouter from './routes-history';
+import historyRouter from './routes/history';
 import conversationRouter from './routes/conversation';
 
 const app = express();

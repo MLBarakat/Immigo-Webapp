@@ -9,6 +9,6 @@ export const pollyClient = new PollyClient({ region: process.env.AWS_REGION || '
 
 // Logger utility
 export const logger = {
-info: (message, context = {}) => console.log(JSON.stringify({ level: 'INFO', timestamp: new Date().toISOString(), message, ...context })),
-  error: (message, context = {}) => console.error(JSON.stringify({ level: 'ERROR', timestamp: new Date().toISOString(), message, ...context }))
+info: (message: string, context = {}) => console.log(JSON.stringify({ level: 'INFO', timestamp: new Date().toISOString(), message, ...context })),
+  error: (message: string, context = {}) => console.error(JSON.stringify({ level: 'ERROR', timestamp: new Date().toISOString(), message, ...context }))
 };
