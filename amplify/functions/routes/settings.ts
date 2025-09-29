@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { authenticate } from '../authMiddleware';
 import { supabase, logger } from '../clients';
 
 const router = Router();
 
-router.get('/settings', authenticate, async (req, res) => {
+router.get('/settings', authenticate, async (req: Request, res: Response) => {
   const { data, error } = await supabase
     .from('user_settings')
     .select('*')
@@ -18,7 +18,7 @@ router.get('/settings', authenticate, async (req, res) => {
   res.json(data || {});
 });
 
-router.put('/settings', authenticate, async (req, res) => {
+router.put('/settings', authenticate, async (req: Request, res: Response) => {
   const { user_id, ...settingsToUpdate } = req.body;
   const { data, error } = await supabase
     .from('user_settings')

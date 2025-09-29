@@ -44,5 +44,8 @@
     "tsx": "^4.11.0",
     "typescript": "^5.4.5",
     "vite": "^5.2.0"
+  },
+  "optionalDependencies": {
+    "@parcel/watcher": "^2.5.1"
   }
 }

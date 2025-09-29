@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { authenticate } from '../authMiddleware';
 import { supabase, logger } from '../clients';
 
 const router = Router();
 
-router.get('/history', authenticate, async (req, res) => {
+router.get('/history', authenticate, async (req: Request, res: Response) => {
   const { data, error } = await supabase
     .from('messages')
     .select('id, role, content, timestamp:created_at')

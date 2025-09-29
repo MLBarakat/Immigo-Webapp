@@ -18,5 +18,9 @@
     "helmet": "^8.1.0",
     "serverless-http": "^4.0.0",
     "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3"
   }
 }
