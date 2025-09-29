@@ -3,7 +3,7 @@ backend:
   phases:
     build:
       commands:
-        - npx ampx pipeline-deploy
+        - npx ampx pipeline-deploy --app-id d3p6hj0cz65790 --branch dev
 frontend:
   phases:
     preBuild:
