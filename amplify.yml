@@ -5,7 +5,7 @@ frontend:
       commands:
         - rm -rf node_modules
         - yarn cache clean
-        - yarn install --ignore-optional
+        - yarn install --frozen-lockfile
     build:
       commands:
         - yarn build
