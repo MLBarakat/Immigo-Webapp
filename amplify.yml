@@ -3,7 +3,7 @@ backend:
   phases:
     build:
       commands:
-        - npx amplify pipeline-deploy
+        - npx ampx pipeline-deploy
 frontend:
   phases:
     preBuild:
