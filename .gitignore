@@ -143,3 +143,7 @@ vite.config.ts.timestamp-*
 .amplify
 amplify_outputs*
 amplifyconfiguration*
+
+# Lock files
+yarn.lock
+package-lock.json
