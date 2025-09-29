@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@parcel/watcher": "^2.5.1",
-    "@parcel/watcher-win32-x64": "^2.5.1",
     "@prisma/client": "^5.15.0",
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
