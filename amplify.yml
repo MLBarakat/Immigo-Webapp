@@ -3,6 +3,7 @@ backend:
   phases:
     build:
       commands:
+        - cd amplify/functions && npm install && cd ../..
         - npx ampx pipeline-deploy --app-id d3p6hj0cz65790 --branch dev
 frontend:
   phases:
