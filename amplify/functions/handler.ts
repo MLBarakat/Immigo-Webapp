@@ -3,7 +3,7 @@ import serverless from 'serverless-http';
 import cors from 'cors';
 import helmet from 'helmet';
 
-// Import your new, separated route handlers
+// Import your route handlers
 import settingsRouter from './routes/settings';
 import historyRouter from './routes/history';
 import conversationRouter from './routes/conversation';
@@ -20,5 +20,4 @@ app.use('/api', settingsRouter);
 app.use('/api', historyRouter);
 app.use('/api', conversationRouter);
 
-// This is the handler that API Gateway will invoke for all requests
-export const handler = serverless(app);
+export const myApiFunction = serverless(app);
