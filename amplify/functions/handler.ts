@@ -20,4 +20,4 @@ app.use('/api', settingsRouter);
 app.use('/api', historyRouter);
 app.use('/api', conversationRouter);
 
-export const myApiFunction = serverless(app);
+export const handler = serverless(app);
