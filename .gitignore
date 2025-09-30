@@ -147,3 +147,4 @@ amplifyconfiguration*
 # Lock files
 yarn.lock
 package-lock.json
+!amplify/functions/package-lock.json

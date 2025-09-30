@@ -4,7 +4,7 @@ backend:
     build:
       commands:
         - cd amplify/functions && npm install && cd ../..
-        - npx ampx pipeline-deploy --app-id d3p6hj0cz65790 --branch dev --deps-lock-file-path amplify/functions/package-lock.json
+        - npx ampx pipeline-deploy --app-id d3p6hj0cz65790 --branch dev
 frontend:
   phases:
     preBuild:
