@@ -1,5 +1,5 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { myApiFunction } from './functions/resource';
+import { apiFunction } from './functions/resource';
 import { auth } from './auth/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -7,7 +7,7 @@ import { secret } from '@aws-amplify/backend';
 
 const backend = defineBackend({
 auth,
-myApiFunction,
+apiFunction,
 });
 
 // API Gateway integration
@@ -16,7 +16,7 @@ restApiName: 'myRestApi',
 });
 
 const lambdaIntegration = new apigateway.LambdaIntegration(
-backend.myApiFunction.resources.lambda
+backend.apiFunction.resources.lambda
 );
 
 api.root.addProxy({
@@ -28,14 +28,14 @@ api.root.addProxy({
 });
 
 // Policies
-backend.myApiFunction.resources.lambda.addToRolePolicy(
+backend.apiFunction.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
     resources: ['*'],
   })
 );
 
-backend.myApiFunction.resources.lambda.addToRolePolicy(
+backend.apiFunction.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['polly:SynthesizeSpeech'],
     resources: ['*'],
@@ -43,10 +43,10 @@ backend.myApiFunction.resources.lambda.addToRolePolicy(
 );
 
 // Environment variables
-backend.myApiFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
-backend.myApiFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
-backend.myApiFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
-backend.myApiFunction.addEnvironment('API_KEY', secret('API_KEY'));
+backend.apiFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
+backend.apiFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
+backend.apiFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
+backend.apiFunction.addEnvironment('API_KEY', secret('API_KEY'));
 
 // Output
 backend.addOutput({
