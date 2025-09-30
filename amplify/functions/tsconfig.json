@@ -8,11 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "dist",
-    "typeRoots": [
-      "./amplify/functions/node_modules/@types",
-      "./amplify/functions/node_modules"
-    ]
+    "outDir": "dist"
   },
   "include": [
     "**/*.ts"
