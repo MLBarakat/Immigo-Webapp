@@ -1,5 +1,5 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { apiFunction } from './functions/resource';
+import { apiFunction } from './api/resource';
 import { auth } from './auth/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
