@@ -1,8 +1,8 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { auth } from './auth/resource';
 import { myApiFunction } from './functions/resource';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import { auth } from './auth/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { secret } from '@aws-amplify/backend';
 
 const backend = defineBackend({
@@ -27,7 +27,7 @@ api.root.addProxy({
   },
 });
 
-// Permissions
+// Policies
 backend.myApiFunction.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
@@ -42,15 +42,13 @@ backend.myApiFunction.resources.lambda.addToRolePolicy(
   })
 );
 
-// Secrets
+// Environment variables
 backend.myApiFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.myApiFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.myApiFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
 backend.myApiFunction.addEnvironment('API_KEY', secret('API_KEY'));
 
-// Output API URL
+// Output
 backend.addOutput({
-  custom: {
-    API_URL: api.url,
-  },
+  custom: { API_URL: api.url },
 });
