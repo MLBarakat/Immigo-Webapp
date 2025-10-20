@@ -3,6 +3,7 @@ backend:
   phases:
     build:
       commands:
+        - npm ci --prefix amplify/functions
         - npx ampx pipeline-deploy --app-id d3p6hj0cz65790 --branch dev
 frontend:
   phases:
