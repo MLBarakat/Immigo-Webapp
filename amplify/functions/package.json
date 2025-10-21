@@ -23,11 +23,15 @@
     "cors": "^2.8.5",
     "aws-cdk-lib": "^2.147.1",
     "constructs": "^10.3.0",
-  "esbuild": "0.25.11",
+    "esbuild": "0.21.5",
     "express": "^4.19.2",
     "helmet": "^7.1.0",
     "serverless-http": "^3.2.0",
     "uuid": "^9.0.1",
     "typescript": "^5.4.5"
+  },
+  "devDependencies": {
+    "@aws-sdk/types": "^3.734.0",
+    "@aws-cdk/cli-plugin-contract": "^2.0.0"
   }
 }
