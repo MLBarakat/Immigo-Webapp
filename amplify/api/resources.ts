@@ -39,43 +39,37 @@ import { defineFunction } from '@aws-amplify/backend';
 
 // Conversation Function - Handles real-time voice/text processing with reserved concurrency
 export const conversationFunction = defineFunction({
-  name: 'immigo-conversation',
+  name: 'conversation-function',
   entry: '../functions/conversation.ts',
-  memoryMB: 1024, // Optimized for streaming conversations and audio processing
-  timeoutSeconds: 30,
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'conversation',
     LOG_LEVEL: 'info',
-    DESCRIPTION: 'Handles real-time conversation streaming, voice processing, and AI responses using Bedrock and Polly',
+    DESCRIPTION: 'Handles real-time conversation streaming, voice processing, and AI responses using Bedrock and Polly'
   }
 });
 
 // Analysis Function - Handles conversation analysis and feedback
 export const analyzeFunction = defineFunction({
-  name: 'immigo-analyze',
+  name: 'analyze-function',
   entry: '../functions/analyze.ts',
-  memoryMB: 512, // Optimized for text analysis without audio processing
-  timeoutSeconds: 30,
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'analyze',
     LOG_LEVEL: 'info',
-    DESCRIPTION: 'Analyzes conversation transcripts for English proficiency and USCIS interview preparation feedback',
+    DESCRIPTION: 'Analyzes conversation transcripts for English proficiency and USCIS interview preparation feedback'
   }
 });
 
 // Utility Function - Handles settings and history management
 export const utilityFunction = defineFunction({
-  name: 'immigo-utility',
+  name: 'utility-function',
   entry: '../functions/utility.ts',
-  memoryMB: 256, // Minimal memory for CRUD operations
-  timeoutSeconds: 10, // Reduced timeout for quick operations
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'utility',
     LOG_LEVEL: 'info',
-    DESCRIPTION: 'Manages user settings, conversation history, and application preferences with optimized caching',
+    DESCRIPTION: 'Manages user settings, conversation history, and application preferences with optimized caching'
   }
 });
 

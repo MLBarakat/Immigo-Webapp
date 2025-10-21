@@ -5,6 +5,7 @@ import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { CfnFunction } from 'aws-cdk-lib/aws-lambda';
@@ -19,11 +20,38 @@ import { secret } from '@aws-amplify/backend';
  * - Sets up IAM permissions
  * - Configures CORS, security, and caching
  */
+// Create log groups for each function
+const createLogGroup = (name: string): logs.LogGroup => new logs.LogGroup(backend.stack, `${name}LogGroup`, {
+  retention: logs.RetentionDays.TWO_WEEKS,
+  removalPolicy: RemovalPolicy.DESTROY
+});
+
 const backend = defineBackend({
   auth,
-  conversationFunction,
-  analyzeFunction,
-  utilityFunction,
+  conversationFunction: {
+    ...conversationFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'index.handler',
+    logGroup: createLogGroup('ConversationFunctionLog'),
+    memorySize: 1024,
+    timeout: Duration.seconds(30)
+  },
+  analyzeFunction: {
+    ...analyzeFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'index.handler',
+    logGroup: createLogGroup('AnalyzeFunctionLog'),
+    memorySize: 512,
+    timeout: Duration.seconds(30)
+  },
+  utilityFunction: {
+    ...utilityFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'index.handler',
+    logGroup: createLogGroup('UtilityFunctionLog'),
+    memorySize: 256,
+    timeout: Duration.seconds(10)
+  }
 });
 
 // API Gateway integration with optimizations
