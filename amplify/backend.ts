@@ -1,5 +1,5 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { apiFunction } from './api/resource';
+import { conversationFunction, analyzeFunction, utilityFunction } from './api/functions';
 import { auth } from './auth/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -8,20 +8,22 @@ import { secret } from '@aws-amplify/backend';
 
 /**
  * ImmiGO Voice Assistant Backend Infrastructure
- * - Handles API Gateway integration
- * - Manages Lambda function configuration
+ * - Handles API Gateway integration with optimized configurations
+ * - Manages multiple Lambda functions with specific memory allocations
  * - Sets up IAM permissions
- * - Configures CORS and security
+ * - Configures CORS, security, and caching
  */
 const backend = defineBackend({
   auth,
-  apiFunction,
+  conversationFunction,
+  analyzeFunction,
+  utilityFunction,
 });
 
-// API Gateway integration
+// API Gateway integration with optimizations
 const api = new apigateway.RestApi(backend.stack, 'RestApi', {
   restApiName: 'immigo-api',
-  description: 'API for ImmiGO - handles conversations, settings, and audio streaming',
+  description: 'ImmiGO API Gateway - Optimized for performance and cost',
   defaultCorsPreflightOptions: {
     allowOrigins: apigateway.Cors.ALL_ORIGINS,
     allowMethods: apigateway.Cors.ALL_METHODS,
@@ -34,74 +36,116 @@ const api = new apigateway.RestApi(backend.stack, 'RestApi', {
     ],
     maxAge: Duration.days(1),
   },
-});
-
-const lambdaIntegration = new apigateway.LambdaIntegration(
-  backend.apiFunction.resources.lambda,
-  {
-    proxy: true,
-    allowTestInvoke: true,
-    timeout: Duration.seconds(29), // Lambda max is 30s
-    integrationResponses: [
-      {
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Origin': "'*'",
-        },
-      },
-      {
-        selectionPattern: '.*ERROR.*',
-        statusCode: '500',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Origin': "'*'",
-        },
-      },
-    ],
-  }
-);
-
-api.root.addProxy({
-  defaultIntegration: lambdaIntegration,
-  anyMethod: true,
-  defaultMethodOptions: {
-    authorizationType: apigateway.AuthorizationType.IAM,
-    methodResponses: [
-      {
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Origin': true,
-        },
-      },
-      {
-        statusCode: '500',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Origin': true,
-        },
-      },
-    ],
+  // Configure throttling and caching
+  deployOptions: {
+    throttlingRateLimit: 10000,
+    throttlingBurstLimit: 5000,
+    metricsEnabled: true,
+    loggingLevel: apigateway.MethodLoggingLevel.INFO,
   },
 });
 
-// Policies
-backend.apiFunction.resources.lambda.addToRolePolicy(
-  new PolicyStatement({
-    actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
-    resources: ['*'],
-  })
+// Conversation endpoints (high memory)
+const conversationIntegration = new apigateway.LambdaIntegration(
+  backend.conversationFunction.resources.lambda,
+  {
+    proxy: true,
+    allowTestInvoke: true,
+    integrationResponses: [{
+      statusCode: '200',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': "'*'",
+      },
+    }],
+  }
 );
 
-backend.apiFunction.resources.lambda.addToRolePolicy(
-  new PolicyStatement({
-    actions: ['polly:SynthesizeSpeech'],
-    resources: ['*'],
-  })
+// Analysis endpoints (medium memory)
+const analyzeIntegration = new apigateway.LambdaIntegration(
+  backend.analyzeFunction.resources.lambda,
+  {
+    proxy: true,
+    allowTestInvoke: true,
+    integrationResponses: [{
+      statusCode: '200',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': "'*'",
+      },
+    }],
+  }
 );
 
-// Environment variables
-backend.apiFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
-backend.apiFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
-backend.apiFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
-backend.apiFunction.addEnvironment('API_KEY', secret('API_KEY'));
+// Utility endpoints (low memory)
+const utilityIntegration = new apigateway.LambdaIntegration(
+  backend.utilityFunction.resources.lambda,
+  {
+    proxy: true,
+    allowTestInvoke: true,
+    integrationResponses: [{
+      statusCode: '200',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': "'*'",
+      },
+    }],
+  }
+);
+
+// Route configurations
+const conversation = api.root.addResource('conversation');
+conversation.addMethod('POST', conversationIntegration, {
+  authorizationType: apigateway.AuthorizationType.IAM,
+  methodResponses: [{ statusCode: '200' }],
+});
+
+const analyze = api.root.addResource('analyze');
+analyze.addMethod('POST', analyzeIntegration, {
+  authorizationType: apigateway.AuthorizationType.IAM,
+  methodResponses: [{ statusCode: '200' }],
+});
+
+const utility = api.root.addResource('utility');
+utility.addMethod('ANY', utilityIntegration, {
+  authorizationType: apigateway.AuthorizationType.IAM,
+  methodResponses: [{ statusCode: '200' }],
+  requestParameters: {
+    'method.request.querystring.userId': true,
+  },
+});
+
+// Add IAM policies to Lambda functions
+const bedrockPolicy = new PolicyStatement({
+  actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
+  resources: ['*'],
+});
+
+const pollyPolicy = new PolicyStatement({
+  actions: ['polly:SynthesizeSpeech'],
+  resources: ['*'],
+});
+
+// Add policies to conversation and analyze functions
+backend.conversationFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
+backend.conversationFunction.resources.lambda.addToRolePolicy(pollyPolicy);
+backend.analyzeFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
+
+// Add environment variables to conversation function
+backend.conversationFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
+backend.conversationFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
+backend.conversationFunction.addEnvironment('API_KEY', secret('API_KEY'));
+backend.conversationFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
+backend.conversationFunction.addEnvironment('FUNCTION_TYPE', 'conversation');
+
+// Add environment variables to analyze function
+backend.analyzeFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
+backend.analyzeFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
+backend.analyzeFunction.addEnvironment('API_KEY', secret('API_KEY'));
+backend.analyzeFunction.addEnvironment('FUNCTION_TYPE', 'analyze');
+
+// Add environment variables to utility function
+backend.utilityFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
+backend.utilityFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
+backend.utilityFunction.addEnvironment('API_KEY', secret('API_KEY'));
+backend.utilityFunction.addEnvironment('FUNCTION_TYPE', 'utility');
 
 // Output
 backend.addOutput({

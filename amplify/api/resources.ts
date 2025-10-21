@@ -46,6 +46,6 @@ export const apiFunction = defineFunction({
     FUNCTION_NAME: 'immigo-function',
     FUNCTION_VERSION: '1.0.0',
     LOG_LEVEL: 'info',
-    DESCRIPTION: 'ImmiGO Voice Assistant API - Real-time conversation processing with AI capabilities'
+    DESCRIPTION: 'ImmiGO Lambda Function - Real-time conversation processing with AI capabilities'
   }
 });
