@@ -59,7 +59,7 @@ import { defineFunction } from '@aws-amplify/backend';
 // Conversation Function - Handles real-time voice/text processing with reserved concurrency
 export const conversationFunction = defineFunction({
   name: 'conversation-function',
-  entry: 'functions/conversation.ts',
+  entry: '../functions/conversation.ts',
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'conversation',
@@ -72,7 +72,7 @@ export const conversationFunction = defineFunction({
 // Analysis Function - Handles conversation analysis and feedback
 export const analyzeFunction = defineFunction({
   name: 'analyze-function',
-  entry: 'functions/analyze.ts',
+  entry: '../functions/analyze.ts',
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'analyze',
@@ -85,7 +85,7 @@ export const analyzeFunction = defineFunction({
 // Utility Function - Handles settings and history management
 export const utilityFunction = defineFunction({
   name: 'utility-function',
-  entry: 'functions/utility.ts',
+  entry: '../functions/utility.ts',
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'utility',
