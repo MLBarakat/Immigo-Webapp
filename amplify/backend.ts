@@ -6,6 +6,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { CfnFunction } from 'aws-cdk-lib/aws-lambda';
 import { Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
@@ -90,16 +91,31 @@ const setupAutoScaling = (fn: lambda.IFunction, name: string, config: {
   maxCapacity: number,
   targetUtilization: number
 }) => {
-  // Create scaling target using function ARN
-  const functionArn = fn.functionArn;
-  const functionName = functionArn.split(':').pop() || '';
-  
+  // Create function version for auto-scaling
+  const version = new lambda.Version(backend.stack, `${name}Version`, {
+    lambda: fn,
+    removalPolicy: RemovalPolicy.RETAIN
+  });
+
+  // Create alias with provisioned concurrency
+  const alias = new lambda.Alias(backend.stack, `${name}LiveAlias`, {
+    aliasName: 'live',
+    version
+  });
+
+  // Create scaling target for the alias
   const target = new applicationautoscaling.ScalableTarget(backend.stack, `${name}ScalingTarget`, {
     serviceNamespace: applicationautoscaling.ServiceNamespace.LAMBDA,
     maxCapacity: config.maxCapacity,
     minCapacity: config.minCapacity,
-    resourceId: `function:${functionName}`,
-    scalableDimension: 'lambda:function:ProvisionedConcurrency'
+    resourceId: `function:${fn.functionName}:${alias.aliasName}`,
+    scalableDimension: 'lambda:function:ProvisionedConcurrency',
+    role: new iam.Role(backend.stack, `${name}ScalingRole`, {
+      assumedBy: new iam.ServicePrincipal('application-autoscaling.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSApplicationAutoscalingLambdaConcurrency')
+      ]
+    })
   });
 
   // Create scaling policy
@@ -110,6 +126,15 @@ const setupAutoScaling = (fn: lambda.IFunction, name: string, config: {
     scaleInCooldown: Duration.seconds(60),
     scaleOutCooldown: Duration.seconds(30)
   });
+
+  // Configure provisioned concurrency and auto-scaling on the alias
+  const pc = alias.addAutoScaling({ 
+    minCapacity: config.minCapacity,
+    maxCapacity: config.maxCapacity
+  });
+  
+  // Add utilization-based scaling
+  pc.node.addDependency(target);  // Ensure scaling target is created first
 };
 
 // Set up monitoring and auto-scaling for each function
