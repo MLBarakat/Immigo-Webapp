@@ -6,9 +6,16 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { Duration } from 'aws-cdk-lib';
 import { secret } from '@aws-amplify/backend';
 
+/**
+ * ImmiGO Voice Assistant Backend Infrastructure
+ * - Handles API Gateway integration
+ * - Manages Lambda function configuration
+ * - Sets up IAM permissions
+ * - Configures CORS and security
+ */
 const backend = defineBackend({
-auth,
-apiFunction,
+  auth,
+  apiFunction,
 });
 
 // API Gateway integration
