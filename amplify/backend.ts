@@ -20,39 +20,49 @@ import { secret } from '@aws-amplify/backend';
  * - Sets up IAM permissions
  * - Configures CORS, security, and caching
  */
-// Create log groups for each function
-const createLogGroup = (name: string): logs.LogGroup => new logs.LogGroup(backend.stack, `${name}LogGroup`, {
-  retention: logs.RetentionDays.TWO_WEEKS,
-  removalPolicy: RemovalPolicy.DESTROY
-});
-
 const backend = defineBackend({
   auth,
   conversationFunction: {
     ...conversationFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'index.handler',
-    logGroup: createLogGroup('ConversationFunctionLog'),
+    handler: 'handler.handler',
     memorySize: 1024,
     timeout: Duration.seconds(30)
   },
   analyzeFunction: {
     ...analyzeFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'index.handler',
-    logGroup: createLogGroup('AnalyzeFunctionLog'),
+    handler: 'handler.handler',
     memorySize: 512,
     timeout: Duration.seconds(30)
   },
   utilityFunction: {
     ...utilityFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'index.handler',
-    logGroup: createLogGroup('UtilityFunctionLog'),
+    handler: 'handler.handler',
     memorySize: 256,
     timeout: Duration.seconds(10)
   }
 });
+
+// Create log groups for each function
+const logGroups = {
+  conversation: new logs.LogGroup(backend.stack, 'ConversationFunctionLog', {
+    retention: logs.RetentionDays.TWO_WEEKS,
+    removalPolicy: RemovalPolicy.DESTROY,
+    logGroupName: `/aws/lambda/${backend.conversationFunction.resources.lambda.functionName}`
+  }),
+  analyze: new logs.LogGroup(backend.stack, 'AnalyzeFunctionLog', {
+    retention: logs.RetentionDays.TWO_WEEKS,
+    removalPolicy: RemovalPolicy.DESTROY,
+    logGroupName: `/aws/lambda/${backend.analyzeFunction.resources.lambda.functionName}`
+  }),
+  utility: new logs.LogGroup(backend.stack, 'UtilityFunctionLog', {
+    retention: logs.RetentionDays.TWO_WEEKS,
+    removalPolicy: RemovalPolicy.DESTROY,
+    logGroupName: `/aws/lambda/${backend.utilityFunction.resources.lambda.functionName}`
+  })
+};
 
 // API Gateway integration with optimizations
 const api = new apigateway.RestApi(backend.stack, 'RestApi', {

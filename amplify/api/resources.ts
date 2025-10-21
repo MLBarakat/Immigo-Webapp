@@ -6,21 +6,40 @@ import { defineFunction } from '@aws-amplify/backend';
  * This module defines the Lambda functions that serve as the backend for the ImmiGO voice assistant application.
  * The functionality is split into three specialized functions for optimal performance and resource usage.
  * 
- * Scaling Configuration:
- * - Conversation Function: High-performance with reserved concurrency
- *   - Memory: 1024MB for real-time processing
- *   - Concurrency: Up to 100 concurrent executions
- *   - Reserved: 10 instances for consistent low latency
+ * Function Configuration:
  * 
- * - Analysis Function: Burst-oriented scaling
- *   - Memory: 512MB for text processing
- *   - Concurrency: Unreserved, scales based on demand
- *   - Auto-scaling: Based on CPU utilization
+ * 1. Conversation Function (immigo-conversation):
+ *    - Purpose: Real-time voice/text processing and AI responses
+ *    - Configuration:
+ *      - Memory: 1024 MB
+ *      - Timeout: 30 seconds
+ *      - Scaling: 10-100 instances
+ *      - Target Utilization: 75%
+ *      - CloudWatch Alarms:
+ *        - Concurrent Executions: > 80
+ *        - Error Rate: > 5
  * 
- * - Utility Function: Cost-optimized
- *   - Memory: 256MB for basic operations
- *   - Concurrency: Shared pool with other functions
- *   - Cache: Enabled for frequently accessed data
+ * 2. Analysis Function (immigo-analyze):
+ *    - Purpose: Conversation analysis and feedback
+ *    - Configuration:
+ *      - Memory: 512 MB
+ *      - Timeout: 30 seconds
+ *      - Scaling: 5-50 instances
+ *      - Target Utilization: 70%
+ *      - CloudWatch Alarms:
+ *        - Concurrent Executions: > 50
+ *        - Error Rate: > 10
+ * 
+ * 3. Utility Function (immigo-utility):
+ *    - Purpose: Settings and history management
+ *    - Configuration:
+ *      - Memory: 256 MB
+ *      - Timeout: 10 seconds
+ *      - Scaling: 3-30 instances
+ *      - Target Utilization: 65%
+ *      - CloudWatch Alarms:
+ *        - Concurrent Executions: > 30
+ *        - Error Rate: > 5
  * 
  * Common Features Across Functions:
  * - Supabase integration for data persistence
@@ -40,36 +59,39 @@ import { defineFunction } from '@aws-amplify/backend';
 // Conversation Function - Handles real-time voice/text processing with reserved concurrency
 export const conversationFunction = defineFunction({
   name: 'conversation-function',
-  entry: '../functions/conversation.ts',
+  entry: 'functions/conversation.ts',
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'conversation',
     LOG_LEVEL: 'info',
-    DESCRIPTION: 'Handles real-time conversation streaming, voice processing, and AI responses using Bedrock and Polly'
+    DESCRIPTION: 'Handles real-time conversation streaming, voice processing, and AI responses using Bedrock and Polly',
+    VERSION: '1.0.0'
   }
 });
 
 // Analysis Function - Handles conversation analysis and feedback
 export const analyzeFunction = defineFunction({
   name: 'analyze-function',
-  entry: '../functions/analyze.ts',
+  entry: 'functions/analyze.ts',
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'analyze',
     LOG_LEVEL: 'info',
-    DESCRIPTION: 'Analyzes conversation transcripts for English proficiency and USCIS interview preparation feedback'
+    DESCRIPTION: 'Analyzes conversation transcripts for English proficiency and USCIS interview preparation feedback',
+    VERSION: '1.0.0'
   }
 });
 
 // Utility Function - Handles settings and history management
 export const utilityFunction = defineFunction({
   name: 'utility-function',
-  entry: '../functions/utility.ts',
+  entry: 'functions/utility.ts',
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'utility',
     LOG_LEVEL: 'info',
-    DESCRIPTION: 'Manages user settings, conversation history, and application preferences with optimized caching'
+    DESCRIPTION: 'Manages user settings, conversation history, and application preferences with optimized caching',
+    VERSION: '1.0.0'
   }
 });
 

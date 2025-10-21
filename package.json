@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "preinstall": "cd amplify/functions && rm -rf node_modules package-lock.json && npm install || true",
+    "preinstall": "cd amplify/functions && rm -rf node_modules package-lock.json",
     "dev": "vite",
     "build": "tsc -p tsconfig.build.json && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "postinstall": "cd amplify/functions && npm install"
+    "postinstall": "cd amplify/functions && npm install",
+    "deploy": "npm run build && amplify push",
+    "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {
     "@supabase/auth-ui-react": "^0.4.7",
