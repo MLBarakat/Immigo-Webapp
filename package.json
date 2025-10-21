@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "preinstall": "cd amplify/functions && npm ci || true",
+    "preinstall": "cd amplify/functions && rm -rf node_modules package-lock.json && npm install || true",
     "dev": "vite",
     "build": "tsc -p tsconfig.build.json && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "postinstall": "cd amplify/functions && npm ci"
+    "postinstall": "cd amplify/functions && npm install"
   },
   "dependencies": {
     "@supabase/auth-ui-react": "^0.4.7",
@@ -43,7 +43,6 @@
     "eslint-plugin-react-refresh": "^0.4.6",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
-    "tsx": "^4.11.0",
     "typescript": "^5.4.5",
     "vite": "^5.2.0"
   },
