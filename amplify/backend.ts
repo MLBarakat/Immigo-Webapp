@@ -6,6 +6,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
+import { CfnFunction } from 'aws-cdk-lib/aws-lambda';
 import { Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { secret } from '@aws-amplify/backend';
@@ -83,24 +84,59 @@ const monitorFunction = (lambda: any, name: string, thresholds: { concurrent: nu
   });
 };
 
-// Set up monitoring for each function with appropriate thresholds
-monitorFunction(
-  backend.conversationFunction.resources.lambda,
-  'Conversation',
-  { concurrent: 80, error: 5 }  // High concurrency, low error tolerance
-);
+// Configure auto-scaling for Lambda functions
+const setupAutoScaling = (fn: lambda.IFunction, name: string, config: {
+  minCapacity: number,
+  maxCapacity: number,
+  targetUtilization: number
+}) => {
+  // Create scaling target using function ARN
+  const functionArn = fn.functionArn;
+  const functionName = functionArn.split(':').pop() || '';
+  
+  const target = new applicationautoscaling.ScalableTarget(backend.stack, `${name}ScalingTarget`, {
+    serviceNamespace: applicationautoscaling.ServiceNamespace.LAMBDA,
+    maxCapacity: config.maxCapacity,
+    minCapacity: config.minCapacity,
+    resourceId: `function:${functionName}`,
+    scalableDimension: 'lambda:function:ProvisionedConcurrency'
+  });
 
-monitorFunction(
-  backend.analyzeFunction.resources.lambda,
-  'Analysis',
-  { concurrent: 50, error: 10 } // Medium concurrency, medium error tolerance
-);
+  // Create scaling policy
+  new applicationautoscaling.TargetTrackingScalingPolicy(backend.stack, `${name}ScalingPolicy`, {
+    targetValue: config.targetUtilization,
+    predefinedMetric: applicationautoscaling.PredefinedMetric.LAMBDA_PROVISIONED_CONCURRENCY_UTILIZATION,
+    scalingTarget: target,
+    scaleInCooldown: Duration.seconds(60),
+    scaleOutCooldown: Duration.seconds(30)
+  });
+};
 
-monitorFunction(
-  backend.utilityFunction.resources.lambda,
-  'Utility',
-  { concurrent: 30, error: 5 }  // Lower concurrency, low error tolerance
-);
+// Set up monitoring and auto-scaling for each function
+const conversationLambda = backend.conversationFunction.resources.lambda;
+monitorFunction(conversationLambda, 'Conversation', { concurrent: 80, error: 5 });
+setupAutoScaling(conversationLambda, 'Conversation', {
+  minCapacity: 10,
+  maxCapacity: 100,
+  targetUtilization: 0.75
+});
+
+const analyzeLambda = backend.analyzeFunction.resources.lambda;
+monitorFunction(analyzeLambda, 'Analysis', { concurrent: 50, error: 10 });
+setupAutoScaling(analyzeLambda, 'Analysis', {
+  minCapacity: 5,
+  maxCapacity: 50,
+  targetUtilization: 0.70
+});
+
+// Set up monitoring and scaling for utility function
+const utilityLambda = backend.utilityFunction.resources.lambda;
+monitorFunction(utilityLambda, 'Utility', { concurrent: 30, error: 5 });
+setupAutoScaling(utilityLambda, 'Utility', {
+  minCapacity: 3,
+  maxCapacity: 30,
+  targetUtilization: 0.65
+});
 
 // Add outputs for monitoring
 new CfnOutput(backend.stack, 'ConversationFunctionName', {
@@ -118,18 +154,29 @@ new CfnOutput(backend.stack, 'UtilityFunctionName', {
   description: 'Name of the utility Lambda function'
 });
 
+// Common integration response parameters for CORS
+const corsIntegrationResponse = {
+  'method.response.header.Access-Control-Allow-Origin': "'*'",
+  'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST,GET,PUT,DELETE'",
+  'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+};
+
 // Conversation endpoints (high memory)
 const conversationIntegration = new apigateway.LambdaIntegration(
   backend.conversationFunction.resources.lambda,
   {
-    proxy: true,
+    proxy: false,
     allowTestInvoke: true,
+    requestTemplates: {
+      'application/json': '{ "statusCode": 200 }'
+    },
     integrationResponses: [{
       statusCode: '200',
-      responseParameters: {
-        'method.response.header.Access-Control-Allow-Origin': "'*'",
-      },
-    }],
+      responseParameters: corsIntegrationResponse,
+      responseTemplates: {
+        'application/json': '$input.json("$")'
+      }
+    }]
   }
 );
 
@@ -137,14 +184,18 @@ const conversationIntegration = new apigateway.LambdaIntegration(
 const analyzeIntegration = new apigateway.LambdaIntegration(
   backend.analyzeFunction.resources.lambda,
   {
-    proxy: true,
+    proxy: false,
     allowTestInvoke: true,
+    requestTemplates: {
+      'application/json': '{ "statusCode": 200 }'
+    },
     integrationResponses: [{
       statusCode: '200',
-      responseParameters: {
-        'method.response.header.Access-Control-Allow-Origin': "'*'",
-      },
-    }],
+      responseParameters: corsIntegrationResponse,
+      responseTemplates: {
+        'application/json': '$input.json("$")'
+      }
+    }]
   }
 );
 
@@ -152,37 +203,57 @@ const analyzeIntegration = new apigateway.LambdaIntegration(
 const utilityIntegration = new apigateway.LambdaIntegration(
   backend.utilityFunction.resources.lambda,
   {
-    proxy: true,
+    proxy: false,
     allowTestInvoke: true,
+    requestTemplates: {
+      'application/json': '{ "statusCode": 200 }'
+    },
     integrationResponses: [{
       statusCode: '200',
-      responseParameters: {
-        'method.response.header.Access-Control-Allow-Origin': "'*'",
-      },
-    }],
+      responseParameters: corsIntegrationResponse,
+      responseTemplates: {
+        'application/json': '$input.json("$")'
+      }
+    }]
   }
 );
+
+// Common method response parameters for CORS
+const corsMethodResponse = {
+  'method.response.header.Access-Control-Allow-Origin': true,
+  'method.response.header.Access-Control-Allow-Methods': true,
+  'method.response.header.Access-Control-Allow-Headers': true
+};
 
 // Route configurations
 const conversation = api.root.addResource('conversation');
 conversation.addMethod('POST', conversationIntegration, {
   authorizationType: apigateway.AuthorizationType.IAM,
-  methodResponses: [{ statusCode: '200' }],
+  methodResponses: [{
+    statusCode: '200',
+    responseParameters: corsMethodResponse
+  }]
 });
 
 const analyze = api.root.addResource('analyze');
 analyze.addMethod('POST', analyzeIntegration, {
   authorizationType: apigateway.AuthorizationType.IAM,
-  methodResponses: [{ statusCode: '200' }],
+  methodResponses: [{
+    statusCode: '200',
+    responseParameters: corsMethodResponse
+  }]
 });
 
 const utility = api.root.addResource('utility');
 utility.addMethod('ANY', utilityIntegration, {
   authorizationType: apigateway.AuthorizationType.IAM,
-  methodResponses: [{ statusCode: '200' }],
+  methodResponses: [{
+    statusCode: '200',
+    responseParameters: corsMethodResponse
+  }],
   requestParameters: {
     'method.request.querystring.userId': true,
-  },
+  }
 });
 
 // Add IAM policies to Lambda functions
