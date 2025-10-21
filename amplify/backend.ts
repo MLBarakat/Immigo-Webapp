@@ -150,16 +150,37 @@ const setupAutoScaling = (fn: lambda.IFunction, name: string, config: {
     scalableDimension: 'lambda:function:ProvisionedConcurrency',
     role: new iam.Role(backend.stack, `${name}ScalingRole`, {
       assumedBy: new iam.ServicePrincipal('application-autoscaling.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSApplicationAutoscalingLambdaConcurrency')
-      ]
+      inlinePolicies: {
+        LambdaAutoScalingPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'lambda:PutProvisionedConcurrencyConfig',
+                'lambda:GetProvisionedConcurrencyConfig',
+                'lambda:DeleteProvisionedConcurrencyConfig'
+              ],
+              resources: [`${fn.functionArn}:*`]
+            })
+          ]
+        })
+      }
     })
   });
 
-  // Create scaling policy
+  // Create scaling policy with custom metric
   new applicationautoscaling.TargetTrackingScalingPolicy(backend.stack, `${name}ScalingPolicy`, {
     targetValue: config.targetUtilization,
-    predefinedMetric: applicationautoscaling.PredefinedMetric.LAMBDA_PROVISIONED_CONCURRENCY_UTILIZATION,
+    customMetric: new cloudwatch.Metric({
+      namespace: 'AWS/Lambda',
+      metricName: 'ConcurrentExecutions',
+      dimensionsMap: {
+        FunctionName: fn.functionName,
+        Resource: `${fn.functionName}:${alias.aliasName}`
+      },
+      statistic: 'Average',
+      period: Duration.minutes(1)
+    }),
     scalingTarget: target,
     scaleInCooldown: Duration.seconds(60),
     scaleOutCooldown: Duration.seconds(30)
