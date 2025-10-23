@@ -3,7 +3,7 @@ backend:
   phases:
     build:
       commands:
-        - yarn install --frozen-lockfile
+        - yarn install --frozen-lockfile --ignore-scripts
         - npm ci --prefix amplify/functions --ignore-scripts
         - npx ampx pipeline-deploy --app-id d3878p0w684f30 --branch dev
 frontend:
