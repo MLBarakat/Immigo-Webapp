@@ -4,7 +4,7 @@ backend:
     build:
       commands:
         - npm ci --prefix amplify/functions --ignore-scripts
-        - npx ampx pipeline-deploy --app-id d3p6hj0cz65790 --branch dev
+        - npx ampx pipeline-deploy --app-id d3878p0w684f30 --branch dev
 frontend:
   phases:
     preBuild:

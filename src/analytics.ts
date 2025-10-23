@@ -2,7 +2,7 @@
 // a real analytics library like Segment, Mixpanel, or PostHog.
 
 class AnalyticsService {
-    track(eventName: string, properties?: Record<string, any>) {
+    track(eventName: string, properties?: Record<string, unknown>) {
     console.log(`[ANALYTICS] Event: ${eventName}`, properties || '');
     // In a real implementation:
     // window.analytics.track(eventName, properties);

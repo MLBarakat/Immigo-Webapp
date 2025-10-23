@@ -19,7 +19,7 @@ router.get('/settings', authenticate, async (req: Request, res: Response) => {
 });
 
 router.put('/settings', authenticate, async (req: Request, res: Response) => {
-  const { user_id, ...settingsToUpdate } = req.body;
+  const { user_id: _user_id, ...settingsToUpdate } = req.body;
   const { data, error } = await supabase
     .from('user_settings')
     .upsert({ user_id: req.user.id, ...settingsToUpdate, updated_at: new Date() })

@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import serverless from 'serverless-http';
 import cors from 'cors';
@@ -23,7 +24,7 @@ app.use('/api', historyRouter);
 app.use('/api', conversationRouter);
 
 // Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err);
   res.status(500).json({
     error: 'Internal server error',
@@ -41,7 +42,7 @@ app.use((req, res) => {
 
 export const handler = serverless(app, {
   binary: ['application/json', 'application/octet-stream'],
-  request: (request: any) => {
+  request: (request: http.IncomingMessage) => {
     // Log incoming requests in CloudWatch
     console.log(`${request.method} ${request.path}`);
     return request;

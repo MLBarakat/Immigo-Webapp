@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import serverless from 'serverless-http';
 import cors from 'cors';
@@ -20,7 +21,7 @@ app.use('/api', settingsRouter);
 app.use('/api', historyRouter);
 
 // Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err);
   res.status(500).json({
     error: 'Internal server error',
@@ -38,7 +39,7 @@ app.use((req, res) => {
 
 export const handler = serverless(app, {
   binary: ['application/json'],
-  request: (request: any) => {
+  request: (request: http.IncomingMessage) => {
     console.log(`[Utility] ${request.method} ${request.path}`);
     return request;
   }

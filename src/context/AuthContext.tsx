@@ -1,28 +1,9 @@
-import { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import { useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
 import { UserProfile } from '../components/UserProfile';
 import { analytics } from '../analytics'; // Import analytics service
-
-interface SignUpPayload {
-  email: string;
-  password: string;
-  fullName: string;
-  language: string;
-}
-
-export interface AuthContextType {
-  session: Session | null;
-  user: User | null;
-  profile: UserProfile | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signUp: (payload: SignUpPayload) => Promise<void>;
-  logout: () => Promise<void>;
-  updateUserLanguage: (newLanguageCode: string) => Promise<void>;
-}
-
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext, SignUpPayload } from './authContextTypes';
 
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const [session, setSession] = useState<Session | null>(null);
@@ -97,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     analytics.track('user_logout'); // Event tracking
   };
 
-  const updateUserLanguage = async (newLanguageCode: string): Promise<void> => {
+  const updateUserLanguage = useCallback(async (newLanguageCode: string): Promise<void> => {
       if (!user) throw new Error("User not authenticated.");
 
       const { error } = await supabase
@@ -110,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         throw error;
       }
       setProfile((prevProfile: UserProfile | null) => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
-  };
+  }, [user]);
 
   const value = useMemo(() => ({
       session,
@@ -121,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       signUp,
       logout,
       updateUserLanguage,
-  }), [session, user, profile, loading]);
+  }), [session, user, profile, loading, updateUserLanguage]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

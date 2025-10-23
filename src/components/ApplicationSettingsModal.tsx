@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, ExternalLink } from 'lucide-react';
 import type { UserSettings, ThemeOption } from '../types/settings';
 
@@ -13,7 +13,7 @@ interface ApplicationSettingsModalProps {
   onClose: () => void;
   settings: Partial<UserSettings>;
   onSave: (settings: UserSettings) => Promise<void>;
-  onSettingChange: (key: keyof UserSettings, value: any) => void;
+  onSettingChange: (key: keyof UserSettings, value: UserSettings[keyof UserSettings]) => void;
   pollyVoices: Voice[];
   isDesktop: boolean;
 }
@@ -21,7 +21,7 @@ interface ApplicationSettingsModalProps {
 const THEME_OPTIONS: { value: ThemeOption; label: string }[] = [ { value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, ];
 
 export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, onSettingChange, pollyVoices = [], isDesktop }) => {
-  const defaults: UserSettings = { theme: 'system', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default' };
+  const defaults = useMemo((): UserSettings => ({ theme: 'system', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default' }), [pollyVoices]);
   const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
   useEffect(() => { if (isOpen) { setDraft({ ...defaults, ...settings }); } }, [isOpen, settings, defaults]); // Added defaults to dependency array
 
   // Propagate changes from internal draft state to the parent's onSettingChange
-  const handleDraftChange = useCallback((key: keyof UserSettings, value: any) => {
+  const handleDraftChange = useCallback((key: keyof UserSettings, value: UserSettings[keyof UserSettings]) => {
     setDraft(prev => ({ ...prev, [key]: value }));
     onSettingChange(key, value); // Also inform the parent component immediately
   }, [onSettingChange]);
@@ -40,8 +40,8 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
       await onSave(draft);
       setError(null);
       onClose();
-    } catch (err: any) {
-      setError(err?.message ?? 'Save failed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }

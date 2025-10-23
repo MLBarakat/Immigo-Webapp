@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import serverless from 'serverless-http';
 import cors from 'cors';
@@ -17,7 +18,7 @@ analyzeRouter.post('/analyze', async (req, res) => {
   try {
     // Implementation moved from conversation.ts
     res.json({ analysis: 'Analysis functionality moved to dedicated endpoint' });
-  } catch (err: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to analyze conversation.' });
   }
 });
@@ -31,7 +32,7 @@ app.use(express.json({ limit: '2mb' })); // Reduced for analysis only
 app.use('/api', analyzeRouter);
 
 // Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err);
   res.status(500).json({
     error: 'Internal server error',
@@ -41,7 +42,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 export const handler = serverless(app, {
   binary: ['application/json'],
-  request: (request: any) => {
+  request: (request: http.IncomingMessage) => {
     console.log(`[Analysis] ${request.method} ${request.path}`);
     return request;
   }

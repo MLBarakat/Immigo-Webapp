@@ -4,6 +4,7 @@ import { bedrockClient, pollyClient, supabase, logger } from '../clients';
 import { InvokeModelCommand, InvokeModelWithResponseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
 import { SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { v4 as uuidv4 } from 'uuid';
+import { Readable } from 'stream';
 
 const router = Router();
 
@@ -12,10 +13,10 @@ if (!text) return '';
     return text.replace(/[<>{}[\]|`~@#$%^&*_+=]/g, '');
 };
 
-const streamToBuffer = (stream: any): Promise<Buffer> =>
+const streamToBuffer = (stream: Readable): Promise<Buffer> =>
   new Promise((resolve, reject) => {
-    const chunks: any[] = [];
-    stream.on('data', (chunk: any) => chunks.push(chunk));
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk: Buffer) => chunks.push(chunk));
     stream.on('error', reject);
     stream.on('end', () => resolve(Buffer.concat(chunks)));
   });
@@ -54,8 +55,9 @@ router.post('/conversation/analyze', authenticate, async (req: Request, res: Res
         logger.info('Analysis generated successfully', { requestId, userId: req.user.id });
         res.json(JSON.parse(feedbackText));
 
-    } catch (err: any) {
-        const errorDetails = { requestId, userId: req.user.id, errorMessage: err.message };
+    } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        const errorDetails = { requestId, userId: req.user.id, errorMessage };
         logger.error('Error in /api/conversation/analyze', errorDetails);
         res.status(500).json({ error: 'Failed to analyze conversation.', errorId: requestId });
     }
@@ -133,8 +135,9 @@ router.post('/conversation', authenticate, async (req: Request, res: Response) =
 
         res.end();
 
-    } catch (err: any) {
-        const errorDetails = { requestId, userId: req.user.id, errorMessage: err.message };
+    } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        const errorDetails = { requestId, userId: req.user.id, errorMessage };
         logger.error('Unhandled error in /api/conversation', errorDetails);
 
         if (!res.headersSent) {

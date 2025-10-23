@@ -94,10 +94,8 @@ function AppContent(): JSX.Element {
 
   const handleSaveSettings = async (settingsToSave: UserSettings) => {
     if (apiClient) {
-      try {
         await apiClient.updateSettings(settingsToSave);
         setUserSettings(settingsToSave);
-      } catch (error) { throw error; }
     }
   };
 

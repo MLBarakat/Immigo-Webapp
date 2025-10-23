@@ -5,12 +5,10 @@ import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as logs from 'aws-cdk-lib/aws-logs';
+
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { CfnFunction } from 'aws-cdk-lib/aws-lambda';
 import { Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
-import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { secret } from '@aws-amplify/backend';
 
 /**
@@ -45,24 +43,7 @@ const backend = defineBackend({
   }
 });
 
-// Create log groups for each function
-const logGroups = {
-  conversation: new logs.LogGroup(backend.stack, 'ConversationFunctionLog', {
-    retention: logs.RetentionDays.TWO_WEEKS,
-    removalPolicy: RemovalPolicy.DESTROY,
-    logGroupName: `/aws/lambda/${backend.conversationFunction.resources.lambda.functionName}`
-  }),
-  analyze: new logs.LogGroup(backend.stack, 'AnalyzeFunctionLog', {
-    retention: logs.RetentionDays.TWO_WEEKS,
-    removalPolicy: RemovalPolicy.DESTROY,
-    logGroupName: `/aws/lambda/${backend.analyzeFunction.resources.lambda.functionName}`
-  }),
-  utility: new logs.LogGroup(backend.stack, 'UtilityFunctionLog', {
-    retention: logs.RetentionDays.TWO_WEEKS,
-    removalPolicy: RemovalPolicy.DESTROY,
-    logGroupName: `/aws/lambda/${backend.utilityFunction.resources.lambda.functionName}`
-  })
-};
+
 
 // API Gateway integration with optimizations
 const api = new apigateway.RestApi(backend.stack, 'RestApi', {
@@ -90,7 +71,7 @@ const api = new apigateway.RestApi(backend.stack, 'RestApi', {
 });
 
 // Configure CloudWatch monitoring for scaling
-const monitorFunction = (lambda: any, name: string, thresholds: { concurrent: number, error: number }) => {
+const monitorFunction = (lambda: lambda.Function, name: string, thresholds: { concurrent: number, error: number }) => {
   // Create CloudWatch alarm for concurrent executions
   new cloudwatch.Alarm(backend.stack, `${name}ConcurrentAlarm`, {
     metric: new cloudwatch.Metric({

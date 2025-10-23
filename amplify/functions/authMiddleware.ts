@@ -1,11 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from './clients'; // Import the shared Supabase client
+import { User } from '@supabase/supabase-js';
 
 // Extend the Express Request type to include the user object
 declare global {
+    // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace Express {
         interface Request {
-            user?: any;
+            user?: User;
         }
     }
 }
