@@ -195,7 +195,7 @@ const corsIntegrationResponse = {
 const conversationIntegration = new apigateway.LambdaIntegration(
   backend.conversationFunction.resources.lambda,
   {
-    proxy: false,
+    proxy: true,
     allowTestInvoke: true,
     requestTemplates: {
       'application/json': '{ "statusCode": 200 }'
@@ -214,7 +214,7 @@ const conversationIntegration = new apigateway.LambdaIntegration(
 const analyzeIntegration = new apigateway.LambdaIntegration(
   backend.analyzeFunction.resources.lambda,
   {
-    proxy: false,
+    proxy: true,
     allowTestInvoke: true,
     requestTemplates: {
       'application/json': '{ "statusCode": 200 }'
@@ -233,7 +233,7 @@ const analyzeIntegration = new apigateway.LambdaIntegration(
 const utilityIntegration = new apigateway.LambdaIntegration(
   backend.utilityFunction.resources.lambda,
   {
-    proxy: false,
+    proxy: true,
     allowTestInvoke: true,
     requestTemplates: {
       'application/json': '{ "statusCode": 200 }'
@@ -252,7 +252,7 @@ const utilityIntegration = new apigateway.LambdaIntegration(
 const configIntegration = new apigateway.LambdaIntegration(
   backend.configFunction.resources.lambda,
   {
-    proxy: true, // Use proxy integration for simple request/response
+    proxy: true,
     allowTestInvoke: true,
   }
 );
@@ -267,7 +267,7 @@ const corsMethodResponse = {
 // Route configurations
 const conversation = api.root.addResource('conversation');
 conversation.addMethod('POST', conversationIntegration, {
-  authorizationType: apigateway.AuthorizationType.IAM,
+  authorizationType: apigateway.AuthorizationType.NONE,
   methodResponses: [{
     statusCode: '200',
     responseParameters: corsMethodResponse
@@ -276,7 +276,7 @@ conversation.addMethod('POST', conversationIntegration, {
 
 const analyze = api.root.addResource('analyze');
 analyze.addMethod('POST', analyzeIntegration, {
-  authorizationType: apigateway.AuthorizationType.IAM,
+  authorizationType: apigateway.AuthorizationType.NONE,
   methodResponses: [{
     statusCode: '200',
     responseParameters: corsMethodResponse
@@ -285,7 +285,7 @@ analyze.addMethod('POST', analyzeIntegration, {
 
 const utility = api.root.addResource('utility');
 utility.addMethod('ANY', utilityIntegration, {
-  authorizationType: apigateway.AuthorizationType.IAM,
+  authorizationType: apigateway.AuthorizationType.NONE,
   methodResponses: [{
     statusCode: '200',
     responseParameters: corsMethodResponse
