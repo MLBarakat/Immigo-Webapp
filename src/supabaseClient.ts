@@ -32,6 +32,3 @@ export const getSupabaseClient = async (): Promise<SupabaseClient> => {
     throw new Error('Could not initialize Supabase client.');
   }
 };
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
