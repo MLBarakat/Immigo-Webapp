@@ -44,7 +44,7 @@ export const handler = serverless(app, {
   binary: ['application/json', 'application/octet-stream'],
   request: (request: http.IncomingMessage) => {
     // Log incoming requests in CloudWatch
-    console.log(`${request.method} ${request.path}`);
+    console.log(`${request.method} ${request.url}`);
     return request;
   }
 });

@@ -126,7 +126,10 @@ router.post('/conversation', authenticate, async (req: Request, res: Response) =
             VoiceId: voiceId || 'Joanna',
         });
         const pollyResponse = await pollyClient.send(pollyCommand);
-        const audioBuffer = await streamToBuffer(pollyResponse.AudioStream);
+        if (!pollyResponse.AudioStream) {
+            throw new Error('Polly audio stream is empty.');
+        }
+        const audioBuffer = await streamToBuffer(pollyResponse.AudioStream as Readable);
         const responseAudio = audioBuffer.toString('base64');
         res.write(JSON.stringify({ type: 'audio', data: responseAudio }) + '\n');
 

@@ -25,7 +25,7 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
 export const handler = serverless(app, {
   binary: ['application/json', 'application/octet-stream'],
   request: (request: http.IncomingMessage) => {
-    console.log(`[Conversation] ${request.method} ${request.path}`);
+    console.log(`[Conversation] ${request.method} ${request.url}`);
     return request;
   }
 });
