@@ -264,8 +264,10 @@ const corsMethodResponse = {
   'method.response.header.Access-Control-Allow-Headers': true
 };
 
+const apiRoot = api.root.addResource('api');
+
 // Route configurations
-const conversation = api.root.addResource('conversation');
+const conversation = apiRoot.addResource('conversation');
 conversation.addMethod('POST', conversationIntegration, {
   authorizationType: apigateway.AuthorizationType.NONE,
   methodResponses: [{
@@ -274,7 +276,7 @@ conversation.addMethod('POST', conversationIntegration, {
   }]
 });
 
-const analyze = api.root.addResource('analyze');
+const analyze = apiRoot.addResource('analyze');
 analyze.addMethod('POST', analyzeIntegration, {
   authorizationType: apigateway.AuthorizationType.NONE,
   methodResponses: [{
@@ -283,7 +285,7 @@ analyze.addMethod('POST', analyzeIntegration, {
   }]
 });
 
-const utility = api.root.addResource('utility');
+const utility = apiRoot.addResource('utility');
 utility.addMethod('ANY', utilityIntegration, {
   authorizationType: apigateway.AuthorizationType.NONE,
   methodResponses: [{
@@ -296,7 +298,7 @@ utility.addMethod('ANY', utilityIntegration, {
 });
 
 // Config route
-const config = api.root.addResource('config');
+const config = apiRoot.addResource('config');
 config.addMethod('GET', configIntegration, {
   // This endpoint is public, so no authorization
   authorizationType: apigateway.AuthorizationType.NONE,
