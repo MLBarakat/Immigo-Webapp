@@ -1,23 +1,34 @@
 import { useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../supabaseClient';
+import { Session, User, SupabaseClient, AuthChangeEvent } from '@supabase/supabase-js';
+import { getSupabaseClient } from '../supabaseClient';
 import { UserProfile } from '../components/UserProfile';
 import { analytics } from '../analytics'; // Import analytics service
 import { AuthContext, SignUpPayload } from './authContextTypes';
 
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const initializeSupabase = async () => {
+      const client = await getSupabaseClient();
+      setSupabase(client);
+    };
+    initializeSupabase();
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+
     const getSessionAndProfile = async () => {
         try {
-            const { data: { session }, error } = await supabase.auth.getSession();
+            const { data: { session: currentSession }, error } = await supabase.auth.getSession();
             if (error) throw error;
-            setSession(session);
-            const currentUser = session?.user;
+            setSession(currentSession);
+            const currentUser = currentSession?.user;
             setUser(currentUser ?? null);
 
             if (currentUser) {
@@ -41,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     };
     getSessionAndProfile();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, newSession: Session | null) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
         if (!newSession?.user) {
@@ -54,15 +65,17 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     return () => {
         subscription?.unsubscribe();
     };
-  }, []);
+  }, [supabase]);
 
   const login = async (email: string, password: string): Promise<void> => {
+    if (!supabase) throw new Error("Supabase client not initialized.");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     analytics.track('user_login', { method: 'email' }); // Event tracking
   };
 
   const signUp = async ({ email, password, fullName, language }: SignUpPayload): Promise<void> => {
+    if (!supabase) throw new Error("Supabase client not initialized.");
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -73,13 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   };
 
   const logout = async (): Promise<void> => {
+    if (!supabase) throw new Error("Supabase client not initialized.");
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     analytics.track('user_logout'); // Event tracking
   };
 
   const updateUserLanguage = useCallback(async (newLanguageCode: string): Promise<void> => {
-      if (!user) throw new Error("User not authenticated.");
+      if (!user || !supabase) throw new Error("User not authenticated or Supabase client not initialized.");
 
       const { error } = await supabase
         .from('profiles')
@@ -91,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         throw error;
       }
       setProfile((prevProfile: UserProfile | null) => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
-  }, [user]);
+  }, [user, supabase]);
 
   const value = useMemo(() => ({
       session,
