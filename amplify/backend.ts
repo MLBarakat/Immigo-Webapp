@@ -71,13 +71,13 @@ const api = new apigateway.RestApi(backend.stack, 'RestApi', {
 });
 
 // Configure CloudWatch monitoring for scaling
-const monitorFunction = (lambda: lambda.Function, name: string, thresholds: { concurrent: number, error: number }) => {
+const monitorFunction = (lambda: lambda.IFunction, name: string, thresholds: { concurrent: number, error: number }) => {
   // Create CloudWatch alarm for concurrent executions
   new cloudwatch.Alarm(backend.stack, `${name}ConcurrentAlarm`, {
     metric: new cloudwatch.Metric({
       namespace: 'AWS/Lambda',
       metricName: 'ConcurrentExecutions',
-      dimensionsMap: { FunctionName: lambda.functionArn.split(':').pop() },
+      dimensionsMap: { FunctionName: lambda.functionArn.split(':').pop() ?? '' },
       period: Duration.minutes(1),
       statistic: 'Maximum'
     }),
@@ -93,7 +93,7 @@ const monitorFunction = (lambda: lambda.Function, name: string, thresholds: { co
     metric: new cloudwatch.Metric({
       namespace: 'AWS/Lambda',
       metricName: 'Errors',
-      dimensionsMap: { FunctionName: lambda.functionArn.split(':').pop() },
+      dimensionsMap: { FunctionName: lambda.functionArn.split(':').pop() ?? '' },
       period: Duration.minutes(1),
       statistic: 'Sum'
     }),
@@ -179,7 +179,7 @@ const setupAutoScaling = (fn: lambda.IFunction, name: string, config: {
 
 // Set up monitoring and auto-scaling for each function
 const conversationLambda = backend.conversationFunction.resources.lambda;
-// monitorFunction(conversationLambda, 'Conversation', { concurrent: 80, error: 5 });
+monitorFunction(conversationLambda, 'Conversation', { concurrent: 80, error: 5 });
 setupAutoScaling(conversationLambda, 'Conversation', {
   minCapacity: 10,
   maxCapacity: 100,
@@ -187,7 +187,7 @@ setupAutoScaling(conversationLambda, 'Conversation', {
 });
 
 const analyzeLambda = backend.analyzeFunction.resources.lambda;
-// monitorFunction(analyzeLambda, 'Analysis', { concurrent: 50, error: 10 });
+monitorFunction(analyzeLambda, 'Analysis', { concurrent: 50, error: 10 });
 setupAutoScaling(analyzeLambda, 'Analysis', {
   minCapacity: 5,
   maxCapacity: 50,
@@ -196,7 +196,7 @@ setupAutoScaling(analyzeLambda, 'Analysis', {
 
 // Set up monitoring and scaling for utility function
 const utilityLambda = backend.utilityFunction.resources.lambda;
-// monitorFunction(utilityLambda, 'Utility', { concurrent: 30, error: 5 });
+monitorFunction(utilityLambda, 'Utility', { concurrent: 30, error: 5 });
 setupAutoScaling(utilityLambda, 'Utility', {
   minCapacity: 3,
   maxCapacity: 30,
