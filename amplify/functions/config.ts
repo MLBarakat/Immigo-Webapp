@@ -15,7 +15,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   const publicConfig = {
     supabaseUrl: process.env.SUPABASE_URL,
-    supabaseAnonKey: process.env.SUPABASE_API_KEY, // Using the API key as the public anon key
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
   };
 
   return {
