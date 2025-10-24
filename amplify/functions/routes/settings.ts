@@ -5,6 +5,9 @@ import { supabase, logger } from '../clients';
 const router = Router();
 
 router.get('/settings', authenticate, async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'User not authenticated.' });
+  }
   const { data, error } = await supabase
     .from('user_settings')
     .select('*')
@@ -19,6 +22,9 @@ router.get('/settings', authenticate, async (req: Request, res: Response) => {
 });
 
 router.put('/settings', authenticate, async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'User not authenticated.' });
+  }
   const { user_id: _user_id, ...settingsToUpdate } = req.body;
   const { data, error } = await supabase
     .from('user_settings')

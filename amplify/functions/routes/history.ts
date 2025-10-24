@@ -5,6 +5,9 @@ import { supabase, logger } from '../clients';
 const router = Router();
 
 router.get('/history', authenticate, async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'User not authenticated.' });
+  }
   const { data, error } = await supabase
     .from('messages')
     .select('id, role, content, timestamp:created_at')

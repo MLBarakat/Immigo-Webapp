@@ -22,6 +22,9 @@ const streamToBuffer = (stream: Readable): Promise<Buffer> =>
   });
 
 router.post('/conversation/analyze', authenticate, async (req: Request, res: Response) => {
+    if (!req.user) {
+        return res.status(401).json({ error: 'User not authenticated.' });
+    }
     const requestId = uuidv4();
     const { conversationHistory } = req.body;
 
@@ -64,6 +67,9 @@ router.post('/conversation/analyze', authenticate, async (req: Request, res: Res
 });
 
 router.post('/conversation', authenticate, async (req: Request, res: Response) => {
+    if (!req.user) {
+        return res.status(401).json({ error: 'User not authenticated.' });
+    }
     const requestId = uuidv4();
     const { message, conversationHistory, voiceId } = req.body;
 

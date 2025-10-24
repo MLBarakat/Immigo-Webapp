@@ -40,7 +40,7 @@ app.use((req, res) => {
 export const handler = serverless(app, {
   binary: ['application/json'],
   request: (request: http.IncomingMessage) => {
-    console.log(`[Utility] ${request.method} ${request.path}`);
+    console.log(`[Utility] ${request.method} ${request.url}`);
     return request;
   }
 });
