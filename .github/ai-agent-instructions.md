@@ -10,7 +10,7 @@ This is a React + TypeScript single-page app (Vite) frontend that talks to a ser
 
 ## Architecture & integration notes
 
-- Backend is defined under `amplify/` using the Amplify backend DSL (`amplify/backend.ts`). Lambda is granted Bedrock and Polly permissions and expects environment secrets (see `backend.ts` for env names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DEEPGRAM_API_KEY`, `API_KEY`).
+- Backend is defined under `amplify/` using the Amplify backend DSL (`amplify/backend.ts`). Lambda is granted Bedrock and Polly permissions and expects environment secrets (see `backend.ts` for env names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DEEPGRAM_API_KEY`, `SUPABASE_API_KEY`).
 - Auth: Supabase is used for frontend auth (`src/supabaseClient.ts`). The app expects a Supabase session object from `useAuth` hooks; the session token is passed to `new ApiClient(session.access_token)`.
 - Streaming behavior: The server streams tokenized text and base64-encoded audio frames. Keep parsing tolerant — chunks may not align to JSON boundaries (see `ApiClient.sendMessage` for current decoding approach).
 
@@ -35,7 +35,7 @@ This is a React + TypeScript single-page app (Vite) frontend that talks to a ser
 
 ## Project-specific conventions
 
-- API base URL and keys are provided via Vite env vars: `VITE_API_BASE_URL`, `VITE_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+- API base URL and keys are provided via Vite env vars: `VITE_API_BASE_URL`, `SUPABASE_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
 - UI settings are saved via `ApiClient.getSettings()` / `updateSettings()`; `App.tsx` caches them in local state and applies CSS classes for theme and font size (see `App.tsx` effect that toggles `root.classList` and body font classes).
 - Conversation state transitions are managed via the `ConversationContext` reducer — prefer dispatching existing action types (`SEND_MESSAGE_START`, `RECEIVE_ASSISTANT_CHUNK`, `FINISH_ASSISTANT_RESPONSE`, etc.) to keep UI consistent.
 

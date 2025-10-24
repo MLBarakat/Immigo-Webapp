@@ -1,5 +1,5 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { conversationFunction, analyzeFunction, utilityFunction } from './api/resources';
+import { conversationFunction, analyzeFunction, utilityFunction, configFunction } from './api/resources';
 import { auth } from './auth/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -40,6 +40,13 @@ const backend = defineBackend({
     handler: 'handler.handler',
     memorySize: 256,
     timeout: Duration.seconds(10)
+  },
+  configFunction: {
+    ...configFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'handler.handler',
+    memorySize: 128, // Smallest size for a simple function
+    timeout: Duration.seconds(5)
   }
 });
 
@@ -241,6 +248,15 @@ const utilityIntegration = new apigateway.LambdaIntegration(
   }
 );
 
+// Config endpoint (very low memory, public access)
+const configIntegration = new apigateway.LambdaIntegration(
+  backend.configFunction.resources.lambda,
+  {
+    proxy: true, // Use proxy integration for simple request/response
+    allowTestInvoke: true,
+  }
+);
+
 // Common method response parameters for CORS
 const corsMethodResponse = {
   'method.response.header.Access-Control-Allow-Origin': true,
@@ -279,6 +295,15 @@ utility.addMethod('ANY', utilityIntegration, {
   }
 });
 
+// Config route
+const config = api.root.addResource('config');
+config.addMethod('GET', configIntegration, {
+  // This endpoint is public, so no authorization
+  authorizationType: apigateway.AuthorizationType.NONE,
+  methodResponses: [{
+    statusCode: '200'
+  }]
+});
 // Add IAM policies to Lambda functions
 const bedrockPolicy = new PolicyStatement({
   actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
@@ -298,21 +323,26 @@ backend.analyzeFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 // Add environment variables to conversation function
 backend.conversationFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.conversationFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
-backend.conversationFunction.addEnvironment('API_KEY', secret('API_KEY'));
+backend.conversationFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.conversationFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
 backend.conversationFunction.addEnvironment('FUNCTION_TYPE', 'conversation');
 
 // Add environment variables to analyze function
 backend.analyzeFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.analyzeFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
-backend.analyzeFunction.addEnvironment('API_KEY', secret('API_KEY'));
+backend.analyzeFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.analyzeFunction.addEnvironment('FUNCTION_TYPE', 'analyze');
 
 // Add environment variables to utility function
 backend.utilityFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.utilityFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
-backend.utilityFunction.addEnvironment('API_KEY', secret('API_KEY'));
+backend.utilityFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.utilityFunction.addEnvironment('FUNCTION_TYPE', 'utility');
+
+// Add environment variables to config function
+backend.configFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
+// Note: We are using the 'SUPABASE_API_KEY' secret for the public 'anon' key. Ensure this is the correct public key.
+backend.configFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 
 // Output
 backend.addOutput({

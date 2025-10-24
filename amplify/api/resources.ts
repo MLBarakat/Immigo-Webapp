@@ -50,7 +50,7 @@ import { defineFunction } from '@aws-amplify/backend';
  * Required Environment Variables for All Functions:
  * - SUPABASE_URL: Supabase project URL
  * - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key
- * - API_KEY: Custom API key for additional security
+ * - SUPABASE_API_KEY: Custom API key for additional security
  * 
  * Additional Variables for Conversation Function:
  * - DEEPGRAM_API_KEY: Deepgram API key for speech-to-text
@@ -95,6 +95,18 @@ export const utilityFunction = defineFunction({
   }
 });
 
+// Config Function - Serves public configuration to the frontend
+export const configFunction = defineFunction({
+  name: 'config-function',
+  entry: '../functions/config.ts',
+  environment: {
+    NODE_ENV: 'production',
+    FUNCTION_TYPE: 'config',
+    LOG_LEVEL: 'info',
+    DESCRIPTION: 'Provides public configuration variables to the frontend client',
+    VERSION: '1.0.0'
+  }
+});
 // Required AWS Permissions per Function:
 // 
 // Conversation Function:

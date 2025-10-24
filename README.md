@@ -109,7 +109,7 @@ VITE_API_URL=http://localhost:3001
 ```env
 PORT=3001
 NODE_ENV=development
-API_KEY=your-secure-api-key
+SUPABASE_API_KEY=your-secure-api-key
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
