@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import ImmigoLogo from '../assets/immigo_logo.svg';
 import { TermsModal } from './TermsModal';
 import { User, Mail, KeyRound, Globe, AlertCircle } from 'lucide-react';
-import { SUPPORTED_LANGUAGES, Language } from './LanguageSelector';
+import { SUPPORTED_LANGUAGES } from '../constants';
+import { Language } from '../types/language';
 import { ImmiGOLabel } from './ImmiGOLabel';
 
 export function AuthPage(): JSX.Element {

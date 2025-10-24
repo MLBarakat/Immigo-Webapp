@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react'; // Added X
 
 interface AccountSettingsPageProps {
