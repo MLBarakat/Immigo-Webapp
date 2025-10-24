@@ -1,3 +1,4 @@
+import React from 'react';
 import { Download, Trash2, Sparkles } from 'lucide-react';
 import { AppStatus } from '../context/conversationContextTypes';
 import { AnimatedStatusButton } from './AnimatedStatusButton';

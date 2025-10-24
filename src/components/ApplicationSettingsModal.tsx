@@ -82,14 +82,14 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
 
           <SettingRow title="AI Voice" description="Select the voice for your AI conversation partner.">
             <select value={draft.ai_voice_id} onChange={(e) => handleDraftChange('ai_voice_id', e.target.value)} className="bg-immigo-gray-100 border-2 border-immigo-gray-300 p-2 rounded-lg text-sm">
-              {pollyVoices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              {pollyVoices.map((v: Voice) => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
           </SettingRow>
 
           <hr className="border-immigo-gray-200" />
 
           <SettingRow title="Live Feedback" description="Get real-time tips during your conversation.">
-            <Toggle checked={!!draft.live_feedback_enabled} onChange={(v) => handleDraftChange('live_feedback_enabled', v)} />
+            <Toggle checked={!!draft.live_feedback_enabled} onChange={(v: boolean) => handleDraftChange('live_feedback_enabled', v)} />
           </SettingRow>
 
           <hr className="border-immigo-gray-200" />

@@ -8,7 +8,7 @@ interface AccountSettingsPageProps {
 
 type SettingsView = 'profile' | 'security' | 'connections' | 'delete';
 
-export const AccountSettingsPage: React.FC<AccountSettingsPageProps> = ({ onNavigateBack, isDesktop }) => {
+export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettingsPageProps): JSX.Element => {
   const [activeView, setActiveView] = useState<SettingsView>('profile');
 
   const renderContent = () => {

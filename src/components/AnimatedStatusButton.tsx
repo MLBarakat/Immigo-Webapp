@@ -1,5 +1,5 @@
+import React, { useEffect, useRef, useState } from 'react';
 import { AppStatus } from '../context/conversationContextTypes';
-import { useEffect, useRef, useState } from 'react';
 
 interface AnimatedStatusButtonProps {
   readonly status: AppStatus;

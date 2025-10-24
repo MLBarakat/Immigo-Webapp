@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
