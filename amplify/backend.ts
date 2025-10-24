@@ -122,59 +122,17 @@ const setupAutoScaling = (fn: lambda.IFunction, name: string, config: {
     version
   });
 
-  // Create scaling target for the alias
-  const target = new applicationautoscaling.ScalableTarget(backend.stack, `${name}ScalingTarget`, {
-    serviceNamespace: applicationautoscaling.ServiceNamespace.LAMBDA,
-    maxCapacity: config.maxCapacity,
-    minCapacity: config.minCapacity,
-    resourceId: `function:${fn.functionName}:${alias.aliasName}`,
-    scalableDimension: 'lambda:function:ProvisionedConcurrency',
-    role: new iam.Role(backend.stack, `${name}ScalingRole`, {
-      assumedBy: new iam.ServicePrincipal('application-autoscaling.amazonaws.com'),
-      inlinePolicies: {
-        LambdaAutoScalingPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'lambda:PutProvisionedConcurrencyConfig',
-                'lambda:GetProvisionedConcurrencyConfig',
-                'lambda:DeleteProvisionedConcurrencyConfig'
-              ],
-              resources: [`${fn.functionArn}:*`]
-            })
-          ]
-        })
-      }
-    })
-  });
-
-  // Create scaling policy with custom metric
-  new applicationautoscaling.TargetTrackingScalingPolicy(backend.stack, `${name}ScalingPolicy`, {
-    targetValue: config.targetUtilization,
-    customMetric: new cloudwatch.Metric({
-      namespace: 'AWS/Lambda',
-      metricName: 'ConcurrentExecutions',
-      dimensionsMap: {
-        FunctionName: fn.functionName,
-        Resource: `${fn.functionName}:${alias.aliasName}`
-      },
-      statistic: 'Average',
-      period: Duration.minutes(1)
-    }),
-    scalingTarget: target,
-    scaleInCooldown: Duration.seconds(60),
-    scaleOutCooldown: Duration.seconds(30)
-  });
-
   // Configure provisioned concurrency and auto-scaling on the alias
-  const pc = alias.addAutoScaling({ 
+  const autoScaling = alias.addAutoScaling({ 
     minCapacity: config.minCapacity,
     maxCapacity: config.maxCapacity
   });
-  
-  // Add utilization-based scaling
-  pc.node.addDependency(target);  // Ensure scaling target is created first
+
+  autoScaling.scaleOnUtilization({
+    utilizationTarget: config.targetUtilization,
+    scaleInCooldown: Duration.seconds(60),
+    scaleOutCooldown: Duration.seconds(30)
+  });
 };
 
 // Set up monitoring and auto-scaling for each function
