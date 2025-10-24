@@ -5,6 +5,7 @@ private isPlaying = false;
 private onended: (() => void) | null = null;
 
   constructor() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     this.resumeAudioContext();
   }

@@ -86,7 +86,7 @@ export function AuthPage(): JSX.Element {
                   <label htmlFor="language" className="sr-only">Primary Language</label>
                   <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" aria-hidden="true" />
                   <select id="language" value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow">
-                    {SUPPORTED_LANGUAGES.map(lang => (
+                    {SUPPORTED_LANGUAGES.map((lang: any) => (
                       <option key={lang.code} value={lang.code}>{lang.name}</option>
                     ))}
                   </select>

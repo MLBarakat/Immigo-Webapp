@@ -121,7 +121,7 @@ function AppContent(): JSX.Element {
 
   const handleLanguageChange = (newLanguageCode: string) => {
     dispatch({ type: 'SET_LANGUAGE', payload: newLanguageCode });
-    updateUserLanguage(newLanguageCode).catch(error => {
+    updateUserLanguage(newLanguageCode).catch((error: any) => {
       console.error("UI failed to sync language update:", error);
     });
   };

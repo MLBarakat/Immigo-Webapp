@@ -1,4 +1,4 @@
-import React, { useReducer, ReactNode } from 'react';
+import { useReducer, ReactNode, useContext } from 'react';
 import { ApiClient } from '../services/apiClient';
 import {
   ConversationContext,
@@ -17,3 +17,11 @@ export function ConversationProvider({ children }: ConversationProviderProps): J
     </ConversationContext.Provider>
   );
 }
+
+export const useConversation = (): ConversationContextType => {
+    const context = useContext(ConversationContext);
+    if (context === undefined) {
+        throw new Error('useConversation must be used within a ConversationProvider');
+    }
+    return context;
+};

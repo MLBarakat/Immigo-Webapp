@@ -1,4 +1,4 @@
-import { AppStatus } from '../context/ConversationContext';
+import { AppStatus } from '../context/conversationContextTypes';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
 
 interface VoiceHubProps {

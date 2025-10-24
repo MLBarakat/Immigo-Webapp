@@ -2,7 +2,7 @@ import { useCallback, useRef, useEffect, useMemo } from 'react';
 import { useConversation } from '../context/ConversationContext';
 import { ApiClient } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
-import { Message } from '../context/ConversationContext';
+import { Message } from '../context/conversationContextTypes';
 import { DeepgramManager } from '../utils/audioUtils'; // Updated import
 import { UserSettings } from '../types/settings';
 import { analytics } from '../analytics';
@@ -84,7 +84,7 @@ export function useConversationManager({ apiClient, userSettings }: UseConversat
   }, [dispatch]);
 
   const downloadTranscript = useCallback(() => {
-    const transcript = state.conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
+    const transcript = state.conversationHistory.map((msg: any) => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
     const blob = new Blob([transcript], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

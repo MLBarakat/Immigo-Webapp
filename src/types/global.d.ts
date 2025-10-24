@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   grammars: any; // Use 'any' for SpeechGrammarList if not fully defined
@@ -51,13 +52,13 @@ interface SpeechRecognitionAlternative {
 }
 
 // This makes the constructor available
-declare var SpeechRecognition: {
+declare const SpeechRecognition: {
   prototype: SpeechRecognition;
   new (): SpeechRecognition;
 };
 
 // This handles the vendor-prefixed version in Chrome
-declare var webkitSpeechRecognition: {
+declare const webkitSpeechRecognition: {
   prototype: SpeechRecognition;
   new (): SpeechRecognition;
 };

@@ -1,5 +1,5 @@
 import { Download, Trash2, Sparkles } from 'lucide-react';
-import { AppStatus } from '../context/ConversationContext';
+import { AppStatus } from '../context/conversationContextTypes';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
 import { UserSettings } from '../types/settings';
 
