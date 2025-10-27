@@ -343,8 +343,8 @@ backend.utilityFunction.addEnvironment('FUNCTION_TYPE', 'utility');
 
 // Add environment variables to config function
 backend.configFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
-// Note: We are using the 'SUPABASE_API_KEY' secret for the public 'anon' key. Ensure this is the correct public key.
 backend.configFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
+backend.configFunction.addEnvironment('SUPABASE_ANON_KEY', secret('SUPABASE_ANON_KEY'));
 
 // Output
 backend.addOutput({
