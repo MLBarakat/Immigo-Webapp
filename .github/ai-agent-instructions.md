@@ -10,24 +10,62 @@ This is a React + TypeScript single-page app (Vite) frontend that talks to a ser
 
 ## Architecture & integration notes
 
-- Backend is defined under `amplify/` using the Amplify backend DSL (`amplify/backend.ts`). Lambda is granted Bedrock and Polly permissions and expects environment secrets (see `backend.ts` for env names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DEEPGRAM_API_KEY`, `SUPABASE_API_KEY`).
-- Auth: Supabase is used for frontend auth (`src/supabaseClient.ts`). The app expects a Supabase session object from `useAuth` hooks; the session token is passed to `new ApiClient(session.access_token)`.
-- Streaming behavior: The server streams tokenized text and base64-encoded audio frames. Keep parsing tolerant — chunks may not align to JSON boundaries (see `ApiClient.sendMessage` for current decoding approach).
+### Backend
+
+The backend is defined in `amplify/backend.ts` using the Amplify backend DSL. It consists of four Lambda functions:
+
+- **`conversationFunction`**: Handles the main conversation logic, including Bedrock and Polly integration.
+- **`analyzeFunction`**: Provides conversation analysis and feedback.
+- **`utilityFunction`**: Manages user settings and history.
+- **`configFunction`**: Serves public configuration.
+
+The backend also features:
+
+- **API Gateway:** A REST API with the following endpoints:
+    - `POST /api/conversation`: Main conversation endpoint.
+    - `POST /api/analyze`: Conversation analysis endpoint.
+    - `GET /api/history`: Retrieves conversation history.
+    - `GET /api/settings`: Retrieves user settings.
+    - `PUT /api/settings`: Updates user settings.
+    - `GET /api/config`: Retrieves public configuration.
+- **Auto-scaling and Monitoring:** CloudWatch alarms and auto-scaling are configured for the Lambda functions to handle varying loads.
+- **IAM Policies:** The Lambda functions have IAM policies for Bedrock, Polly, and other necessary services.
+- **Environment Variables:** The functions use secrets for `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DEEPGRAM_API_KEY`, and `SUPABASE_API_KEY`.
+
+### Frontend
+
+- **Authentication:** Supabase is used for frontend auth (`src/supabaseClient.ts`). The app expects a Supabase session object from `useAuth` hooks; the session token is passed to `new ApiClient(session.access_token)`.
+- **API Client:** The `ApiClient` in `src/services/apiClient.ts` handles all communication with the backend. It includes the `Authorization` header with a bearer token and an `X-API-Key` header.
+- **Streaming behavior:** The server streams tokenized text and base64-encoded audio frames. Keep parsing tolerant — chunks may not align to JSON boundaries (see `ApiClient.sendMessage` for current decoding approach).
+- **Feedback Feature:** The app includes a feedback feature that allows users to get an analysis of their conversation. This feature is handled by the `handleRequestFeedback` function in `src/App.tsx` and the `/api/analyze` endpoint.
+- **Analytics:** The app tracks analytics events using an `analytics` object. Events include `session_started`, `session_ended`, `conversation_cleared`, and `transcript_downloaded`.
 
 ## Common developer workflows
 
 - Install & run frontend dev server:
 
+  ```bash
   npm install
   npm run dev
+  ```
 
 - Build for production:
 
+  ```bash
   npm run build
+  ```
 
 - Linting:
 
+  ```bash
   npm run lint
+  ```
+
+- Deploy:
+
+  ```bash
+  npm run deploy
+  ```
 
 - Backend / Amplify:
 
@@ -35,7 +73,7 @@ This is a React + TypeScript single-page app (Vite) frontend that talks to a ser
 
 ## Project-specific conventions
 
-- API base URL and keys are provided via Vite env vars: `VITE_API_BASE_URL`, `SUPABASE_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
+- API base URL and keys are provided via Vite env vars: `VITE_API_BASE_URL`, `VITE_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
 - UI settings are saved via `ApiClient.getSettings()` / `updateSettings()`; `App.tsx` caches them in local state and applies CSS classes for theme and font size (see `App.tsx` effect that toggles `root.classList` and body font classes).
 - Conversation state transitions are managed via the `ConversationContext` reducer — prefer dispatching existing action types (`SEND_MESSAGE_START`, `RECEIVE_ASSISTANT_CHUNK`, `FINISH_ASSISTANT_RESPONSE`, etc.) to keep UI consistent.
 
@@ -65,4 +103,4 @@ This is a React + TypeScript single-page app (Vite) frontend that talks to a ser
 
 ---
 
-If any section is unclear or you want more detail (examples of conversation reducer actions, audio framing, or Amplify deploy commands you use locally), tell me which area to expand. 
+If any section is unclear or you want more detail (examples of conversation reducer actions, audio framing, or Amplify deploy commands you use locally), tell me which area to expand.

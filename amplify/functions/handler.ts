@@ -3,12 +3,15 @@ import express from 'express';
 import serverless from 'serverless-http';
 import cors from 'cors';
 import helmet from 'helmet';
+import expressWs from 'express-ws';
 
 import settingsRouter from './routes/settings';
 import historyRouter from './routes/history';
 import conversationRouter from './routes/conversation';
+import { setupWebSocketProxy } from './routes/websocket';
 
 const app = express();
+const wsInstance = expressWs(app);
 
 app.use(cors());
 app.use(helmet());
@@ -22,6 +25,7 @@ app.get('/health', (req, res) => {
 app.use('/api', settingsRouter);
 app.use('/api', historyRouter);
 app.use('/api', conversationRouter);
+setupWebSocketProxy(wsInstance);
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
