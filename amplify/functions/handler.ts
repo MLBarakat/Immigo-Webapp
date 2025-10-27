@@ -18,7 +18,7 @@ app.use(helmet());
 app.use(express.json({ limit: '10mb' }));
 
 // Config endpoint to provide Supabase credentials to the frontend
-app.get('/config', (req, res) => {
+app.get('/api/config', (req, res) => {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
