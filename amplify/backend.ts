@@ -54,7 +54,7 @@ const backend = defineBackend({
 
 // API Gateway integration with optimizations
 const api = new apigateway.RestApi(backend.stack, 'RestApi', {
-  restApiName: 'immigo-api',
+  restApiName: 'immigo-gateway',
   description: 'ImmiGO API Gateway - Handles requests for voice assistant functionalities',
   defaultCorsPreflightOptions: {
     allowOrigins: apigateway.Cors.ALL_ORIGINS,
