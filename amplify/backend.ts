@@ -323,26 +323,22 @@ backend.conversationFunction.resources.lambda.addToRolePolicy(pollyPolicy);
 backend.analyzeFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 
 // Add environment variables to conversation function
-backend.conversationFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.conversationFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.conversationFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.conversationFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
 backend.conversationFunction.addEnvironment('FUNCTION_TYPE', 'conversation');
 
 // Add environment variables to analyze function
-backend.analyzeFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.analyzeFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.analyzeFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.analyzeFunction.addEnvironment('FUNCTION_TYPE', 'analyze');
 
 // Add environment variables to utility function
-backend.utilityFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.utilityFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.utilityFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.utilityFunction.addEnvironment('FUNCTION_TYPE', 'utility');
 
 // Add environment variables to config function
-backend.configFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.configFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.configFunction.addEnvironment('SUPABASE_ANON_KEY', secret('SUPABASE_ANON_KEY'));
 

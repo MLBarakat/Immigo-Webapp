@@ -7,8 +7,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error('Supabase environment variables are not set.');
+    if (!supabaseUrl || !supabaseUrl.startsWith('http') || !supabaseAnonKey) {
+      console.error('Supabase environment variables are not set or are invalid.');
       return {
         statusCode: 500,
         headers: {
