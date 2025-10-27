@@ -17,19 +17,6 @@ app.use(cors());
 app.use(helmet());
 app.use(express.json({ limit: '10mb' }));
 
-// Config endpoint to provide Supabase credentials to the frontend
-app.get('/api/config', (req, res) => {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Supabase environment variables are not set.');
-    return res.status(500).json({ error: 'Server configuration error.' });
-  }
-
-  res.json({ supabaseUrl, supabaseAnonKey });
-});
-
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

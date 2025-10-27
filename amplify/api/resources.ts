@@ -98,7 +98,7 @@ export const utilityFunction = defineFunction({
 // Config Function - Serves public configuration to the frontend
 export const configFunction = defineFunction({
   name: 'config-function',
-  entry: '../functions/handler.ts',
+  entry: '../functions/config.ts',
   environment: {
     NODE_ENV: 'production',
     FUNCTION_TYPE: 'config',
