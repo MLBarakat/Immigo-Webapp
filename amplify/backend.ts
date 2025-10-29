@@ -11,6 +11,9 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { secret } from '@aws-amplify/backend';
 
+// Determine the environment from a build-time environment variable
+const nodeEnv = process.env.NODE_ENV;
+
 const backend = defineBackend({
   auth,
   conversationFunction: {
@@ -58,8 +61,8 @@ const backend = defineBackend({
 });
 
 const api = new apigateway.RestApi(backend.stack, 'RestApi', {
-  restApiName: 'immigo-gateway',
-  description: 'ImmiGO API Gateway - Handles requests for voice assistant functionalities',
+  restApiName: `immigo-gateway-${nodeEnv}`,
+  description: `ImmiGO API Gateway - ${nodeEnv}`,
   defaultCorsPreflightOptions: {
     allowOrigins: apigateway.Cors.ALL_ORIGINS,
     allowMethods: apigateway.Cors.ALL_METHODS,
@@ -73,6 +76,7 @@ const api = new apigateway.RestApi(backend.stack, 'RestApi', {
     maxAge: Duration.days(1),
   },
   deployOptions: {
+    stageName: nodeEnv,
     throttlingRateLimit: 10000,
     throttlingBurstLimit: 5000,
     metricsEnabled: true,
