@@ -19,7 +19,7 @@ export const getSupabaseClient = async (): Promise<SupabaseClient> => {
       throw new Error('VITE_API_BASE_URL is not defined in .env file');
     }
 
-    const response = await fetch(`${apiUrl}/config`);
+    const response = await fetch(`${apiUrl.replace(/\/$/, '')}/config`);
     if (!response.ok) {
       throw new Error(`Failed to fetch config: ${response.statusText}`);
     }
