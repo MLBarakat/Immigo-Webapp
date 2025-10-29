@@ -21,6 +21,8 @@ import { DisplayUser } from './types/user';
 import { ScrollToTop } from './components/ScrollToTop';
 import { FeedbackModal } from './components/FeedbackModal';
 import { analytics } from './analytics';
+import { ErrorBoundary } from './ErrorBoundary';
+import { logger } from './logger';
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -86,7 +88,9 @@ function AppContent(): JSX.Element {
         try {
           const settings = await apiClient.getSettings();
           setUserSettings(settings);
-        } catch (error) { console.error('Failed to fetch user settings:', error); }
+        } catch (error) { 
+          logger.error('Failed to fetch user settings', error);
+        }
       }
     };
     fetchSettings();
@@ -106,7 +110,7 @@ function AppContent(): JSX.Element {
       try {
         await apiClient.updateSettings({ [key]: value });
       } catch (error) {
-        console.error("Failed to save setting:", error);
+        logger.error("Failed to save setting", error);
       }
     }
   };
@@ -122,7 +126,7 @@ function AppContent(): JSX.Element {
   const handleLanguageChange = (newLanguageCode: string) => {
     dispatch({ type: 'SET_LANGUAGE', payload: newLanguageCode });
     updateUserLanguage(newLanguageCode).catch((error: any) => {
-      console.error("UI failed to sync language update:", error);
+      logger.error("UI failed to sync language update", error);
     });
   };
 
@@ -141,7 +145,7 @@ function AppContent(): JSX.Element {
       setFeedbackData(data);
       analytics.track('feedback_received_success');
     } catch (error) {
-      console.error("Failed to get feedback:", error);
+      logger.error("Failed to get feedback", error);
       setFeedbackError(error instanceof Error ? error.message : "An unknown error occurred.");
       analytics.track('feedback_received_failure');
     } finally {
@@ -246,8 +250,10 @@ function App(): JSX.Element {
     <Router>
       <AuthProvider>
         <ConversationProvider apiClient={null}>
-          <ScrollToTop />
-          <AppContent />
+          <ErrorBoundary>
+            <ScrollToTop />
+            <AppContent />
+          </ErrorBoundary>
         </ConversationProvider>
       </AuthProvider>
     </Router>

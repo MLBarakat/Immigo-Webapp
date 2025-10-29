@@ -8,7 +8,4 @@ export const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_
 export const pollyClient = new PollyClient({ region: process.env.AWS_REGION || 'us-east-2' });
 
 // Logger utility
-export const logger = {
-info: (message: string, context = {}) => console.log(JSON.stringify({ level: 'INFO', timestamp: new Date().toISOString(), message, ...context })),
-  error: (message: string, context = {}) => console.error(JSON.stringify({ level: 'ERROR', timestamp: new Date().toISOString(), message, ...context }))
-};
+export { logger } from './logger';

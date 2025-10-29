@@ -1,5 +1,5 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { conversationFunction, analyzeFunction, utilityFunction, configFunction } from './api/resources';
+import { conversationFunction, analyzeFunction, utilityFunction, configFunction, settingsFunction, historyFunction } from './api/resources';
 import { auth } from './auth/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -11,13 +11,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { secret } from '@aws-amplify/backend';
 
-/**
- * ImmiGO Voice Assistant Backend Infrastructure
- * - Handles API Gateway integration with optimized configurations
- * - Manages multiple Lambda functions with specific memory allocations
- * - Sets up IAM permissions
- * - Configures CORS, security, and caching
- */
 const backend = defineBackend({
   auth,
   conversationFunction: {
@@ -45,14 +38,25 @@ const backend = defineBackend({
     ...configFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
     handler: 'handler.handler',
-    memorySize: 128, // Smallest size for a simple function
+    memorySize: 128,
     timeout: Duration.seconds(5)
+  },
+  settingsFunction: {
+    ...settingsFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'handler.handler',
+    memorySize: 256,
+    timeout: Duration.seconds(10)
+  },
+  historyFunction: {
+    ...historyFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'handler.handler',
+    memorySize: 256,
+    timeout: Duration.seconds(10)
   }
 });
 
-
-
-// API Gateway integration with optimizations
 const api = new apigateway.RestApi(backend.stack, 'RestApi', {
   restApiName: 'immigo-gateway',
   description: 'ImmiGO API Gateway - Handles requests for voice assistant functionalities',
@@ -68,7 +72,6 @@ const api = new apigateway.RestApi(backend.stack, 'RestApi', {
     ],
     maxAge: Duration.days(1),
   },
-  // Configure throttling and caching
   deployOptions: {
     throttlingRateLimit: 10000,
     throttlingBurstLimit: 5000,
@@ -77,9 +80,7 @@ const api = new apigateway.RestApi(backend.stack, 'RestApi', {
   },
 });
 
-// Configure CloudWatch monitoring for scaling
 const monitorFunction = (lambda: lambda.IFunction, name: string, thresholds: { concurrent: number, error: number }) => {
-  // Create CloudWatch alarm for concurrent executions
   new cloudwatch.Alarm(backend.stack, `${name}ConcurrentAlarm`, {
     metric: new cloudwatch.Metric({
       namespace: 'AWS/Lambda',
@@ -95,7 +96,6 @@ const monitorFunction = (lambda: lambda.IFunction, name: string, thresholds: { c
     comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD
   });
 
-  // Create CloudWatch alarm for errors
   new cloudwatch.Alarm(backend.stack, `${name}ErrorAlarm`, {
     metric: new cloudwatch.Metric({
       namespace: 'AWS/Lambda',
@@ -111,25 +111,21 @@ const monitorFunction = (lambda: lambda.IFunction, name: string, thresholds: { c
   });
 };
 
-// Configure auto-scaling for Lambda functions
 const setupAutoScaling = (fn: lambda.IFunction, name: string, config: {
   minCapacity: number,
   maxCapacity: number,
   targetUtilization: number
 }) => {
-  // Create function version for auto-scaling
   const version = new lambda.Version(backend.stack, `${name}Version`, {
     lambda: fn,
     removalPolicy: RemovalPolicy.RETAIN
   });
 
-  // Create alias with provisioned concurrency
   const alias = new lambda.Alias(backend.stack, `${name}LiveAlias`, {
     aliasName: 'live',
     version
   });
 
-  // Configure provisioned concurrency and auto-scaling on the alias
   const autoScaling = alias.addAutoScaling({ 
     minCapacity: config.minCapacity,
     maxCapacity: config.maxCapacity
@@ -142,7 +138,6 @@ const setupAutoScaling = (fn: lambda.IFunction, name: string, config: {
   });
 };
 
-// Set up monitoring and auto-scaling for each function
 const conversationLambda = backend.conversationFunction.resources.lambda;
 monitorFunction(conversationLambda, 'Conversation', { concurrent: 80, error: 5 });
 setupAutoScaling(conversationLambda, 'Conversation', {
@@ -159,7 +154,6 @@ setupAutoScaling(analyzeLambda, 'Analysis', {
   targetUtilization: 0.70
 });
 
-// Set up monitoring and scaling for utility function
 const utilityLambda = backend.utilityFunction.resources.lambda;
 monitorFunction(utilityLambda, 'Utility', { concurrent: 30, error: 5 });
 setupAutoScaling(utilityLambda, 'Utility', {
@@ -168,7 +162,6 @@ setupAutoScaling(utilityLambda, 'Utility', {
   targetUtilization: 0.65
 });
 
-// Add outputs for monitoring
 new CfnOutput(backend.stack, 'ConversationFunctionName', {
   value: backend.conversationFunction.resources.lambda.functionArn.split(':').pop() || '',
   description: 'Name of the conversation Lambda function'
@@ -184,80 +177,19 @@ new CfnOutput(backend.stack, 'UtilityFunctionName', {
   description: 'Name of the utility Lambda function'
 });
 
-// Common integration response parameters for CORS
 const corsIntegrationResponse = {
   'method.response.header.Access-Control-Allow-Origin': "'*'",
   'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST,GET,PUT,DELETE'",
   'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
 };
 
-// Conversation endpoints (high memory)
-const conversationIntegration = new apigateway.LambdaIntegration(
-  backend.conversationFunction.resources.lambda,
-  {
-    proxy: true,
-    allowTestInvoke: true,
-    requestTemplates: {
-      'application/json': '{ "statusCode": 200 }'
-    },
-    integrationResponses: [{
-      statusCode: '200',
-      responseParameters: corsIntegrationResponse,
-      responseTemplates: {
-        'application/json': '$input.json("$")'
-      }
-    }]
-  }
-);
+const conversationIntegration = new apigateway.LambdaIntegration(backend.conversationFunction.resources.lambda, { proxy: true });
+const analyzeIntegration = new apigateway.LambdaIntegration(backend.analyzeFunction.resources.lambda, { proxy: true });
+const utilityIntegration = new apigateway.LambdaIntegration(backend.utilityFunction.resources.lambda, { proxy: true });
+const configIntegration = new apigateway.LambdaIntegration(backend.configFunction.resources.lambda, { proxy: true });
+const settingsIntegration = new apigateway.LambdaIntegration(backend.settingsFunction.resources.lambda, { proxy: true });
+const historyIntegration = new apigateway.LambdaIntegration(backend.historyFunction.resources.lambda, { proxy: true });
 
-// Analysis endpoints (medium memory)
-const analyzeIntegration = new apigateway.LambdaIntegration(
-  backend.analyzeFunction.resources.lambda,
-  {
-    proxy: true,
-    allowTestInvoke: true,
-    requestTemplates: {
-      'application/json': '{ "statusCode": 200 }'
-    },
-    integrationResponses: [{
-      statusCode: '200',
-      responseParameters: corsIntegrationResponse,
-      responseTemplates: {
-        'application/json': '$input.json("$")'
-      }
-    }]
-  }
-);
-
-// Utility endpoints (low memory)
-const utilityIntegration = new apigateway.LambdaIntegration(
-  backend.utilityFunction.resources.lambda,
-  {
-    proxy: true,
-    allowTestInvoke: true,
-    requestTemplates: {
-      'application/json': '{ "statusCode": 200 }'
-    },
-    integrationResponses: [{
-      statusCode: '200',
-      responseParameters: corsIntegrationResponse,
-      responseTemplates: {
-        'application/json': '$input.json("$")'
-      }
-    }]
-  }
-);
-
-// Config endpoint (very low memory, public access)
-const configIntegration = new apigateway.LambdaIntegration(
-  backend.configFunction.resources.lambda,
-  {
-    proxy: true,
-    allowTestInvoke: true,
-  }
-);
-
-// Common method response parameters for CORS
 const corsMethodResponse = {
   'method.response.header.Access-Control-Allow-Origin': true,
   'method.response.header.Access-Control-Allow-Methods': true,
@@ -266,86 +198,53 @@ const corsMethodResponse = {
 
 const apiRoot = api.root.addResource('api');
 
-// Route configurations
 const conversation = apiRoot.addResource('conversation');
-conversation.addMethod('POST', conversationIntegration, {
-  authorizationType: apigateway.AuthorizationType.NONE,
-  methodResponses: [{
-    statusCode: '200',
-    responseParameters: corsMethodResponse
-  }]
-});
+conversation.addMethod('POST', conversationIntegration, { authorizationType: apigateway.AuthorizationType.NONE, methodResponses: [{ statusCode: '200', responseParameters: corsMethodResponse }] });
 
 const analyze = apiRoot.addResource('analyze');
-analyze.addMethod('POST', analyzeIntegration, {
-  authorizationType: apigateway.AuthorizationType.NONE,
-  methodResponses: [{
-    statusCode: '200',
-    responseParameters: corsMethodResponse
-  }]
-});
+analyze.addMethod('POST', analyzeIntegration, { authorizationType: apigateway.AuthorizationType.NONE, methodResponses: [{ statusCode: '200', responseParameters: corsMethodResponse }] });
 
 const utility = apiRoot.addResource('utility');
-utility.addMethod('ANY', utilityIntegration, {
-  authorizationType: apigateway.AuthorizationType.NONE,
-  methodResponses: [{
-    statusCode: '200',
-    responseParameters: corsMethodResponse
-  }],
-  requestParameters: {
-    'method.request.querystring.userId': true,
-  }
-});
+utility.addMethod('ANY', utilityIntegration, { authorizationType: apigateway.AuthorizationType.NONE, methodResponses: [{ statusCode: '200', responseParameters: corsMethodResponse }], requestParameters: { 'method.request.querystring.userId': true } });
 
-// Config route
 const config = apiRoot.addResource('config');
-config.addMethod('GET', configIntegration, {
-  // This endpoint is public, so no authorization
-  authorizationType: apigateway.AuthorizationType.NONE,
-  methodResponses: [{
-    statusCode: '200'
-  }]
-});
-// Add IAM policies to Lambda functions
-const bedrockPolicy = new PolicyStatement({
-  actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
-  resources: ['*'],
-});
+config.addMethod('GET', configIntegration, { authorizationType: apigateway.AuthorizationType.NONE, methodResponses: [{ statusCode: '200' }] });
 
-const pollyPolicy = new PolicyStatement({
-  actions: ['polly:SynthesizeSpeech'],
-  resources: ['*'],
-});
+const settings = apiRoot.addResource('settings');
+settings.addMethod('GET', settingsIntegration, { authorizationType: apigateway.AuthorizationType.NONE, methodResponses: [{ statusCode: '200', responseParameters: corsMethodResponse }] });
+settings.addMethod('PUT', settingsIntegration, { authorizationType: apigateway.AuthorizationType.NONE, methodResponses: [{ statusCode: '200', responseParameters: corsMethodResponse }] });
 
-// Add policies to conversation and analyze functions
+const history = apiRoot.addResource('history');
+history.addMethod('GET', historyIntegration, { authorizationType: apigateway.AuthorizationType.NONE, methodResponses: [{ statusCode: '200', responseParameters: corsMethodResponse }] });
+
+const bedrockPolicy = new PolicyStatement({ actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'], resources: ['*'] });
+const pollyPolicy = new PolicyStatement({ actions: ['polly:SynthesizeSpeech'], resources: ['*'] });
+
 backend.conversationFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 backend.conversationFunction.resources.lambda.addToRolePolicy(pollyPolicy);
 backend.analyzeFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 
-// Add environment variables to conversation function
 backend.conversationFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.conversationFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.conversationFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
 backend.conversationFunction.addEnvironment('FUNCTION_TYPE', 'conversation');
 
-// Add environment variables to analyze function
 backend.analyzeFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.analyzeFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.analyzeFunction.addEnvironment('FUNCTION_TYPE', 'analyze');
 
-// Add environment variables to utility function
 backend.utilityFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.utilityFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.utilityFunction.addEnvironment('FUNCTION_TYPE', 'utility');
 
-// Add environment variables to config function
-backend.configFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
+backend.settingsFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
+backend.settingsFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
+backend.settingsFunction.addEnvironment('FUNCTION_TYPE', 'settings');
+
+backend.historyFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
+backend.historyFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
+backend.historyFunction.addEnvironment('FUNCTION_TYPE', 'history');
+
 backend.configFunction.addEnvironment('SUPABASE_ANON_KEY', secret('SUPABASE_ANON_KEY'));
 
-// Output
-backend.addOutput({
-  custom: { 
-    API_URL: api.url,
-    API_ENDPOINT: `${api.url}api`
-  },
-});
+backend.addOutput({ custom: { API_URL: api.url, API_ENDPOINT: `${api.url}api` } });

@@ -107,6 +107,32 @@ export const configFunction = defineFunction({
     VERSION: '1.0.0'
   }
 });
+
+// Settings Function - Manages user-specific settings
+export const settingsFunction = defineFunction({
+  name: 'settings-function',
+  entry: '../functions/settings.ts',
+  environment: {
+    NODE_ENV: 'production',
+    FUNCTION_TYPE: 'settings',
+    LOG_LEVEL: 'info',
+    DESCRIPTION: 'Manages user profile settings.',
+    VERSION: '1.0.0'
+  }
+});
+
+// History Function - Manages user conversation history
+export const historyFunction = defineFunction({
+  name: 'history-function',
+  entry: '../functions/history.ts',
+  environment: {
+    NODE_ENV: 'production',
+    FUNCTION_TYPE: 'history',
+    LOG_LEVEL: 'info',
+    DESCRIPTION: 'Manages user conversation history.',
+    VERSION: '1.0.0'
+  }
+});
 // Required AWS Permissions per Function:
 // 
 // Conversation Function:
