@@ -40,7 +40,7 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
     method: req.method,
   });
 
-  const errorMessage = process.env.NODE_ENV === 'development' || appError.isOperational
+  const errorMessage = process.env.NODE_ENV === 'DEV' || appError.isOperational
     ? appError.message
     : 'An internal server error occurred.';
 

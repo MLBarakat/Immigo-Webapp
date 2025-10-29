@@ -15,6 +15,9 @@ const createResponse = (statusCode: number, body: object) => {
 };
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  // Log all environment variables for debugging purposes
+  logger.debug('Dumping all environment variables', { env: process.env });
+
   logger.debug('Config function execution started', { path: event.path });
 
   try {
@@ -34,7 +37,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const responseBody = { supabaseUrl, supabaseAnonKey };
     // In development, we log more details. In production, we log minimally.
     logger.info('Successfully retrieved Supabase configuration.', { 
-      urlHost: process.env.NODE_ENV === 'development' ? supabaseUrl.split('//')[1].split('.')[0] : undefined
+      urlHost: process.env.NODE_ENV === 'DEV' ? supabaseUrl.split('//')[1].split('.')[0] : undefined
     });
 
     return createResponse(200, responseBody);
@@ -49,7 +52,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     });
 
     // Only show detailed error messages in development
-    const errorMessage = process.env.NODE_ENV === 'development' ? appError.message : 'An internal server error occurred.';
+    const errorMessage = process.env.NODE_ENV === 'DEV' ? appError.message : 'An internal server error occurred.';
     return createResponse(appError.statusCode, { error: errorMessage });
   }
 };
