@@ -11,7 +11,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { secret } from '@aws-amplify/backend';
 
-// Determine the environment from a build-time environment variable
+// Determine the environment from a build-time environment variable to control staging
 const nodeEnv = process.env.NODE_ENV;
 
 const backend = defineBackend({
@@ -19,42 +19,42 @@ const backend = defineBackend({
   conversationFunction: {
     ...conversationFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'handler.handler',
+    handler: 'conversation.handler',
     memorySize: 1024,
     timeout: Duration.seconds(30)
   },
   analyzeFunction: {
     ...analyzeFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'handler.handler',
+    handler: 'analyze.handler',
     memorySize: 512,
     timeout: Duration.seconds(30)
   },
   utilityFunction: {
     ...utilityFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'handler.handler',
+    handler: 'utility.handler',
     memorySize: 256,
     timeout: Duration.seconds(10)
   },
   configFunction: {
     ...configFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'handler.handler',
+    handler: 'config.handler',
     memorySize: 128,
     timeout: Duration.seconds(5)
   },
   settingsFunction: {
     ...settingsFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'handler.handler',
+    handler: 'settings.handler',
     memorySize: 256,
     timeout: Duration.seconds(10)
   },
   historyFunction: {
     ...historyFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'handler.handler',
+    handler: 'history.handler',
     memorySize: 256,
     timeout: Duration.seconds(10)
   }
