@@ -231,23 +231,18 @@ backend.analyzeFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 backend.conversationFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.conversationFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 backend.conversationFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_API_KEY'));
-backend.conversationFunction.addEnvironment('FUNCTION_TYPE', 'conversation');
 
 backend.analyzeFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.analyzeFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
-backend.analyzeFunction.addEnvironment('FUNCTION_TYPE', 'analyze');
 
 backend.utilityFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.utilityFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
-backend.utilityFunction.addEnvironment('FUNCTION_TYPE', 'utility');
 
 backend.settingsFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.settingsFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
-backend.settingsFunction.addEnvironment('FUNCTION_TYPE', 'settings');
 
 backend.historyFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.historyFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
-backend.historyFunction.addEnvironment('FUNCTION_TYPE', 'history');
 
 backend.configFunction.addEnvironment('SUPABASE_ANON_KEY', secret('SUPABASE_ANON_KEY'));
 

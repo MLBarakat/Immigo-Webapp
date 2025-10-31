@@ -3,6 +3,7 @@ import { defineFunction } from '@aws-amplify/backend';
 // Determine the environment from a build-time environment variable
 const nodeEnv = process.env.NODE_ENV || 'DEV';
 const logLevel = nodeEnv === 'DEV' ? 'DEBUG' : 'INFO';
+const supabaseUrl = process.env.SUPABASE_URL || '';
 
 // Conversation Function
 export const conversationFunction = defineFunction({
@@ -46,7 +47,8 @@ export const configFunction = defineFunction({
   environment: {
     NODE_ENV: nodeEnv,
     LOG_LEVEL: logLevel,
-    FUNCTION_TYPE: 'config',
+    SUPABASE_URL: supabaseUrl,
+    FUNCTION_TYPE: 'configuration',
     DESCRIPTION: 'Provides public configuration variables to the frontend client',
     VERSION: '1.0.0'
   }
@@ -58,6 +60,7 @@ export const settingsFunction = defineFunction({
   environment: {
     NODE_ENV: nodeEnv,
     LOG_LEVEL: logLevel,
+    SUPABASE_URL: supabaseUrl,
     FUNCTION_TYPE: 'settings',
     DESCRIPTION: 'Manages user profile settings.',
     VERSION: '1.0.0'
@@ -70,6 +73,7 @@ export const historyFunction = defineFunction({
   environment: {
     NODE_ENV: nodeEnv,
     LOG_LEVEL: logLevel,
+    SUPABASE_URL: supabaseUrl,
     FUNCTION_TYPE: 'history',
     DESCRIPTION: 'Manages user conversation history.',
     VERSION: '1.0.0'
