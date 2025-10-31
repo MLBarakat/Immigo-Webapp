@@ -15,9 +15,7 @@ const createResponse = (statusCode: number, body: object) => {
 };
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  // Log all environment variables for debugging purposes
-  logger.debug('Dumping all environment variables', { env: process.env });
-
+  
   logger.debug('Config function execution started', { path: event.path });
 
   try {

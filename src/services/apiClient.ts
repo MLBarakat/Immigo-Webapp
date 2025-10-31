@@ -38,6 +38,7 @@ export class ApiClient {
       'X-API-Key': API_KEY,
     };
 
+    // The API_BASE_URL already contains /api, so the url parameter should be the relative path from there.
     const fullUrl = `${API_BASE_URL}${url}`;
     logger.debug(`API Request: ${options.method || 'GET'} ${fullUrl}`);
 
@@ -64,7 +65,7 @@ export class ApiClient {
   }
 
   async getHistory(): Promise<Message[]> {
-    const response = await this.fetchWithAuth('/api/history');
+    const response = await this.fetchWithAuth('/history');
     const data = await response.json();
     return data.history;
   }
@@ -80,7 +81,7 @@ export class ApiClient {
     onTextChunk: (textChunk: string) => void,
     onAudioChunk: (audioChunk: Uint8Array) => void
   ): Promise<void> {
-    const response = await this.fetchWithAuth('/api/conversation', {
+    const response = await this.fetchWithAuth('/conversation', {
       method: 'POST',
       body: JSON.stringify({
         conversationId,
@@ -117,7 +118,7 @@ export class ApiClient {
   }
 
   async getAnalysis(conversationHistory: readonly Message[]): Promise<FeedbackResponse> {
-    const response = await this.fetchWithAuth('/api/conversation/analyze', {
+    const response = await this.fetchWithAuth('/analyze', {
       method: 'POST',
       body: JSON.stringify({ conversationHistory }),
     });
@@ -125,12 +126,12 @@ export class ApiClient {
   }
 
   async getSettings(): Promise<Partial<UserSettings>> {
-    const response = await this.fetchWithAuth('/api/settings');
+    const response = await this.fetchWithAuth('/settings');
     return response.json();
   }
 
   async updateSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
-    const response = await this.fetchWithAuth('/api/settings', {
+    const response = await this.fetchWithAuth('/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
     });
