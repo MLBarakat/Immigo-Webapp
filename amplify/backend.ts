@@ -5,6 +5,8 @@ import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -12,7 +14,7 @@ import { Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { secret } from '@aws-amplify/backend';
 
 // Determine the environment from a build-time environment variable to control staging
-const nodeEnv = process.env.NODE_ENV;
+const nodeEnv = process.env.NODE_ENV || 'DEV';
 
 const backend = defineBackend({
   auth,
@@ -60,8 +62,9 @@ const backend = defineBackend({
   }
 });
 
-const api = new apigateway.RestApi(backend.stack, 'RestApi', {
-  restApiName: `immigo-gateway-${nodeEnv}`,
+// HTTP API Gateway
+const apiGateway = new apigateway.RestApi(backend.stack, 'RestApi', {
+  restApiName: `ImmiGO-Gateway-${nodeEnv}`,
   description: `ImmiGO API Gateway - ${nodeEnv}`,
   defaultCorsPreflightOptions: {
     allowOrigins: apigateway.Cors.ALL_ORIGINS,
@@ -83,6 +86,31 @@ const api = new apigateway.RestApi(backend.stack, 'RestApi', {
     loggingLevel: apigateway.MethodLoggingLevel.INFO,
   },
 });
+
+// WebSocket API Gateway
+const webSocketApi = new apigatewayv2.WebSocketApi(backend.stack, 'WebSocketApi', {
+  apiName: `immigo-websocket-api-${nodeEnv}`,
+  description: `ImmiGO WebSocket API - ${nodeEnv}`,
+});
+
+const webSocketStage = new apigatewayv2.WebSocketStage(backend.stack, 'WebSocketStage', {
+  webSocketApi,
+  stageName: nodeEnv,
+  autoDeploy: true,
+});
+
+const webSocketIntegration = new WebSocketLambdaIntegration('WebSocketIntegration', backend.conversationFunction.resources.lambda);
+
+webSocketApi.addRoute('$connect', { integration: webSocketIntegration });
+webSocketApi.addRoute('$disconnect', { integration: webSocketIntegration });
+webSocketApi.addRoute('$default', { integration: webSocketIntegration });
+
+// Grant API Gateway permission to invoke the Lambda
+backend.conversationFunction.resources.lambda.addPermission('ApiGatewayInvokePermission', {
+    principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+    sourceArn: `arn:aws:execute-api:${backend.stack.region}:${backend.stack.account}:${webSocketApi.apiId}/${webSocketStage.stageName}/*`
+});
+
 
 const monitorFunction = (lambda: lambda.IFunction, name: string, thresholds: { concurrent: number, error: number }) => {
   new cloudwatch.Alarm(backend.stack, `${name}ConcurrentAlarm`, {
@@ -200,7 +228,7 @@ const corsMethodResponse = {
   'method.response.header.Access-Control-Allow-Headers': true
 };
 
-const apiRoot = api.root.addResource('api');
+const apiRoot = apiGateway.root.addResource('api');
 
 const conversation = apiRoot.addResource('conversation');
 conversation.addMethod('POST', conversationIntegration, { authorizationType: apigateway.AuthorizationType.NONE, methodResponses: [{ statusCode: '200', responseParameters: corsMethodResponse }] });
@@ -244,4 +272,10 @@ backend.historyFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPA
 
 backend.configFunction.addEnvironment('SUPABASE_ANON_KEY', secret('SUPABASE_ANON_KEY'));
 
-backend.addOutput({ custom: { API_URL: api.url, API_ENDPOINT: `${api.url}api` } });
+backend.addOutput({
+  custom: {
+    API_URL: apiGateway.url,
+    API_ENDPOINT: `${apiGateway.url}api`,
+    WEBSOCKET_URL: webSocketStage.url,
+  },
+});
