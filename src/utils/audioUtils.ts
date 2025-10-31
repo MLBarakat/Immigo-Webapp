@@ -82,7 +82,8 @@ export class DeepgramManager {
 
     try {
       // Establish WebSocket connection to the backend server
-      this.socket = new WebSocket('ws://localhost:3001'); // Ensure this URL is correct for your setup
+      const websocketURL = import.meta.env.VITE_WEBSOCKET_URL;
+      this.socket = new WebSocket(websocketURL);
 
       this.socket.onopen = async () => {
         console.log('WebSocket connection opened.');
