@@ -89,7 +89,7 @@ const apiGateway = new apigateway.RestApi(backend.stack, 'RestApi', {
 
 // WebSocket API Gateway
 const webSocketApi = new apigatewayv2.WebSocketApi(backend.stack, 'WebSocketApi', {
-  apiName: `immigo-websocket-api-${nodeEnv}`,
+  apiName: `ImmiGO-Websocket-${nodeEnv}`,
   description: `ImmiGO WebSocket API - ${nodeEnv}`,
 });
 
