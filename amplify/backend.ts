@@ -238,10 +238,8 @@ backend.analyzeFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_
 backend.utilityFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.utilityFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 
-backend.settingsFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.settingsFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 
-backend.historyFunction.addEnvironment('SUPABASE_URL', secret('SUPABASE_URL'));
 backend.historyFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 
 backend.configFunction.addEnvironment('SUPABASE_ANON_KEY', secret('SUPABASE_ANON_KEY'));
