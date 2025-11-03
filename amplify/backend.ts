@@ -3,6 +3,8 @@ import { conversationFunction, analyzeFunction, utilityFunction, configFunction,
 import { auth } from './auth/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -14,17 +16,59 @@ const nodeEnv = process.env.NODE_ENV || 'DEV';
 
 const backend = defineBackend({
   auth,
-  conversationFunction, 
-  analyzeFunction, 
-  utilityFunction, 
-  configFunction, 
-  settingsFunction, 
-  historyFunction,
-  webSocketFunction
+  conversationFunction: {
+    ...conversationFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'conversation.handler',
+    memorySize: 1024,
+    timeout: Duration.seconds(30)
+  },
+  analyzeFunction: {
+    ...analyzeFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'analyze.handler',
+    memorySize: 512,
+    timeout: Duration.seconds(30)
+  },
+  utilityFunction: {
+    ...utilityFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'utility.handler',
+    memorySize: 256,
+    timeout: Duration.seconds(10)
+  },
+  configFunction: {
+    ...configFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'config.handler',
+    memorySize: 128,
+    timeout: Duration.seconds(5)
+  },
+  settingsFunction: {
+    ...settingsFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'settings.handler',
+    memorySize: 256,
+    timeout: Duration.seconds(10)
+  },
+  historyFunction: {
+    ...historyFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'history.handler',
+    memorySize: 256,
+    timeout: Duration.seconds(10)
+  },
+  webSocketFunction: {
+    ...webSocketFunction,
+    runtime: lambda.Runtime.NODEJS_18_X,
+    handler: 'websocket.handler',
+    memorySize: 512,
+    timeout: Duration.seconds(30)
+  }
 });
 
 // HTTP API Gateway
-const apiURL = new apigateway.RestApi(backend.stack, 'RestApi', {
+const apiGatewayURL = new apigateway.RestApi(backend.stack, 'RestApi', {
   restApiName: `ImmiGO-Gateway-${nodeEnv}`,
   description: `ImmiGO API Gateway - ${nodeEnv}`,
   defaultCorsPreflightOptions: {
@@ -82,7 +126,7 @@ const configIntegration = new apigateway.LambdaIntegration(backend.configFunctio
 const settingsIntegration = new apigateway.LambdaIntegration(backend.settingsFunction.resources.lambda, { proxy: true });
 const historyIntegration = new apigateway.LambdaIntegration(backend.historyFunction.resources.lambda, { proxy: true });
 
-const apiRoot = apiURL.root.addResource('api');
+const apiRoot = apiGatewayURL.root.addResource('api');
 
 // HTTP Routes
 apiRoot.addResource('conversation').addMethod('POST', conversationIntegration);
@@ -123,8 +167,8 @@ backend.webSocketFunction.addEnvironment('DEEPGRAM_API_KEY', secret('DEEPGRAM_AP
 // Outputs
 backend.addOutput({
   custom: {
-    API_URL: apiURL.url,
-    API_ENDPOINT: `${apiURL.url}api`,
+    API_URL: apiGatewayURL.url,
+    API_ENDPOINT: `${apiGatewayURL.url}api`,
     WEBSOCKET_URL: webSocketStage.url,
   },
 });
