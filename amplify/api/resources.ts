@@ -79,3 +79,15 @@ export const historyFunction = defineFunction({
     VERSION: '1.0.0'
   }
 });
+
+// WebSocket Function
+export const webSocketFunction = defineFunction({
+  entry: '../functions/websocket.ts',
+  environment: {
+    NODE_ENV: nodeEnv,
+    LOG_LEVEL: logLevel,
+    FUNCTION_TYPE: 'websocket',
+    DESCRIPTION: 'Handles WebSocket connections for real-time communication.',
+    VERSION: '1.0.0'
+  }
+});
