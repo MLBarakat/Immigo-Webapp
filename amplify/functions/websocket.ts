@@ -77,7 +77,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         logger.debug(`Received message from client, forwarding to Deepgram`, { connectionId });
         const deepgramSocketForMessage = connections.get(connectionId);
         if (deepgramSocketForMessage && deepgramSocketForMessage.readyState === WebSocket.OPEN) {
-          deepgramSocketForMessage.send(event.body);
+          if (event.body) {
+            deepgramSocketForMessage.send(event.body);
+          } else {
+            logger.warn('Received an empty message from client.', { connectionId });
+          }
         } else {
           logger.warn('Received message for a connection with no active Deepgram socket.', { connectionId });
         }
