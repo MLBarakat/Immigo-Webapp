@@ -107,7 +107,7 @@ webSocketApi.addRoute('$default', { integration: webSocketIntegration });
 // Grant the WebSocket API permission to invoke the Lambda function
 backend.webSocketFunction.resources.lambda.addPermission('ApiGatewayInvokePermission', {
     principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-    sourceArn: `arn:aws:execute-api:${backend.stack.region}:${backend.stack.account}:${webSocketApi.apiId}/${webSocketStage.stageName}/*`
+    sourceArn: `arn:aws:execute-api:${backend.stack.region}:${backend.stack.account}:${webSocketApi.apiId}/*`
 });
 
 // Grant the WebSocket Lambda function permission to manage connections
