@@ -3,7 +3,8 @@ import { logger } from './logger';
 import WebSocket from 'ws';
 import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi';
 
-const DEEPGRAM_URL = `wss://api.deepgram.com/v1/listen?encoding=webm&sample_rate=48000&model=nova-2-general&language=en-US&interim_results=true&endpointing=true`;
+const deepgramURL = process.env.DEEPGRAM_URL || '';
+const deepgramAPIKey = process.env.DEEPGRAM_API_KEY || '';
 
 // This is a simple in-memory store. For a scalable production app, you would replace this with DynamoDB.
 const connections = new Map<string, WebSocket>();
@@ -15,6 +16,8 @@ const getApiGatewayManagementApiClient = (domainName: string, stage: string) => 
 };
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  // Log all environment variables for debugging purposes
+  logger.debug('Dumping all environment variables', { env: process.env });
   const connectionId = event.requestContext.connectionId!;
   const routeKey = event.requestContext.routeKey!;
   const domainName = event.requestContext.domainName!;
@@ -29,8 +32,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       case '$connect':
         logger.info(`Client connecting...`, { connectionId });
 
-        const deepgramSocket = new WebSocket(DEEPGRAM_URL, {
-          headers: { Authorization: `Token ${process.env.DEEPGRAM_API_KEY}` },
+        const deepgramSocket = new WebSocket(deepgramURL, {
+          headers: { Authorization: `Token ${deepgramAPIKey}` },
         });
 
         deepgramSocket.on('open', () => {

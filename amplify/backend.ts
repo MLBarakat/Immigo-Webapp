@@ -6,10 +6,8 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import { Duration, Fn, Aws } from 'aws-cdk-lib';
+import { Duration, Aws } from 'aws-cdk-lib';
 import { secret } from '@aws-amplify/backend';
-import * as logs from 'aws-cdk-lib/aws-logs';
 
 // Determine the environment from a build-time environment variable to control staging
 const nodeEnv = process.env.NODE_ENV || 'DEV';
@@ -69,7 +67,7 @@ const backend = defineBackend({
 
 // HTTP API Gateway
 const gatewayAPI = new apigateway.RestApi(backend.stack, 'Gateway-Api', {
-  restApiName: `ImmiGO-Gateway-${nodeEnv}`,
+  restApiName: `immigo-gateway-${nodeEnv}`,
   description: `ImmiGO API Gateway - ${nodeEnv}`,
   defaultCorsPreflightOptions: {
     allowOrigins: apigateway.Cors.ALL_ORIGINS,
@@ -88,39 +86,15 @@ const gatewayAPI = new apigateway.RestApi(backend.stack, 'Gateway-Api', {
 
 // WebSocket API Gateway
 const webSocketAPI = new apigatewayv2.WebSocketApi(backend.stack, 'WebSocket-Api', {
-  apiName: `ImmiGO-WebSocket-${nodeEnv}`,
+  apiName: `immigo-websocket-api-${nodeEnv}`,
   description: `ImmiGO WebSocket API - ${nodeEnv}`,
 });
 
-// create a CloudWatch log group for access logs
-const webSicketLogGroup = new logs.LogGroup(backend.stack, 'WebSocketAccessLogs', { retention: logs.RetentionDays.ONE_WEEK });
-
-// lower-level stage to set access logs and throttling (DefaultRouteSettings)
-const webSocketStage = new apigatewayv2.CfnStage(backend.stack, 'WebSocketStage', {
-  apiId: webSocketAPI.apiId,
+const webSocketStage = new apigatewayv2.WebSocketStage(backend.stack, 'WebSocketStage', {
+  webSocketApi: webSocketAPI,
   stageName: nodeEnv,
   autoDeploy: true,
-  accessLogSettings: {
-    destinationArn: webSicketLogGroup.logGroupArn,
-    format: '$context.requestId $context.routeKey $context.status',
-  },
-  defaultRouteSettings: {
-    throttlingBurstLimit: 5000,
-    throttlingRateLimit: 10000,
-  },
 });
-
-// build the connect URL as a CloudFormation expression
-const websocketURL = Fn.join('', [
-  'wss://',
-  webSocketAPI.apiId,        // L2 apiId token
-  '.execute-api.',
-  Aws.REGION,
-  '.',
-  Aws.URL_SUFFIX,
-  '/',
-  webSocketStage.stageName  // token from the CfnStage
-]);
 
 const webSocketIntegration = new WebSocketLambdaIntegration('WebSocketIntegration', backend.webSocketFunction.resources.lambda);
 
@@ -128,16 +102,10 @@ webSocketAPI.addRoute('$connect', { integration: webSocketIntegration });
 webSocketAPI.addRoute('$disconnect', { integration: webSocketIntegration });
 webSocketAPI.addRoute('$default', { integration: webSocketIntegration });
 
-// Grant the WebSocket API permission to invoke the Lambda function
-backend.webSocketFunction.resources.lambda.addPermission('ApiGatewayInvokePermission', {
-    principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-    sourceArn: `arn:aws:execute-api:${backend.stack.region}:${backend.stack.account}:${webSocketAPI.apiId}/*`
-});
-
 // Grant the WebSocket Lambda function permission to manage connections
 const manageConnectionsPolicy = new PolicyStatement({
     actions: ['execute-api:ManageConnections'],
-    resources: [`arn:aws:execute-api:${backend.stack.region}:${backend.stack.account}:${webSocketAPI.apiId}/${webSocketStage.stageName}/*`],
+    resources: [`arn:aws:execute-api:${Aws.REGION}:${Aws.ACCOUNT_ID}:${webSocketAPI.apiId}/${nodeEnv}/*`],
 });
 backend.webSocketFunction.resources.lambda.addToRolePolicy(manageConnectionsPolicy);
 
@@ -193,6 +161,6 @@ backend.addOutput({
   custom: {
     API_URL: gatewayAPI.url,
     API_ENDPOINT: `${gatewayAPI.url}api`,
-    WEBSOCKET_URL: websocketURL
+    WEBSOCKET_URL: webSocketStage.url,
   },
 });

@@ -4,6 +4,7 @@ import { defineFunction } from '@aws-amplify/backend';
 const nodeEnv = process.env.NODE_ENV || 'DEV';
 const logLevel = nodeEnv === 'DEV' ? 'DEBUG' : 'INFO';
 const supabaseUrl = process.env.SUPABASE_URL || '';
+const deepgramURL = process.env.DEEPGRAM_URL || '';
 
 // Conversation Function
 export const conversationFunction = defineFunction({
@@ -86,6 +87,7 @@ export const webSocketFunction = defineFunction({
   environment: {
     NODE_ENV: nodeEnv,
     LOG_LEVEL: logLevel,
+    DEEPGRAM_URL: deepgramURL,
     FUNCTION_TYPE: 'websocket',
     DESCRIPTION: 'Handles WebSocket connections for real-time communication.',
     VERSION: '1.0.0'
