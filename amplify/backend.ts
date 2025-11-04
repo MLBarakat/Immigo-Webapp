@@ -66,7 +66,7 @@ const backend = defineBackend({
 });
 
 // HTTP API Gateway
-const gatewayAPI = new apigateway.RestApi(backend.stack, 'Gateway-Api', {
+const gatewayAPI = new apigateway.RestApi(backend.stack, 'GatewayApi', {
   restApiName: `immigo-gateway-${nodeEnv}`,
   description: `ImmiGO API Gateway - ${nodeEnv}`,
   defaultCorsPreflightOptions: {
@@ -85,7 +85,7 @@ const gatewayAPI = new apigateway.RestApi(backend.stack, 'Gateway-Api', {
 });
 
 // WebSocket API Gateway
-const webSocketAPI = new apigatewayv2.WebSocketApi(backend.stack, 'WebSocket-Api', {
+const webSocketAPI = new apigatewayv2.WebSocketApi(backend.stack, 'WebSocketApi', {
   apiName: `immigo-websocket-api-${nodeEnv}`,
   description: `ImmiGO WebSocket API - ${nodeEnv}`,
 });
