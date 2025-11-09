@@ -163,10 +163,12 @@ function AppContent(): JSX.Element {
     initials: (authUser?.user_metadata?.full_name as string || authUser?.email || 'U').charAt(0).toUpperCase(),
   };
 
+  const isAppLoading = conversationManager.isModelLoading || !conversationManager.isVadReady;
+
   return (
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
       <AppLoadingOverlay 
-        isModelLoading={conversationManager.isModelLoading} 
+        isLoading={isAppLoading} 
         modelLoadingProgress={conversationManager.modelLoadingProgress} 
       />
       <Header

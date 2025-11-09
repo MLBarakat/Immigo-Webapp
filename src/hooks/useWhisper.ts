@@ -7,6 +7,7 @@ export interface WhisperHook {
     interimTranscript: string;
     finalTranscript: { text: string } | null;
     isModelLoading: boolean;
+    isVadReady: boolean; // New state
     modelLoadingProgress: number;
     isTranscribing: boolean;
     startRecording: () => void;
@@ -17,6 +18,7 @@ export const useWhisper = (): WhisperHook => {
     const [interimTranscript, setInterimTranscript] = useState<string>('');
     const [finalTranscript, setFinalTranscript] = useState<{ text: string } | null>(null);
     const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
+    const [isVadReady, setIsVadReady] = useState<boolean>(false); // New state
     const [modelLoadingProgress, setModelLoadingProgress] = useState<number>(0);
     const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
 
@@ -34,6 +36,9 @@ export const useWhisper = (): WhisperHook => {
             case 'ready':
                 setIsModelLoading(false);
                 logger.info('Whisper model is ready.');
+                break;
+            case 'interim-result':
+                setInterimTranscript(output);
                 break;
             case 'complete':
                 setIsTranscribing(false);
@@ -99,6 +104,7 @@ export const useWhisper = (): WhisperHook => {
 
         MicVAD.new(vadOptions).then(newVad => {
             vad.current = newVad;
+            setIsVadReady(true); // Set VAD ready state to true
         }).catch(error => {
             logger.error("Failed to create VAD", error);
         });
@@ -130,5 +136,5 @@ export const useWhisper = (): WhisperHook => {
         }
     };
 
-    return { interimTranscript, finalTranscript, isModelLoading, modelLoadingProgress, isTranscribing, startRecording, stopRecording };
+    return { interimTranscript, finalTranscript, isModelLoading, isVadReady, modelLoadingProgress, isTranscribing, startRecording, stopRecording };
 };

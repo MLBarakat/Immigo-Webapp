@@ -21,6 +21,7 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     interimTranscript,
     finalTranscript,
     isModelLoading,
+    isVadReady,
     modelLoadingProgress,
     startRecording,
     stopRecording
@@ -117,6 +118,7 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
   return {
     ...state,
     isModelLoading,
+    isVadReady,
     modelLoadingProgress,
     isTranscribing: state.appStatus === 'processing',
     startSession,

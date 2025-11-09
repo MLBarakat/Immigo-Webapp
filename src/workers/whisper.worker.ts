@@ -44,6 +44,11 @@ self.addEventListener('message', async (event) => {
             // Transcribe the audio
             const transcriber = await PipelineSingleton.getInstance();
             const result = await transcriber(audio, {
+                // Provide a callback function to receive intermediate results
+                callback_function: (beams: any[]) => {
+                    const bestBeam = beams.reduce((prev, curr) => (prev.score > curr.score ? prev : curr));
+                    self.postMessage({ status: 'interim-result', output: bestBeam.text });
+                },
                 chunk_length_s: 30,
                 stride_length_s: 5,
                 language: 'english',
