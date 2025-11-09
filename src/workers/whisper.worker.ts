@@ -43,8 +43,6 @@ self.addEventListener('message', async (event) => {
         } else if (action === 'transcribe') {
             const transcriber = await PipelineSingleton.getInstance();
             
-            // The transcriber function handles state and streams internally.
-            // We feed it the latest audio chunk.
             const result = await transcriber(audio, {
                 chunk_length_s: 30,
                 stride_length_s: 5,
@@ -53,8 +51,16 @@ self.addEventListener('message', async (event) => {
             });
 
             if (result) {
+                let output_text = '';
+                if (Array.isArray(result)) {
+                    // Join the text from all chunks if it's an array
+                    output_text = result.map(r => r.text).join('');
+                } else {
+                    // Otherwise, just use the text from the single result
+                    output_text = result.text;
+                }
                 // Post the latest transcription result back to the main thread.
-                self.postMessage({ status: 'interim-result', output: result.text });
+                self.postMessage({ status: 'interim-result', output: output_text });
             }
         }
     } catch (error: any) {
