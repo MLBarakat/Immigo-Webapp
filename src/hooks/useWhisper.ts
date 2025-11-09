@@ -1,7 +1,7 @@
 // src/hooks/useWhisper.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '../logger';
-import { MicVAD, VADOptions } from '@ricky0123/vad-web';
+import { MicVAD } from '@ricky0123/vad-web';
 
 export interface WhisperHook {
     interimTranscript: string;
@@ -83,7 +83,7 @@ export const useWhisper = (): WhisperHook => {
         worker.current.addEventListener('message', handleWorkerMessage);
         worker.current.postMessage({ action: 'load' });
 
-        const vadOptions: VADOptions = {
+        const vadOptions = {
             onSpeechStart: () => {
                 logger.debug('VAD: Speech started');
                 if (speechEndTimer.current) {
@@ -92,7 +92,7 @@ export const useWhisper = (): WhisperHook => {
                 audioBuffer.current = [];
             },
             onSpeechEnd: onSpeechEnd,
-            onSpeechData: (audio) => {
+            onSpeechData: (audio: Float32Array) => {
                 audioBuffer.current.push(audio);
             },
         };
