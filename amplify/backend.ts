@@ -153,6 +153,6 @@ backend.addOutput({
   custom: {
     API_URL: gatewayAPI.url,
     API_ENDPOINT: `${gatewayAPI.url}api`,
-    StorageBucketName: backend.resources.storage.bucketName,
+    StorageBucketName: backend.storage.resources.bucketName,
   },
 });
