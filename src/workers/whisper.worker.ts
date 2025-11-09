@@ -20,7 +20,9 @@ class PipelineSingleton {
      */
     static async getInstance(progress_callback?: (progress: any) => void): Promise<AutomaticSpeechRecognitionPipeline> {
         if (this.instance === null) {
-            this.instance = await pipeline(this.task, this.model, { progress_callback }) as AutomaticSpeechRecognitionPipeline;
+            // Use 'any' as an intermediate type to break the complex type inference chain
+            const p: any = await pipeline(this.task, this.model, { progress_callback });
+            this.instance = p as AutomaticSpeechRecognitionPipeline;
         }
         return this.instance;
     }
