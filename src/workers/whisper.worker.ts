@@ -41,20 +41,21 @@ self.addEventListener('message', async (event) => {
             self.postMessage({ status: 'ready' });
 
         } else if (action === 'transcribe') {
-            // Transcribe the audio
             const transcriber = await PipelineSingleton.getInstance();
+            
+            // The transcriber function handles state and streams internally.
+            // We feed it the latest audio chunk.
             const result = await transcriber(audio, {
-                // Provide a callback function to receive intermediate results
-                callback_function: (beams: any[]) => {
-                    const bestBeam = beams.reduce((prev, curr) => (prev.score > curr.score ? prev : curr));
-                    self.postMessage({ status: 'interim-result', output: bestBeam.text });
-                },
                 chunk_length_s: 30,
                 stride_length_s: 5,
                 language: 'english',
                 task: 'transcribe',
             });
-            self.postMessage({ status: 'complete', output: result });
+
+            if (result) {
+                // Post the latest transcription result back to the main thread.
+                self.postMessage({ status: 'interim-result', output: result.text });
+            }
         }
     } catch (error: any) {
         self.postMessage({ status: 'error', message: error.message });

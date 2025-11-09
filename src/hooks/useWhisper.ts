@@ -7,9 +7,9 @@ export interface WhisperHook {
     interimTranscript: string;
     finalTranscript: { text: string } | null;
     isModelLoading: boolean;
-    isVadReady: boolean; // New state
+    isVadReady: boolean;
     modelLoadingProgress: number;
-    isTranscribing: boolean;
+    isTranscribing: boolean; // This now means "is user speaking"
     startRecording: () => void;
     stopRecording: () => void;
 }
@@ -18,13 +18,12 @@ export const useWhisper = (): WhisperHook => {
     const [interimTranscript, setInterimTranscript] = useState<string>('');
     const [finalTranscript, setFinalTranscript] = useState<{ text: string } | null>(null);
     const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
-    const [isVadReady, setIsVadReady] = useState<boolean>(false); // New state
+    const [isVadReady, setIsVadReady] = useState<boolean>(false);
     const [modelLoadingProgress, setModelLoadingProgress] = useState<number>(0);
     const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
 
     const worker = useRef<Worker | null>(null);
     const vad = useRef<MicVAD | null>(null);
-    const audioBuffer = useRef<Float32Array[]>([]);
 
     const handleWorkerMessage = useCallback((event: MessageEvent) => {
         const { status, output } = event.data;
@@ -40,15 +39,8 @@ export const useWhisper = (): WhisperHook => {
             case 'interim-result':
                 setInterimTranscript(output);
                 break;
-            case 'complete':
-                setIsTranscribing(false);
-                setFinalTranscript(output);
-                setInterimTranscript(''); // Clear interim when final is ready
-                logger.info('Transcription completed.', { output });
-                break;
             case 'error':
                 setIsModelLoading(false);
-                setIsTranscribing(false);
                 logger.error('Whisper worker error:', event.data.message);
                 break;
             default:
@@ -59,28 +51,16 @@ export const useWhisper = (): WhisperHook => {
         }
     }, []);
 
-    const speechEndTimer = useRef<number | null>(null);
-
     const onSpeechEnd = useCallback(() => {
-        if (speechEndTimer.current) {
-            clearTimeout(speechEndTimer.current);
-        }
-        // Wait a moment after speech ends to ensure we have the full utterance
-        speechEndTimer.current = window.setTimeout(() => {
-            if (worker.current && audioBuffer.current.length > 0) {
-                const combinedAudio = new Float32Array(audioBuffer.current.reduce((acc, val) => acc + val.length, 0));
-                let offset = 0;
-                for (const buffer of audioBuffer.current) {
-                    combinedAudio.set(buffer, offset);
-                    offset += buffer.length;
-                }
-                
-                logger.info(`Sending audio chunk of length ${combinedAudio.length} for transcription.`);
-                worker.current.postMessage({ action: 'transcribe', audio: combinedAudio });
-                setIsTranscribing(true);
-                audioBuffer.current = []; // Clear buffer after sending
+        setIsTranscribing(false);
+        // Use a functional state update to get the latest interim transcript
+        setInterimTranscript(currentInterim => {
+            if (currentInterim) {
+                logger.info('Finalizing transcript:', { text: currentInterim });
+                setFinalTranscript({ text: currentInterim });
             }
-        }, 500); // 500ms pause threshold
+            return ''; // Clear interim transcript
+        });
     }, []);
 
     useEffect(() => {
@@ -91,20 +71,19 @@ export const useWhisper = (): WhisperHook => {
         const vadOptions = {
             onSpeechStart: () => {
                 logger.debug('VAD: Speech started');
-                if (speechEndTimer.current) {
-                    clearTimeout(speechEndTimer.current);
-                }
-                audioBuffer.current = [];
+                setIsTranscribing(true);
             },
             onSpeechEnd: onSpeechEnd,
             onSpeechData: (audio: Float32Array) => {
-                audioBuffer.current.push(audio);
+                if (worker.current) {
+                    worker.current.postMessage({ action: 'transcribe', audio });
+                }
             },
         };
 
         MicVAD.new(vadOptions).then(newVad => {
             vad.current = newVad;
-            setIsVadReady(true); // Set VAD ready state to true
+            setIsVadReady(true);
         }).catch(error => {
             logger.error("Failed to create VAD", error);
         });
@@ -112,9 +91,6 @@ export const useWhisper = (): WhisperHook => {
         return () => {
             worker.current?.terminate();
             vad.current?.destroy();
-            if (speechEndTimer.current) {
-                clearTimeout(speechEndTimer.current);
-            }
         };
     }, [handleWorkerMessage, onSpeechEnd]);
 
@@ -131,8 +107,7 @@ export const useWhisper = (): WhisperHook => {
         if (vad.current) {
             vad.current.pause();
             logger.info('VAD paused.');
-            // If there's pending audio, process it now
-            onSpeechEnd();
+            onSpeechEnd(); // Finalize any pending speech
         }
     };
 
