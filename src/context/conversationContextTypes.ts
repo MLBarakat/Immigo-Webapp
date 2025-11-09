@@ -30,7 +30,8 @@ export type ConversationAction =
   | { type: 'SEND_MESSAGE_START'; payload: { userMessage: Message; assistantMessageId: string } }
   | { type: 'RECEIVE_ASSISTANT_CHUNK'; payload: { content: string } }
   | { type: 'FINISH_ASSISTANT_RESPONSE' }
-  | { type: 'SEND_MESSAGE_FAILURE'; payload: string };
+  | { type: 'SEND_MESSAGE_FAILURE'; payload: string }
+  | { type: 'SET_STATUS'; payload: AppStatus };
 
 export const initialState: ConversationState = {
   conversationHistory: [],
@@ -51,6 +52,8 @@ export const conversationReducer = (state: ConversationState, action: Conversati
       return { ...state, isSessionActive: false, appStatus: 'idle', sessionTime: 0 };
     case 'SET_TRANSCRIPT':
       return { ...state, transcript: action.payload, appStatus: 'listening' };
+    case 'SET_STATUS':
+      return { ...state, appStatus: action.payload };
     case 'CLEAR_CONVERSATION':
       return { ...state, conversationHistory: [] };
     case 'TICK_SESSION_TIMER':

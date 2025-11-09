@@ -70,51 +70,13 @@ export class ApiClient {
     return data.history;
   }
 
-  async sendMessage(
-    conversationId: string,
-    userMessageText: string,
-    pollyVoiceId: string,
-    languageCode: string,
-    micMode: 'voice_activity' | 'push_to_talk',
-    bargeIn: 'relaxed' | 'balanced' | 'aggressive',
-    liveFeedbackEnabled: boolean,
-    onTextChunk: (textChunk: string) => void,
-    onAudioChunk: (audioChunk: Uint8Array) => void
-  ): Promise<void> {
-    const response = await this.fetchWithAuth('/conversation', {
+  async postTranscript(transcript: string): Promise<ArrayBuffer> {
+    const response = await this.fetchWithAuth('/transcript', {
       method: 'POST',
-      body: JSON.stringify({
-        conversationId,
-        message: userMessageText,
-        pollyVoiceId,
-        languageCode,
-        micMode,
-        bargeIn,
-        liveFeedbackEnabled,
-      }),
+      body: JSON.stringify({ transcript }),
     });
-
-    if (response.body) {
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        try {
-          const parsedChunk = JSON.parse(chunk);
-          if (parsedChunk.type === 'text') {
-            onTextChunk(parsedChunk.data);
-          } else if (parsedChunk.type === 'audio') {
-            const audioData = new Uint8Array(parsedChunk.data);
-            onAudioChunk(audioData);
-          }
-        } catch (e) {
-          logger.error('Error parsing stream chunk', e);
-        }
-      }
-    }
+    // The response is expected to be an audio file (e.g., mp3)
+    return response.arrayBuffer();
   }
 
   async getAnalysis(conversationHistory: readonly Message[]): Promise<FeedbackResponse> {

@@ -18,6 +18,18 @@ export const conversationFunction = defineFunction({
   }
 });
 
+// Transcript Function
+export const transcriptFunction = defineFunction({
+  entry: '../functions/transcript.ts',
+  environment: {
+    NODE_ENV: nodeEnv,
+    LOG_LEVEL: logLevel,
+    FUNCTION_TYPE: 'transcript',
+    DESCRIPTION: 'Receives transcripts from the client, interacts with AI, and uses Polly to generate audio responses.',
+    VERSION: '1.0.0'
+  }
+});
+
 // Analysis Function
 export const analyzeFunction = defineFunction({
   entry: '../functions/analyze.ts',
@@ -77,19 +89,6 @@ export const historyFunction = defineFunction({
     SUPABASE_URL: supabaseUrl,
     FUNCTION_TYPE: 'history',
     DESCRIPTION: 'Manages user conversation history.',
-    VERSION: '1.0.0'
-  }
-});
-
-// WebSocket Function
-export const webSocketFunction = defineFunction({
-  entry: '../functions/websocket.ts',
-  environment: {
-    NODE_ENV: nodeEnv,
-    LOG_LEVEL: logLevel,
-    DEEPGRAM_URL: deepgramURL,
-    FUNCTION_TYPE: 'websocket',
-    DESCRIPTION: 'Handles WebSocket connections for real-time communication.',
     VERSION: '1.0.0'
   }
 });

@@ -23,6 +23,7 @@ import { FeedbackModal } from './components/FeedbackModal';
 import { analytics } from './analytics';
 import { ErrorBoundary } from './ErrorBoundary';
 import { logger } from './logger';
+import AppLoadingOverlay from './components/AppLoadingOverlay';
 
 const PollyVoices = [
   { id: 'Joanna', name: 'Joanna (US English)' },
@@ -164,6 +165,10 @@ function AppContent(): JSX.Element {
 
   return (
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
+      <AppLoadingOverlay 
+        isModelLoading={conversationManager.isModelLoading} 
+        modelLoadingProgress={conversationManager.modelLoadingProgress} 
+      />
       <Header
         displayUser={user}
         userSettings={userSettings}

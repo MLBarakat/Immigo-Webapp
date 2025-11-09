@@ -13,6 +13,7 @@
     "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.7.6",
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
     "@supabase/supabase-js": "^2.43.4",
@@ -20,8 +21,8 @@
     "lucide-react": "^0.381.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.23.1",
     "react-error-boundary": "^4.0.13",
+    "react-router-dom": "^6.23.1",
     "react-speech-recognition": "^3.10.0",
     "uuid": "^9.0.1"
   },
