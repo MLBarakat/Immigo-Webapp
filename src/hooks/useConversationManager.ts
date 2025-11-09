@@ -27,15 +27,6 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     stopRecording
   } = useWhisper();
 
-  // Effect to sync whisper's transcribing status with the app's status
-  useEffect(() => {
-    if (isTranscribing) {
-      dispatch({ type: 'SET_STATUS', payload: 'processing' });
-    } else if (state.appStatus === 'processing' && !isTranscribing) {
-      dispatch({ type: 'SET_STATUS', payload: state.isSessionActive ? 'listening' : 'idle' });
-    }
-  }, [isTranscribing, dispatch, state.appStatus, state.isSessionActive]);
-  
   // Effect to update the live interim transcript in the UI
   useEffect(() => {
     dispatch({ type: 'SET_INTERIM_TRANSCRIPT', payload: interimTranscript });

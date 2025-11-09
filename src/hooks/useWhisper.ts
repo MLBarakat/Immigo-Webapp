@@ -71,7 +71,7 @@ export const useWhisper = (): WhisperHook => {
                 }
                 
                 logger.info(`Sending audio chunk of length ${combinedAudio.length} for transcription.`);
-                worker.current.postMessage({ audio: combinedAudio });
+                worker.current.postMessage({ action: 'transcribe', audio: combinedAudio });
                 setIsTranscribing(true);
                 audioBuffer.current = []; // Clear buffer after sending
             }

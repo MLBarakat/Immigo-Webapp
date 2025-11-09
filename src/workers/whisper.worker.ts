@@ -30,23 +30,27 @@ class PipelineSingleton {
 
 // Listen for messages from the main thread
 self.addEventListener('message', async (event) => {
+    const { action, audio } = event.data;
+
     try {
-        // Retrieve the pipeline instance, providing a callback for progress updates
-        const transcriber = await PipelineSingleton.getInstance((progress: any) => {
-            self.postMessage(progress);
-        });
+        if (action === 'load') {
+            // Load the model and send a ready message
+            await PipelineSingleton.getInstance((progress: any) => {
+                self.postMessage(progress);
+            });
+            self.postMessage({ status: 'ready' });
 
-        // Transcribe the audio and send the result back to the main thread
-        const result = await transcriber(event.data.audio, {
-            chunk_length_s: 30,
-            stride_length_s: 5,
-            language: 'english',
-            task: 'transcribe',
-        });
-
-        // Send the transcribed text back to the main thread
-        self.postMessage({ status: 'complete', output: result });
-
+        } else if (action === 'transcribe') {
+            // Transcribe the audio
+            const transcriber = await PipelineSingleton.getInstance();
+            const result = await transcriber(audio, {
+                chunk_length_s: 30,
+                stride_length_s: 5,
+                language: 'english',
+                task: 'transcribe',
+            });
+            self.postMessage({ status: 'complete', output: result });
+        }
     } catch (error: any) {
         self.postMessage({ status: 'error', message: error.message });
     }
