@@ -2,7 +2,7 @@ import { useCallback, useRef, useEffect } from 'react';
 import { useConversation } from '../context/ConversationContext';
 import { ApiClient } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
-import { Message, AppStatus } from '../context/conversationContextTypes';
+import { Message } from '../context/conversationContextTypes';
 import { useWhisper } from './useWhisper'; // Import the new hook
 import { UserSettings } from '../types/settings';
 import { analytics } from '../analytics';
