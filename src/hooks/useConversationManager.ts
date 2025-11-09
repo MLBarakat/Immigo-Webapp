@@ -22,7 +22,6 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     finalTranscript,
     isModelLoading,
     modelLoadingProgress,
-    isTranscribing,
     startRecording,
     stopRecording
   } = useWhisper();
