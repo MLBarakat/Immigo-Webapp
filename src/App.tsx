@@ -164,6 +164,7 @@ function AppContent(): JSX.Element {
   };
 
   const isAppLoading = conversationManager.isModelLoading || !conversationManager.isVadReady;
+  logger.debug('App loading status:', { isAppLoading, isModelLoading: conversationManager.isModelLoading, isVadReady: conversationManager.isVadReady });
 
   return (
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">

@@ -27,14 +27,16 @@ export const useWhisper = (): WhisperHook => {
 
     const handleWorkerMessage = useCallback((event: MessageEvent) => {
         const { status, output } = event.data;
+        logger.debug('Worker message received:', { status, output, eventData: event.data }); // Log all worker messages
         switch (status) {
             case 'loading':
                 setIsModelLoading(true);
                 setModelLoadingProgress(event.data.progress ?? 0);
+                logger.debug('Model loading progress:', event.data.progress);
                 break;
             case 'ready':
                 setIsModelLoading(false);
-                logger.info('Whisper model is ready.');
+                logger.info('Whisper model is ready. isModelLoading set to false.');
                 break;
             case 'interim-result':
                 setInterimTranscript(output);
@@ -46,6 +48,7 @@ export const useWhisper = (): WhisperHook => {
             default:
                 if (event.data.file) { // Progress update
                     setModelLoadingProgress(event.data.progress);
+                    logger.debug('Model download progress update:', event.data.progress);
                 }
                 break;
         }
@@ -64,6 +67,7 @@ export const useWhisper = (): WhisperHook => {
     }, []);
 
     useEffect(() => {
+        logger.debug('useWhisper useEffect: Initializing worker and VAD.');
         worker.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
         worker.current.addEventListener('message', handleWorkerMessage);
         worker.current.postMessage({ action: 'load' });
@@ -84,11 +88,13 @@ export const useWhisper = (): WhisperHook => {
         MicVAD.new(vadOptions).then(newVad => {
             vad.current = newVad;
             setIsVadReady(true);
+            logger.info('VAD initialized successfully. isVadReady set to true.');
         }).catch(error => {
-            logger.error("Failed to create VAD", error);
+            logger.error("Failed to create VAD:", error);
         });
 
         return () => {
+            logger.debug('useWhisper useEffect: Cleaning up worker and VAD.');
             worker.current?.terminate();
             vad.current?.destroy();
         };
