@@ -1,25 +1,25 @@
 // src/workers/whisper.worker.ts
-import { pipeline, env, Pipeline, AutomaticSpeechRecognitionPipeline } from '@huggingface/transformers';
+import { pipeline, env, AutomaticSpeechRecognitionPipeline } from '@huggingface/transformers';
 
 // Skip local model check to directly download from the Hugging Face Hub
 env.allowLocalModels = false;
 
 /**
- * Represents the state of the pipeline.
+ * A singleton class to manage the speech recognition pipeline instance.
  */
 class PipelineSingleton {
-    static task = 'automatic-speech-recognition';
+    static task: 'automatic-speech-recognition' = 'automatic-speech-recognition';
     static model = 'Xenova/whisper-tiny.en';
-    static instance: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
+    private static instance: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
 
     /**
      * Returns a singleton instance of the pipeline.
      * @param {Function} progress_callback - A callback function to report progress.
-     * @returns {Promise<Pipeline>} A promise that resolves with the pipeline instance.
+     * @returns {Promise<AutomaticSpeechRecognitionPipeline>} A promise that resolves with the pipeline instance.
      */
-    static async getInstance(progress_callback?: (progress: any) => void) {
+    static getInstance(progress_callback?: (progress: any) => void): Promise<AutomaticSpeechRecognitionPipeline> {
         if (this.instance === null) {
-            this.instance = pipeline(this.task, this.model, { progress_callback });
+            this.instance = pipeline(this.task, this.model, { progress_callback }) as Promise<AutomaticSpeechRecognitionPipeline>;
         }
         return this.instance;
     }
@@ -45,7 +45,6 @@ self.addEventListener('message', async (event) => {
         self.postMessage({ status: 'complete', output: result });
 
     } catch (error: any) {
-        // Send an error message back to the main thread
         self.postMessage({ status: 'error', message: error.message });
     }
 });

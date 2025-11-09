@@ -1,21 +1,19 @@
-import { useCallback, useRef, useEffect, useMemo } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { useConversation } from '../context/ConversationContext';
 import { ApiClient } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
-import { Message } from '../context/conversationContextTypes';
+import { Message, AppStatus } from '../context/conversationContextTypes';
 import { useWhisper } from './useWhisper'; // Import the new hook
 import { UserSettings } from '../types/settings';
 import { analytics } from '../analytics';
-import { logger } from '../logger';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
   userSettings: Partial<UserSettings>;
 }
 
-export function useConversationManager({ apiClient, userSettings }: UseConversationManagerProps) {
+export function useConversationManager({ apiClient }: UseConversationManagerProps) {
   const { state, dispatch } = useConversation();
-  const currentConversationId = useRef<string>(uuidv4());
   const intervalRef = useRef<number | null>(null);
 
   // Replace DeepgramManager with the useWhisper hook
