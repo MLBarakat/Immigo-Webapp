@@ -1,4 +1,4 @@
-import { defineBackend, defineStorage } from '@aws-amplify/backend';
+import { defineBackend } from '@aws-amplify/backend';
 import {
   conversationFunction,
   analyzeFunction,
@@ -9,6 +9,7 @@ import {
   transcriptFunction
 } from './api/resources';
 import { auth } from './auth/resource';
+import { storage } from './storage/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -20,14 +21,7 @@ const nodeEnv = process.env.NODE_ENV || 'DEV';
 
 const backend = defineBackend({
   auth,
-  storage: defineStorage({
-    name: 'immigoModelStorage',
-    access: (allow) => ({
-      'public/*': [
-        allow.guest.to(['read']),
-      ],
-    })
-  }),
+  storage,
   conversationFunction: {
     ...conversationFunction,
     runtime: lambda.Runtime.NODEJS_18_X,
