@@ -185,8 +185,7 @@ function AppContent(): JSX.Element {
           <ConversationHistory
             messages={conversationManager.conversationHistory}
             displayUser={user}
-            isTranscribing={conversationManager.isTranscribing}
-            transcript={conversationManager.transcript}
+            interimTranscript={conversationManager.interimTranscript}
           />
           {isDesktop ? (
             <div className="border-t border-immigo-gray-200">

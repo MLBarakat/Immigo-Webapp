@@ -6,11 +6,10 @@ import ImmigoLogo from '../assets/immigo_logo.png';
 interface ConversationHistoryProps {
   messages: readonly Message[];
   displayUser: DisplayUser;
-  isTranscribing: boolean;
-  transcript: string;
+  interimTranscript: string;
 }
 
-export function ConversationHistory({ messages, displayUser, isTranscribing, transcript }: ConversationHistoryProps): JSX.Element {
+export function ConversationHistory({ messages, displayUser, interimTranscript }: ConversationHistoryProps): JSX.Element {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -19,7 +18,7 @@ export function ConversationHistory({ messages, displayUser, isTranscribing, tra
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, transcript]);
+  }, [messages, interimTranscript]);
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -44,10 +43,10 @@ export function ConversationHistory({ messages, displayUser, isTranscribing, tra
           )}
         </div>
       ))}
-      {isTranscribing && transcript && (
+      {interimTranscript && (
           <div className="flex items-start gap-4 justify-end">
             <div className="max-w-[70%] p-3 rounded-xl shadow-sm bg-immigo-gray-200 text-deep-navy rounded-br-none opacity-70 italic">
-                <p className="text-sm">{transcript}</p>
+                <p className="text-sm">{interimTranscript}</p>
             </div>
             <div className="w-10 h-10 rounded-full bg-art-blue-600 text-star-white flex items-center justify-center font-bold flex-shrink-0 animate-pulse">
                 {displayUser.initials}
