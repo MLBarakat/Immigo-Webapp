@@ -24,6 +24,7 @@ export type ConversationAction =
   | { type: 'START_SESSION' }
   | { type: 'END_SESSION' }
   | { type: 'SET_TRANSCRIPT'; payload: string }
+  | { type: 'SET_INTERIM_TRANSCRIPT'; payload: string }
   | { type: 'CLEAR_CONVERSATION' }
   | { type: 'TICK_SESSION_TIMER' }
   | { type: 'SET_LANGUAGE'; payload: string }
@@ -33,6 +34,18 @@ export type ConversationAction =
   | { type: 'SEND_MESSAGE_FAILURE'; payload: string }
   | { type: 'SET_STATUS'; payload: AppStatus };
 
+export interface ConversationState {
+  conversationHistory: readonly Message[];
+  appStatus: AppStatus;
+  isSessionActive: boolean;
+  sessionTime: number;
+  errorMessage: string | null;
+  transcript: string;
+  interimTranscript: string; // New state for in-progress transcription
+  currentLanguageCode: string;
+  assistantMessageId: string | null;
+}
+
 export const initialState: ConversationState = {
   conversationHistory: [],
   appStatus: 'idle',
@@ -40,6 +53,7 @@ export const initialState: ConversationState = {
   sessionTime: 0,
   errorMessage: null,
   transcript: '',
+  interimTranscript: '',
   currentLanguageCode: 'en-US',
   assistantMessageId: null,
 };
@@ -47,15 +61,17 @@ export const initialState: ConversationState = {
 export const conversationReducer = (state: ConversationState, action: ConversationAction): ConversationState => {
   switch (action.type) {
     case 'START_SESSION':
-      return { ...state, isSessionActive: true, sessionTime: 0, appStatus: 'listening', errorMessage: null };
+      return { ...state, isSessionActive: true, sessionTime: 0, appStatus: 'listening', errorMessage: null, interimTranscript: '' };
     case 'END_SESSION':
-      return { ...state, isSessionActive: false, appStatus: 'idle', sessionTime: 0 };
+      return { ...state, isSessionActive: false, appStatus: 'idle', sessionTime: 0, interimTranscript: '' };
     case 'SET_TRANSCRIPT':
       return { ...state, transcript: action.payload, appStatus: 'listening' };
+    case 'SET_INTERIM_TRANSCRIPT':
+      return { ...state, interimTranscript: action.payload };
     case 'SET_STATUS':
       return { ...state, appStatus: action.payload };
     case 'CLEAR_CONVERSATION':
-      return { ...state, conversationHistory: [] };
+      return { ...state, conversationHistory: [], interimTranscript: '' };
     case 'TICK_SESSION_TIMER':
       return { ...state, sessionTime: state.isSessionActive ? state.sessionTime + 1 : 0 };
     case 'SET_LANGUAGE':
@@ -67,6 +83,7 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         ...state,
         appStatus: 'processing',
         transcript: '',
+        interimTranscript: '', // Clear interim transcript when message is sent
         errorMessage: null,
         conversationHistory: [...state.conversationHistory, action.payload.userMessage, newAssistantMessage],
         assistantMessageId: action.payload.assistantMessageId,
