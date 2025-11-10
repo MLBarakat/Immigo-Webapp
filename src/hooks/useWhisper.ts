@@ -88,6 +88,22 @@ export const useWhisper = (): WhisperHook => {
             logger.error("Failed to create VAD:", error);
         });
 
+        // Add a timeout for VAD initialization
+        const vadInitTimeout = new Promise((resolve, reject) =>
+            setTimeout(() => reject(new Error('VAD initialization timed out after 15 seconds.')), 15000)
+        );
+
+        Promise.race([MicVAD.new(vadOptions), vadInitTimeout])
+            .then(newVad => {
+                vad.current = newVad as MicVAD; // Cast to MicVAD
+                setIsVadReady(true);
+                logger.info('VAD initialized successfully. isVadReady set to true.');
+            })
+            .catch(error => {
+                logger.error("Failed to create VAD or VAD initialization timed out:", error);
+                // Optionally, set an error state here to display to the user
+            });
+
         return () => {
             worker.current?.terminate();
             vad.current?.destroy();
