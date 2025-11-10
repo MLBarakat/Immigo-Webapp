@@ -74,17 +74,10 @@ export const useWhisper = (): WhisperHook => {
             },
             onSpeechEnd: onSpeechEnd,
             onSpeechData: (audio: Float32Array) => {
-                logger.debug('VAD: onSpeechData received audio chunk.', { length: audio.length });
                 if (worker.current) {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
             },
-            onFrameProcessed: (probabilities: any) => { // Workaround for stubborn TypeScript error
-                // Log VAD probabilities to see if any audio is being processed
-                console.log('VAD: Frame processed. Speech probability:', probabilities.speech);
-            },
-            baseAssetPath: '/assets/', // Look for VAD assets in the /assets/ subdirectory
-            onnxWASMBasePath: '/assets/', // Look for ONNX Runtime WASM/MJS files in the /assets/ subdirectory
         };
 
         MicVAD.new(vadOptions).then(newVad => {
