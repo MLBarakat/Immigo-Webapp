@@ -92,6 +92,8 @@ export const useWhisper = (): WhisperHook => {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
             },
+            baseAssetPath: '/assets/', // Look for VAD assets in the /assets/ subdirectory
+            onnxWASMBasePath: '/assets/', // Look for ONNX Runtime WASM/MJS files in the /assets/ subdirectory
         };
 
         logger.debug('VAD options being used:', vadOptions);
