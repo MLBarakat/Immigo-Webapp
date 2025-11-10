@@ -72,13 +72,8 @@ export const useWhisper = (): WhisperHook => {
         worker.current.addEventListener('message', handleWorkerMessage);
         worker.current.postMessage({ action: 'load' });
 
-        // Construct the VAD model URL using an environment variable
-        // IMPORTANT: You must upload 'silero_vad_legacy.onnx' and 'silero_vad_legacy.onnx.json'
-        // to the S3 bucket (immigoModelStorage) under the 'public/' prefix.
-        // Then, set VITE_VAD_MODEL_URL to the public URL of the .onnx file.
-        // Example: https://your-bucket-name.s3.your-region.amazonaws.com/public/silero_vad_legacy.onnx
-        const vadModelUrl = import.meta.env.VITE_VAD_MODEL_URL;
-
+        // The VAD and ONNX Runtime assets are now copied to the root of the build output
+        // by vite-plugin-static-copy. We set the base paths accordingly.
         const vadOptions = {
             onSpeechStart: () => {
                 logger.debug('VAD: Speech started');
@@ -90,13 +85,9 @@ export const useWhisper = (): WhisperHook => {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
             },
-            modelURL: vadModelUrl, // Pass the model URL to MicVAD
+            baseAssetPath: '/', // Look for VAD assets in the root
+            onnxWASMBasePath: '/', // Look for ONNX Runtime WASM/MJS files in the root
         };
-
-        if (!vadModelUrl) {
-            logger.error("VITE_VAD_MODEL_URL environment variable is not set. VAD will not initialize.");
-            return;
-        }
 
         MicVAD.new(vadOptions).then(newVad => {
             vad.current = newVad;
