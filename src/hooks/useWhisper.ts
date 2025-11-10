@@ -82,7 +82,7 @@ export const useWhisper = (): WhisperHook => {
             },
             onSpeechEnd: onSpeechEnd,
             onSpeechData: (audio: Float32Array) => {
-                logger.debug('VAD: onSpeechData received audio chunk. Length:', audio.length);
+                logger.debug('VAD: onSpeechData received audio chunk.', { length: audio.length });
                 if (worker.current) {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }

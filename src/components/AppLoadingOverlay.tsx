@@ -15,7 +15,7 @@ const AppLoadingOverlay: React.FC<AppLoadingOverlayProps> = ({ isLoading, modelL
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm flex flex-col items-center justify-center z-50 transition-opacity duration-300">
-            <div className="text-white text-2xl font-bold mb-4">Initializing ImmiGO Voice...</div>
+            <div className="text-white text-2xl font-bold mb-4">Initializing ImmiGO App...</div>
             
             {/* Waveform Animation */}
             <div className="flex items-center justify-center space-x-2 h-10">
