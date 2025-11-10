@@ -165,11 +165,21 @@ function AppContent(): JSX.Element {
 
   const isAppLoading = conversationManager.isModelLoading || !conversationManager.isVadReady;
 
+  let combinedLoadingProgress = 0;
+  if (conversationManager.isModelLoading) {
+    combinedLoadingProgress = conversationManager.modelLoadingProgress * 0.8;
+  } else {
+    combinedLoadingProgress = 80; // Whisper model is 100% loaded, so 80% of total
+    if (conversationManager.isVadReady) {
+      combinedLoadingProgress = 100; // VAD is also ready, so 100% of total
+    }
+  }
+
   return (
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
       <AppLoadingOverlay 
         isLoading={isAppLoading} 
-        modelLoadingProgress={conversationManager.modelLoadingProgress} 
+        modelLoadingProgress={combinedLoadingProgress} 
       />
       <Header
         displayUser={user}

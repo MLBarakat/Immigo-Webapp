@@ -89,7 +89,7 @@ export const useWhisper = (): WhisperHook => {
         });
 
         // Add a timeout for VAD initialization
-        const vadInitTimeout = new Promise((resolve, reject) =>
+        const vadInitTimeout = new Promise((_resolve, reject) =>
             setTimeout(() => reject(new Error('VAD initialization timed out after 15 seconds.')), 15000)
         );
 
