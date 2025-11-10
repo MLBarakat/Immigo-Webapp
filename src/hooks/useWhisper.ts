@@ -73,8 +73,13 @@ export const useWhisper = (): WhisperHook => {
         worker.current.addEventListener('message', handleWorkerMessage);
         worker.current.postMessage({ action: 'load' });
 
-        // The VAD and ONNX Runtime assets are now copied to the root of the build output
-        // by vite-plugin-static-copy. We set the base paths accordingly.
+        // Construct the VAD model URLs using environment variables
+        // IMPORTANT: You must upload 'silero_vad.onnx' and 'silero_vad.onnx.json'
+        // to the S3 bucket (immigoModelStorage) under the 'public/' prefix.
+        // Then, set VITE_VAD_MODEL_URL and VITE_VAD_CONFIG_URL to their respective public URLs.
+        // Example:
+        // VITE_VAD_MODEL_URL=https://your-bucket-name.s3.your-region.amazonaws.com/public/silero_vad.onnx
+        // VITE_VAD_CONFIG_URL=https://your-bucket-name.s3.your-region.amazonaws.com/public/silero_vad.onnx.json
         const vadOptions = {
             onSpeechStart: () => {
                 logger.debug('VAD: Speech started');
@@ -87,9 +92,27 @@ export const useWhisper = (): WhisperHook => {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
             },
-            baseAssetPath: '/', // Look for VAD assets in the root
-            onnxWASMBasePath: '/', // Look for ONNX Runtime WASM/MJS files in the root
+            // Temporarily comment out local asset paths to test CDN defaults
+            // baseAssetPath: '/', // Look for VAD assets in the root
+            // onnxWASMBasePath: '/', // Look for ONNX Runtime WASM/MJS files in the root
         };
+
+        logger.debug('VAD options being used:', vadOptions);
+
+        MicVAD.new(vadOptions).then(newVad => {
+            vad.current = newVad;
+            setIsVadReady(true);
+            logger.info('VAD initialized successfully. isVadReady set to true.');
+        }).catch(error => {
+            logger.error("Failed to create VAD:", error);
+        });
+
+        return () => {
+            logger.debug('useWhisper useEffect: Cleaning up worker and VAD.');
+            worker.current?.terminate();
+            vad.current?.destroy();
+        };
+    }, [handleWorkerMessage, onSpeechEnd]);
 
         MicVAD.new(vadOptions).then(newVad => {
             vad.current = newVad;
