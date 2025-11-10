@@ -31,7 +31,7 @@ export const useWhisper = (): WhisperHook => {
         switch (status) {
             case 'loading':
                 setIsModelLoading(true);
-                setModelLoadingProgress(event.data.progress ?? 0);
+                setModelLoadingProgress(typeof event.data.progress === 'number' ? event.data.progress : 0);
                 logger.debug('Model loading progress:', event.data.progress);
                 break;
             case 'ready':
@@ -47,7 +47,7 @@ export const useWhisper = (): WhisperHook => {
                 logger.error('Whisper worker error:', event.data.message);
                 break;
             default:
-                if (event.data.file) { // Progress update
+                if (typeof event.data.progress === 'number') { // Only update progress if it's a number
                     setModelLoadingProgress(event.data.progress);
                     logger.debug('Model download progress update:', event.data.progress);
                 }
