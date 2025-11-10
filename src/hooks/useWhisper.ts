@@ -74,9 +74,15 @@ export const useWhisper = (): WhisperHook => {
             },
             onSpeechEnd: onSpeechEnd,
             onSpeechData: (audio: Float32Array) => {
+                logger.debug('VAD: onSpeechData received audio chunk.', { length: audio.length });
                 if (worker.current) {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
+            },
+            onFrameProcessed: (probs) => {
+                // Log VAD probabilities to see if any audio is being processed
+                // probs.isSpeech is true if speech is detected in the frame
+                console.log('VAD: Frame processed. Speech probability:', probs.speech, 'Is speech:', probs.isSpeech);
             },
             baseAssetPath: '/assets/', // Look for VAD assets in the /assets/ subdirectory
             onnxWASMBasePath: '/assets/', // Look for ONNX Runtime WASM/MJS files in the /assets/ subdirectory
