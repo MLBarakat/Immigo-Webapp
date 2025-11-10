@@ -111,21 +111,6 @@ export const useWhisper = (): WhisperHook => {
         };
     }, [handleWorkerMessage, onSpeechEnd]);
 
-        MicVAD.new(vadOptions).then(newVad => {
-            vad.current = newVad;
-            setIsVadReady(true);
-            logger.info('VAD initialized successfully. isVadReady set to true.');
-        }).catch(error => {
-            logger.error("Failed to create VAD:", error);
-        });
-
-        return () => {
-            logger.debug('useWhisper useEffect: Cleaning up worker and VAD.');
-            worker.current?.terminate();
-            vad.current?.destroy();
-        };
-    }, [handleWorkerMessage, onSpeechEnd]);
-
     const startRecording = () => {
         if (vad.current) {
             vad.current.start();
