@@ -79,7 +79,7 @@ export const useWhisper = (): WhisperHook => {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
             },
-            onFrameProcessed: (probs) => {
+            onFrameProcessed: (probs: { speech: number; isSpeech: boolean }) => {
                 // Log VAD probabilities to see if any audio is being processed
                 // probs.isSpeech is true if speech is detected in the frame
                 console.log('VAD: Frame processed. Speech probability:', probs.speech, 'Is speech:', probs.isSpeech);
