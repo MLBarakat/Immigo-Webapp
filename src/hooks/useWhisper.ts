@@ -31,8 +31,8 @@ export const useWhisper = (): WhisperHook => {
         switch (status) {
             case 'loading':
                 setIsModelLoading(true);
-                setModelLoadingProgress(event.data.progress.progress ?? 0); // Access progress.progress
-                logger.debug('Model loading progress:', event.data.progress.progress);
+                setModelLoadingProgress(event.data.progress ?? 0);
+                logger.debug('Model loading progress:', event.data.progress);
                 break;
             case 'ready':
                 setIsModelLoading(false);
@@ -47,8 +47,8 @@ export const useWhisper = (): WhisperHook => {
                 break;
             default:
                 if (event.data.file) { // Progress update
-                    setModelLoadingProgress(event.data.progress.progress); // Access progress.progress
-                    logger.debug('Model download progress update:', event.data.progress.progress);
+                    setModelLoadingProgress(event.data.progress);
+                    logger.debug('Model download progress update:', event.data.progress);
                 }
                 break;
         }
