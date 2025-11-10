@@ -19,17 +19,21 @@ const AppLoadingOverlay: React.FC<AppLoadingOverlayProps> = ({ isLoading, modelL
             
             {/* Waveform Animation */}
             <div className="flex items-center justify-center space-x-2 h-10">
-                {bars.map((_, i) => (
-                    <div
-                        key={i}
-                        className="w-2 bg-blue-500 rounded-full"
-                        style={{
-                            height: '100%',
-                            animation: `wave 1.2s ease-in-out infinite`,
-                            animationDelay: `${i * 0.2}s`,
-                        }}
-                    ></div>
-                ))}
+                {bars.map((_, i) => {
+                    const threshold = (i + 1) * 20; // Each bar represents 20%
+                    const barColor = modelLoadingProgress >= threshold ? 'bg-blue-500' : 'bg-gray-600';
+                    return (
+                        <div
+                            key={i}
+                            className={`w-2 rounded-full ${barColor}`}
+                            style={{
+                                height: '100%',
+                                animation: `wave 1.2s ease-in-out infinite`,
+                                animationDelay: `${i * 0.2}s`,
+                            }}
+                        ></div>
+                    );
+                })}
             </div>
 
             {/* Progress Text */}
