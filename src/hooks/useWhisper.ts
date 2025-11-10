@@ -79,7 +79,7 @@ export const useWhisper = (): WhisperHook => {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
             },
-            onFrameProcessed: (probabilities: { speech: number; notSpeech: number }) => {
+            onFrameProcessed: (probabilities: any) => { // Workaround for stubborn TypeScript error
                 // Log VAD probabilities to see if any audio is being processed
                 console.log('VAD: Frame processed. Speech probability:', probabilities.speech);
             },
