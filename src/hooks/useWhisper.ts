@@ -31,8 +31,8 @@ export const useWhisper = (): WhisperHook => {
         switch (status) {
             case 'loading':
                 setIsModelLoading(true);
-                setModelLoadingProgress(event.data.progress ?? 0);
-                logger.debug('Model loading progress:', event.data.progress);
+                setModelLoadingProgress(event.data.progress.progress ?? 0); // Access progress.progress
+                logger.debug('Model loading progress:', event.data.progress.progress);
                 break;
             case 'ready':
                 setIsModelLoading(false);
@@ -47,8 +47,8 @@ export const useWhisper = (): WhisperHook => {
                 break;
             default:
                 if (event.data.file) { // Progress update
-                    setModelLoadingProgress(event.data.progress);
-                    logger.debug('Model download progress update:', event.data.progress);
+                    setModelLoadingProgress(event.data.progress.progress); // Access progress.progress
+                    logger.debug('Model download progress update:', event.data.progress.progress);
                 }
                 break;
         }
@@ -72,6 +72,13 @@ export const useWhisper = (): WhisperHook => {
         worker.current.addEventListener('message', handleWorkerMessage);
         worker.current.postMessage({ action: 'load' });
 
+        // Construct the VAD model URL using an environment variable
+        // IMPORTANT: You must upload 'silero_vad_legacy.onnx' and 'silero_vad_legacy.onnx.json'
+        // to the S3 bucket (immigoModelStorage) under the 'public/' prefix.
+        // Then, set VITE_VAD_MODEL_URL to the public URL of the .onnx file.
+        // Example: https://your-bucket-name.s3.your-region.amazonaws.com/public/silero_vad_legacy.onnx
+        const vadModelUrl = import.meta.env.VITE_VAD_MODEL_URL;
+
         const vadOptions = {
             onSpeechStart: () => {
                 logger.debug('VAD: Speech started');
@@ -83,7 +90,13 @@ export const useWhisper = (): WhisperHook => {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
             },
+            modelURL: vadModelUrl, // Pass the model URL to MicVAD
         };
+
+        if (!vadModelUrl) {
+            logger.error("VITE_VAD_MODEL_URL environment variable is not set. VAD will not initialize.");
+            return;
+        }
 
         MicVAD.new(vadOptions).then(newVad => {
             vad.current = newVad;
