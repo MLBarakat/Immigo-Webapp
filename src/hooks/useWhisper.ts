@@ -27,20 +27,17 @@ export const useWhisper = (): WhisperHook => {
 
     const handleWorkerMessage = useCallback((event: MessageEvent) => {
         const { status, output } = event.data;
-        logger.debug('Worker message received:', { status, output, eventData: event.data }); // Log all worker messages
         switch (status) {
             case 'loading':
                 setIsModelLoading(true);
                 setModelLoadingProgress(typeof event.data.progress === 'number' ? event.data.progress : 0);
-                logger.debug('Model loading progress:', event.data.progress);
                 break;
             case 'ready':
                 setIsModelLoading(false);
-                logger.info('Whisper model is ready. isModelLoading set to false.');
+                logger.info('Whisper model is ready.');
                 break;
             case 'interim-result':
                 setInterimTranscript(output);
-                logger.debug('useWhisper: Interim transcript updated:', output);
                 break;
             case 'error':
                 setIsModelLoading(false);
@@ -49,7 +46,6 @@ export const useWhisper = (): WhisperHook => {
             default:
                 if (typeof event.data.progress === 'number') { // Only update progress if it's a number
                     setModelLoadingProgress(event.data.progress);
-                    logger.debug('Model download progress update:', event.data.progress);
                 }
                 break;
         }
@@ -68,26 +64,16 @@ export const useWhisper = (): WhisperHook => {
     }, []);
 
     useEffect(() => {
-        logger.debug('useWhisper useEffect: Initializing worker and VAD.');
         worker.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
         worker.current.addEventListener('message', handleWorkerMessage);
         worker.current.postMessage({ action: 'load' });
 
-        // Construct the VAD model URLs using environment variables
-        // IMPORTANT: You must upload 'silero_vad.onnx' and 'silero_vad.onnx.json'
-        // to the S3 bucket (immigoModelStorage) under the 'public/' prefix.
-        // Then, set VITE_VAD_MODEL_URL and VITE_VAD_CONFIG_URL to their respective public URLs.
-        // Example:
-        // VITE_VAD_MODEL_URL=https://your-bucket-name.s3.your-region.amazonaws.com/public/silero_vad.onnx
-        // VITE_VAD_CONFIG_URL=https://your-bucket-name.s3.your-region.amazonaws.com/public/silero_vad.onnx.json
         const vadOptions = {
             onSpeechStart: () => {
-                logger.debug('VAD: Speech started');
                 setIsTranscribing(true);
             },
             onSpeechEnd: onSpeechEnd,
             onSpeechData: (audio: Float32Array) => {
-                logger.debug('VAD: onSpeechData received audio chunk.', { length: audio.length });
                 if (worker.current) {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
@@ -95,8 +81,6 @@ export const useWhisper = (): WhisperHook => {
             baseAssetPath: '/assets/', // Look for VAD assets in the /assets/ subdirectory
             onnxWASMBasePath: '/assets/', // Look for ONNX Runtime WASM/MJS files in the /assets/ subdirectory
         };
-
-        logger.debug('VAD options being used:', vadOptions);
 
         MicVAD.new(vadOptions).then(newVad => {
             vad.current = newVad;
@@ -107,7 +91,6 @@ export const useWhisper = (): WhisperHook => {
         });
 
         return () => {
-            logger.debug('useWhisper useEffect: Cleaning up worker and VAD.');
             worker.current?.terminate();
             vad.current?.destroy();
         };

@@ -164,7 +164,6 @@ function AppContent(): JSX.Element {
   };
 
   const isAppLoading = conversationManager.isModelLoading || !conversationManager.isVadReady;
-  logger.debug('App loading status:', { isAppLoading, isModelLoading: conversationManager.isModelLoading, isVadReady: conversationManager.isVadReady });
 
   return (
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
@@ -254,7 +253,7 @@ function AppContent(): JSX.Element {
 
 function App(): JSX.Element {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <ConversationProvider apiClient={null}>
           <ErrorBoundary>
