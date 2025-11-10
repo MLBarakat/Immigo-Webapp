@@ -74,18 +74,32 @@ export const useWhisper = (): WhisperHook => {
             },
             onSpeechEnd: onSpeechEnd,
             onSpeechData: (audio: Float32Array) => {
-                logger.debug('VAD: onSpeechData received audio chunk.', { length: audio.length });
                 if (worker.current) {
                     worker.current.postMessage({ action: 'transcribe', audio });
                 }
             },
             onFrameProcessed: (probabilities: { speech: number; notSpeech: number }, frame: Float32Array) => {
-                // Log VAD probabilities to see if any audio is being processed
-                // probabilities.isSpeech is true if speech is detected in the frame
                 console.log('VAD: Frame processed. Speech probability:', probabilities.speech, 'Is speech:', probabilities.isSpeech);
             },
             baseAssetPath: '/assets/', // Look for VAD assets in the /assets/ subdirectory
             onnxWASMBasePath: '/assets/', // Look for ONNX Runtime WASM/MJS files in the /assets/ subdirectory
+            getStream: async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            channelCount: 1, // Mono audio is generally preferred for VAD/STT
+                            echoCancellation: false,
+                            autoGainControl: true, // Let the browser handle gain
+                            noiseSuppression: true, // Let the browser handle noise suppression
+                        },
+                    });
+                    logger.info('getUserMedia successful: Audio stream obtained.');
+                    return stream;
+                } catch (error) {
+                    logger.error('getUserMedia failed: Could not obtain audio stream.', error);
+                    throw error; // Re-throw to ensure VAD initialization fails if stream not obtained
+                }
+            },
         };
 
         MicVAD.new(vadOptions).then(newVad => {
