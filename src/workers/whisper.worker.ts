@@ -51,6 +51,7 @@ self.addEventListener('message', async (event) => {
             });
 
             if (result) {
+                console.log('Worker: Transcriber result:', result); // Add this log
                 let output_text = '';
                 if (Array.isArray(result)) {
                     // Join the text from all chunks if it's an array

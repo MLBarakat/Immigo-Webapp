@@ -40,6 +40,7 @@ export const useWhisper = (): WhisperHook => {
                 break;
             case 'interim-result':
                 setInterimTranscript(output);
+                logger.debug('useWhisper: Interim transcript updated:', output);
                 break;
             case 'error':
                 setIsModelLoading(false);
