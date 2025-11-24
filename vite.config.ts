@@ -40,6 +40,23 @@ export default defineConfig({
           src: 'node_modules/onnxruntime-web/dist/*.mjs',
           dest: './assets/',
         },
+        // Also copy to the project's public directory so hosting (Amplify) serves them
+        {
+          src: 'node_modules/@ricky0123/vad-web/dist/vad.worklet.bundle.min.js',
+          dest: 'public/assets/',
+        },
+        {
+          src: 'node_modules/@ricky0123/vad-web/dist/silero_vad_legacy.onnx',
+          dest: 'public/',
+        },
+        {
+          src: 'node_modules/onnxruntime-web/dist/*.wasm',
+          dest: 'public/assets/',
+        },
+        {
+          src: 'node_modules/onnxruntime-web/dist/*.mjs',
+          dest: 'public/assets/',
+        },
       ],
     }),
   ],

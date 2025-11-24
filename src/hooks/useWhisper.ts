@@ -26,26 +26,47 @@ export const useWhisper = (): WhisperHook => {
     const vad = useRef<MicVAD | null>(null);
 
     const handleWorkerMessage = useCallback((event: MessageEvent) => {
-        const { status, output } = event.data;
+        const data = event.data || {};
+        const status = data.status;
+
+        // Asset probe results
+        if (status === 'asset-check') {
+            logger.info('Worker asset check:', data.assets);
+            return;
+        }
+
+        if (status === 'log') {
+            // Structured log from worker
+            logger.debug('Worker log:', data.message || data.result || data);
+            return;
+        }
+
+        if (status === 'error') {
+            setIsModelLoading(false);
+            const err = data.error || { message: data.message };
+            // Log full error with stack if available
+            logger.error('Whisper worker error:', err.message || err);
+            if (err.stack) {
+                logger.error('Whisper worker stack:', err.stack);
+            }
+            return;
+        }
+
         switch (status) {
             case 'loading':
                 setIsModelLoading(true);
-                setModelLoadingProgress(typeof event.data.progress === 'number' ? event.data.progress : 0);
+                setModelLoadingProgress(typeof data.progress === 'number' ? data.progress : 0);
                 break;
             case 'ready':
                 setIsModelLoading(false);
                 logger.info('Whisper model is ready.');
                 break;
             case 'interim-result':
-                setInterimTranscript(output);
-                break;
-            case 'error':
-                setIsModelLoading(false);
-                logger.error('Whisper worker error:', event.data.message);
+                setInterimTranscript(data.output);
                 break;
             default:
-                if (typeof event.data.progress === 'number') { // Only update progress if it's a number
-                    setModelLoadingProgress(event.data.progress);
+                if (typeof data.progress === 'number') { // Only update progress if it's a number
+                    setModelLoadingProgress(data.progress);
                 }
                 break;
         }
@@ -75,19 +96,18 @@ export const useWhisper = (): WhisperHook => {
             onSpeechEnd: onSpeechEnd,
             onSpeechData: (audio: Float32Array) => {
                 if (worker.current) {
-                    worker.current.postMessage({ action: 'transcribe', audio });
+                    try {
+                        // Transfer the underlying buffer to the worker to avoid copying large audio chunks
+                        worker.current.postMessage({ action: 'transcribe', audio }, [audio.buffer]);
+                    } catch (e) {
+                        // If transfer fails (some browsers/environments), fallback to normal postMessage
+                        worker.current.postMessage({ action: 'transcribe', audio });
+                    }
                 }
             },
         };
 
-        MicVAD.new(vadOptions).then(newVad => {
-            vad.current = newVad;
-            setIsVadReady(true);
-            logger.info('VAD initialized successfully. isVadReady set to true.');
-        }).catch(error => {
-            logger.error("Failed to create VAD:", error);
-        });
-
+        // Initialize VAD once
         MicVAD.new(vadOptions)
             .then(newVad => {
                 vad.current = newVad;
@@ -96,7 +116,6 @@ export const useWhisper = (): WhisperHook => {
             })
             .catch(error => {
                 logger.error("Failed to create VAD:", error);
-                // Optionally, set an error state here to display to the user
             });
 
         return () => {
