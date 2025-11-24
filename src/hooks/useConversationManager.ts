@@ -94,9 +94,19 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      stopRecording();
+      // Do NOT call stopRecording() here — cleanup runs before the effect runs on
+      // every dependency change (including when starting a session) which would
+      // prematurely pause the VAD. stopRecording is called explicitly by endSession
+      // and by the unmount handler below.
     };
   }, [state.isSessionActive, dispatch, stopRecording]);
+
+  // Ensure we stop recording when the component unmounts.
+  useEffect(() => {
+    return () => {
+      stopRecording();
+    };
+  }, [stopRecording]);
 
   const clearConversation = useCallback(() => {
     dispatch({ type: 'CLEAR_CONVERSATION' });
