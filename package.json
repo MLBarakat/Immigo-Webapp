@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "preinstall": "cd amplify/functions && rimraf node_modules package-lock.json",
+    "preinstall": "cd amplify/functions && rm -rf node_modules package-lock.json",
     "dev": "vite",
     "build": "tsc -p tsconfig.build.json && vite build",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
