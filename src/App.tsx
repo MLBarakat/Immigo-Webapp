@@ -46,9 +46,11 @@ function AppContent(): JSX.Element {
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const apiClient = useMemo(() => {
-    if (session?.access_token) { return new ApiClient(session.access_token); }
+    if (session?.access_token) {
+      return new ApiClient(session.access_token);
+    }
     return null;
-  }, [session]);
+  }, [session?.access_token]);
 
   const { state, dispatch } = useConversation();
   const conversationManager = useConversationManager({ apiClient, userSettings });
@@ -78,24 +80,35 @@ function AppContent(): JSX.Element {
     }
   }, [userSettings.theme, userSettings.font_size]);
 
+  // Effect 1: Sync Language (Only runs when profile language changes)
   useEffect(() => {
     const lang = profile?.language;
     if (lang) {
       dispatch({ type: 'SET_LANGUAGE', payload: lang });
     }
+  }, [profile?.language, dispatch]);
+
+  // Effect 2: Fetch Settings (Only runs when apiClient is ready)
+  useEffect(() => {
+    let isMounted = true;
 
     const fetchSettings = async () => {
       if (apiClient) {
         try {
           const settings = await apiClient.getSettings();
-          setUserSettings(settings);
+          if (isMounted) {
+             setUserSettings(settings);
+          }
         } catch (error) { 
           logger.error('Failed to fetch user settings', error);
         }
       }
     };
+
     fetchSettings();
-  }, [apiClient, dispatch, profile]);
+
+    return () => { isMounted = false; };
+  }, [apiClient]);
 
   const handleSaveSettings = async (settingsToSave: UserSettings) => {
     if (apiClient) {
