@@ -113,6 +113,11 @@ export const useWhisper = (): WhisperHook => {
                 vad.current = newVad;
                 setIsVadReady(true);
                 logger.info('VAD initialized successfully. isVadReady set to true.');
+                logger.debug('VAD instance:', {
+                    hasStart: typeof (newVad as any).start === 'function',
+                    hasPause: typeof (newVad as any).pause === 'function',
+                    sampleRate: (newVad as any).sampleRate || null,
+                });
             })
             .catch(error => {
                 logger.error("Failed to create VAD:", error);
@@ -126,8 +131,14 @@ export const useWhisper = (): WhisperHook => {
 
     const startRecording = () => {
         if (vad.current) {
-            vad.current.start();
-            logger.info('VAD started. Listening...');
+            try {
+                const res = vad.current.start();
+                // Some implementations return a promise or boolean; log it for debugging
+                logger.debug('VAD.start() result:', res);
+                logger.info('VAD started. Listening...');
+            } catch (err) {
+                logger.error('Error starting VAD:', err);
+            }
         } else {
             logger.warn('VAD not initialized, cannot start recording.');
         }
