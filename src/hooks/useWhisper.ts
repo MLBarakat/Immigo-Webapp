@@ -9,7 +9,7 @@ export interface WhisperHook {
     isModelLoading: boolean;
     isVadReady: boolean;
     modelLoadingProgress: number;
-    isTranscribing: boolean; // This now means "is user speaking"
+    isTranscribing: boolean; 
     startRecording: () => void;
     stopRecording: () => void;
 }
@@ -29,14 +29,12 @@ export const useWhisper = (): WhisperHook => {
         const data = event.data || {};
         const status = data.status;
 
-        // Asset probe results
         if (status === 'asset-check') {
             logger.info('Worker asset check:', data.assets);
             return;
         }
 
         if (status === 'log') {
-            // Structured log from worker
             logger.debug('Worker log:', data.message || data.result || data);
             return;
         }
@@ -44,11 +42,7 @@ export const useWhisper = (): WhisperHook => {
         if (status === 'error') {
             setIsModelLoading(false);
             const err = data.error || { message: data.message };
-            // Log full error with stack if available
             logger.error('Whisper worker error:', err.message || err);
-            if (err.stack) {
-                logger.error('Whisper worker stack:', err.stack);
-            }
             return;
         }
 
@@ -65,7 +59,7 @@ export const useWhisper = (): WhisperHook => {
                 setInterimTranscript(data.output);
                 break;
             default:
-                if (typeof data.progress === 'number') { // Only update progress if it's a number
+                if (typeof data.progress === 'number') {
                     setModelLoadingProgress(data.progress);
                 }
                 break;
@@ -74,13 +68,12 @@ export const useWhisper = (): WhisperHook => {
 
     const onSpeechEnd = useCallback(() => {
         setIsTranscribing(false);
-        // Use a functional state update to get the latest interim transcript
         setInterimTranscript(currentInterim => {
             if (currentInterim) {
                 logger.info('Finalizing transcript:', { text: currentInterim });
                 setFinalTranscript({ text: currentInterim });
             }
-            return ''; // Clear interim transcript
+            return ''; 
         });
     }, []);
 
@@ -97,27 +90,19 @@ export const useWhisper = (): WhisperHook => {
             onSpeechData: (audio: Float32Array) => {
                 if (worker.current) {
                     try {
-                        // Transfer the underlying buffer to the worker to avoid copying large audio chunks
                         worker.current.postMessage({ action: 'transcribe', audio }, [audio.buffer]);
                     } catch (e) {
-                        // If transfer fails (some browsers/environments), fallback to normal postMessage
                         worker.current.postMessage({ action: 'transcribe', audio });
                     }
                 }
             },
         };
 
-        // Initialize VAD once
         MicVAD.new(vadOptions)
             .then(newVad => {
                 vad.current = newVad;
                 setIsVadReady(true);
                 logger.info('VAD initialized successfully. isVadReady set to true.');
-                logger.debug('VAD instance:', {
-                    hasStart: typeof (newVad as any).start === 'function',
-                    hasPause: typeof (newVad as any).pause === 'function',
-                    sampleRate: (newVad as any).sampleRate || null,
-                });
             })
             .catch(error => {
                 logger.error("Failed to create VAD:", error);
@@ -129,11 +114,11 @@ export const useWhisper = (): WhisperHook => {
         };
     }, [handleWorkerMessage, onSpeechEnd]);
 
-    const startRecording = () => {
+    // FIX: Memoize startRecording to prevent re-creation on every render
+    const startRecording = useCallback(() => {
         if (vad.current) {
             try {
                 const res = vad.current.start();
-                // Some implementations return a promise or boolean; log it for debugging
                 logger.debug('VAD.start() result:', res);
                 logger.info('VAD started. Listening...');
             } catch (err) {
@@ -142,15 +127,16 @@ export const useWhisper = (): WhisperHook => {
         } else {
             logger.warn('VAD not initialized, cannot start recording.');
         }
-    };
+    }, []); // Empty dependency array as vad is a Ref
 
-    const stopRecording = () => {
+    // FIX: Memoize stopRecording to prevent re-creation on every render
+    const stopRecording = useCallback(() => {
         if (vad.current) {
             vad.current.pause();
             logger.info('VAD paused.');
-            onSpeechEnd(); // Finalize any pending speech
+            onSpeechEnd(); 
         }
-    };
+    }, [onSpeechEnd]); // Dependent on onSpeechEnd
 
     return { interimTranscript, finalTranscript, isModelLoading, isVadReady, modelLoadingProgress, isTranscribing, startRecording, stopRecording };
 };
