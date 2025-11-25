@@ -1,4 +1,3 @@
-// src/hooks/useWhisper.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '../logger';
 import { MicVAD } from '@ricky0123/vad-web';
@@ -24,20 +23,15 @@ export const useWhisper = (): WhisperHook => {
 
     const worker = useRef<Worker | null>(null);
     const vad = useRef<MicVAD | null>(null);
+    // Ref to manage the finalization logic and prevent race conditions
+    const finalizingRef = useRef(false);
 
     const handleWorkerMessage = useCallback((event: MessageEvent) => {
         const data = event.data || {};
         const status = data.status;
 
-        if (status === 'asset-check') {
-            logger.info('Worker asset check:', data.assets);
-            return;
-        }
-
-        if (status === 'log') {
-            logger.debug('Worker log:', data.message || data.result || data);
-            return;
-        }
+        // Diagnostic log
+        console.log("WORKER SAYS:", JSON.stringify(data));
 
         if (status === 'error') {
             setIsModelLoading(false);
@@ -55,26 +49,37 @@ export const useWhisper = (): WhisperHook => {
                 setIsModelLoading(false);
                 logger.info('Whisper model is ready.');
                 break;
+            
+            case 'update':
+            case 'complete':
             case 'interim-result':
-                setInterimTranscript(data.output);
-                break;
-            default:
-                if (typeof data.progress === 'number') {
-                    setModelLoadingProgress(data.progress);
+                if (typeof data.output === 'string') {
+                    // If the finalizing flag is set, this is the last result.
+                    if (finalizingRef.current) {
+                        logger.info('Finalizing transcript:', { text: data.output });
+                        setFinalTranscript({ text: data.output });
+                        setInterimTranscript(''); // Clear the interim transcript
+                        finalizingRef.current = false; // Reset the flag
+                    } else {
+                        // Otherwise, it's a regular interim update.
+                        setInterimTranscript(data.output);
+                    }
                 }
                 break;
-        }
-    }, []);
 
+            default:
+                // Handle other messages like progress if needed
+                break;
+        }
+    }, []); // No dependencies, relies on refs and setState
+
+    // This callback is now only responsible for setting a flag.
     const onSpeechEnd = useCallback(() => {
         setIsTranscribing(false);
-        setInterimTranscript(currentInterim => {
-            if (currentInterim) {
-                logger.info('Finalizing transcript:', { text: currentInterim });
-                setFinalTranscript({ text: currentInterim });
-            }
-            return ''; 
-        });
+        // When VAD detects speech end, set a flag.
+        // The next message from the worker will be treated as the final result.
+        finalizingRef.current = true; 
+        logger.debug('VAD: Speech ended. Awaiting final transcription.');
     }, []);
 
     useEffect(() => {
@@ -83,35 +88,26 @@ export const useWhisper = (): WhisperHook => {
         worker.current.postMessage({ action: 'load' });
 
         const vadOptions = {
-            // 1. Lower the minimum speech duration (Default is often 3 frames / ~300ms)
-            // Setting to 1 frame allows even very short utterances like "Hi".
-            minSpeechFrames: 1, 
-
-            // 2. Increase the "patience" before cutting off (Default is often ~20-30 frames)
-            // This prevents the VAD from cutting you off if you pause for a second while thinking.
-            redemptionFrames: 24, // ~2.5 seconds of silence required to end a sentence
-
-            // 3. Sensitivity Thresholds (0.0 to 1.0)
-            // Lower = More Sensitive (picks up whispers). Higher = Less Sensitive (needs loud voice).
-            positiveSpeechThreshold: 0.8, // Start speaking when confidence > 80%
-            negativeSpeechThreshold: 0.6, // Stop speaking when confidence < 60%
-
+            minSpeechFrames: 1,
+            redemptionFrames: 24, 
+            positiveSpeechThreshold: 0.8,
+            negativeSpeechThreshold: 0.6,
+            
+            // When speech starts, clear previous transcripts.
             onSpeechStart: () => {
                 logger.debug('VAD: Speech started');
+                setInterimTranscript('');
+                setFinalTranscript(null);
+                finalizingRef.current = false;
                 setIsTranscribing(true);
             },
             onSpeechEnd: onSpeechEnd,
             onVADMisfire: () => {
-                // Optional: Log this to see if we are still ignoring things we shouldn't
                 logger.debug('VAD: Misfire (Short noise ignored)');
             },
             onSpeechData: (audio: Float32Array) => {
                 if (worker.current) {
-                    try {
-                        worker.current.postMessage({ action: 'transcribe', audio }, [audio.buffer]);
-                    } catch (e) {
-                        worker.current.postMessage({ action: 'transcribe', audio });
-                    }
+                    worker.current.postMessage({ action: 'transcribe', audio });
                 }
             },
         };
@@ -120,7 +116,7 @@ export const useWhisper = (): WhisperHook => {
             .then(newVad => {
                 vad.current = newVad;
                 setIsVadReady(true);
-                logger.info('VAD initialized successfully. isVadReady set to true.');
+                logger.info('VAD initialized successfully.');
             })
             .catch(error => {
                 logger.error("Failed to create VAD:", error);
@@ -132,29 +128,25 @@ export const useWhisper = (): WhisperHook => {
         };
     }, [handleWorkerMessage, onSpeechEnd]);
 
-    // FIX: Memoize startRecording to prevent re-creation on every render
     const startRecording = useCallback(() => {
         if (vad.current) {
             try {
-                const res = vad.current.start();
-                logger.debug('VAD.start() result:', res);
+                vad.current.start();
                 logger.info('VAD started. Listening...');
             } catch (err) {
                 logger.error('Error starting VAD:', err);
             }
-        } else {
-            logger.warn('VAD not initialized, cannot start recording.');
         }
-    }, []); // Empty dependency array as vad is a Ref
+    }, []);
 
-    // FIX: Memoize stopRecording to prevent re-creation on every render
     const stopRecording = useCallback(() => {
         if (vad.current) {
             vad.current.pause();
             logger.info('VAD paused.');
+            // Manually trigger speech end to finalize the transcript.
             onSpeechEnd(); 
         }
-    }, [onSpeechEnd]); // Dependent on onSpeechEnd
+    }, [onSpeechEnd]);
 
     return { interimTranscript, finalTranscript, isModelLoading, isVadReady, modelLoadingProgress, isTranscribing, startRecording, stopRecording };
 };
