@@ -46,13 +46,16 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     const assistantMessageId = uuidv4();
 
     dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage, assistantMessageId } });
+    dispatch({ type: 'SET_STATUS', payload: 'processing' });
 
     try {
-      const audioData = await apiClient.postTranscript(text);
+      // 1. Get the real text and audio from the updated API client
+      const { responseText, audioData } = await apiClient.postTranscript(text);
       
-      const simulatedTextResponse = "This is a simulated response to your transcript.";
-      dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: simulatedTextResponse } });
+      // 2. Dispatch the real assistant text to the conversation history
+      dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: responseText } });
 
+      // 3. Play the assistant's audio
       const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
@@ -70,6 +73,8 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message.';
+      // Rollback the optimistic update
+      dispatch({ type: 'SEND_MESSAGE_ROLLBACK', payload: { userMessageId: userMessage.id, assistantMessageId } });
       dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: errorMessage });
     }
   }, [apiClient, dispatch]);

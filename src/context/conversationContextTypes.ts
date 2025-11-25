@@ -32,6 +32,7 @@ export type ConversationAction =
   | { type: 'RECEIVE_ASSISTANT_CHUNK'; payload: { content: string } }
   | { type: 'FINISH_ASSISTANT_RESPONSE' }
   | { type: 'SEND_MESSAGE_FAILURE'; payload: string }
+  | { type: 'SEND_MESSAGE_ROLLBACK'; payload: { userMessageId: string, assistantMessageId: string } }
   | { type: 'SET_STATUS'; payload: AppStatus };
 
 export interface ConversationState {
@@ -113,6 +114,14 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         appStatus: 'error',
         errorMessage: action.payload,
         assistantMessageId: null,
+      };
+
+    case 'SEND_MESSAGE_ROLLBACK':
+      return {
+        ...state,
+        conversationHistory: state.conversationHistory.filter(
+          msg => msg.id !== action.payload.userMessageId && msg.id !== action.payload.assistantMessageId
+        ),
       };
 
     default:

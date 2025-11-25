@@ -71,13 +71,31 @@ export class ApiClient {
     return data.history;
   }
 
-  async postTranscript(transcript: string): Promise<ArrayBuffer> {
+  async postTranscript(transcript: string): Promise<{ responseText: string, audioData: ArrayBuffer }> {
     const response = await this.fetchWithAuth('/transcript', {
       method: 'POST',
       body: JSON.stringify({ transcript }),
     });
-    // The response is expected to be an audio file (e.g., mp3)
-    return response.arrayBuffer();
+
+    // Expect a JSON response with the assistant's text and base64-encoded audio
+    const data = await response.json();
+
+    if (!data.responseText || !data.audioData) {
+      throw new ApiError('Invalid response from transcript endpoint', 500, data);
+    }
+
+    // Decode the base64 audio data into an ArrayBuffer
+    const audioBytes = atob(data.audioData);
+    const audioBuffer = new ArrayBuffer(audioBytes.length);
+    const audioView = new Uint8Array(audioBuffer);
+    for (let i = 0; i < audioBytes.length; i++) {
+      audioView[i] = audioBytes.charCodeAt(i);
+    }
+
+    return {
+      responseText: data.responseText,
+      audioData: audioBuffer,
+    };
   }
 
   async getAnalysis(conversationHistory: readonly Message[]): Promise<FeedbackResponse> {
