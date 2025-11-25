@@ -3,7 +3,7 @@ import { useConversation } from '../context/ConversationContext';
 import { ApiClient } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
 import { Message } from '../context/conversationContextTypes';
-import { useWhisper } from './useWhisper'; // Import the new hook
+import { useWhisper } from './useWhisper';
 import { UserSettings } from '../types/settings';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
@@ -16,6 +16,7 @@ interface UseConversationManagerProps {
 export function useConversationManager({ apiClient }: UseConversationManagerProps) {
   const { state, dispatch } = useConversation();
   const intervalRef = useRef<number | null>(null);
+  const processedTranscriptRef = useRef<string>('');
 
   // VAD-based Whisper hook
   const {
@@ -36,6 +37,7 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
   const sendTextMessage = useCallback(async (text: string) => {
     if (!apiClient) {
       dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: 'System is initializing. Please wait a moment and try again.' });
+      dispatch({ type: 'SET_STATUS', payload: 'idle' });
       return;
     }
     if (!text.trim()) {
@@ -73,6 +75,7 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message.';
+      dispatch({ type: 'SET_STATUS', payload: 'idle' });
       // Rollback the optimistic update
       dispatch({ type: 'SEND_MESSAGE_ROLLBACK', payload: { userMessageId: userMessage.id, assistantMessageId } });
       dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: errorMessage });
@@ -81,8 +84,17 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
 
   // Effect to automatically send the final transcript when it's ready
   useEffect(() => {
-    if (finalTranscript?.text) {
-      sendTextMessage(finalTranscript.text);
+    // If there's new final text that we haven't processed yet
+    if (finalTranscript && finalTranscript !== processedTranscriptRef.current) {
+      // Extract only the new portion of the text
+      const newText = finalTranscript.substring(processedTranscriptRef.current.length).trim();
+      
+      if (newText) {
+        sendTextMessage(newText);
+      }
+
+      // Update the ref to mark the new text as processed
+      processedTranscriptRef.current = finalTranscript;
     }
   }, [finalTranscript, sendTextMessage]);
 
@@ -90,6 +102,8 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
   const startSession = useCallback(() => {
     dispatch({ type: 'START_SESSION' });
     analytics.track('session_started');
+    // Reset transcript history for the new session
+    processedTranscriptRef.current = ''; 
     startRecording();
   }, [dispatch, startRecording]);
 
@@ -107,12 +121,8 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      // Do NOT call stopRecording() here — cleanup runs before the effect runs on
-      // every dependency change (including when starting a session) which would
-      // prematurely pause the VAD. stopRecording is called explicitly by endSession
-      // and by the unmount handler below.
     };
-  }, [state.isSessionActive, dispatch, stopRecording]);
+  }, [state.isSessionActive, dispatch]);
 
   // Ensure we stop recording when the component unmounts.
   useEffect(() => {
