@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '../logger';
-import { MicVAD, MicVADOptions } from '@ricky0123/vad-web';
+import { MicVAD } from '@ricky0123/vad-web';
+
+// Local type for VAD options since MicVADOptions is not exported from @ricky0123/vad-web
+type VadOptions = {
+    positiveSpeechThreshold?: number;
+    negativeSpeechThreshold?: number;
+    preSpeechPadFrames?: number;
+    postSpeechPadFrames?: number;
+};
 
 export interface WhisperHook {
     interimTranscript: string;
@@ -98,7 +106,14 @@ export const useWhisper = (): WhisperHook => {
         worker.current.addEventListener('message', handleWorkerMessage);
         worker.current.postMessage({ action: 'load' });
 
-        const vadOptions: MicVADOptions = {
+        const vadOptions: VadOptions & {
+            minSpeechFrames: number;
+            redemptionFrames: number;
+            onSpeechStart: () => void;
+            onSpeechEnd: () => void;
+            onVADMisfire: () => void;
+            onSpeechData: (audio: Float32Array) => void;
+        } = {
             minSpeechFrames: 3,
             redemptionFrames: 8, 
             positiveSpeechThreshold: 0.7,
