@@ -17,11 +17,14 @@ class WhisperPipeline {
     static model = 'Xenova/whisper-tiny'; 
     static instance: Pipeline | null = null;
 
-    static async getInstance(progress_callback: (progress: any) => void) {
+    static async getInstance(progress_callback?: (progress: any) => void) {
+        // Use a no-op callback when none is provided to satisfy the pipeline API
+        const cb = progress_callback ?? (() => {});
+
         if (this.instance === null) {
             try {
                 this.instance = await pipeline(this.task, this.model, { 
-                    progress_callback,
+                    progress_callback: cb,
                     // Specify quantization for faster inference and lower memory usage
                     quantized: true, 
                 });
@@ -48,7 +51,7 @@ self.onmessage = async (event) => {
     }
 
     if (action === 'transcribe') {
-        const transcriber = await WhisperPipeline.getInstance(null); // Already loaded, no progress callback needed
+        const transcriber = await WhisperPipeline.getInstance(); // Already loaded, no progress callback needed
         if (!transcriber || !audio) {
             self.postMessage({ status: 'error', error: 'Transcription service is not ready or audio is missing.' });
             return;
