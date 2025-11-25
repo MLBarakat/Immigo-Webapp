@@ -83,10 +83,28 @@ export const useWhisper = (): WhisperHook => {
         worker.current.postMessage({ action: 'load' });
 
         const vadOptions = {
+            // 1. Lower the minimum speech duration (Default is often 3 frames / ~300ms)
+            // Setting to 1 frame allows even very short utterances like "Hi".
+            minSpeechFrames: 1, 
+
+            // 2. Increase the "patience" before cutting off (Default is often ~20-30 frames)
+            // This prevents the VAD from cutting you off if you pause for a second while thinking.
+            redemptionFrames: 24, // ~2.5 seconds of silence required to end a sentence
+
+            // 3. Sensitivity Thresholds (0.0 to 1.0)
+            // Lower = More Sensitive (picks up whispers). Higher = Less Sensitive (needs loud voice).
+            positiveSpeechThreshold: 0.8, // Start speaking when confidence > 80%
+            negativeSpeechThreshold: 0.6, // Stop speaking when confidence < 60%
+
             onSpeechStart: () => {
+                logger.debug('VAD: Speech started');
                 setIsTranscribing(true);
             },
             onSpeechEnd: onSpeechEnd,
+            onVADMisfire: () => {
+                // Optional: Log this to see if we are still ignoring things we shouldn't
+                logger.debug('VAD: Misfire (Short noise ignored)');
+            },
             onSpeechData: (audio: Float32Array) => {
                 if (worker.current) {
                     try {

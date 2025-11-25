@@ -121,7 +121,7 @@ const pollyPolicy = new PolicyStatement({ actions: ['polly:SynthesizeSpeech'], r
 backend.conversationFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 backend.conversationFunction.resources.lambda.addToRolePolicy(pollyPolicy);
 backend.analyzeFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
-backend.transcriptFunction.resources.lambda.addToRolePolicy(pollyPolicy); // Add Polly permissions to new function
+// backend.transcriptFunction.resources.lambda.addToRolePolicy(pollyPolicy); // Add Polly permissions to new function
 
 // Environment Variables
 backend.conversationFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));

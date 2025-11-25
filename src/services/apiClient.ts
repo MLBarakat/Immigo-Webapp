@@ -38,8 +38,9 @@ export class ApiClient {
       'X-API-Key': API_KEY,
     };
 
-    // The API_BASE_URL already contains /api, so the url parameter should be the relative path from there.
-    const fullUrl = `${API_BASE_URL}${url}`;
+    const cleanBase = (API_BASE_URL || '').replace(/\/$/, '');
+    const cleanPath = url.replace(/^\//, '');
+    const fullUrl = `${cleanBase}/${cleanPath}`;
     logger.debug(`API Request: ${options.method || 'GET'} ${fullUrl}`);
 
     const response = await fetch(fullUrl, { ...options, headers });

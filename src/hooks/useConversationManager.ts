@@ -6,6 +6,7 @@ import { Message } from '../context/conversationContextTypes';
 import { useWhisper } from './useWhisper'; // Import the new hook
 import { UserSettings } from '../types/settings';
 import { analytics } from '../analytics';
+import { logger } from '../logger';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
@@ -33,7 +34,11 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
   }, [interimTranscript, dispatch]);
 
   const sendTextMessage = useCallback(async (text: string) => {
-    if (!apiClient || !text.trim()) {
+    if (!apiClient) {
+      dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: 'System is initializing. Please wait a moment and try again.' });
+      return;
+    }
+    if (!text.trim()) {
       return;
     }
 
@@ -52,7 +57,10 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       
-      audio.play();
+      audio.play().catch(error => {
+        logger.error("Audio playback failed.", error);
+        dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: 'Audio playback failed. Your browser may require interaction first.' });
+      });
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
 
       audio.onended = () => {
