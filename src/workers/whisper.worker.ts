@@ -1,6 +1,6 @@
 // src/workers/whisper.worker.ts
 
-import { pipeline, env, Pipeline } from '@xenova/transformers';
+import { env, Pipeline } from '@xenova/transformers';
 
 // --- Configuration ---
 // 1. Environment settings for Transformers.js
@@ -23,6 +23,7 @@ class WhisperPipeline {
 
         if (this.instance === null) {
             try {
+                const { pipeline } = await import('@xenova/transformers');
                 this.instance = await pipeline(this.task, this.model, { 
                     progress_callback: cb,
                     // Specify quantization for faster inference and lower memory usage
