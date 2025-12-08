@@ -120,10 +120,22 @@ export default defineConfig({
 
   ],
 
-  worker: {
+    worker: {
 
-    format: 'es',
+      format: 'es',
 
-  },
+    },
 
-});
+    build: {
+
+      rollupOptions: {
+
+        external: ['@xenova/transformers'],
+
+      },
+
+    },
+
+  });
+
+  
