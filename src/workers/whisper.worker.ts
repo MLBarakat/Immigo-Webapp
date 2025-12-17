@@ -18,8 +18,9 @@ class WhisperPipeline {
         if (this.instance === null && this.loadingPromise === null) {
             this.loadingPromise = new Promise(async (resolve, reject) => {
                 try {
-                    // Dynamically import the transformers library from a CDN
-                    const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+                    // Dynamically import the transformers library from a CDN.
+                    // Use the Vite ignore comment so Vite/Rollup doesn't rewrite or bundle it.
+                    const { pipeline, env } = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
                     
                     // --- Environment settings for Transformers.js ---
                     env.allowLocalModels = true;
