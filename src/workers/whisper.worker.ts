@@ -1,39 +1,49 @@
 // src/workers/whisper.worker.ts
 
-import { env, Pipeline, pipeline } from '@xenova/transformers';
+// The transformers library will be imported dynamically
+// to avoid bundling issues with Vite in the worker context.
 
 // --- Configuration ---
-// 1. Environment settings for Transformers.js
-env.allowLocalModels = true;
-env.allowRemoteModels = true;
-// NOTE: You may need to adjust the model path based on your project structure if you host them locally.
-// By default, it will fetch from the Hugging Face Hub.
-env.localModelPath = '/models/';
+// Environment settings and pipeline definition are now handled within the getInstance method.
 
-// 2. Model and Pipeline definition
+// --- Model and Pipeline definition ---
 class WhisperPipeline {
     static task = 'automatic-speech-recognition';
     // Using a multilingual model for broader compatibility
     static model = 'Xenova/whisper-tiny'; 
-    static instance: Pipeline | null = null;
+    static instance: any = null; // Use `any` as the type will be from the dynamic import
+    static loadingPromise: Promise<any> | null = null;
 
     static async getInstance(progress_callback?: (progress: any) => void) {
-        // Use a no-op callback when none is provided to satisfy the pipeline API
-        const cb = progress_callback ?? (() => {});
+        if (this.instance === null && this.loadingPromise === null) {
+            this.loadingPromise = new Promise(async (resolve, reject) => {
+                try {
+                    // Dynamically import the transformers library from a CDN
+                    const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+                    
+                    // --- Environment settings for Transformers.js ---
+                    env.allowLocalModels = true;
+                    env.allowRemoteModels = true;
+                    // By default, it will fetch from the Hugging Face Hub.
+                    env.localModelPath = '/models/';
 
-        if (this.instance === null) {
-            try {
-                this.instance = await pipeline(this.task, this.model, { 
-                    progress_callback: cb,
-                    // Specify quantization for faster inference and lower memory usage
-                    quantized: true, 
-                });
-            } catch (error) {
-                self.postMessage({ status: 'error', error: `Failed to load model: ${error}` });
-                return null;
-            }
+                    // Use a no-op callback when none is provided to satisfy the pipeline API
+                    const cb = progress_callback ?? (() => {});
+                    
+                    this.instance = await pipeline(this.task, this.model, { 
+                        progress_callback: cb,
+                        // Specify quantization for faster inference and lower memory usage
+                        quantized: true, 
+                    });
+                    resolve(this.instance);
+                } catch (error) {
+                    self.postMessage({ status: 'error', error: `Failed to load model: ${error}` });
+                    reject(error);
+                }
+            });
         }
-        return this.instance;
+        
+        return this.loadingPromise;
     }
 }
 
@@ -43,28 +53,30 @@ self.onmessage = async (event) => {
 
     if (action === 'load') {
         // Load the model and report progress to the main thread
-        await WhisperPipeline.getInstance(progress => {
-            self.postMessage(progress);
-        });
-        self.postMessage({ status: 'ready' });
+        try {
+            await WhisperPipeline.getInstance(progress => {
+                self.postMessage(progress);
+            });
+            self.postMessage({ status: 'ready' });
+        } catch (error) {
+            // Error is already posted inside getInstance
+        }
         return;
     }
 
     if (action === 'transcribe') {
-        const transcriber = await WhisperPipeline.getInstance(); // Already loaded, no progress callback needed
-        if (!transcriber || !audio) {
-            self.postMessage({ status: 'error', error: 'Transcription service is not ready or audio is missing.' });
-            return;
-        }
-
         try {
+            const transcriber = await WhisperPipeline.getInstance(); // Should be loaded now
+            if (!transcriber || !audio) {
+                self.postMessage({ status: 'error', error: 'Transcription service is not ready or audio is missing.' });
+                return;
+            }
+
             // The VAD provides audio as a Float32Array, which is what the model expects.
-            // The `callback_function` is the key to getting streaming, interim results.
             const output = await transcriber(audio, {
                 chunk_length_s: 30,
                 stride_length_s: 5,
                 callback_function: (beams: any[]) => {
-                    // This function is called with interim results during transcription.
                     const bestBeam = beams[0];
                     if (bestBeam) {
                         self.postMessage({
@@ -75,7 +87,6 @@ self.onmessage = async (event) => {
                 }
             });
 
-            // Once the entire chunk is processed, the promise resolves with the final text.
             if (output && typeof output.text === 'string') {
                  self.postMessage({
                     status: 'complete',

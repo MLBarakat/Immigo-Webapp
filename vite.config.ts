@@ -125,11 +125,7 @@ export default defineConfig({
         format: 'es',
 
       },
-      build: {
-        rollupOptions: {
-          external: ['@xenova/transformers'],
-        },
-      }
+
     });
 
   
