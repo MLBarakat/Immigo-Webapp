@@ -49,6 +49,26 @@ class WhisperPipeline {
 }
 
 // --- Message Handler ---
+self.postMessage({ status: 'worker-initialized' });
+
+// Catch any synchronous errors that would otherwise be silent inside the worker
+self.addEventListener('error', (e: ErrorEvent) => {
+    try {
+        self.postMessage({ status: 'error', error: `Worker error: ${e.message}` });
+    } catch (_) {
+        // ignore
+    }
+});
+
+// Catch unhandled promise rejections
+(self as any).addEventListener('unhandledrejection', (ev: PromiseRejectionEvent) => {
+    try {
+        self.postMessage({ status: 'error', error: `Unhandled rejection: ${ev.reason}` });
+    } catch (_) {
+        // ignore
+    }
+});
+
 self.onmessage = async (event) => {
     const { action, audio } = event.data;
 
@@ -67,6 +87,7 @@ self.onmessage = async (event) => {
 
     if (action === 'transcribe') {
         try {
+            self.postMessage({ status: 'log', message: `Received transcribe request (audio length: ${audio?.length ?? 0})` });
             const transcriber = await WhisperPipeline.getInstance(); // Should be loaded now
             if (!transcriber || !audio) {
                 self.postMessage({ status: 'error', error: 'Transcription service is not ready or audio is missing.' });

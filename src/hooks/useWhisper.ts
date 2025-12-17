@@ -104,6 +104,13 @@ export const useWhisper = (): WhisperHook => {
     useEffect(() => {
         worker.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
         worker.current.addEventListener('message', handleWorkerMessage);
+        // Surface runtime worker errors to the console to help debugging
+        worker.current.addEventListener('error', (e) => {
+            console.error('Whisper worker runtime error:', e);
+        });
+        worker.current.addEventListener('messageerror', (e) => {
+            console.error('Whisper worker message error:', e);
+        });
         worker.current.postMessage({ action: 'load' });
 
         const vadOptions: VadOptions & {
@@ -129,11 +136,13 @@ export const useWhisper = (): WhisperHook => {
             },
             onSpeechData: (audio: Float32Array) => {
                 if (worker.current) {
+                    console.debug('Sending audio to worker (length):', audio.length);
                     // Send audio to the worker for transcription
                     // Use a transferable object for performance
                     try {
                         worker.current.postMessage({ action: 'transcribe', audio }, [audio.buffer]);
                     } catch (e) {
+                        console.warn('Failed to transfer audio buffer, falling back to copy:', e);
                         // Fallback if transferable is not supported (e.g., in some dev environments)
                         worker.current.postMessage({ action: 'transcribe', audio });
                     }
