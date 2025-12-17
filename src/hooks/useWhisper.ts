@@ -112,6 +112,12 @@ export const useWhisper = (): WhisperHook => {
             console.error('Whisper worker message error:', e);
         });
         worker.current.postMessage({ action: 'load' });
+        // Ping the worker to confirm it's alive and responding
+        try {
+            worker.current.postMessage({ action: 'ping' });
+        } catch (e) {
+            console.warn('Failed to send ping to worker:', e);
+        }
 
         const vadOptions: VadOptions & {
             minSpeechFrames: number;

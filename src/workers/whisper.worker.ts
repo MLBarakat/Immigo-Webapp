@@ -85,6 +85,12 @@ self.onmessage = async (event) => {
         return;
     }
 
+    if (action === 'ping') {
+        // Simple handshake for debugging to confirm the worker is alive
+        self.postMessage({ status: 'pong' });
+        return;
+    }
+
     if (action === 'transcribe') {
         try {
             self.postMessage({ status: 'log', message: `Received transcribe request (audio length: ${audio?.length ?? 0})` });
