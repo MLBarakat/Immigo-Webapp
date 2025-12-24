@@ -133,6 +133,13 @@ export const useWhisper = (): WhisperHook => {
             negativeSpeechThreshold: 0.65,
             preSpeechPadFrames: 1,
             onSpeechStart: () => {
+                logger.debug('VAD: Speech started');
+                setIsTranscribing(true);
+            },
+            onSpeechEnd: onSpeechEnd,
+            onVADMisfire: () => {
+                logger.debug('VAD: Misfire (Short noise ignored)');
+            },
             onSpeechData: (audio: Float32Array) => {
                 // Debug: confirm this callback is invoked and inspect the audio
                 try {
@@ -144,13 +151,7 @@ export const useWhisper = (): WhisperHook => {
                 } catch (e) {
                     console.warn('Error while logging onSpeechData debug info:', e);
                 }
-                setIsTranscribing(true);
-            },
-            onSpeechEnd: onSpeechEnd,
-            onVADMisfire: () => {
-                logger.debug('VAD: Misfire (Short noise ignored)');
-            },
-            onSpeechData: (audio: Float32Array) => {
+
                 if (worker.current) {
                     console.debug('Sending audio to worker (length):', audio.length);
                     // Send audio to the worker for transcription
@@ -164,6 +165,13 @@ export const useWhisper = (): WhisperHook => {
                     }
                 }
             },
+        };
+
+        MicVAD.new(vadOptions)
+            .then(newVad => {
+                vad.current = newVad;
+                setIsVadReady(true);
+                logger.info('VAD initialized successfully.');
                 // Dev helper: expose the VAD instance and worker on window for manual debugging
                 try {
                     // @ts-ignore - dev debug helper
@@ -181,13 +189,6 @@ export const useWhisper = (): WhisperHook => {
                 } catch (e) {
                     // ignore
                 }
-        };
-
-        MicVAD.new(vadOptions)
-            .then(newVad => {
-                vad.current = newVad;
-                setIsVadReady(true);
-                logger.info('VAD initialized successfully.');
             })
             .catch(error => {
                 logger.error("Failed to create VAD:", error);
