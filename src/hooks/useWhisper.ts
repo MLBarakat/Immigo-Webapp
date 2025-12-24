@@ -133,7 +133,17 @@ export const useWhisper = (): WhisperHook => {
             negativeSpeechThreshold: 0.65,
             preSpeechPadFrames: 1,
             onSpeechStart: () => {
-                logger.debug('VAD: Speech started');
+            onSpeechData: (audio: Float32Array) => {
+                // Debug: confirm this callback is invoked and inspect the audio
+                try {
+                    console.debug('VAD onSpeechData invoked, audio length:', audio?.length);
+                    if (audio && audio.length > 0) {
+                        // Print a small sample to help ensure non-zero data
+                        console.debug('audio sample:', audio.slice(0, Math.min(10, audio.length)));
+                    }
+                } catch (e) {
+                    console.warn('Error while logging onSpeechData debug info:', e);
+                }
                 setIsTranscribing(true);
             },
             onSpeechEnd: onSpeechEnd,
@@ -154,6 +164,23 @@ export const useWhisper = (): WhisperHook => {
                     }
                 }
             },
+                // Dev helper: expose the VAD instance and worker on window for manual debugging
+                try {
+                    // @ts-ignore - dev debug helper
+                    (window as any).__vadInstance = vad.current;
+                    // @ts-ignore - dev debug helper
+                    (window as any).__whisperWorker = worker.current;
+                    console.debug('Exposed __vadInstance and __whisperWorker on window for debugging.');
+                } catch (e) {
+                    // ignore
+                }
+
+                // Log VAD instance keys to help debug whether onSpeechData is present
+                try {
+                    console.debug('VAD instance keys:', Object.keys(vad.current || {}));
+                } catch (e) {
+                    // ignore
+                }
         };
 
         MicVAD.new(vadOptions)
