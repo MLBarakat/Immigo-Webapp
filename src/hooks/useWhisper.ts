@@ -40,7 +40,8 @@ export const useWhisper = (): WhisperHook => {
         const data = event.data || {};
         const status = data.status;
 
-        logger.debug('Worker message', { data }); // Reduced verbosity; use structured logger
+        // Log a small summary instead of dumping the entire message payload to avoid excessive console noise
+        logger.debug('Worker message', { status, inferenceId: data?.inferenceId, progress: data?.progress }); // Reduced verbosity; use structured logger
 
         switch (status) {
             case 'loading':
@@ -180,25 +181,21 @@ export const useWhisper = (): WhisperHook => {
                 logger.debug('VAD: Misfire (Short noise ignored)');
             },
             onSpeechData: (audio: Float32Array) => {
-                // Debug: confirm this callback is invoked and inspect the audio
+                // Debug: confirm this callback is invoked; log only length to avoid noisy dumps
                 try {
-                    console.debug('VAD onSpeechData invoked, audio length:', audio?.length);
-                    if (audio && audio.length > 0) {
-                        // Print a small sample to help ensure non-zero data
-                        console.debug('audio sample:', audio.slice(0, Math.min(10, audio.length)));
-                    }
+                    logger.debug('VAD onSpeechData', { audioLength: audio?.length });
                 } catch (e) {
-                    console.warn('Error while logging onSpeechData debug info:', e);
+                    logger.warn('Error while logging onSpeechData debug info', { errorMessage: String(e) });
                 }
 
                 if (worker.current) {
-                    console.debug('Sending audio to worker (length):', audio.length);
+                    logger.debug('Sending audio to worker', { audioLength: audio.length });
                     // Send audio to the worker for transcription
                     // Use a transferable object for performance
                     try {
                         worker.current.postMessage({ action: 'transcribe', audio }, [audio.buffer]);
                     } catch (e) {
-                        console.warn('Failed to transfer audio buffer, falling back to copy:', e);
+                        logger.warn('Failed to transfer audio buffer, falling back to copy', { errorMessage: String(e) });
                         // Fallback if transferable is not supported (e.g., in some dev environments)
                         worker.current.postMessage({ action: 'transcribe', audio });
                     }
@@ -217,14 +214,14 @@ export const useWhisper = (): WhisperHook => {
                     (window as any).__vadInstance = vad.current;
                     // @ts-ignore - dev debug helper
                     (window as any).__whisperWorker = worker.current;
-                    console.debug('Exposed __vadInstance and __whisperWorker on window for debugging.');
+                    logger.debug('Exposed __vadInstance and __whisperWorker on window for debugging.');
                 } catch (e) {
                     // ignore
                 }
 
                 // Log VAD instance keys to help debug whether onSpeechData is present
                 try {
-                    console.debug('VAD instance keys:', Object.keys(vad.current || {}));
+                    logger.debug('VAD instance keys', { keys: Object.keys(vad.current || {}) });
                 } catch (e) {
                     // ignore
                 }
