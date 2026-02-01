@@ -39,15 +39,15 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
             <form className="space-y-4">
               <div>
                 <label htmlFor="current-password" className="block text-sm font-medium text-immigo-gray-700">Current Password</label>
-                <input type="password" id="current-password" autocomplete="current-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                <input type="password" id="current-password" autoComplete="current-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
               </div>
               <div>
                 <label htmlFor="new-password" className="block text-sm font-medium text-immigo-gray-700">New Password</label>
-                <input type="password" id="new-password" autocomplete="new-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                <input type="password" id="new-password" autoComplete="new-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
               </div>
               <div>
                 <label htmlFor="confirm-password" className="block text-sm font-medium text-immigo-gray-700">Confirm New Password</label>
-                <input type="password" id="confirm-password" autocomplete="new-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                <input type="password" id="confirm-password" autoComplete="new-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
               </div>
               <button type="submit" className="px-4 py-2 bg-art-blue-600 text-white rounded-md font-semibold hover:bg-art-blue-700">Update Password</button>
             </form>

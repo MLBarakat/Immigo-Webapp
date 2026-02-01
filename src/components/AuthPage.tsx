@@ -79,7 +79,7 @@ export function AuthPage(): JSX.Element {
             <div className="relative">
               <label htmlFor="password" className="sr-only">Password</label>
               <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" aria-hidden="true" />
-              <input id="password" type="password" autocomplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow" required />
+              <input id="password" type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow" required />
             </div>
             {!isLogin && (
               <>

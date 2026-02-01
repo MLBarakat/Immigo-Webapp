@@ -106,7 +106,7 @@ export const useWhisper = (): WhisperHook => {
                 worker.current.postMessage({ action: 'speech_end', timestamp: Date.now() });
             }
         } catch (e) {
-            logger.warn('Failed to send speech_end to worker', e);
+            logger.warn('Failed to send speech_end to worker', { error: String(e) });
         }
 
         // Finalize any lingering interim text when speech stops
@@ -229,8 +229,8 @@ export const useWhisper = (): WhisperHook => {
                     // ignore
                 }
             })
-            .catch(error => {
-                logger.error("Failed to create VAD:", error);
+            .catch((error: unknown) => {
+                logger.error("Failed to create VAD:", undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
             });
 
         return () => {

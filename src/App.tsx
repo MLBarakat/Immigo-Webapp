@@ -99,8 +99,8 @@ function AppContent(): JSX.Element {
           if (isMounted) {
              setUserSettings(settings);
           }
-        } catch (error) { 
-          logger.error('Failed to fetch user settings', error);
+        } catch (error: unknown) { 
+          logger.error('Failed to fetch user settings', undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
         }
       }
     };
@@ -123,8 +123,8 @@ function AppContent(): JSX.Element {
     if (apiClient) {
       try {
         await apiClient.updateSettings({ [key]: value });
-      } catch (error) {
-        logger.error("Failed to save setting", error);
+      } catch (error: unknown) {
+        logger.error("Failed to save setting", undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
       }
     }
   };
@@ -140,7 +140,7 @@ function AppContent(): JSX.Element {
   const handleLanguageChange = (newLanguageCode: string) => {
     dispatch({ type: 'SET_LANGUAGE', payload: newLanguageCode });
     updateUserLanguage(newLanguageCode).catch((error: any) => {
-      logger.error("UI failed to sync language update", error);
+      logger.error("UI failed to sync language update", undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
     });
   };
 
@@ -158,8 +158,8 @@ function AppContent(): JSX.Element {
       const data = await apiClient.getAnalysis(conversationManager.conversationHistory);
       setFeedbackData(data);
       analytics.track('feedback_received_success');
-    } catch (error) {
-      logger.error("Failed to get feedback", error);
+    } catch (error: unknown) {
+      logger.error("Failed to get feedback", undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
       setFeedbackError(error instanceof Error ? error.message : "An unknown error occurred.");
       analytics.track('feedback_received_failure');
     } finally {

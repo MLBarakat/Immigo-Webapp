@@ -33,8 +33,8 @@ export const getSupabaseClient = (): Promise<SupabaseClient> => {
       // Initialize the client once
       const client = createClient(config.supabaseUrl, config.supabaseAnonKey);
       return client;
-    } catch (error) {
-      logger.error('Error initializing Supabase client:', error);
+    } catch (error: unknown) {
+      logger.error('Error initializing Supabase client:', undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
       // Reset the promise so we can try again if it fails
       supabasePromise = null;
       throw new Error('Could not initialize Supabase client.');

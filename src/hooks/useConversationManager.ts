@@ -62,8 +62,8 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       
-      audio.play().catch(error => {
-        logger.error("Audio playback failed.", error);
+      audio.play().catch((error: unknown) => {
+        logger.error("Audio playback failed.", undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
         dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: 'Audio playback failed. Your browser may require interaction first.' });
       });
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
