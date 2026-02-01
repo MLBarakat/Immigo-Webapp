@@ -20,23 +20,39 @@ class WhisperPipeline {
                 try {
                     // Dynamically import the transformers library from a CDN.
                     // Use the Vite ignore comment so Vite/Rollup doesn't rewrite or bundle it.
-                    const { pipeline, env } = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
-                    
-                    // --- Environment settings for Transformers.js ---
-                    env.allowLocalModels = true;
-                    env.allowRemoteModels = true;
-                    // By default, it will fetch from the Hugging Face Hub.
-                    env.localModelPath = '/models/';
+                    // Temporarily silence noisy console output from third-party libs (transformers / onnxruntime)
+                    // while we dynamically import and initialize the model. We restore the console afterwards.
+                    const _savedConsole = { debug: console.debug, info: console.info, warn: console.warn, log: console.log };
+                    const _noop = () => {};
 
-                    // Use a no-op callback when none is provided to satisfy the pipeline API
-                    const cb = progress_callback ?? (() => {});
-                    
-                    this.instance = await pipeline(this.task, this.model, { 
-                        progress_callback: cb,
-                        // Specify quantization for faster inference and lower memory usage
-                        quantized: true, 
-                    });
-                    resolve(this.instance);
+                    try {
+                        // Mute console while importing and initializing the model to reduce spam from third-party libs
+                        console.debug = _noop; console.info = _noop; console.warn = _noop; console.log = _noop;
+
+                        const { pipeline, env } = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+
+                        // --- Environment settings for Transformers.js ---
+                        env.allowLocalModels = true;
+                        env.allowRemoteModels = true;
+                        // By default, it will fetch from the Hugging Face Hub.
+                        env.localModelPath = '/models/';
+
+                        // Use a no-op callback when none is provided to satisfy the pipeline API
+                        const cb = progress_callback ?? (() => {});
+                        
+                        this.instance = await pipeline(this.task, this.model, { 
+                            progress_callback: cb,
+                            // Specify quantization for faster inference and lower memory usage
+                            quantized: true, 
+                        });
+                        resolve(this.instance);
+                    } finally {
+                        // Restore console methods to avoid hiding important messages later
+                        console.debug = _savedConsole.debug;
+                        console.info = _savedConsole.info;
+                        console.warn = _savedConsole.warn;
+                        console.log = _savedConsole.log;
+                    }
                 } catch (error) {
                     self.postMessage({ status: 'error', error: `Failed to load model: ${error}` });
                     reject(error);

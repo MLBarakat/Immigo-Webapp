@@ -40,7 +40,7 @@ export const useWhisper = (): WhisperHook => {
         const data = event.data || {};
         const status = data.status;
 
-        console.log("WORKER SAYS:", JSON.stringify(data)); // Keep for debugging
+        logger.debug('Worker message', { data }); // Reduced verbosity; use structured logger
 
         switch (status) {
             case 'loading':
