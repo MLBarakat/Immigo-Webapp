@@ -64,6 +64,16 @@ class WhisperPipeline {
     }
 }
 
+// Inference bookkeeping to support cancellation, de-dup, and latency measurement
+let _currentInferenceId = 0;
+const _lastReported: Record<number, string> = {};
+const _speechEndTimestamps: Record<number, number> = {};
+const _inferenceStartTimes: Record<number, number> = {};
+
+// Default ASR tuning parameters (seconds). These can be overridden by the main thread
+let _chunkLengthS = 8;
+let _strideLengthS = 1;
+
 // --- Message Handler ---
 self.postMessage({ status: 'worker-initialized' });
 
@@ -91,6 +101,14 @@ self.onmessage = async (event) => {
     if (action === 'load') {
         // Load the model and report progress to the main thread
         try {
+            // Allow the main thread to send ASR tuning values when loading
+            const cfg = event.data?.config ?? {};
+            if (typeof cfg.chunk_length_s === 'number') _chunkLengthS = cfg.chunk_length_s;
+            if (typeof cfg.stride_length_s === 'number') _strideLengthS = cfg.stride_length_s;
+            if (cfg && (cfg.chunk_length_s || cfg.stride_length_s)) {
+                self.postMessage({ status: 'config-updated', chunk_length_s: _chunkLengthS, stride_length_s: _strideLengthS });
+            }
+
             await WhisperPipeline.getInstance(progress => {
                 self.postMessage(progress);
             });
@@ -106,6 +124,30 @@ self.onmessage = async (event) => {
         self.postMessage({ status: 'pong' });
         return;
     }
+    // Allow runtime updates to ASR configuration
+    if (action === 'set-config') {
+        try {
+            const cfg = event.data?.config ?? {};
+            if (typeof cfg.chunk_length_s === 'number') _chunkLengthS = cfg.chunk_length_s;
+            if (typeof cfg.stride_length_s === 'number') _strideLengthS = cfg.stride_length_s;
+            self.postMessage({ status: 'config-updated', chunk_length_s: _chunkLengthS, stride_length_s: _strideLengthS });
+        } catch (e) {
+            // ignore
+        }
+        return;
+    }
+    // Mark the end of a user's speech segment so we can measure latency from speech end -> complete
+    if (action === 'speech_end') {
+        try {
+            const ts = event.data.timestamp ?? Date.now();
+            // Associate the speech end timestamp with the current inference id so we can calculate latency
+            _speechEndTimestamps[_currentInferenceId] = ts;
+            self.postMessage({ status: 'speech-end-ack', inferenceId: _currentInferenceId, timestamp: ts });
+        } catch (e) {
+            // ignore
+        }
+        return;
+    }
 
     if (action === 'transcribe') {
         try {
@@ -116,26 +158,47 @@ self.onmessage = async (event) => {
                 return;
             }
 
+            // Start a new inference and bump the id so older inferences get ignored
+            const inferenceId = ++_currentInferenceId;
+            _lastReported[inferenceId] = '';
+            _inferenceStartTimes[inferenceId] = Date.now();
+            self.postMessage({ status: 'inference-start', inferenceId });
+
             // The VAD provides audio as a Float32Array, which is what the model expects.
             const output = await transcriber(audio, {
-                chunk_length_s: 30,
-                stride_length_s: 5,
+                // Use configured chunk/stride (seconds)
+                chunk_length_s: _chunkLengthS,
+                stride_length_s: _strideLengthS,
                 callback_function: (beams: any[]) => {
-                    const bestBeam = beams[0];
-                    if (bestBeam) {
-                        self.postMessage({
-                            status: 'update',
-                            output: bestBeam.text,
-                        });
+                    const bestBeam = beams && beams[0];
+                    if (!bestBeam) return;
+
+                    // Normalize whitespace and trim to avoid tiny repeated fragments
+                    const normalized = (bestBeam.text || '').replace(/\s+/g, ' ').trim();
+
+                    // Only report updates for the latest active inference and when text actually changed
+                    if (inferenceId === _currentInferenceId && normalized && normalized !== _lastReported[inferenceId]) {
+                        _lastReported[inferenceId] = normalized;
+                        self.postMessage({ status: 'update', output: normalized, inferenceId });
                     }
                 }
             });
 
+            // If this inference is no longer the active one, treat it as cancelled/ignored
+            if (inferenceId !== _currentInferenceId) {
+                self.postMessage({ status: 'cancelled', inferenceId });
+                return;
+            }
+
             if (output && typeof output.text === 'string') {
-                 self.postMessage({
-                    status: 'complete',
-                    output: output.text,
-                });
+                 const finalText = (output.text || '').replace(/\s+/g, ' ').trim();
+                 self.postMessage({ status: 'complete', output: finalText, inferenceId });
+
+                 const speechEndTs = _speechEndTimestamps[inferenceId];
+                 if (speechEndTs) {
+                     const latencyMs = Date.now() - speechEndTs;
+                     self.postMessage({ status: 'latency', inferenceId, latencyMs });
+                 }
             }
         } catch (error) {
             self.postMessage({ status: 'error', error: `Transcription failed: ${error}` });

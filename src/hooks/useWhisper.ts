@@ -70,6 +70,23 @@ export const useWhisper = (): WhisperHook => {
                 setInterimTranscript(''); // Clear interim when a chunk is complete
                 break;
 
+            case 'inference-start':
+                logger.debug('Worker inference started', { inferenceId: data.inferenceId });
+                break;
+
+            case 'latency':
+                // Small telemetry message with time in ms from speech end -> complete
+                logger.info('Transcription latency (ms)', { latencyMs: data.latencyMs, inferenceId: data.inferenceId });
+                break;
+
+            case 'cancelled':
+                logger.debug('Inference cancelled/ignored', { inferenceId: data.inferenceId });
+                break;
+
+            case 'speech-end-ack':
+                logger.debug('Worker acknowledged speech end', { inferenceId: data.inferenceId, timestamp: data.timestamp });
+                break;
+
             default:
                 // Handle any other progress messages from the worker if needed
                 if (typeof data.progress === 'number') {
@@ -82,6 +99,15 @@ export const useWhisper = (): WhisperHook => {
     const onSpeechEnd = useCallback(() => {
         logger.debug('VAD: Speech ended.');
         setIsTranscribing(false);
+
+        // Emit a speech_end marker to the worker so it can measure end->complete latency
+        try {
+            if (worker.current) {
+                worker.current.postMessage({ action: 'speech_end', timestamp: Date.now() });
+            }
+        } catch (e) {
+            logger.warn('Failed to send speech_end to worker', e);
+        }
 
         // Finalize any lingering interim text when speech stops
         setInterimTranscript(currentInterim => {
@@ -111,7 +137,20 @@ export const useWhisper = (): WhisperHook => {
         worker.current.addEventListener('messageerror', (e) => {
             console.error('Whisper worker message error:', e);
         });
-        worker.current.postMessage({ action: 'load' });
+        // Send load + optional ASR config (read from Vite env): VITE_ASR_CHUNK_LENGTH_S & VITE_ASR_STRIDE_LENGTH_S
+        try {
+            const envChunk = Number(import.meta.env.VITE_ASR_CHUNK_LENGTH_S ?? '');
+            const envStride = Number(import.meta.env.VITE_ASR_STRIDE_LENGTH_S ?? '');
+            const cfg: Record<string, number> = {};
+            if (Number.isFinite(envChunk)) cfg.chunk_length_s = envChunk;
+            if (Number.isFinite(envStride)) cfg.stride_length_s = envStride;
+            worker.current.postMessage({ action: 'load', config: cfg });
+            if (Object.keys(cfg).length) logger.info('Sent ASR config to worker', cfg);
+        } catch (e) {
+            // Fallback to basic load if something goes wrong
+            worker.current.postMessage({ action: 'load' });
+        }
+
         // Ping the worker to confirm it's alive and responding
         try {
             worker.current.postMessage({ action: 'ping' });
