@@ -151,6 +151,7 @@ self.onmessage = async (event) => {
 
     if (action === 'transcribe') {
         try {
+            // Emit an explicit log so the main thread can confirm receipt of audio
             self.postMessage({ status: 'log', message: `Received transcribe request (audio length: ${audio?.length ?? 0})` });
             const transcriber = await WhisperPipeline.getInstance(); // Should be loaded now
             if (!transcriber || !audio) {

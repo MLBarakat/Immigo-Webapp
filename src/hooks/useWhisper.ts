@@ -54,17 +54,19 @@ export const useWhisper = (): WhisperHook => {
                 break;
             case 'error':
                 setIsModelLoading(false);
-                logger.error('Whisper worker error:', data.error);
+                logger.error('Whisper worker error:', undefined, { errorMessage: data?.error });
                 break;
 
             // Worker is sending an interim update
             case 'update':
                 // The output is a segment of the transcript. We append it.
+                logger.info('Whisper interim update', { inferenceId: data?.inferenceId, text: data?.output });
                 setInterimTranscript(finalTranscriptRef.current + ' ' + data.output);
                 break;
 
             // Worker has finished a full transcription chunk
             case 'complete':
+                logger.info('Whisper transcription complete', { inferenceId: data?.inferenceId, text: data?.output });
                 const newTranscript = (finalTranscriptRef.current + ' ' + data.output).trim();
                 finalTranscriptRef.current = newTranscript;
                 setFinalTranscript(newTranscript);
@@ -72,7 +74,7 @@ export const useWhisper = (): WhisperHook => {
                 break;
 
             case 'inference-start':
-                logger.debug('Worker inference started', { inferenceId: data.inferenceId });
+                logger.info('Worker inference started', { inferenceId: data.inferenceId });
                 break;
 
             case 'latency':
@@ -81,11 +83,20 @@ export const useWhisper = (): WhisperHook => {
                 break;
 
             case 'cancelled':
-                logger.debug('Inference cancelled/ignored', { inferenceId: data.inferenceId });
+                logger.info('Inference cancelled/ignored', { inferenceId: data.inferenceId });
                 break;
 
             case 'speech-end-ack':
-                logger.debug('Worker acknowledged speech end', { inferenceId: data.inferenceId, timestamp: data.timestamp });
+                logger.info('Worker acknowledged speech end', { inferenceId: data.inferenceId, timestamp: data.timestamp });
+                break;
+
+            case 'log':
+                // Generic log coming from the worker; display so we can monitor flow from the worker side
+                logger.info('Worker log', { message: data?.message });
+                break;
+
+            case 'pong':
+                logger.info('Worker pong');
                 break;
 
             default:
@@ -183,13 +194,15 @@ export const useWhisper = (): WhisperHook => {
             onSpeechData: (audio: Float32Array) => {
                 // Debug: confirm this callback is invoked; log only length to avoid noisy dumps
                 try {
-                    logger.debug('VAD onSpeechData', { audioLength: audio?.length });
+                    // Use INFO so we see it in non-dev builds; this is a critical signal that audio is being captured
+                    logger.info('VAD onSpeechData', { audioLength: audio?.length });
                 } catch (e) {
-                    logger.warn('Error while logging onSpeechData debug info', { errorMessage: String(e) });
+                    logger.warn('Error while logging onSpeechData info', { errorMessage: String(e) });
                 }
 
                 if (worker.current) {
-                    logger.debug('Sending audio to worker', { audioLength: audio.length });
+                    // Log at INFO to ensure visibility in production logs
+                    logger.info('Sending audio to worker', { audioLength: audio.length });
                     // Send audio to the worker for transcription
                     // Use a transferable object for performance
                     try {
