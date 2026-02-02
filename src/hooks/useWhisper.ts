@@ -220,7 +220,18 @@ export const useWhisper = (): WhisperHook => {
             .then(newVad => {
                 vad.current = newVad;
                 setIsVadReady(true);
-                logger.info('VAD initialized successfully.');
+                // Important: Pause the VAD after initialization to avoid it auto-starting and capturing ambient noise
+                try {
+                    if (vad.current?.listening) {
+                        vad.current.pause();
+                        logger.info('VAD initialized and paused; call startRecording() to begin listening.');
+                    } else {
+                        logger.info('VAD initialized (paused). Call startRecording() to begin listening.');
+                    }
+                } catch (e) {
+                    logger.warn('Failed to pause VAD after initialization', { errorMessage: String(e) });
+                }
+
                 // Dev helper: expose the VAD instance and worker on window for manual debugging
                 try {
                     // @ts-ignore - dev debug helper
