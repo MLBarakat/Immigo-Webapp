@@ -108,31 +108,57 @@ export const useWhisper = (): WhisperHook => {
         }
     }, []);
 
-    const onSpeechEnd = useCallback(() => {
-        logger.debug('VAD: Speech ended.');
+    // Accept the final audio chunk (if provided) from the VAD onSpeechEnd callback.
+    // If audio is present, send it to the worker for transcription instead of locally finalizing the interim text
+    const onSpeechEnd = useCallback((audio?: Float32Array) => {
+        logger.debug('VAD: Speech ended.', { audioLength: audio?.length });
         setIsTranscribing(false);
 
-        // Emit a speech_end marker to the worker so it can measure end->complete latency
-        try {
-            if (worker.current) {
-                worker.current.postMessage({ action: 'speech_end', timestamp: Date.now() });
+        if (worker.current) {
+            try {
+                if (audio && audio.length > 0) {
+                    // Send the final audio chunk to the worker for transcription (transfer buffer)
+                    logger.info('Sending final audio chunk to worker on speech end', { audioLength: audio.length });
+                    try {
+                        worker.current.postMessage({ action: 'transcribe', audio }, [audio.buffer]);
+                    } catch (e) {
+                        logger.warn('Failed to transfer final audio buffer, falling back to copy', { errorMessage: String(e) });
+                        worker.current.postMessage({ action: 'transcribe', audio });
+                    }
+
+                    // After sending the audio, send a speech_end marker to allow the worker to calculate latency
+                    try {
+                        worker.current.postMessage({ action: 'speech_end', timestamp: Date.now() });
+                    } catch (e) {
+                        logger.warn('Failed to send speech_end to worker', { errorMessage: String(e) });
+                    }
+
+                    // Do not locally finalize the interim transcript; wait for worker 'complete' to update final text
+                } else {
+                    // No audio was provided by the VAD; finalize any lingering interim text locally
+                    setInterimTranscript(currentInterim => {
+                        if (currentInterim.trim()) {
+                            const newFinal = currentInterim.trim();
+                            finalTranscriptRef.current = newFinal;
+                            setFinalTranscript(newFinal);
+                            logger.info('Finalizing transcript on speech end (no audio):', { text: newFinal });
+                        }
+                        return '';
+                    });
+
+                    // Still notify the worker of speech end so any in-progress inference can measure latency
+                    try {
+                        worker.current.postMessage({ action: 'speech_end', timestamp: Date.now() });
+                    } catch (e) {
+                        logger.warn('Failed to send speech_end to worker', { errorMessage: String(e) });
+                    }
+                }
+            } catch (e) {
+                logger.error('Error handling onSpeechEnd audio', undefined, { errorMessage: String(e) });
             }
-        } catch (e) {
-            logger.warn('Failed to send speech_end to worker', { error: String(e) });
         }
 
-        // Finalize any lingering interim text when speech stops
-        setInterimTranscript(currentInterim => {
-            if (currentInterim.trim()) {
-                const newFinal = currentInterim.trim();
-                finalTranscriptRef.current = newFinal;
-                setFinalTranscript(newFinal);
-                logger.info('Finalizing transcript on speech end:', { text: newFinal });
-            }
-            return ''; // Clear interim text
-        });
-        
-        // Optional: Pause the VAD. `stopRecording` already does this.
+        // Pause the VAD after speech ends
         if (vad.current?.listening) {
             vad.current.pause();
         }
@@ -174,7 +200,7 @@ export const useWhisper = (): WhisperHook => {
             minSpeechFrames: number;
             redemptionFrames: number;
             onSpeechStart: () => void;
-            onSpeechEnd: () => void;
+            onSpeechEnd: (audio?: Float32Array) => void;
             onVADMisfire: () => void;
             onSpeechData: (audio: Float32Array) => void;
         } = {
@@ -187,7 +213,7 @@ export const useWhisper = (): WhisperHook => {
                 logger.debug('VAD: Speech started');
                 setIsTranscribing(true);
             },
-            onSpeechEnd: onSpeechEnd,
+            onSpeechEnd: onSpeechEnd, // (audio?: Float32Array) => void
             onVADMisfire: () => {
                 logger.debug('VAD: Misfire (Short noise ignored)');
             },
