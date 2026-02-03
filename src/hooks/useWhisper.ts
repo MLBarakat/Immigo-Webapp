@@ -110,9 +110,63 @@ export const useWhisper = (): WhisperHook => {
 
     // Accept the final audio chunk (if provided) from the VAD onSpeechEnd callback.
     // If audio is present, send it to the worker for transcription instead of locally finalizing the interim text
+    // Buffer and partial flush logic to support live interim transcription while user is speaking
+    const audioBufferRef = useRef<Float32Array[]>([]);
+    const partialFlushTimerRef = useRef<number | null>(null);
+
+    const startPartialFlushTimer = useCallback(() => {
+        if (partialFlushTimerRef.current !== null) return;
+        // Flush every 700ms while user is speaking
+        partialFlushTimerRef.current = window.setInterval(() => {
+            if (!vad.current?.listening) return;
+            // Concatenate buffered audio and take last 1.5s of samples for partial inference
+            const samples = audioBufferRef.current;
+            if (!samples || samples.length === 0) return;
+
+            // Concatenate all chunks into one Float32Array
+            let totalLen = 0;
+            for (const s of samples) totalLen += s.length;
+            const concat = new Float32Array(totalLen);
+            let offset = 0;
+            for (const s of samples) {
+                concat.set(s, offset);
+                offset += s.length;
+            }
+
+            // Keep approximately last 1.5s (assuming 16000 Hz)
+            const targetSamples = Math.floor(1.5 * 16000);
+            const start = Math.max(0, concat.length - targetSamples);
+            const partial = concat.slice(start);
+
+            // Send as partial transcribe message (non-final)
+            if (worker.current && partial.length > 0) {
+                try {
+                    worker.current.postMessage({ action: 'transcribe-partial', audio: partial }, [partial.buffer]);
+                    logger.debug('Sent partial audio to worker', { partialLength: partial.length });
+                } catch (e) {
+                    logger.warn('Failed to transfer partial audio buffer, falling back to copy', { errorMessage: String(e) });
+                    worker.current.postMessage({ action: 'transcribe-partial', audio: partial });
+                }
+            }
+
+            // Discard older buffered chunks to keep memory bounded (keep only recent)
+            audioBufferRef.current = [concat.slice(Math.max(0, concat.length - targetSamples))];
+        }, 700);
+    }, []);
+
+    const stopPartialFlushTimer = useCallback(() => {
+        if (partialFlushTimerRef.current !== null) {
+            clearInterval(partialFlushTimerRef.current);
+            partialFlushTimerRef.current = null;
+        }
+    }, []);
+
     const onSpeechEnd = useCallback((audio?: Float32Array) => {
         logger.debug('VAD: Speech ended.', { audioLength: audio?.length });
         setIsTranscribing(false);
+
+        // Stop periodic partial flushing
+        stopPartialFlushTimer();
 
         if (worker.current) {
             try {
@@ -132,6 +186,9 @@ export const useWhisper = (): WhisperHook => {
                     } catch (e) {
                         logger.warn('Failed to send speech_end to worker', { errorMessage: String(e) });
                     }
+
+                    // Clear the buffer
+                    audioBufferRef.current = [];
 
                     // Do not locally finalize the interim transcript; wait for worker 'complete' to update final text
                 } else {
@@ -163,7 +220,7 @@ export const useWhisper = (): WhisperHook => {
             vad.current.pause();
         }
 
-    }, []);
+    }, [stopPartialFlushTimer]);
 
     useEffect(() => {
         worker.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
@@ -212,12 +269,21 @@ export const useWhisper = (): WhisperHook => {
             onSpeechStart: () => {
                 logger.debug('VAD: Speech started');
                 setIsTranscribing(true);
+                // Start periodic flushes for partial streaming
+                try { startPartialFlushTimer(); } catch (e) { logger.warn('Failed to start partial flush timer', { errorMessage: String(e) }); }
             },
             onSpeechEnd: onSpeechEnd, // (audio?: Float32Array) => void
             onVADMisfire: () => {
                 logger.debug('VAD: Misfire (Short noise ignored)');
             },
             onSpeechData: (audio: Float32Array) => {
+                // Buffer for partial streaming and also send direct small frames if desired
+                try {
+                    audioBufferRef.current.push(audio);
+                } catch (e) {
+                    logger.warn('Failed to buffer audio for partial streaming', { errorMessage: String(e) });
+                }
+
                 // Debug: confirm this callback is invoked; log only length to avoid noisy dumps
                 try {
                     // Use INFO so we see it in non-dev builds; this is a critical signal that audio is being captured

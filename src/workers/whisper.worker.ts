@@ -205,4 +205,52 @@ self.onmessage = async (event) => {
             self.postMessage({ status: 'error', error: `Transcription failed: ${error}` });
         }
     }
+
+    // Handle partial/streaming transcribe calls that should produce interim updates
+    if (action === 'transcribe-partial') {
+        try {
+            self.postMessage({ status: 'log', message: `Received partial transcribe request (audio length: ${audio?.length ?? 0})` });
+
+            // Simple guard to avoid overlapping partial inferences
+            if ((self as any)._partialInProgress) {
+                // Ignore overlapping partial requests to keep inference throughput manageable
+                self.postMessage({ status: 'log', message: 'Skipping overlapping partial transcribe' });
+                return;
+            }
+
+            (self as any)._partialInProgress = true;
+
+            const transcriber = await WhisperPipeline.getInstance();
+            if (!transcriber || !audio) {
+                self.postMessage({ status: 'log', message: 'Partial transcriber not available or audio missing' });
+                (self as any)._partialInProgress = false;
+                return;
+            }
+
+            // Use a short chunk/stride for quicker interim updates
+            await transcriber(audio, {
+                chunk_length_s: Math.min(2, _chunkLengthS),
+                stride_length_s: Math.min(0.5, _strideLengthS),
+                callback_function: (beams: any[]) => {
+                    const bestBeam = beams && beams[0];
+                    if (!bestBeam) return;
+                    const normalized = (bestBeam.text || '').replace(/\s+/g, ' ').trim();
+
+                    // Report partial updates without assigning a new inference id
+                    if (normalized) {
+                        // Avoid flooding by de-duping partial text
+                        if ((self as any)._lastPartialReported !== normalized) {
+                            (self as any)._lastPartialReported = normalized;
+                            self.postMessage({ status: 'update', output: normalized, inferenceId: null });
+                        }
+                    }
+                }
+            });
+
+            (self as any)._partialInProgress = false;
+        } catch (error) {
+            (self as any)._partialInProgress = false;
+            self.postMessage({ status: 'log', message: `Partial transcribe failed: ${error}` });
+        }
+    }
 };

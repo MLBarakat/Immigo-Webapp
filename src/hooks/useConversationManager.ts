@@ -75,10 +75,10 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message.';
-      dispatch({ type: 'SET_STATUS', payload: 'idle' });
-      // Rollback the optimistic update
-      dispatch({ type: 'SEND_MESSAGE_ROLLBACK', payload: { userMessageId: userMessage.id, assistantMessageId } });
+      // Keep the user's message and assistant placeholder, mark error state so user can retry or see the failure
+      dispatch({ type: 'SET_STATUS', payload: 'error' });
       dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: errorMessage });
+      logger.error('Failed to send transcript to backend', undefined, { errorMessage });
     }
   }, [apiClient, dispatch]);
 
