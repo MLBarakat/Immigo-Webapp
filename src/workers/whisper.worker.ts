@@ -229,8 +229,9 @@ self.onmessage = async (event) => {
 
             // Use a short chunk/stride for quicker interim updates
             await transcriber(audio, {
-                chunk_length_s: Math.min(2, _chunkLengthS),
-                stride_length_s: Math.min(0.5, _strideLengthS),
+                // Use shorter chunk/stride values for partial/incremental inference to reduce latency
+                chunk_length_s: 1,
+                stride_length_s: 0.25,
                 callback_function: (beams: any[]) => {
                     const bestBeam = beams && beams[0];
                     if (!bestBeam) return;

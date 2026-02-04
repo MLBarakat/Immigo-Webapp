@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { useConversation } from '../context/ConversationContext';
-import { ApiClient } from '../services/apiClient';
+import { ApiClient, ApiError } from '../services/apiClient';
 import { v4 as uuidv4 } from 'uuid';
 import { Message } from '../context/conversationContextTypes';
 import { useWhisper } from './useWhisper';
@@ -51,9 +51,38 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     dispatch({ type: 'SET_STATUS', payload: 'processing' });
 
     try {
-      // 1. Get the real text and audio from the updated API client
-      const { responseText, audioData } = await apiClient.postTranscript(text);
-      
+      // Retry loop to handle transient 5xx errors
+      const maxAttempts = 3;
+      let attempt = 0;
+      let lastError: unknown = null;
+      let responseText: string | null = null;
+      let audioData: ArrayBuffer | null = null;
+
+      while (attempt < maxAttempts) {
+        try {
+          attempt++;
+          const res = await apiClient.postTranscript(text);
+          responseText = res.responseText;
+          audioData = res.audioData;
+          break; // success
+        } catch (err: unknown) {
+          lastError = err;
+          if (err instanceof ApiError && err.status >= 500 && err.status < 600 && attempt < maxAttempts) {
+            // transient server error — retry with backoff
+            const backoffMs = 500 * Math.pow(2, attempt - 1);
+            logger.warn('Transient backend error, retrying postTranscript', { attempt, backoffMs, status: err.status });
+            await new Promise(r => setTimeout(r, backoffMs));
+            continue;
+          }
+          // Non-retryable or max attempts exhausted
+          throw err;
+        }
+      }
+
+      if (!responseText || !audioData) {
+        throw lastError ?? new Error('Unknown error posting transcript');
+      }
+
       // 2. Dispatch the real assistant text to the conversation history
       dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: responseText } });
 

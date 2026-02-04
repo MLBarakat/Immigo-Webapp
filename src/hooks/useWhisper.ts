@@ -59,9 +59,37 @@ export const useWhisper = (): WhisperHook => {
 
             // Worker is sending an interim update
             case 'update':
-                // The output is a segment of the transcript. We append it.
+                // The output is a segment of the transcript. Differentiate partial (inferenceId == null) vs full inference updates.
                 logger.info('Whisper interim update', { inferenceId: data?.inferenceId, text: data?.output });
-                setInterimTranscript(finalTranscriptRef.current + ' ' + data.output);
+
+                const incoming = String(data?.output || '').trim();
+                if (!incoming) break;
+
+                // Partial streaming updates (no inference id) — try to commit complete sentences early
+                if (data?.inferenceId == null) {
+                    // Extract complete sentences ending with ., ?, or !
+                    const sentenceRegex = /([^\.!?]*[\.!?]+)/g;
+                    const matches = Array.from(incoming.matchAll(sentenceRegex)).map(m => m[0].trim()).filter(Boolean);
+                    const remainder = incoming.replace(sentenceRegex, '').trim();
+
+                    if (matches.length > 0) {
+                        // Commit all complete sentences to final transcript immediately
+                        const committedText = matches.join(' ').trim();
+                        if (committedText) {
+                            const newFinal = (finalTranscriptRef.current + ' ' + committedText).trim();
+                            finalTranscriptRef.current = newFinal;
+                            setFinalTranscript(newFinal);
+                            logger.info('Committed complete sentences from partial update', { committedText });
+                        }
+                    }
+
+                    // Set interim to final + remainder (if any)
+                    const interimText = remainder ? (finalTranscriptRef.current + ' ' + remainder).trim() : finalTranscriptRef.current;
+                    setInterimTranscript(interimText);
+                } else {
+                    // Full inference update for the active inference — append to interim so UI shows it
+                    setInterimTranscript(finalTranscriptRef.current + ' ' + incoming);
+                }
                 break;
 
             // Worker has finished a full transcription chunk
@@ -116,10 +144,10 @@ export const useWhisper = (): WhisperHook => {
 
     const startPartialFlushTimer = useCallback(() => {
         if (partialFlushTimerRef.current !== null) return;
-        // Flush every 700ms while user is speaking
+        // Flush every 300ms while user is speaking for faster feedback
         partialFlushTimerRef.current = window.setInterval(() => {
             if (!vad.current?.listening) return;
-            // Concatenate buffered audio and take last 1.5s of samples for partial inference
+            // Concatenate buffered audio and take last 1.0s of samples for partial inference
             const samples = audioBufferRef.current;
             if (!samples || samples.length === 0) return;
 
@@ -133,8 +161,8 @@ export const useWhisper = (): WhisperHook => {
                 offset += s.length;
             }
 
-            // Keep approximately last 1.5s (assuming 16000 Hz)
-            const targetSamples = Math.floor(1.5 * 16000);
+            // Keep approximately last 1.0s (assuming 16000 Hz)
+            const targetSamples = Math.floor(1.0 * 16000);
             const start = Math.max(0, concat.length - targetSamples);
             const partial = concat.slice(start);
 
@@ -151,7 +179,7 @@ export const useWhisper = (): WhisperHook => {
 
             // Discard older buffered chunks to keep memory bounded (keep only recent)
             audioBufferRef.current = [concat.slice(Math.max(0, concat.length - targetSamples))];
-        }, 700);
+        }, 300);
     }, []);
 
     const stopPartialFlushTimer = useCallback(() => {
