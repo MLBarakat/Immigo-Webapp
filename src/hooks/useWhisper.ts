@@ -67,6 +67,12 @@ export const useWhisper = (): WhisperHook => {
 
                 // Partial streaming updates (no inference id) — try to commit complete sentences early
                 if (data?.inferenceId == null) {
+                    // If the worker echoed back our clientSendTs, record time-to-first-interim for telemetry
+                    if (typeof data?.clientSendTs === 'number') {
+                        const roundTripMs = Date.now() - data.clientSendTs;
+                        logger.info('Partial update RTT (ms)', { roundTripMs });
+                    }
+
                     // Extract complete sentences ending with ., ?, or !
                     const sentenceRegex = /([^\.!?]*[\.!?]+)/g;
                     const matches = Array.from(incoming.matchAll(sentenceRegex)).map(m => m[0].trim()).filter(Boolean);
@@ -142,45 +148,87 @@ export const useWhisper = (): WhisperHook => {
     const audioBufferRef = useRef<Float32Array[]>([]);
     const partialFlushTimerRef = useRef<number | null>(null);
 
+    // Runtime ASR tuning params (exposed on window for dev tweaking)
+    // Defaults tuned to reduce time-to-first-interim while keeping compute reasonable
+    const DEFAULT_PARTIAL_FLUSH_MS = 200; // was 300
+    const DEFAULT_PARTIAL_WINDOW_S = 1.5; // was 1.0
+    const DEFAULT_PARTIAL_MIN_MS = 200; // flush immediately if at least 200ms buffered
+
+    // Expose a simple tunable object in dev for quick experiments
+    try {
+        // @ts-ignore
+        if (!(window as any).__ASR) {
+            // @ts-ignore
+            (window as any).__ASR = {
+                partialFlushMs: DEFAULT_PARTIAL_FLUSH_MS,
+                partialWindowS: DEFAULT_PARTIAL_WINDOW_S,
+                partialMinMs: DEFAULT_PARTIAL_MIN_MS,
+                partialChunkS: 0.8,
+                partialStrideS: 0.2,
+            };
+        }
+    } catch (e) {
+        // ignore in non-browser test contexts
+    }
+
+    const getAsrParam = (key: string, fallback: number) => {
+        try {
+            // @ts-ignore
+            const cfg = (window as any).__ASR;
+            if (cfg && typeof cfg[key] === 'number') return cfg[key] as number;
+        } catch (e) {
+            // ignore
+        }
+        return fallback;
+    };
+
+    const flushPartial = useCallback((force = false) => {
+        if (!vad.current?.listening && !force) return;
+
+        // Concatenate buffered audio and take last N seconds defined by partialWindowS
+        const samples = audioBufferRef.current;
+        if (!samples || samples.length === 0) return;
+
+        // Concatenate all chunks into one Float32Array
+        let totalLen = 0;
+        for (const s of samples) totalLen += s.length;
+        const concat = new Float32Array(totalLen);
+        let offset = 0;
+        for (const s of samples) {
+            concat.set(s, offset);
+            offset += s.length;
+        }
+
+        const partialWindowS = getAsrParam('partialWindowS', DEFAULT_PARTIAL_WINDOW_S);
+        const targetSamples = Math.floor(partialWindowS * 16000);
+        const start = Math.max(0, concat.length - targetSamples);
+        const partial = concat.slice(start);
+
+        // Send as partial transcribe message (non-final). Include a client timestamp so the worker's response
+        // can be measured end-to-end for time-to-first-interim metrics.
+        if (worker.current && partial.length > 0) {
+            const clientSendTs = Date.now();
+            try {
+                worker.current.postMessage({ action: 'transcribe-partial', audio: partial, clientSendTs }, [partial.buffer]);
+                logger.debug('Sent partial audio to worker', { partialLength: partial.length, clientSendTs });
+            } catch (e) {
+                logger.warn('Failed to transfer partial audio buffer, falling back to copy', { errorMessage: String(e) });
+                worker.current.postMessage({ action: 'transcribe-partial', audio: partial, clientSendTs });
+            }
+        }
+
+        // Discard older buffered chunks to keep memory bounded (keep only recent)
+        audioBufferRef.current = [concat.slice(Math.max(0, concat.length - targetSamples))];
+    }, []);
+
     const startPartialFlushTimer = useCallback(() => {
         if (partialFlushTimerRef.current !== null) return;
-        // Flush every 300ms while user is speaking for faster feedback
+        const flushMs = getAsrParam('partialFlushMs', DEFAULT_PARTIAL_FLUSH_MS);
+        // Flush periodically while user is speaking for faster feedback
         partialFlushTimerRef.current = window.setInterval(() => {
-            if (!vad.current?.listening) return;
-            // Concatenate buffered audio and take last 1.0s of samples for partial inference
-            const samples = audioBufferRef.current;
-            if (!samples || samples.length === 0) return;
-
-            // Concatenate all chunks into one Float32Array
-            let totalLen = 0;
-            for (const s of samples) totalLen += s.length;
-            const concat = new Float32Array(totalLen);
-            let offset = 0;
-            for (const s of samples) {
-                concat.set(s, offset);
-                offset += s.length;
-            }
-
-            // Keep approximately last 1.0s (assuming 16000 Hz)
-            const targetSamples = Math.floor(1.0 * 16000);
-            const start = Math.max(0, concat.length - targetSamples);
-            const partial = concat.slice(start);
-
-            // Send as partial transcribe message (non-final)
-            if (worker.current && partial.length > 0) {
-                try {
-                    worker.current.postMessage({ action: 'transcribe-partial', audio: partial }, [partial.buffer]);
-                    logger.debug('Sent partial audio to worker', { partialLength: partial.length });
-                } catch (e) {
-                    logger.warn('Failed to transfer partial audio buffer, falling back to copy', { errorMessage: String(e) });
-                    worker.current.postMessage({ action: 'transcribe-partial', audio: partial });
-                }
-            }
-
-            // Discard older buffered chunks to keep memory bounded (keep only recent)
-            audioBufferRef.current = [concat.slice(Math.max(0, concat.length - targetSamples))];
-        }, 300);
-    }, []);
+            try { flushPartial(); } catch (e) { logger.warn('Partial flush timer error', { errorMessage: String(e) }); }
+        }, flushMs);
+    }, [flushPartial]);
 
     const stopPartialFlushTimer = useCallback(() => {
         if (partialFlushTimerRef.current !== null) {
@@ -260,13 +308,26 @@ export const useWhisper = (): WhisperHook => {
         worker.current.addEventListener('messageerror', (e) => {
             console.error('Whisper worker message error:', e);
         });
-        // Send load + optional ASR config (read from Vite env): VITE_ASR_CHUNK_LENGTH_S & VITE_ASR_STRIDE_LENGTH_S
+        // Send load + optional ASR config (read from Vite env and runtime window __ASR)
         try {
             const envChunk = Number(import.meta.env.VITE_ASR_CHUNK_LENGTH_S ?? '');
             const envStride = Number(import.meta.env.VITE_ASR_STRIDE_LENGTH_S ?? '');
+            const envPartialChunk = Number(import.meta.env.VITE_ASR_PARTIAL_CHUNK_S ?? '');
+            const envPartialStride = Number(import.meta.env.VITE_ASR_PARTIAL_STRIDE_S ?? '');
+
+            // Allow runtime overrides from window.__ASR for quick dev experimentation
+            // @ts-ignore
+            const runtimeASR = (window as any).__ASR ?? {};
+
             const cfg: Record<string, number> = {};
             if (Number.isFinite(envChunk)) cfg.chunk_length_s = envChunk;
             if (Number.isFinite(envStride)) cfg.stride_length_s = envStride;
+            if (Number.isFinite(envPartialChunk)) cfg.partial_chunk_length_s = envPartialChunk;
+            if (Number.isFinite(envPartialStride)) cfg.partial_stride_length_s = envPartialStride;
+
+            if (typeof runtimeASR.partialChunkS === 'number') cfg.partial_chunk_length_s = runtimeASR.partialChunkS;
+            if (typeof runtimeASR.partialStrideS === 'number') cfg.partial_stride_length_s = runtimeASR.partialStrideS;
+
             worker.current.postMessage({ action: 'load', config: cfg });
             if (Object.keys(cfg).length) logger.info('Sent ASR config to worker', cfg);
         } catch (e) {
@@ -318,6 +379,21 @@ export const useWhisper = (): WhisperHook => {
                     logger.info('VAD onSpeechData', { audioLength: audio?.length });
                 } catch (e) {
                     logger.warn('Error while logging onSpeechData info', { errorMessage: String(e) });
+                }
+
+                // If enough buffered audio has accumulated (> partialMinMs), trigger an immediate partial flush
+                try {
+                    const partialMinMs = getAsrParam('partialMinMs', DEFAULT_PARTIAL_MIN_MS);
+                    // Compute total buffered samples
+                    let totalSamples = 0;
+                    for (const s of audioBufferRef.current) totalSamples += s.length;
+                    const totalMs = Math.floor(totalSamples / 16); // samples / 16 = ms at 16kHz
+                    if (totalMs >= partialMinMs) {
+                        // Flush partial immediately so short bursts get a quick interim
+                        flushPartial();
+                    }
+                } catch (e) {
+                    // ignore
                 }
 
                 if (worker.current) {

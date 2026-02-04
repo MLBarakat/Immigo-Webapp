@@ -74,6 +74,10 @@ const _inferenceStartTimes: Record<number, number> = {};
 let _chunkLengthS = 8;
 let _strideLengthS = 1;
 
+// Default partial (short) inference parameters for low-latency interim updates
+let _partialChunkLengthS = 0.8; // was 1
+let _partialStrideLengthS = 0.2; // was 0.25
+
 // --- Message Handler ---
 self.postMessage({ status: 'worker-initialized' });
 
@@ -105,8 +109,11 @@ self.onmessage = async (event) => {
             const cfg = event.data?.config ?? {};
             if (typeof cfg.chunk_length_s === 'number') _chunkLengthS = cfg.chunk_length_s;
             if (typeof cfg.stride_length_s === 'number') _strideLengthS = cfg.stride_length_s;
-            if (cfg && (cfg.chunk_length_s || cfg.stride_length_s)) {
-                self.postMessage({ status: 'config-updated', chunk_length_s: _chunkLengthS, stride_length_s: _strideLengthS });
+            if (typeof cfg.partial_chunk_length_s === 'number') _partialChunkLengthS = cfg.partial_chunk_length_s;
+            if (typeof cfg.partial_stride_length_s === 'number') _partialStrideLengthS = cfg.partial_stride_length_s;
+
+            if (cfg && (cfg.chunk_length_s || cfg.stride_length_s || cfg.partial_chunk_length_s || cfg.partial_stride_length_s)) {
+                self.postMessage({ status: 'config-updated', chunk_length_s: _chunkLengthS, stride_length_s: _strideLengthS, partial_chunk_length_s: _partialChunkLengthS, partial_stride_length_s: _partialStrideLengthS });
             }
 
             await WhisperPipeline.getInstance(progress => {
@@ -130,7 +137,9 @@ self.onmessage = async (event) => {
             const cfg = event.data?.config ?? {};
             if (typeof cfg.chunk_length_s === 'number') _chunkLengthS = cfg.chunk_length_s;
             if (typeof cfg.stride_length_s === 'number') _strideLengthS = cfg.stride_length_s;
-            self.postMessage({ status: 'config-updated', chunk_length_s: _chunkLengthS, stride_length_s: _strideLengthS });
+            if (typeof cfg.partial_chunk_length_s === 'number') _partialChunkLengthS = cfg.partial_chunk_length_s;
+            if (typeof cfg.partial_stride_length_s === 'number') _partialStrideLengthS = cfg.partial_stride_length_s;
+            self.postMessage({ status: 'config-updated', chunk_length_s: _chunkLengthS, stride_length_s: _strideLengthS, partial_chunk_length_s: _partialChunkLengthS, partial_stride_length_s: _partialStrideLengthS });
         } catch (e) {
             // ignore
         }
@@ -209,7 +218,8 @@ self.onmessage = async (event) => {
     // Handle partial/streaming transcribe calls that should produce interim updates
     if (action === 'transcribe-partial') {
         try {
-            self.postMessage({ status: 'log', message: `Received partial transcribe request (audio length: ${audio?.length ?? 0})` });
+            const clientSendTs = event.data?.clientSendTs ?? null;
+            self.postMessage({ status: 'log', message: `Received partial transcribe request (audio length: ${audio?.length ?? 0})`, clientSendTs });
 
             // Simple guard to avoid overlapping partial inferences
             if ((self as any)._partialInProgress) {
@@ -229,9 +239,9 @@ self.onmessage = async (event) => {
 
             // Use a short chunk/stride for quicker interim updates
             await transcriber(audio, {
-                // Use shorter chunk/stride values for partial/incremental inference to reduce latency
-                chunk_length_s: 1,
-                stride_length_s: 0.25,
+                // Use configured short chunk/stride values for partial/incremental inference to reduce latency
+                chunk_length_s: _partialChunkLengthS,
+                stride_length_s: _partialStrideLengthS,
                 callback_function: (beams: any[]) => {
                     const bestBeam = beams && beams[0];
                     if (!bestBeam) return;
@@ -242,7 +252,8 @@ self.onmessage = async (event) => {
                         // Avoid flooding by de-duping partial text
                         if ((self as any)._lastPartialReported !== normalized) {
                             (self as any)._lastPartialReported = normalized;
-                            self.postMessage({ status: 'update', output: normalized, inferenceId: null });
+                            const partialLatencyMs = clientSendTs ? Date.now() - clientSendTs : null;
+                            self.postMessage({ status: 'update', output: normalized, inferenceId: null, clientSendTs, partialLatencyMs });
                         }
                     }
                 }
