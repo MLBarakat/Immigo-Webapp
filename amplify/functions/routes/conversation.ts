@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { Readable } from 'stream';
 import { InvokeModelWithResponseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
-import { SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
+import { SynthesizeSpeechCommand, VoiceId } from '@aws-sdk/client-polly';
 import { authenticate } from '../authMiddleware';
 import { supabase, bedrockClient, pollyClient, logger } from '../clients';
 import { AppError } from '../errors';
@@ -16,7 +16,7 @@ interface Message {
 interface ConversationRequestBody {
   message?: string;
   conversationHistory?: Message[];
-  voiceId?: string;
+  voiceId?: VoiceId;
 }
 
 const sanitizeInput = (text: string | null | undefined): string => {
@@ -84,7 +84,7 @@ router.post('/conversation', authenticate, async (req: Request, res: Response, n
       Engine: 'neural',
       OutputFormat: 'mp3',
       Text: fullResponseText,
-      VoiceId: voiceId || 'Joanna',
+      VoiceId: voiceId ?? VoiceId.Joanna,
     });
     const pollyResponse = await pollyClient.send(pollyCommand);
     if (!pollyResponse.AudioStream) {
