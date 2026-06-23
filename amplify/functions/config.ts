@@ -1,56 +1,50 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import express, { Request, Response, NextFunction } from 'express';
+import serverless from 'serverless-http';
+import cors from 'cors';
+import helmet from 'helmet';
+
 import { logger } from './logger';
 import { AppError } from './errors';
+import configRouter from './routes/config';
 
-// Helper to create a standard API Gateway response
-const createResponse = (statusCode: number, body: object) => {
-    return {
-        statusCode,
-        headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*"
-        },
-        body: JSON.stringify(body),
-    };
-};
+const app = express();
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  
-  logger.debug('Config function execution started', { path: event.path });
+app.use(cors());
+app.use(helmet());
+app.use(express.json());
 
-  try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+// Request logging middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  logger.debug(`Incoming request to config service: ${req.method} ${req.path}`);
+  next();
+});
 
-    if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
-      throw new AppError('Supabase URL is not set or is invalid in environment variables.', 500, true, { check: 'SUPABASE_URL' });
-    }
-    logger.debug('Supabase URL validation passed.');
+// Use the router for the actual logic
+app.use('/api', configRouter);
 
-    if (!supabaseAnonKey) {
-      throw new AppError('Supabase anon key is not set in environment variables.', 500, true, { check: 'SUPABASE_ANON_KEY' });
-    }
-    logger.debug('Supabase anon key validation passed.');
+// 404 handler for routes not found within this service
+app.use((req: Request, res: Response, _next: NextFunction) => {
+  const message = `Route not found in config service: ${req.method} ${req.path}`;
+  logger.warn(message, { path: req.path, method: req.method });
+  res.status(404).json({ error: 'Not Found', message });
+});
 
-    const responseBody = { supabaseUrl, supabaseAnonKey };
-    // In development, we log more details. In production, we log minimally.
-    logger.info('Successfully retrieved Supabase configuration.', { 
-      urlHost: process.env.NODE_ENV === 'DEV' ? supabaseUrl.split('//')[1].split('.')[0] : undefined
-    });
+// Centralized error handling middleware
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const appError = err instanceof AppError ? err : new AppError('An unexpected error occurred in the config service.', 500, false);
 
-    return createResponse(200, responseBody);
+  logger.error(appError.message, appError, {
+    isOperational: appError.isOperational,
+    context: appError.context,
+    path: req.path,
+    method: req.method,
+  });
 
-  } catch (error) {
-    const appError = error instanceof AppError ? error : new AppError('An unexpected error occurred in config function.', 500, false);
+  const errorMessage = process.env.NODE_ENV === 'DEV' || appError.isOperational
+    ? appError.message
+    : 'An internal server error occurred.';
 
-    logger.error(appError.message, appError, {
-      isOperational: appError.isOperational,
-      context: appError.context,
-      path: event.path,
-    });
+  res.status(appError.statusCode).json({ error: errorMessage });
+});
 
-    // Only show detailed error messages in development
-    const errorMessage = process.env.NODE_ENV === 'DEV' ? appError.message : 'An internal server error occurred.';
-    return createResponse(appError.statusCode, { error: errorMessage });
-  }
-};
+export const handler = serverless(app);

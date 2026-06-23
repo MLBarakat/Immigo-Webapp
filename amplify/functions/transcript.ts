@@ -1,101 +1,50 @@
-// amplify/functions/transcript.ts
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { supabase, logger } from './clients'; // Assuming 'clients' exports supabase and logger
+import express, { Request, Response, NextFunction } from 'express';
+import serverless from 'serverless-http';
+import cors from 'cors';
+import helmet from 'helmet';
 
-// Define CORS headers for all responses
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*', // Or a specific origin
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-API-Key',
-    'Access-Control-Allow-Methods': 'OPTIONS,POST',
-};
+import { logger } from './logger';
+import { AppError } from './errors';
+import transcriptRouter from './routes/transcript';
 
-/**
- * A lightweight, high-performance Lambda handler for processing transcripts.
- * It replaces the previous Express-based implementation.
- */
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    // Handle CORS pre-flight requests
-    if (event.httpMethod === 'OPTIONS') {
-        return {
-            statusCode: 204,
-            headers: corsHeaders,
-            body: '',
-        };
-    }
+const app = express();
 
-    try {
-        // 1. Authentication
-        const authHeader = event.headers.Authorization || event.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return {
-                statusCode: 401,
-                headers: corsHeaders,
-                body: JSON.stringify({ error: 'Authentication token is required.' }),
-            };
-        }
-        const token = authHeader.split(' ')[1];
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+app.use(cors());
+app.use(helmet());
+app.use(express.json());
 
-        if (authError || !user) {
-            logger.warn('Authentication failed', { error: authError?.message });
-            return {
-                statusCode: 401,
-                headers: corsHeaders,
-                body: JSON.stringify({ error: 'Invalid or expired token.' }),
-            };
-        }
+// Request logging middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  logger.debug(`Incoming request to transcript service: ${req.method} ${req.path}`);
+  next();
+});
 
-        logger.debug('User authenticated successfully', { userId: user.id });
+// Use the router for the actual logic
+app.use('/api', transcriptRouter);
 
-        // 2. Body Validation
-        if (!event.body) {
-            return {
-                statusCode: 400,
-                headers: corsHeaders,
-                body: JSON.stringify({ error: 'Request body is missing.' }),
-            };
-        }
+// 404 handler for routes not found within this service
+app.use((req: Request, res: Response, _next: NextFunction) => {
+  const message = `Route not found in transcript service: ${req.method} ${req.path}`;
+  logger.warn(message, { path: req.path, method: req.method });
+  res.status(404).json({ error: 'Not Found', message });
+});
 
-        const { transcript } = JSON.parse(event.body);
-        if (!transcript) {
-            return {
-                statusCode: 400,
-                headers: corsHeaders,
-                body: JSON.stringify({ error: 'Transcript content is required.' }),
-            };
-        }
-        
-        // 3. Business Logic (from former routes/transcript.ts)
-        // TODO: Add logic to process transcript and get AI response
-        // TODO: Add Polly integration to convert AI response to speech
+// Centralized error handling middleware
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const appError = err instanceof AppError ? err : new AppError('An unexpected error occurred in the transcript service.', 500, false);
 
-        logger.info('Transcript received successfully', { userId: user.id, transcriptLength: transcript.length });
-        
-        // For now, just echo the transcript back in the response.
-        const responsePayload = { 
-            message: 'Transcript received.', 
-            transcript,
-            // Example of future data:
-            // responseText: 'This is the AI response.',
-            // audioData: '<base64-encoded-audio>'
-        };
+  logger.error(appError.message, appError, {
+    isOperational: appError.isOperational,
+    context: appError.context,
+    path: req.path,
+    method: req.method,
+  });
 
-        // 4. Success Response
-        return {
-            statusCode: 200, // Changed from 201 to 200 as it's more common for this pattern
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify(responsePayload),
-        };
+  const errorMessage = process.env.NODE_ENV === 'DEV' || appError.isOperational
+    ? appError.message
+    : 'An internal server error occurred.';
 
-    } catch (error) {
-        // Catch parsing errors or other unexpected issues
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        logger.error('An unexpected error occurred in the transcript handler', { error: errorMessage, details: error });
-        
-        return {
-            statusCode: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: 'An internal server error occurred.' }),
-        };
-    }
-};
+  res.status(appError.statusCode).json({ error: errorMessage });
+});
+
+export const handler = serverless(app);
