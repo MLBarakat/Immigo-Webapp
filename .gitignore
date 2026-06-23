@@ -147,3 +147,5 @@ amplifyconfiguration*
 # Lock files
 yarn.lock
 .github/copilot-instructions.md
+/.gemini
+REMEDIATION_PLAN.md

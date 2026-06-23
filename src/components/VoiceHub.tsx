@@ -1,6 +1,5 @@
 import { AppStatus } from '../context/conversationContextTypes';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
-import { DevAsrControls } from './DevAsrControls';
 
 interface VoiceHubProps {
   readonly status: AppStatus;
@@ -47,9 +46,6 @@ export function VoiceHub({ status, isSessionActive, sessionTime, onStartSession,
                 <p className={`text-xs font-semibold capitalize ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>{statusMessage()}</p>
                 <p className={`text-sm font-mono ${statusColor}`}>{formatTime(sessionTime)}</p>
             </div>
-            {/* Dev-only ASR controls to tune partial-streaming at runtime */}
-            {/* @ts-ignore - import only in dev */}
-            {import.meta.env.DEV ? <div className="w-full mt-2"><DevAsrControls /></div> : null}
         </div>
     );
 }
