@@ -33,7 +33,7 @@ const PollyVoices = [
 ];
 
 function AppContent(): JSX.Element {
-  // Added 'loading' to the destructured properties to prevent auth race conditions
+  // Destructured the loading flag to prevent race conditions during boot
   const { session, user: authUser, profile, loading, logout, updateUserLanguage } = useAuth();
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
@@ -58,7 +58,6 @@ function AppContent(): JSX.Element {
 
   // EFFECT TO APPLY THEME AND FONT SIZE
   useEffect(() => {
-    // Theme application
     const root = window.document.documentElement;
     const isDark =
       userSettings.theme === 'dark' ||
@@ -66,9 +65,8 @@ function AppContent(): JSX.Element {
 
     root.classList.toggle('dark', isDark);
 
-    // Font size application
     const body = window.document.body;
-    body.classList.remove('text-sm', 'text-base', 'text-lg'); // Clear old classes
+    body.classList.remove('text-sm', 'text-base', 'text-lg');
     switch (userSettings.font_size) {
       case 'small':
         body.classList.add('text-sm');
@@ -81,7 +79,7 @@ function AppContent(): JSX.Element {
     }
   }, [userSettings.theme, userSettings.font_size]);
 
-  // Effect 1: Sync Language (Only runs when profile language changes)
+  // Effect 1: Sync Language
   useEffect(() => {
     const lang = profile?.language;
     if (lang) {
@@ -89,7 +87,7 @@ function AppContent(): JSX.Element {
     }
   }, [profile?.language, dispatch]);
 
-  // Effect 2: Fetch Settings (Only runs when apiClient is ready)
+  // Effect 2: Fetch Settings
   useEffect(() => {
     let isMounted = true;
 
@@ -130,15 +128,16 @@ function AppContent(): JSX.Element {
     }
   };
 
-  // Guard clause to show a loader spinner while Supabase asynchronously gets remote configs
+  // Guard Clause 1: Wait until the configuration fetch confirms user session status
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-immigo-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-immigo-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-art-blue-600"></div>
       </div>
     );
   }
 
+  // Guard Clause 2: Lock out unauthenticated users securely
   if (!session) { return <AuthPage />; }
 
   const handleOpenAppSettings = () => setIsAppSettingsModalOpen(true);
@@ -192,9 +191,9 @@ function AppContent(): JSX.Element {
   if (conversationManager.isModelLoading) {
     combinedLoadingProgress = conversationManager.modelLoadingProgress * 0.8;
   } else {
-    combinedLoadingProgress = 80; // Whisper model is 100% loaded, so 80% of total
+    combinedLoadingProgress = 80;
     if (conversationManager.isVadReady) {
-      combinedLoadingProgress = 100; // VAD is also ready, so 100% of total
+      combinedLoadingProgress = 100;
     }
   }
 

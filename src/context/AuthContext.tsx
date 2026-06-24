@@ -2,7 +2,7 @@ import { useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { Session, User, SupabaseClient, AuthChangeEvent } from '@supabase/supabase-js';
 import { getSupabaseClient } from '../supabaseClient';
 import { UserProfile } from '../components/UserProfile';
-import { analytics } from '../analytics'; // Import analytics service
+import { analytics } from '../analytics';
 import { AuthContext, SignUpPayload } from './authContextTypes';
 
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
@@ -12,15 +12,14 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialized with error safety to prevent infinite fallback loading spinners
   useEffect(() => {
     const initializeSupabase = async () => {
       try {
         const client = await getSupabaseClient();
         setSupabase(client);
       } catch (err) {
-        console.error("Critical failure during Supabase initialization setup:", err);
-        setLoading(false);
+        console.error("Critical failure during Supabase instantiation initialization:", err);
+        setLoading(false); // Disable application-wide spinner to enable error states
       }
     };
     initializeSupabase();
@@ -77,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     if (!supabase) throw new Error("Supabase client not initialized.");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    analytics.track('user_login', { method: 'email' }); // Event tracking
+    analytics.track('user_login', { method: 'email' });
   };
 
   const signUp = async ({ email, password, fullName, language }: SignUpPayload): Promise<void> => {
@@ -88,14 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       options: { data: { full_name: fullName, language } },
     });
     if (error) throw error;
-    analytics.track('user_signup', { method: 'email', language }); // Event tracking
+    analytics.track('user_signup', { method: 'email', language });
   };
 
   const logout = async (): Promise<void> => {
     if (!supabase) throw new Error("Supabase client not initialized.");
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-    analytics.track('user_logout'); // Event tracking
+    analytics.track('user_logout');
   };
 
   const updateUserLanguage = useCallback(async (newLanguageCode: string): Promise<void> => {

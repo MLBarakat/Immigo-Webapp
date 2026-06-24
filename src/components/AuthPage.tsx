@@ -17,6 +17,7 @@ export function AuthPage(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState(false);
+  const [signUpSuccess, setSignUpSuccess] = useState(false);
   const { login, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,7 +33,7 @@ export function AuthPage(): JSX.Element {
         await login(email, password);
       } else {
         await signUp({ email, password, fullName, language });
-        // Instead of an alert, we can handle this state in the UI in a future sprint
+        setSignUpSuccess(true);
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -44,6 +45,33 @@ export function AuthPage(): JSX.Element {
       setLoading(false);
     }
   };
+
+  // Intercept the UI with a confirmation view state if account creation succeeds
+  if (signUpSuccess) {
+    return (
+      <div className="min-h-dvh w-full bg-immigo-gray-50 flex items-center justify-center p-4 lg:p-6">
+        <div className="w-full max-w-md bg-star-white p-8 lg:p-10 rounded-2xl shadow-xl border border-immigo-gray-200 text-center">
+          <header className="flex flex-col items-center justify-center mb-6">
+            <div className="flex items-center justify-center mb-4">
+              <img src={ImmigoLogo} alt="ImmiGo Logo" className="h-16 w-16 lg:h-20 lg:w-20 object-contain" />
+              <ImmiGOLabel className="flex font-bold text-5xl lg:text-6xl" />
+            </div>
+            <h1 className="text-2xl font-bold text-deep-navy font-display">Account Created!</h1>
+            <p className="text-immigo-gray-600 mt-3 text-sm leading-relaxed">
+              We've sent a verification link to <strong className="text-deep-navy font-semibold">{email}</strong>. Please check your email inbox and click the activation link to finish starting your journey.
+            </p>
+          </header>
+          <button
+            type="button"
+            onClick={() => { setIsLogin(true); setSignUpSuccess(false); setError(null); }}
+            className="w-full py-3 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-art-blue-500"
+          >
+            Back to Login Screen
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
