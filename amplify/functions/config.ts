@@ -1,7 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import serverless from 'serverless-http';
 import cors from 'cors';
-import helmet from 'helmet';
 
 import { logger } from './logger';
 import { AppError } from './errors';
@@ -9,8 +8,11 @@ import configRouter from './routes/config';
 
 const app = express();
 
-app.use(cors());
-app.use(helmet());
+app.use(cors({
+  origin: '*',
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+  methods: ['GET', 'OPTIONS'],
+}));
 app.use(express.json());
 
 // Request logging middleware
