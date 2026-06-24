@@ -12,10 +12,16 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Initialized with error safety to prevent infinite fallback loading spinners
   useEffect(() => {
     const initializeSupabase = async () => {
-      const client = await getSupabaseClient();
-      setSupabase(client);
+      try {
+        const client = await getSupabaseClient();
+        setSupabase(client);
+      } catch (err) {
+        console.error("Critical failure during Supabase initialization setup:", err);
+        setLoading(false);
+      }
     };
     initializeSupabase();
   }, []);
@@ -24,46 +30,46 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     if (!supabase) return;
 
     const getSessionAndProfile = async () => {
-        try {
-            const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-            if (error) throw error;
-            setSession(currentSession);
-            const currentUser = currentSession?.user;
-            setUser(currentUser ?? null);
+      try {
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        setSession(currentSession);
+        const currentUser = currentSession?.user;
+        setUser(currentUser ?? null);
 
-            if (currentUser) {
-              const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', currentUser.id)
-                .single();
+        if (currentUser) {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .single();
 
-              if (profileError) {
-                console.error("Error fetching user profile:", profileError.message);
-              } else {
-                setProfile(profileData);
-              }
-            }
-        } catch (err) {
-            console.error("Error in session/profile fetch:", err);
-        } finally {
-            setLoading(false);
+          if (profileError) {
+            console.error("Error fetching user profile:", profileError.message);
+          } else {
+            setProfile(profileData);
+          }
         }
+      } catch (err) {
+        console.error("Error in session/profile fetch:", err);
+      } finally {
+        setLoading(false);
+      }
     };
     getSessionAndProfile();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, newSession: Session | null) => {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        if (!newSession?.user) {
-            setProfile(null);
-        } else {
-            getSessionAndProfile();
-        }
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+      if (!newSession?.user) {
+        setProfile(null);
+      } else {
+        getSessionAndProfile();
+      }
     });
 
     return () => {
-        subscription?.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, [supabase]);
 
@@ -93,29 +99,29 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   };
 
   const updateUserLanguage = useCallback(async (newLanguageCode: string): Promise<void> => {
-      if (!user || !supabase) throw new Error("User not authenticated or Supabase client not initialized.");
+    if (!user || !supabase) throw new Error("User not authenticated or Supabase client not initialized.");
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({ language: newLanguageCode })
-        .eq('id', user.id);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ language: newLanguageCode })
+      .eq('id', user.id);
 
-      if (error) {
-        console.error("Failed to update user language in profile:", error.message);
-        throw error;
-      }
-      setProfile((prevProfile: UserProfile | null) => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
+    if (error) {
+      console.error("Failed to update user language in profile:", error.message);
+      throw error;
+    }
+    setProfile((prevProfile: UserProfile | null) => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
   }, [user, supabase]);
 
   const value = useMemo(() => ({
-      session,
-      user,
-      profile,
-      loading,
-      login,
-      signUp,
-      logout,
-      updateUserLanguage,
+    session,
+    user,
+    profile,
+    loading,
+    login,
+    signUp,
+    logout,
+    updateUserLanguage,
   }), [session, user, profile, loading, updateUserLanguage]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

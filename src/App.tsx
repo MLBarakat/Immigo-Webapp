@@ -33,7 +33,8 @@ const PollyVoices = [
 ];
 
 function AppContent(): JSX.Element {
-  const { session, user: authUser, profile, logout, updateUserLanguage } = useAuth();
+  // Added 'loading' to the destructured properties to prevent auth race conditions
+  const { session, user: authUser, profile, loading, logout, updateUserLanguage } = useAuth();
   const [isAppSettingsModalOpen, setIsAppSettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -97,9 +98,9 @@ function AppContent(): JSX.Element {
         try {
           const settings = await apiClient.getSettings();
           if (isMounted) {
-             setUserSettings(settings);
+            setUserSettings(settings);
           }
-        } catch (error: unknown) { 
+        } catch (error: unknown) {
           logger.error('Failed to fetch user settings', undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
         }
       }
@@ -112,8 +113,8 @@ function AppContent(): JSX.Element {
 
   const handleSaveSettings = async (settingsToSave: UserSettings) => {
     if (apiClient) {
-        await apiClient.updateSettings(settingsToSave);
-        setUserSettings(settingsToSave);
+      await apiClient.updateSettings(settingsToSave);
+      setUserSettings(settingsToSave);
     }
   };
 
@@ -128,6 +129,15 @@ function AppContent(): JSX.Element {
       }
     }
   };
+
+  // Guard clause to show a loader spinner while Supabase asynchronously gets remote configs
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-immigo-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-immigo-blue-600"></div>
+      </div>
+    );
+  }
 
   if (!session) { return <AuthPage />; }
 
@@ -190,9 +200,9 @@ function AppContent(): JSX.Element {
 
   return (
     <div className="flex flex-col h-screen bg-immigo-gray-50 font-sans">
-      <AppLoadingOverlay 
-        isLoading={isAppLoading} 
-        modelLoadingProgress={combinedLoadingProgress} 
+      <AppLoadingOverlay
+        isLoading={isAppLoading}
+        modelLoadingProgress={combinedLoadingProgress}
       />
       <Header
         displayUser={user}
@@ -214,7 +224,7 @@ function AppContent(): JSX.Element {
           />
           {isDesktop ? (
             <div className="border-t border-immigo-gray-200">
-                <ChatInput onSendMessage={conversationManager.sendTextMessage} disabled={conversationManager.appStatus !== 'idle'} />
+              <ChatInput onSendMessage={conversationManager.sendTextMessage} disabled={conversationManager.appStatus !== 'idle'} />
             </div>
           ) : (
             <div className="flex items-center p-2 bg-star-white border-t border-immigo-gray-200">
