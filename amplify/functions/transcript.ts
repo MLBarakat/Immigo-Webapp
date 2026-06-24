@@ -1,50 +1,82 @@
-import express, { Request, Response, NextFunction } from 'express';
-import serverless from 'serverless-http';
-import cors from 'cors';
-import helmet from 'helmet';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { supabase, logger } from './clients';
 
-import { logger } from './logger';
-import { AppError } from './errors';
-import transcriptRouter from './routes/transcript';
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-API-Key',
+  'Access-Control-Allow-Methods': 'OPTIONS,POST',
+};
 
-const app = express();
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 204,
+      headers: corsHeaders,
+      body: '',
+    };
+  }
 
-app.use(cors());
-app.use(helmet());
-app.use(express.json());
+  try {
+    const authHeader = event.headers.Authorization || event.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return {
+        statusCode: 401,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Authentication token is required.' }),
+      };
+    }
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
-// Request logging middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
-  logger.debug(`Incoming request to transcript service: ${req.method} ${req.path}`);
-  next();
-});
+    if (authError || !user) {
+      logger.warn('Authentication failed', { error: authError?.message });
+      return {
+        statusCode: 401,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Invalid or expired token.' }),
+      };
+    }
 
-// Use the router for the actual logic
-app.use('/api', transcriptRouter);
+    logger.debug('User authenticated successfully', { userId: user.id });
 
-// 404 handler for routes not found within this service
-app.use((req: Request, res: Response, _next: NextFunction) => {
-  const message = `Route not found in transcript service: ${req.method} ${req.path}`;
-  logger.warn(message, { path: req.path, method: req.method });
-  res.status(404).json({ error: 'Not Found', message });
-});
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Request body is missing.' }),
+      };
+    }
 
-// Centralized error handling middleware
-app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
-  const appError = err instanceof AppError ? err : new AppError('An unexpected error occurred in the transcript service.', 500, false);
+    const { transcript } = JSON.parse(event.body);
+    if (!transcript) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Transcript content is required.' }),
+      };
+    }
 
-  logger.error(appError.message, appError, {
-    isOperational: appError.isOperational,
-    context: appError.context,
-    path: req.path,
-    method: req.method,
-  });
+    logger.info('Transcript received successfully', { userId: user.id, transcriptLength: transcript.length });
 
-  const errorMessage = process.env.NODE_ENV === 'DEV' || appError.isOperational
-    ? appError.message
-    : 'An internal server error occurred.';
+    const responsePayload = {
+      message: 'Transcript received.',
+      transcript,
+    };
 
-  res.status(appError.statusCode).json({ error: errorMessage });
-});
+    return {
+      statusCode: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(responsePayload),
+    };
 
-export const handler = serverless(app);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    logger.error('An unexpected error occurred in the transcript handler', { error: errorMessage, details: error });
+
+    return {
+      statusCode: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'An internal server error occurred.' }),
+    };
+  }
+};
