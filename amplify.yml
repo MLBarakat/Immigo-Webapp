@@ -3,8 +3,9 @@ backend:
   phases:
     build:
       commands:
-        - npm ci --ignore-scripts
-        - npm ci --prefix amplify/functions --ignore-scripts
+        # Removed --ignore-scripts to let native platform extension binaries unpack smoothly
+        - npm ci
+        - npm ci --prefix amplify/functions
         - npx ampx pipeline-deploy --app-id d3878p0w684f30 --branch dev
 frontend:
   phases:
