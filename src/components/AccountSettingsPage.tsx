@@ -1,15 +1,23 @@
 import { useState } from 'react';
-import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react'; // Added X
+import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth'; // 1. Import your auth hook
 
 interface AccountSettingsPageProps {
   onNavigateBack: () => void;
-  isDesktop: boolean; // NEW prop
+  isDesktop: boolean;
 }
 
 type SettingsView = 'profile' | 'security' | 'connections' | 'delete';
 
 export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettingsPageProps): JSX.Element => {
   const [activeView, setActiveView] = useState<SettingsView>('profile');
+
+  // 2. Extract active user information and profile details from hook context
+  const { user, profile } = useAuth();
+
+  // Fallback calculations for values to display
+  const userEmail = user?.email || '';
+  const userFullName = profile?.full_name || (user?.user_metadata?.full_name as string) || '';
 
   const renderContent = () => {
     switch (activeView) {
@@ -18,14 +26,25 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-deep-navy">My Profile</h2>
             <p className="text-immigo-gray-600">Manage your personal information</p>
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-immigo-gray-700">Full Name</label>
-                <input type="text" id="name" defaultValue="John Doe" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                <input
+                  type="text"
+                  id="name"
+                  defaultValue={userFullName} // 3. Swap out hardcoded "John Doe"
+                  className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500"
+                />
               </div>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-immigo-gray-700">Email</label>
-                <input type="email" id="email" defaultValue="john.doe@example.com" disabled className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm bg-immigo-gray-100 cursor-not-allowed" />
+                <input
+                  type="email"
+                  id="email"
+                  defaultValue={userEmail} // 4. Swap out hardcoded "john.doe@example.com"
+                  disabled
+                  className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm bg-immigo-gray-100 cursor-not-allowed"
+                />
               </div>
               <button type="submit" className="px-4 py-2 bg-art-blue-600 text-white rounded-md font-semibold hover:bg-art-blue-700">Save Profile</button>
             </form>
@@ -36,7 +55,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-deep-navy">Security & Login</h2>
             <p className="text-immigo-gray-600">Manage your password and security settings</p>
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
               <div>
                 <label htmlFor="current-password" className="block text-sm font-medium text-immigo-gray-700">Current Password</label>
                 <input type="password" id="current-password" autoComplete="current-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
@@ -84,53 +103,51 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
   };
 
   const containerClasses = isDesktop
-    ? "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" // Modal container for desktop
-    : "h-screen w-screen bg-immigo-gray-100 flex flex-col font-sans"; // Full screen for mobile
+    ? "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
+    : "h-screen w-screen bg-immigo-gray-100 flex flex-col font-sans";
 
   const contentClasses = isDesktop
-    ? "bg-star-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden" // Modal content for desktop
-    : "flex-1 bg-immigo-gray-100 flex flex-col"; // Full screen content for mobile, no rounded corners/shadow
+    ? "bg-star-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden"
+    : "flex-1 bg-immigo-gray-100 flex flex-col";
 
   const headerClasses = isDesktop
     ? "flex items-center justify-between p-6 border-b border-immigo-gray-200"
     : "flex items-center p-4 border-b border-immigo-gray-200 bg-star-white shadow-md flex-shrink-0";
 
-  const mainContentClasses = isDesktop
-    ? "flex-1 p-6 overflow-y-auto"
-    : "flex-1 p-6 overflow-y-auto"; // Both have scrollable main content
+  const mainContentClasses = lg => "flex-1 p-6 overflow-y-auto";
 
   return (
     <div className={containerClasses}>
       <div className={contentClasses}>
         <header className={headerClasses}>
-          {!isDesktop && ( // Mobile back button
+          {!isDesktop && (
             <button onClick={onNavigateBack} className="p-2 rounded-full hover:bg-immigo-gray-100 text-immigo-gray-600">
               <ArrowLeft className="w-6 h-6" />
             </button>
           )}
           <h1 className={`font-bold text-deep-navy ${isDesktop ? 'text-2xl font-display' : 'text-xl ml-4 font-display'}`}>Account Settings</h1>
-          {isDesktop && ( // Desktop close button
+          {isDesktop && (
             <button onClick={onNavigateBack} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
               <X className="w-6 h-6 text-immigo-gray-600" />
             </button>
           )}
         </header>
-        <div className={mainContentClasses}>
-            <div className="lg:grid lg:grid-cols-12 gap-8">
-                <nav className="lg:col-span-3">
-                    <ul className="space-y-1">
-                        <li><a href="#" onClick={() => setActiveView('profile')} className={`flex items-center p-3 rounded-lg font-semibold ${activeView === 'profile' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><User className="w-5 h-5 mr-3" /> My Profile</a></li>
-                        <li><a href="#" onClick={() => setActiveView('security')} className={`flex items-center p-3 rounded-lg font-semibold ${activeView === 'security' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Lock className="w-5 h-5 mr-3" /> Security & Login</a></li>
-                        <li><a href="#" onClick={() => setActiveView('connections')} className={`flex items-center p-3 rounded-lg font-semibold ${activeView === 'connections' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Share2 className="w-5 h-5 mr-3" /> Social Connections</a></li>
-                        <li><a href="#" onClick={() => setActiveView('delete')} className={`flex items-center p-3 rounded-lg font-semibold text-art-red-700 ${activeView === 'delete' ? 'bg-art-red-50' : 'hover:bg-art-red-50'}`}><AlertTriangle className="w-5 h-5 mr-3" /> Delete My Account</a></li>
-                    </ul>
-                </nav>
-                <main className="lg:col-span-9 mt-6 lg:mt-0">
-                    <div className="bg-star-white p-8 rounded-lg shadow">
-                        {renderContent()}
-                    </div>
-                </main>
-            </div>
+        <div className="flex-1 p-6 overflow-y-auto">
+          <div className="lg:grid lg:grid-cols-12 gap-8">
+            <nav className="lg:col-span-3">
+              <ul className="space-y-1">
+                <li><button type="button" onClick={() => setActiveView('profile')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'profile' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><User className="w-5 h-5 mr-3" /> My Profile</button></li>
+                <li><button type="button" onClick={() => setActiveView('security')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'security' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Lock className="w-5 h-5 mr-3" /> Security & Login</button></li>
+                <li><button type="button" onClick={() => setActiveView('connections')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'connections' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Share2 className="w-5 h-5 mr-3" /> Social Connections</button></li>
+                <li><button type="button" onClick={() => setActiveView('delete')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold text-art-red-700 ${activeView === 'delete' ? 'bg-art-red-50' : 'hover:bg-art-red-50'}`}><AlertTriangle className="w-5 h-5 mr-3" /> Delete My Account</button></li>
+              </ul>
+            </nav>
+            <main className="lg:col-span-9 mt-6 lg:mt-0">
+              <div className="bg-star-white p-8 rounded-lg shadow">
+                {renderContent()}
+              </div>
+            </main>
+          </div>
         </div>
       </div>
     </div>
