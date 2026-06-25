@@ -73,8 +73,11 @@ const backend = defineBackend({
   }
 });
 
+// Fix 1: Created a dedicated custom stack space using Amplify Gen 2 standards to fix the backend.stack compilation issue
+const apiStack = backend.createStack(`immigo-gateway-stack-${nodeEnv}`);
+
 // HTTP API Gateway
-const gatewayAPI = new apigateway.RestApi(backend.stack, 'GatewayApi', {
+const gatewayAPI = new apigateway.RestApi(apiStack, 'GatewayApi', {
   restApiName: `immigo-gateway-${nodeEnv}`,
   description: `ImmiGO API Gateway - ${nodeEnv}`,
   defaultCorsPreflightOptions: {
@@ -121,7 +124,6 @@ const pollyPolicy = new PolicyStatement({ actions: ['polly:SynthesizeSpeech'], r
 backend.conversationFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 backend.conversationFunction.resources.lambda.addToRolePolicy(pollyPolicy);
 backend.analyzeFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
-// backend.transcriptFunction.resources.lambda.addToRolePolicy(pollyPolicy); // Add Polly permissions to new function
 
 // Environment Variables
 backend.conversationFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));

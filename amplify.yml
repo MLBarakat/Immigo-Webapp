@@ -3,9 +3,11 @@ backend:
   phases:
     build:
       commands:
-        # Install top-level development tools safely
+        # 1. Complete primary initialization
         - npm ci
-        # Let ampx handle the modular building & bundling of all lambdas internally
+        # 2. Fix 2: Re-populate modules inside functions that were stripped by the preinstall script to pass TypeScript compilation checks
+        - cd amplify/functions && npm install && cd ../..
+        # 3. Deploy full cloud orchestration stacks
         - npx ampx pipeline-deploy --app-id d3878p0w684f30 --branch dev
 frontend:
   phases:
