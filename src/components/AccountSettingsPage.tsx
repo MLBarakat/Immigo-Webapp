@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth'; // 1. Import your auth hook
+import { useAuth } from '../hooks/useAuth';
 
 interface AccountSettingsPageProps {
   onNavigateBack: () => void;
@@ -11,11 +11,9 @@ type SettingsView = 'profile' | 'security' | 'connections' | 'delete';
 
 export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettingsPageProps): JSX.Element => {
   const [activeView, setActiveView] = useState<SettingsView>('profile');
-
-  // 2. Extract active user information and profile details from hook context
   const { user, profile } = useAuth();
 
-  // Fallback calculations for values to display
+  // Dynamically map authenticated credentials out of the live session layer
   const userEmail = user?.email || '';
   const userFullName = profile?.full_name || (user?.user_metadata?.full_name as string) || '';
 
@@ -32,7 +30,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
                 <input
                   type="text"
                   id="name"
-                  defaultValue={userFullName} // 3. Swap out hardcoded "John Doe"
+                  defaultValue={userFullName}
                   className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500"
                 />
               </div>
@@ -41,7 +39,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
                 <input
                   type="email"
                   id="email"
-                  defaultValue={userEmail} // 4. Swap out hardcoded "john.doe@example.com"
+                  defaultValue={userEmail}
                   disabled
                   className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm bg-immigo-gray-100 cursor-not-allowed"
                 />
@@ -114,7 +112,8 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
     ? "flex items-center justify-between p-6 border-b border-immigo-gray-200"
     : "flex items-center p-4 border-b border-immigo-gray-200 bg-star-white shadow-md flex-shrink-0";
 
-  const mainContentClasses = lg => "flex-1 p-6 overflow-y-auto";
+  // Fixed layout typo from (lg => string function) back to a single string identifier
+  const mainContentClasses = "flex-1 p-6 overflow-y-auto";
 
   return (
     <div className={containerClasses}>
@@ -132,7 +131,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
             </button>
           )}
         </header>
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className={mainContentClasses}>
           <div className="lg:grid lg:grid-cols-12 gap-8">
             <nav className="lg:col-span-3">
               <ul className="space-y-1">
