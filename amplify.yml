@@ -3,9 +3,9 @@ backend:
   phases:
     build:
       commands:
-        # Removed --ignore-scripts to let native platform extension binaries unpack smoothly
+        # Install top-level development tools safely
         - npm ci
-        - npm ci --prefix amplify/functions
+        # Let ampx handle the modular building & bundling of all lambdas internally
         - npx ampx pipeline-deploy --app-id d3878p0w684f30 --branch dev
 frontend:
   phases:
