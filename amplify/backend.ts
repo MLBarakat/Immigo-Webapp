@@ -12,7 +12,6 @@ import { auth } from './auth/resource';
 import { storage } from './storage/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Duration } from 'aws-cdk-lib';
 import { secret } from '@aws-amplify/backend';
 
@@ -24,56 +23,43 @@ const backend = defineBackend({
   storage,
   conversationFunction: {
     ...conversationFunction,
-    runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'conversation.handler',
     memorySize: 1024,
     timeout: Duration.seconds(30)
+    // Removed explicit runtime and handler overrides to allow default index.handler resolution
   },
   analyzeFunction: {
     ...analyzeFunction,
-    runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'analyze.handler',
     memorySize: 512,
     timeout: Duration.seconds(30)
   },
   utilityFunction: {
     ...utilityFunction,
-    runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'utility.handler',
     memorySize: 256,
     timeout: Duration.seconds(10)
   },
   configFunction: {
     ...configFunction,
-    runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'config.handler',
     memorySize: 128,
     timeout: Duration.seconds(5)
   },
   settingsFunction: {
     ...settingsFunction,
-    runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'settings.handler',
     memorySize: 256,
     timeout: Duration.seconds(10)
   },
   historyFunction: {
     ...historyFunction,
-    runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'history.handler',
     memorySize: 256,
     timeout: Duration.seconds(10)
   },
   transcriptFunction: {
     ...transcriptFunction,
-    runtime: lambda.Runtime.NODEJS_18_X,
-    handler: 'transcript.handler',
     memorySize: 512,
     timeout: Duration.seconds(20)
   }
 });
 
-// Fix 1: Created a dedicated custom stack space using Amplify Gen 2 standards to fix the backend.stack compilation issue
+// Created a dedicated custom stack space using Amplify Gen 2 standards to fix the backend.stack compilation issue
 const apiStack = backend.createStack(`immigo-gateway-stack-${nodeEnv}`);
 
 // HTTP API Gateway
