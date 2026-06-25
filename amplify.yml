@@ -3,7 +3,8 @@ backend:
   phases:
     build:
       commands:
-        - yarn install --frozen-lockfile --ignore-scripts
+        # Use npm clean-install to safely leverage your package-lock.json
+        - npm ci --ignore-scripts
         - npm ci --prefix amplify/functions --ignore-scripts
         - npx ampx pipeline-deploy --app-id d3878p0w684f30 --branch dev
 frontend:
@@ -11,11 +12,11 @@ frontend:
     preBuild:
       commands:
         - rm -rf node_modules
-        - yarn cache clean
-        - yarn install --frozen-lockfile
+        - npm cache clean --force
+        - npm ci
     build:
       commands:
-        - yarn build
+        - npm run build
   artifacts:
     baseDirectory: dist
     files:
