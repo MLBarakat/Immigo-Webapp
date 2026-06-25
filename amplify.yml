@@ -3,7 +3,6 @@ backend:
   phases:
     build:
       commands:
-        # Use npm clean-install to safely leverage your package-lock.json
         - npm ci --ignore-scripts
         - npm ci --prefix amplify/functions --ignore-scripts
         - npx ampx pipeline-deploy --app-id d3878p0w684f30 --branch dev
