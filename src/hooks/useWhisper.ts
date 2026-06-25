@@ -34,7 +34,6 @@ export const useWhisper = (): WhisperHook => {
     const vad = useRef<MicVAD | null>(null);
     const finalTranscriptRef = useRef<string>('');
 
-    // Mutable reference flag to gauge speech boundaries during high-frequency frame tracking
     const isSpeechActiveRef = useRef<boolean>(false);
     const audioBufferRef = useRef<Float32Array[]>([]);
     const partialFlushTimerRef = useRef<number | null>(null);
@@ -303,19 +302,19 @@ export const useWhisper = (): WhisperHook => {
             preSpeechPadFrames: 1,
             onSpeechStart: () => {
                 logger.debug('VAD: Speech started');
-                isSpeechActiveRef.current = true; // Mark boundary active
+                isSpeechActiveRef.current = true;
                 setIsTranscribing(true);
                 try { startPartialFlushTimer(); } catch (e) { logger.warn('Failed to start partial flush timer', { errorMessage: String(e) }); }
             },
             onSpeechEnd: (audio?: Float32Array) => {
-                isSpeechActiveRef.current = false; // Close boundary tracking
+                isSpeechActiveRef.current = false;
                 onSpeechEnd(audio);
             },
             onVADMisfire: () => {
                 logger.debug('VAD: Misfire (Short noise ignored)');
             },
-            // FIX 1: Replaced the fictional property 'onSpeechData' with the native 'onFrameProcessed' callback
-            onFrameProcessed: (probabilities: any, frame: Float32Array) => {
+            // Fix: Appended leading underscore to mark parameter unread, safely bypassing strict TS6133 rule checks
+            onFrameProcessed: (_probabilities: any, frame: Float32Array) => {
                 if (!isSpeechActiveRef.current) return;
 
                 try {
@@ -396,7 +395,6 @@ export const useWhisper = (): WhisperHook => {
         logger.info('VAD paused.');
         isSpeechActiveRef.current = false;
 
-        // FIX 2: Consolidate any existing audio cache chunks rather than passing an empty undefined entity
         const samples = audioBufferRef.current;
         let finalUtteranceAudio: Float32Array | undefined = undefined;
 
