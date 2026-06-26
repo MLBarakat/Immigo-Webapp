@@ -38,18 +38,19 @@ const backend = defineBackend({
   },
   configFunction: {
     ...configFunction,
-    // FIX: Upgraded memory and timeout to provide adequate headroom for Express server compilation on cold-starts
     memorySize: 512,
     timeout: Duration.seconds(10)
   },
   settingsFunction: {
     ...settingsFunction,
-    memorySize: 256,
+    // FIX: Upgraded compute allocation to prevent Express cold-start bottlenecks
+    memorySize: 512,
     timeout: Duration.seconds(10)
   },
   historyFunction: {
     ...historyFunction,
-    memorySize: 256,
+    // FIX: Upgraded compute allocation to prevent Express cold-start bottlenecks
+    memorySize: 512,
     timeout: Duration.seconds(10)
   },
   transcriptFunction: {
@@ -111,7 +112,7 @@ backend.conversationFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 backend.conversationFunction.resources.lambda.addToRolePolicy(pollyPolicy);
 backend.analyzeFunction.resources.lambda.addToRolePolicy(bedrockPolicy);
 
-// Environment Variables
+// Environment Variables Allocation
 backend.conversationFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.conversationFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 
@@ -121,8 +122,10 @@ backend.analyzeFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_
 backend.utilityFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.utilityFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 
+backend.settingsFunction.addEnvironment('SUPABASE_URL', process.env.SUPABASE_URL || '');
 backend.settingsFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 
+backend.historyFunction.addEnvironment('SUPABASE_URL', process.env.SUPABASE_URL || '');
 backend.historyFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 
 backend.transcriptFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
