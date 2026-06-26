@@ -148,11 +148,16 @@ export const useWhisper = (): WhisperHook => {
     try {
         if (!(window as any).__ASR) {
             (window as any).__ASR = {
-                partialFlushMs: DEFAULT_PARTIAL_FLUSH_MS,
-                partialWindowS: DEFAULT_PARTIAL_WINDOW_S,
-                partialMinMs: DEFAULT_PARTIAL_MIN_MS,
-                partialChunkS: 0.8,
-                partialStrideS: 0.2,
+                partialFlushMs: 300,   // Flush and evaluate text every 300ms
+                partialWindowS: 1.0,   // Look back at exactly 1.0 second of audio context
+                partialMinMs: 150,     // Minimum duration of new speech required to trigger an update
+                partialChunkS: 0.5,    // Process small 500ms chunks inside the worker
+                partialStrideS: 0.1,   // Keep the stride boundary tight at 100ms
+                // partialFlushMs: DEFAULT_PARTIAL_FLUSH_MS,
+                // partialWindowS: DEFAULT_PARTIAL_WINDOW_S,
+                // partialMinMs: DEFAULT_PARTIAL_MIN_MS,
+                // partialChunkS: 0.8,
+                // partialStrideS: 0.2,
             };
         }
     } catch (e) { }
