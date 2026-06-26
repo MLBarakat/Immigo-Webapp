@@ -38,7 +38,15 @@ export const useWhisper = (): WhisperHook => {
     const audioBufferRef = useRef<Float32Array[]>([]);
     const partialFlushTimerRef = useRef<number | null>(null);
 
-    const handleWorkerMessage = useCallback((event: MessageEvent) => {
+    // UI thread processing lock barrier to prevent event congestion
+    const partialInProgressRef = useRef<boolean>(false);
+
+    // Keep references fresh to avoid stale closures in listeners without tearing down the worker loop
+    const handleWorkerMessageRef = useRef<any>(null);
+    const onSpeechEndRef = useRef<any>(null);
+    const flushPartialRef = useRef<any>(null);
+
+    handleWorkerMessageRef.current = (event: MessageEvent) => {
         const data = event.data || {};
         const status = data.status;
 
@@ -55,10 +63,15 @@ export const useWhisper = (): WhisperHook => {
                 break;
             case 'error':
                 setIsModelLoading(false);
+                partialInProgressRef.current = false;
                 logger.error('Whisper worker error:', undefined, { errorMessage: data?.error });
                 break;
 
-            case 'update':
+            case 'partial-complete':
+                partialInProgressRef.current = false;
+                break;
+
+            case 'update': { // Clean lexical isolation block wrapper
                 logger.info('Whisper interim update', { inferenceId: data?.inferenceId, text: data?.output });
                 const incoming = String(data?.output || '').trim();
                 if (!incoming) break;
@@ -89,35 +102,33 @@ export const useWhisper = (): WhisperHook => {
                     setInterimTranscript(finalTranscriptRef.current + ' ' + incoming);
                 }
                 break;
+            }
 
-            case 'complete':
+            case 'complete': {
                 logger.info('Whisper transcription complete', { inferenceId: data?.inferenceId, text: data?.output });
                 const newTranscript = (finalTranscriptRef.current + ' ' + data.output).trim();
                 finalTranscriptRef.current = newTranscript;
                 setFinalTranscript(newTranscript);
                 setInterimTranscript('');
+                partialInProgressRef.current = false;
                 break;
+            }
 
             case 'inference-start':
                 logger.info('Worker inference started', { inferenceId: data.inferenceId });
                 break;
-
             case 'latency':
                 logger.info('Transcription latency (ms)', { latencyMs: data.latencyMs, inferenceId: data.inferenceId });
                 break;
-
             case 'cancelled':
                 logger.info('Inference cancelled/ignored', { inferenceId: data.inferenceId });
                 break;
-
             case 'speech-end-ack':
                 logger.info('Worker acknowledged speech end', { inferenceId: data.inferenceId, timestamp: data.timestamp });
                 break;
-
             case 'log':
                 logger.info('Worker log', { message: data?.message });
                 break;
-
             case 'pong':
                 logger.info('Worker pong');
                 break;
@@ -128,7 +139,7 @@ export const useWhisper = (): WhisperHook => {
                 }
                 break;
         }
-    }, []);
+    };
 
     const DEFAULT_PARTIAL_FLUSH_MS = 200;
     const DEFAULT_PARTIAL_WINDOW_S = 1.5;
@@ -154,8 +165,9 @@ export const useWhisper = (): WhisperHook => {
         return fallback;
     };
 
-    const flushPartial = useCallback((force = false) => {
+    flushPartialRef.current = (force = false) => {
         if (!vad.current?.listening && !force) return;
+        if (partialInProgressRef.current) return;
 
         const samples = audioBufferRef.current;
         if (!samples || samples.length === 0) return;
@@ -176,6 +188,7 @@ export const useWhisper = (): WhisperHook => {
 
         if (worker.current && partial.length > 0) {
             const clientSendTs = Date.now();
+            partialInProgressRef.current = true;
             try {
                 worker.current.postMessage({ action: 'transcribe-partial', audio: partial, clientSendTs }, [partial.buffer]);
                 logger.debug('Sent partial audio to worker', { partialLength: partial.length, clientSendTs });
@@ -186,6 +199,10 @@ export const useWhisper = (): WhisperHook => {
         }
 
         audioBufferRef.current = [concat.slice(Math.max(0, concat.length - targetSamples))];
+    };
+
+    const flushPartial = useCallback((force = false) => {
+        flushPartialRef.current(force);
     }, []);
 
     const startPartialFlushTimer = useCallback(() => {
@@ -203,7 +220,7 @@ export const useWhisper = (): WhisperHook => {
         }
     }, []);
 
-    const onSpeechEnd = useCallback((audio?: Float32Array) => {
+    onSpeechEndRef.current = (audio?: Float32Array) => {
         logger.debug('VAD: Speech ended.', { audioLength: audio?.length });
         setIsTranscribing(false);
         stopPartialFlushTimer();
@@ -251,11 +268,13 @@ export const useWhisper = (): WhisperHook => {
         if (vad.current?.listening) {
             vad.current.pause();
         }
-    }, [stopPartialFlushTimer]);
+    };
 
+    // Core worker and listener synchronization effect block
     useEffect(() => {
         worker.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
-        worker.current.addEventListener('message', handleWorkerMessage);
+
+        worker.current.addEventListener('message', (e) => handleWorkerMessageRef.current(e));
         worker.current.addEventListener('error', (e) => console.error('Whisper worker runtime error:', e));
         worker.current.addEventListener('messageerror', (e) => console.error('Whisper worker message error:', e));
 
@@ -283,9 +302,7 @@ export const useWhisper = (): WhisperHook => {
 
         try {
             worker.current.postMessage({ action: 'ping' });
-        } catch (e) {
-            console.warn('Failed to send ping to worker:', e);
-        }
+        } catch (e) { }
 
         const vadOptions: VadOptions & {
             minSpeechFrames: number;
@@ -304,27 +321,20 @@ export const useWhisper = (): WhisperHook => {
                 logger.debug('VAD: Speech started');
                 isSpeechActiveRef.current = true;
                 setIsTranscribing(true);
-                try { startPartialFlushTimer(); } catch (e) { logger.warn('Failed to start partial flush timer', { errorMessage: String(e) }); }
+                try { startPartialFlushTimer(); } catch (e) { }
             },
             onSpeechEnd: (audio?: Float32Array) => {
                 isSpeechActiveRef.current = false;
-                onSpeechEnd(audio);
+                onSpeechEndRef.current(audio);
             },
             onVADMisfire: () => {
                 logger.debug('VAD: Misfire (Short noise ignored)');
             },
-            // Fix: Appended leading underscore to mark parameter unread, safely bypassing strict TS6133 rule checks
             onFrameProcessed: (_probabilities: any, frame: Float32Array) => {
                 if (!isSpeechActiveRef.current) return;
 
                 try {
                     audioBufferRef.current.push(frame);
-                } catch (e) {
-                    logger.warn('Failed to buffer audio for partial streaming', { errorMessage: String(e) });
-                }
-
-                try {
-                    logger.info('VAD onSpeechData frame tracked', { audioLength: frame?.length });
                 } catch (e) { }
 
                 try {
@@ -333,7 +343,7 @@ export const useWhisper = (): WhisperHook => {
                     for (const s of audioBufferRef.current) totalSamples += s.length;
                     const totalMs = Math.floor(totalSamples / 16);
                     if (totalMs >= partialMinMs) {
-                        flushPartial();
+                        flushPartialRef.current();
                     }
                 } catch (e) { }
             },
@@ -346,18 +356,12 @@ export const useWhisper = (): WhisperHook => {
                 try {
                     if (vad.current?.listening) {
                         vad.current.pause();
-                        logger.info('VAD initialized and paused; call startRecording() to begin listening.');
-                    } else {
-                        logger.info('VAD initialized (paused). Call startRecording() to begin listening.');
                     }
-                } catch (e) {
-                    logger.warn('Failed to pause VAD after initialization', { errorMessage: String(e) });
-                }
+                } catch (e) { }
 
                 try {
                     (window as any).__vadInstance = vad.current;
                     (window as any).__whisperWorker = worker.current;
-                    logger.debug('Exposed __vadInstance and __whisperWorker on window for debugging.');
                 } catch (e) { }
             })
             .catch((error: unknown) => {
@@ -368,17 +372,11 @@ export const useWhisper = (): WhisperHook => {
             vad.current?.destroy();
             worker.current?.terminate();
         };
-    }, [handleWorkerMessage, onSpeechEnd, flushPartial, startPartialFlushTimer]);
+    }, [startPartialFlushTimer]); // Safe static array - Worker remains anchored permanently on mount without model reloading
 
     const startRecording = useCallback(() => {
-        if (!vad.current) {
-            logger.warn('VAD not ready, cannot start recording.');
-            return;
-        }
-        if (vad.current.listening) {
-            logger.debug('VAD is already listening.');
-            return;
-        }
+        if (!vad.current) return;
+        if (vad.current.listening) return;
         finalTranscriptRef.current = '';
         setFinalTranscript('');
         setInterimTranscript('');
@@ -388,11 +386,8 @@ export const useWhisper = (): WhisperHook => {
     }, []);
 
     const stopRecording = useCallback(() => {
-        if (!vad.current || !vad.current.listening) {
-            return;
-        }
+        if (!vad.current || !vad.current.listening) return;
         vad.current.pause();
-        logger.info('VAD paused.');
         isSpeechActiveRef.current = false;
 
         const samples = audioBufferRef.current;
@@ -409,8 +404,8 @@ export const useWhisper = (): WhisperHook => {
             }
         }
 
-        onSpeechEnd(finalUtteranceAudio);
-    }, [onSpeechEnd]);
+        onSpeechEndRef.current(finalUtteranceAudio);
+    }, []);
 
     return { interimTranscript, finalTranscript, isModelLoading, isVadReady, modelLoadingProgress, isTranscribing, startRecording, stopRecording };
 };

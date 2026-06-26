@@ -1,29 +1,18 @@
 // src/workers/whisper.worker.ts
 
-// The transformers library will be imported dynamically
-// to avoid bundling issues with Vite in the worker context.
-
-// --- Configuration ---
-// Environment settings and pipeline definition are now handled within the getInstance method.
-
-// --- Model and Pipeline definition ---
+// --- Model and Pipeline Singleton Definition ---
 class WhisperPipeline {
     static task = 'automatic-speech-recognition';
-    // Using a multilingual model for broader compatibility
-    static model = 'Xenova/whisper-tiny'; 
-    static instance: any = null; // Use `any` as the type will be from the dynamic import
+    static model = 'Xenova/whisper-tiny';
+    static instance: any = null;
     static loadingPromise: Promise<any> | null = null;
 
     static async getInstance(progress_callback?: (progress: any) => void) {
         if (this.instance === null && this.loadingPromise === null) {
             this.loadingPromise = new Promise(async (resolve, reject) => {
                 try {
-                    // Dynamically import the transformers library from a CDN.
-                    // Use the Vite ignore comment so Vite/Rollup doesn't rewrite or bundle it.
-                    // Temporarily silence noisy console output from third-party libs (transformers / onnxruntime)
-                    // while we dynamically import and initialize the model. We restore the console afterwards.
                     const _savedConsole = { debug: console.debug, info: console.info, warn: console.warn, log: console.log };
-                    const _noop = () => {};
+                    const _noop = () => { };
 
                     try {
                         // Mute console while importing and initializing the model to reduce spam from third-party libs
@@ -31,19 +20,16 @@ class WhisperPipeline {
 
                         const { pipeline, env } = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
 
-                        // --- Environment settings for Transformers.js ---
+                        // Environment settings for Transformers.js
                         env.allowLocalModels = true;
                         env.allowRemoteModels = true;
-                        // By default, it will fetch from the Hugging Face Hub.
                         env.localModelPath = '/models/';
 
-                        // Use a no-op callback when none is provided to satisfy the pipeline API
-                        const cb = progress_callback ?? (() => {});
-                        
-                        this.instance = await pipeline(this.task, this.model, { 
+                        const cb = progress_callback ?? (() => { });
+
+                        this.instance = await pipeline(this.task, this.model, {
                             progress_callback: cb,
-                            // Specify quantization for faster inference and lower memory usage
-                            quantized: true, 
+                            quantized: true,
                         });
                         resolve(this.instance);
                     } finally {
@@ -59,53 +45,46 @@ class WhisperPipeline {
                 }
             });
         }
-        
+
         return this.loadingPromise;
     }
 }
 
-// Inference bookkeeping to support cancellation, de-dup, and latency measurement
+// Inference bookkeeping tracking arrays
 let _currentInferenceId = 0;
 const _lastReported: Record<number, string> = {};
 const _speechEndTimestamps: Record<number, number> = {};
 const _inferenceStartTimes: Record<number, number> = {};
 
-// Default ASR tuning parameters (seconds). These can be overridden by the main thread
+// Default ASR tuning parameters (seconds)
 let _chunkLengthS = 8;
 let _strideLengthS = 1;
 
 // Default partial (short) inference parameters for low-latency interim updates
-let _partialChunkLengthS = 0.8; // was 1
-let _partialStrideLengthS = 0.2; // was 0.25
+let _partialChunkLengthS = 0.8;
+let _partialStrideLengthS = 0.2;
 
-// --- Message Handler ---
+// Initial signal handshake to notify main thread
 self.postMessage({ status: 'worker-initialized' });
 
-// Catch any synchronous errors that would otherwise be silent inside the worker
+// Global thread exception captures
 self.addEventListener('error', (e: ErrorEvent) => {
     try {
         self.postMessage({ status: 'error', error: `Worker error: ${e.message}` });
-    } catch (_) {
-        // ignore
-    }
+    } catch (_) { }
 });
 
-// Catch unhandled promise rejections
 (self as any).addEventListener('unhandledrejection', (ev: PromiseRejectionEvent) => {
     try {
         self.postMessage({ status: 'error', error: `Unhandled rejection: ${ev.reason}` });
-    } catch (_) {
-        // ignore
-    }
+    } catch (_) { }
 });
 
 self.onmessage = async (event) => {
     const { action, audio } = event.data;
 
     if (action === 'load') {
-        // Load the model and report progress to the main thread
         try {
-            // Allow the main thread to send ASR tuning values when loading
             const cfg = event.data?.config ?? {};
             if (typeof cfg.chunk_length_s === 'number') _chunkLengthS = cfg.chunk_length_s;
             if (typeof cfg.stride_length_s === 'number') _strideLengthS = cfg.stride_length_s;
@@ -120,18 +99,15 @@ self.onmessage = async (event) => {
                 self.postMessage(progress);
             });
             self.postMessage({ status: 'ready' });
-        } catch (error) {
-            // Error is already posted inside getInstance
-        }
+        } catch (error) { }
         return;
     }
 
     if (action === 'ping') {
-        // Simple handshake for debugging to confirm the worker is alive
         self.postMessage({ status: 'pong' });
         return;
     }
-    // Allow runtime updates to ASR configuration
+
     if (action === 'set-config') {
         try {
             const cfg = event.data?.config ?? {};
@@ -140,53 +116,42 @@ self.onmessage = async (event) => {
             if (typeof cfg.partial_chunk_length_s === 'number') _partialChunkLengthS = cfg.partial_chunk_length_s;
             if (typeof cfg.partial_stride_length_s === 'number') _partialStrideLengthS = cfg.partial_stride_length_s;
             self.postMessage({ status: 'config-updated', chunk_length_s: _chunkLengthS, stride_length_s: _strideLengthS, partial_chunk_length_s: _partialChunkLengthS, partial_stride_length_s: _partialStrideLengthS });
-        } catch (e) {
-            // ignore
-        }
+        } catch (e) { }
         return;
     }
-    // Mark the end of a user's speech segment so we can measure latency from speech end -> complete
+
     if (action === 'speech_end') {
         try {
             const ts = event.data.timestamp ?? Date.now();
-            // Associate the speech end timestamp with the current inference id so we can calculate latency
             _speechEndTimestamps[_currentInferenceId] = ts;
             self.postMessage({ status: 'speech-end-ack', inferenceId: _currentInferenceId, timestamp: ts });
-        } catch (e) {
-            // ignore
-        }
+        } catch (e) { }
         return;
     }
 
     if (action === 'transcribe') {
         try {
-            // Emit an explicit log so the main thread can confirm receipt of audio
             self.postMessage({ status: 'log', message: `Received transcribe request (audio length: ${audio?.length ?? 0})` });
-            const transcriber = await WhisperPipeline.getInstance(); // Should be loaded now
+            const transcriber = await WhisperPipeline.getInstance();
             if (!transcriber || !audio) {
                 self.postMessage({ status: 'error', error: 'Transcription service is not ready or audio is missing.' });
                 return;
             }
 
-            // Start a new inference and bump the id so older inferences get ignored
             const inferenceId = ++_currentInferenceId;
             _lastReported[inferenceId] = '';
             _inferenceStartTimes[inferenceId] = Date.now();
             self.postMessage({ status: 'inference-start', inferenceId });
 
-            // The VAD provides audio as a Float32Array, which is what the model expects.
             const output = await transcriber(audio, {
-                // Use configured chunk/stride (seconds)
                 chunk_length_s: _chunkLengthS,
                 stride_length_s: _strideLengthS,
                 callback_function: (beams: any[]) => {
                     const bestBeam = beams && beams[0];
                     if (!bestBeam) return;
 
-                    // Normalize whitespace and trim to avoid tiny repeated fragments
                     const normalized = (bestBeam.text || '').replace(/\s+/g, ' ').trim();
 
-                    // Only report updates for the latest active inference and when text actually changed
                     if (inferenceId === _currentInferenceId && normalized && normalized !== _lastReported[inferenceId]) {
                         _lastReported[inferenceId] = normalized;
                         self.postMessage({ status: 'update', output: normalized, inferenceId });
@@ -194,37 +159,34 @@ self.onmessage = async (event) => {
                 }
             });
 
-            // If this inference is no longer the active one, treat it as cancelled/ignored
             if (inferenceId !== _currentInferenceId) {
                 self.postMessage({ status: 'cancelled', inferenceId });
                 return;
             }
 
             if (output && typeof output.text === 'string') {
-                 const finalText = (output.text || '').replace(/\s+/g, ' ').trim();
-                 self.postMessage({ status: 'complete', output: finalText, inferenceId });
+                const finalText = (output.text || '').replace(/\s+/g, ' ').trim();
+                self.postMessage({ status: 'complete', output: finalText, inferenceId });
 
-                 const speechEndTs = _speechEndTimestamps[inferenceId];
-                 if (speechEndTs) {
-                     const latencyMs = Date.now() - speechEndTs;
-                     self.postMessage({ status: 'latency', inferenceId, latencyMs });
-                 }
+                const speechEndTs = _speechEndTimestamps[inferenceId];
+                if (speechEndTs) {
+                    const latencyMs = Date.now() - speechEndTs;
+                    self.postMessage({ status: 'latency', inferenceId, latencyMs });
+                }
             }
         } catch (error) {
             self.postMessage({ status: 'error', error: `Transcription failed: ${error}` });
         }
     }
 
-    // Handle partial/streaming transcribe calls that should produce interim updates
     if (action === 'transcribe-partial') {
         try {
             const clientSendTs = event.data?.clientSendTs ?? null;
             self.postMessage({ status: 'log', message: `Received partial transcribe request (audio length: ${audio?.length ?? 0})`, clientSendTs });
 
-            // Simple guard to avoid overlapping partial inferences
             if ((self as any)._partialInProgress) {
-                // Ignore overlapping partial requests to keep inference throughput manageable
                 self.postMessage({ status: 'log', message: 'Skipping overlapping partial transcribe' });
+                self.postMessage({ status: 'partial-complete' }); // Core Fix: Release main thread lock on skipped steps
                 return;
             }
 
@@ -232,14 +194,12 @@ self.onmessage = async (event) => {
 
             const transcriber = await WhisperPipeline.getInstance();
             if (!transcriber || !audio) {
-                self.postMessage({ status: 'log', message: 'Partial transcriber not available or audio missing' });
                 (self as any)._partialInProgress = false;
+                self.postMessage({ status: 'partial-complete' });
                 return;
             }
 
-            // Use a short chunk/stride for quicker interim updates
             await transcriber(audio, {
-                // Use configured short chunk/stride values for partial/incremental inference to reduce latency
                 chunk_length_s: _partialChunkLengthS,
                 stride_length_s: _partialStrideLengthS,
                 callback_function: (beams: any[]) => {
@@ -247,9 +207,7 @@ self.onmessage = async (event) => {
                     if (!bestBeam) return;
                     const normalized = (bestBeam.text || '').replace(/\s+/g, ' ').trim();
 
-                    // Report partial updates without assigning a new inference id
                     if (normalized) {
-                        // Avoid flooding by de-duping partial text
                         if ((self as any)._lastPartialReported !== normalized) {
                             (self as any)._lastPartialReported = normalized;
                             const partialLatencyMs = clientSendTs ? Date.now() - clientSendTs : null;
@@ -260,9 +218,10 @@ self.onmessage = async (event) => {
             });
 
             (self as any)._partialInProgress = false;
+            self.postMessage({ status: 'partial-complete' }); // Core Fix: Inform main thread worker thread is free
         } catch (error) {
             (self as any)._partialInProgress = false;
-            self.postMessage({ status: 'log', message: `Partial transcribe failed: ${error}` });
+            self.postMessage({ status: 'partial-complete' }); // Safe fallback release
         }
     }
 };
