@@ -25,7 +25,6 @@ const backend = defineBackend({
     ...conversationFunction,
     memorySize: 1024,
     timeout: Duration.seconds(30)
-    // Removed explicit runtime and handler overrides to allow default index.handler resolution
   },
   analyzeFunction: {
     ...analyzeFunction,
@@ -39,8 +38,9 @@ const backend = defineBackend({
   },
   configFunction: {
     ...configFunction,
-    memorySize: 128,
-    timeout: Duration.seconds(5)
+    // FIX: Upgraded memory and timeout to provide adequate headroom for Express server compilation on cold-starts
+    memorySize: 512,
+    timeout: Duration.seconds(10)
   },
   settingsFunction: {
     ...settingsFunction,
@@ -128,6 +128,7 @@ backend.historyFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPA
 backend.transcriptFunction.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', secret('SUPABASE_SERVICE_ROLE_KEY'));
 backend.transcriptFunction.addEnvironment('SUPABASE_API_KEY', secret('SUPABASE_API_KEY'));
 
+backend.configFunction.addEnvironment('SUPABASE_URL', process.env.SUPABASE_URL || '');
 backend.configFunction.addEnvironment('SUPABASE_ANON_KEY', secret('SUPABASE_ANON_KEY'));
 
 // Outputs
