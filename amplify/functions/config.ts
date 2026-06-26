@@ -1,61 +1,53 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import express, { Request, Response, NextFunction } from 'express';
+import serverless from 'serverless-http';
+import cors from 'cors';
+import helmet from 'helmet';
 import { logger } from './logger';
 import { AppError } from './errors';
+import configRouter from './routes/config';
 
-// Helper to create a standard API Gateway response with proper CORS configuration
-const createResponse = (statusCode: number, body: object) => {
-  return {
-    statusCode,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization,X-API-Key",
-      "Access-Control-Allow-Methods": "GET,OPTIONS"
-    },
-    body: JSON.stringify(body),
-  };
-};
+const app = express();
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  // Handle CORS pre-flight requests immediately
-  if (event.httpMethod === 'OPTIONS') {
-    return createResponse(204, {});
-  }
+// Global Security & Request Parsing Middleware
+app.use(cors());
+app.use(helmet());
+app.use(express.json());
 
-  logger.debug('Config function execution started', { path: event.path });
+// Request logging middleware for debugging traceability
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  logger.debug(`Incoming request to config service: ${req.method} ${req.path}`);
+  next();
+});
 
-  try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+// Route Registration (Maps /api/config cleanly)
+app.use('/api', configRouter);
 
-    if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
-      throw new AppError('Supabase URL is not set or is invalid in environment variables.', 500, true, { check: 'SUPABASE_URL' });
-    }
-    logger.debug('Supabase URL validation passed.');
+// 404 Fallback Handler for undefined resources inside this function container
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  next(new AppError(`Route not found in config service: ${req.method} ${req.path}`, 404));
+});
 
-    if (!supabaseAnonKey) {
-      throw new AppError('Supabase anon key is not set in environment variables.', 500, true, { check: 'SUPABASE_ANON_KEY' });
-    }
-    logger.debug('Supabase anon key validation passed.');
+// Centralized Stage 1 Compliant Error Handling Middleware
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  const appError = err instanceof AppError
+    ? err
+    : new AppError('An unexpected error occurred in the config service.', 500, false);
 
-    const responseBody = { supabaseUrl, supabaseAnonKey };
+  logger.error(appError.message, appError, {
+    isOperational: appError.isOperational,
+    context: appError.context,
+    path: req.path,
+    method: req.method,
+  });
 
-    logger.info('Successfully retrieved Supabase configuration.', {
-      urlHost: process.env.NODE_ENV === 'DEV' ? supabaseUrl.split('//')[1].split('.')[0] : undefined
-    });
+  // Safe error masking - hide detailed stack metrics in production environments
+  const isDevelopment = process.env.NODE_ENV === 'DEV' || process.env.NODE_ENV === 'development';
+  const errorMessage = isDevelopment || appError.isOperational
+    ? appError.message
+    : 'An internal server error occurred.';
 
-    return createResponse(200, responseBody);
+  res.status(appError.statusCode).json({ error: errorMessage });
+});
 
-  } catch (error) {
-    const appError = error instanceof AppError ? error : new AppError('An unexpected error occurred in config function.', 500, false);
-
-    logger.error(appError.message, appError, {
-      isOperational: appError.isOperational,
-      context: appError.context,
-      path: event.path,
-    });
-
-    // Only show detailed error messages in development
-    const errorMessage = process.env.NODE_ENV === 'DEV' ? appError.message : 'An internal server error occurred.';
-    return createResponse(appError.statusCode, { error: errorMessage });
-  }
-};
+// Export serverless wrapper handler for AWS Amplify pipeline deployment integration
+export const handler = serverless(app);
