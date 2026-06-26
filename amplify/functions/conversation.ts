@@ -1,165 +1,44 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { bedrockClient, pollyClient, supabase, logger } from './clients';
-import { InvokeModelCommand, InvokeModelWithResponseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
-import { SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
-import { Readable } from 'stream';
+// amplify/functions/conversation.ts
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-API-Key',
-  'Access-Control-Allow-Methods': 'OPTIONS,POST',
-};
+import express, { Request, Response, NextFunction } from 'express';
+import serverless from 'serverless-http';
+import cors from 'cors';
+import helmet from 'helmet';
+import { logger } from './logger';
+import { AppError } from './errors';
+import conversationRouter from './routes/conversation';
+import analyzeRouter from './routes/analyze';
 
-const sanitizeInput = (text: string | null | undefined): string => {
-  if (!text) return '';
-  return text.replace(/[<>{}\[\]|`~@#$%^&*=_+]/g, '');
-};
+const app = express();
 
-const streamToBuffer = (stream: Readable): Promise<Buffer> =>
-  new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-  });
+// Core Global Request Pipeline Middleware Configuration
+app.use(cors());
+app.use(helmet());
+app.use(express.json()); // Fix 2: Explicit json body-parsing middleware injected
 
-const createErrorResponse = (statusCode: number, message: string, details?: any): APIGatewayProxyResult => {
-  logger.error(message, details);
-  return {
-    statusCode,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ error: message }),
-  };
-};
+// Direct incoming requests to their respective Express sub-routers
+app.use('/api', conversationRouter);
+app.use('/api', analyzeRouter);
 
-// --- Route Handlers ---
+// Fallback Route for dead-end requests
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  next(new AppError(`Resource route not found in conversation microservice: ${req.method} ${req.path}`, 404));
+});
 
-async function handleAnalysis(body: any, userId: string): Promise<APIGatewayProxyResult> {
-  const { conversationHistory } = body;
-  if (!conversationHistory || !Array.isArray(conversationHistory) || conversationHistory.length === 0) {
-    return createErrorResponse(400, 'Conversation history is required for analysis and must be a non-empty array.');
-  }
+// Centralized Stage 1 Compliant Error Handling Middleware
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  const appError = err instanceof AppError
+    ? err
+    : new AppError('An unexpected server error occurred in conversation engine.', 500, false);
 
-  const transcript = conversationHistory.map((msg: { role: string; content: string; }) => `${msg.role}: ${msg.content}`).join('\n');
-  const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0';
-  const command = new InvokeModelCommand({
-    modelId,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 1024,
-      system: "You are an expert English language coach for USCIS interview preparation...",
-      messages: [{ role: 'user', content: `Here is the transcript:\n\n${transcript}` }],
-    }),
-    accept: 'application/json',
-  });
+  logger.error(appError.message, appError, { path: req.path, method: req.method });
 
-  const apiResponse = await bedrockClient.send(command);
-  const responseBody = JSON.parse(new TextDecoder().decode(apiResponse.body));
-  const feedbackText = responseBody.content[0].text;
+  const isDevelopment = process.env.NODE_ENV === 'DEV' || process.env.NODE_ENV === 'development';
+  const errorMessage = isDevelopment || appError.isOperational
+    ? appError.message
+    : 'An internal server error occurred.';
 
-  logger.info('Analysis generated successfully', { userId });
-  return {
-    statusCode: 200,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    body: feedbackText,
-  };
-}
+  res.status(appError.statusCode).json({ error: errorMessage });
+});
 
-async function handleConversation(body: any, userId: string): Promise<APIGatewayProxyResult> {
-  const { message, conversationHistory, voiceId } = body;
-
-  const sanitizedMessage = sanitizeInput(message);
-  if (!sanitizedMessage) {
-    return createErrorResponse(400, 'Message content is required.');
-  }
-
-  const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0';
-  const streamCommand = new InvokeModelWithResponseStreamCommand({
-    modelId,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 2048,
-      messages: [
-        ...(conversationHistory || []).map((msg: { role: string; content: string; }) => ({ role: msg.role, content: msg.content })),
-        { role: 'user', content: sanitizedMessage },
-      ],
-    }),
-  });
-
-  const bedrockResponseStream = await bedrockClient.send(streamCommand);
-  let fullResponseText = "";
-  if (bedrockResponseStream.body) {
-    for await (const event of bedrockResponseStream.body) {
-      if (event.chunk) {
-        const chunk = JSON.parse(new TextDecoder().decode(event.chunk.bytes));
-        if (chunk.type === 'content_block_delta') {
-          fullResponseText += chunk.delta.text;
-        }
-      }
-    }
-  }
-
-  const pollyCommand = new SynthesizeSpeechCommand({
-    Engine: 'neural',
-    OutputFormat: 'mp3',
-    Text: fullResponseText,
-    VoiceId: voiceId || 'Joanna',
-  });
-  const pollyResponse = await pollyClient.send(pollyCommand);
-  if (!pollyResponse.AudioStream) {
-    return createErrorResponse(500, 'Polly audio stream is empty.');
-  }
-  const audioBuffer = await streamToBuffer(pollyResponse.AudioStream as Readable);
-  const audioData = audioBuffer.toString('base64');
-
-  Promise.all([
-    supabase.from('messages').insert({ user_id: userId, role: 'user', content: sanitizedMessage }),
-    supabase.from('messages').insert({ user_id: userId, role: 'assistant', content: fullResponseText })
-  ]).catch(dbError => {
-    logger.error('Failed to save messages to Supabase', { dbError });
-  });
-
-  return {
-    statusCode: 200,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ responseText: fullResponseText, audioData }),
-  };
-}
-
-// --- Main Handler ---
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: corsHeaders, body: '' };
-  }
-
-  try {
-    const authHeader = event.headers.Authorization || event.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return createErrorResponse(401, 'Authentication token is required.');
-    }
-    const token = authHeader.split(' ')[1];
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return createErrorResponse(401, 'Invalid or expired token.', { authError: authError?.message });
-    }
-
-    if (!event.body) {
-      return createErrorResponse(400, 'Request body is missing.');
-    }
-    const body = JSON.parse(event.body);
-
-    if (event.path.endsWith('/analyze')) {
-      return await handleAnalysis(body, user.id);
-    }
-    if (event.path.endsWith('/conversation')) {
-      return await handleConversation(body, user.id);
-    }
-
-    return createErrorResponse(404, `Route not found: ${event.httpMethod} ${event.path}`);
-  } catch (error) {
-    return createErrorResponse(500, 'An internal server error occurred.', { error });
-  }
-};
+export const handler = serverless(app);
