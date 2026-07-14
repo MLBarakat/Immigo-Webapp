@@ -60,10 +60,9 @@ export function useVAD(callbacks: VADCallbacks = {}): VADHook {
         let destroyed = false;
 
         MicVAD.new({
-            // Speech detection thresholds — tuned for conversational speech
+            // Speech detection thresholds ?" tuned for conversational speech
             positiveSpeechThreshold: 0.70,
             negativeSpeechThreshold: 0.65,
-            preSpeechPadFrames: 1,
             minSpeechFrames: 3,
             redemptionFrames: 8,
 
