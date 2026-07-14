@@ -1,12 +1,5 @@
-// src/components/AudioRecorder.tsx
-// T009: Record click interactions, state changes, and speculative text render blocks.
-// T018: Connect token diff coordinate targets to DOM rendering with CSS transitions.
-// T019: Apply ARIA Polite live region attributes on transcript container.
-
-import React, { useMemo } from 'react';
-import { diffTokens, type DiffResult } from '../utils/diffReconciliation';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { useMemo } from 'react';
+import { TranscriptionState } from '../context/TranscriptionContext';
 
 export interface AudioRecorderProps {
     /** Speculative (interim) text from VAD — shown as translucent grey */
@@ -17,91 +10,24 @@ export interface AudioRecorderProps {
     isSessionActive: boolean;
     /** Whether the VAD model is loaded and ready */
     vadReady: boolean;
-    /** Whether the Whisper model is loaded */
+    /** Whether the Whisper model is loading */
     isModelLoading: boolean;
     /** Whisper model load progress 0-100 */
     modelLoadingProgress: number;
     /** Current FSM state label for ARIA and UI feedback */
-    fsmState: string;
+    fsmState: TranscriptionState;
+    /** Whether the background worker is currently executing a matrix inference split */
+    isTranscribing: boolean;
     /** Callback to start a new recording session */
     onStart: () => void;
     /** Callback to end the current recording session */
     onStop: () => void;
 }
 
-// ─── Token Render Component ───────────────────────────────────────────────────
-
-interface TokenSpanProps {
-    result: DiffResult;
-    index: number;
+interface RenderToken {
+  text: string;
+  isSpeculative: boolean;
 }
-
-/**
- * Renders a single token span with CSS opacity transition.
- *
- * Token classification:
- *   unchanged  → full opacity (1.0)
- *   insert     → slides in with fade (opacity 0 → 1) via CSS animation
- *   delete     → rendered as nothing (handled by diffTokens filtering)
- *   substitute → cross-fade: old text fades out, new text fades in
- *   speculative → translucent grey (opacity 0.45)
- */
-function TokenSpan({ result, index }: TokenSpanProps): JSX.Element {
-    const baseStyle: React.CSSProperties = {
-        display: 'inline',
-        marginRight: '0.25em',
-        transition: 'opacity 180ms ease-in-out, color 180ms ease-in-out',
-    };
-
-    if (result.type === 'unchanged') {
-        return (
-            <span
-                key={`unchanged-${index}`}
-                style={{ ...baseStyle, opacity: 1 }}
-            >
-                {result.token}
-            </span>
-        );
-    }
-
-    if (result.type === 'insert') {
-        return (
-            <span
-                key={`insert-${index}`}
-                style={{ ...baseStyle, opacity: 1, animation: 'token-fade-in 180ms ease-in-out' }}
-            >
-                {result.token}
-            </span>
-        );
-    }
-
-    if (result.type === 'substitute') {
-        return (
-            <span
-                key={`substitute-${index}`}
-                style={{ ...baseStyle, opacity: 1, animation: 'token-fade-in 180ms ease-in-out' }}
-            >
-                {result.token}
-            </span>
-        );
-    }
-
-    if (result.type === 'speculative') {
-        return (
-            <span
-                key={`speculative-${index}`}
-                style={{ ...baseStyle, opacity: 0.45, color: 'var(--color-speculative, #6b7280)' }}
-            >
-                {result.token}
-            </span>
-        );
-    }
-
-    // delete tokens are not rendered in the output view
-    return <></>;
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function AudioRecorder({
     speculativeText,
@@ -111,18 +37,34 @@ export function AudioRecorder({
     isModelLoading,
     modelLoadingProgress,
     fsmState,
+    isTranscribing,
     onStart,
     onStop,
 }: AudioRecorderProps): JSX.Element {
 
-    // T018: Compute token-level diff between committed and speculative text
-    const tokenDiff = useMemo<DiffResult[]>(() => {
-        if (!speculativeText && !committedText) return [];
-        return diffTokens(committedText, speculativeText);
+    // High-performance token split layout generator. Eliminates heavy DP matrices inside render frames.
+    const renderedTokens = useMemo<RenderToken[]>(() => {
+        const tokensPool: RenderToken[] = [];
+
+        if (committedText) {
+            const committedWords = committedText.split(/\s+/).filter(w => w.length > 0);
+            for (let i = 0; i < committedWords.length; i++) {
+                tokensPool.push({ text: committedWords[i], isSpeculative: false });
+            }
+        }
+
+        if (speculativeText) {
+            const speculativeWords = speculativeText.split(/\s+/).filter(w => w.length > 0);
+            for (let i = 0; i < speculativeWords.length; i++) {
+                tokensPool.push({ text: speculativeWords[i], isSpeculative: true });
+            }
+        }
+
+        return tokensPool;
     }, [committedText, speculativeText]);
 
     const handleButtonClick = () => {
-        if (!vadReady) return;
+        if (!vadReady || isModelLoading) return;
         if (isSessionActive) {
             onStop();
         } else {
@@ -131,11 +73,11 @@ export function AudioRecorder({
     };
 
     const buttonLabel = isSessionActive ? 'Stop Recording' : 'Start Recording';
-    const buttonDisabled = isModelLoading || !vadReady;
+    const buttonDisabled = isModelLoading || !vadReady || fsmState === 'VERIFYING';
 
     return (
-        <div className="audio-recorder" role="region" aria-label="Speech Transcription">
-            {/* Model loading indicator */}
+        <div className="audio-recorder" role="region" aria-label="Speech Transcription UI Window">
+            {/* Model loading progress indicator */}
             {isModelLoading && (
                 <div
                     className="model-loading-bar"
@@ -143,26 +85,28 @@ export function AudioRecorder({
                     aria-valuenow={Math.round(modelLoadingProgress)}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    aria-label="Loading Whisper model"
+                    aria-label="Loading local Whisper model asset graph"
                 >
                     <div
                         className="model-loading-fill"
                         style={{ width: `${modelLoadingProgress}%` }}
                     />
                     <span className="model-loading-label">
-                        Loading model… {Math.round(modelLoadingProgress)}%
+                        Loading localized intelligence layers… {Math.round(modelLoadingProgress)}%
                     </span>
                 </div>
             )}
 
-            {/* Record / Stop button */}
+            {/* Record toggle interaction button container */}
             <button
                 id="audio-recorder-toggle"
                 onClick={handleButtonClick}
                 disabled={buttonDisabled}
                 aria-pressed={isSessionActive}
                 aria-label={buttonLabel}
-                className={`recorder-btn ${isSessionActive ? 'recorder-btn--active' : ''}`}
+                className={`recorder-btn ${isSessionActive ? 'recorder-btn--active' : ''} ${
+                    buttonDisabled ? 'recorder-btn--disabled' : ''
+                }`}
             >
                 <span className="recorder-btn__icon" aria-hidden="true">
                     {isSessionActive ? '⏹' : '🎙'}
@@ -170,70 +114,92 @@ export function AudioRecorder({
                 <span className="recorder-btn__label">{buttonLabel}</span>
             </button>
 
-            {/* FSM state indicator (hidden from main content but visible to SR) */}
-            <span className="sr-only" aria-live="off" aria-atomic="true">
-                Transcription state: {fsmState}
+            {/* Current Authoritative FSM state indicator hidden cleanly from main layout pool */}
+            <span className="sr-only" aria-live="polite" aria-atomic="true">
+                Authoritative transcription lifecycle state: {fsmState}
             </span>
 
             {/*
-                T019: ARIA Polite live region for transcript text.
-                aria-live="polite"  → Announce updates after the user finishes speaking (non-disruptive).
-                aria-atomic="false" → Screen reader only announces the changed portion, not the full text.
-                aria-relevant="additions text" → Announce additions and text changes.
+                FR-016 Compliance: ARIA Polite live region for transcript container text nodes.
+                aria-live="polite"   → Announce modifications gently during speech breath boundaries.
+                aria-atomic="false"  → Accessibility tools announce newly added tokens exclusively.
+                aria-relevant="text" → Filter alerts strictly to character injections.
             */}
             <div
                 id="transcript-live-region"
                 role="log"
                 aria-live="polite"
                 aria-atomic="false"
-                aria-relevant="additions text"
-                aria-label="Live speech transcript"
+                aria-relevant="text"
+                aria-label="Live interactive speech transcript viewport"
                 className="transcript-container"
             >
-                {tokenDiff.length > 0 ? (
+                {renderedTokens.length > 0 ? (
                     <p className="transcript-text">
-                        {tokenDiff.map((result, i) => (
-                            <TokenSpan key={i} result={result} index={i} />
-                        ))}
-                    </p>
-                ) : (committedText || speculativeText) ? (
-                    /* Fallback: plain text render if diff is empty but text exists */
-                    <p className="transcript-text">
-                        {committedText && (
-                            <span style={{ opacity: 1 }}>{committedText}</span>
-                        )}
-                        {speculativeText && speculativeText !== committedText && (
-                            <span style={{ opacity: 0.45, color: 'var(--color-speculative, #6b7280)', marginLeft: '0.25em' }}>
-                                {speculativeText.startsWith(committedText)
-                                    ? speculativeText.slice(committedText.length).trim()
-                                    : speculativeText}
+                        {renderedTokens.map((token, idx) => (
+                            <span
+                                key={`token-${idx}`}
+                                style={{
+                                    display: 'inline',
+                                    marginRight: '0.25em',
+                                    transition: 'opacity 150ms ease-in-out, color 150ms ease-in-out',
+                                    // FR-010 Enforced Opacity styling thresholds
+                                    opacity: token.isSpeculative ? 0.70 : 1.0,
+                                    color: token.isSpeculative ? 'rgba(75, 85, 99, 0.7)' : 'var(--color-text-primary, #1f2937)',
+                                    animation: token.isSpeculative ? 'token-slide-up 150ms ease-out' : 'none'
+                                }}
+                            >
+                                {token.text}
                             </span>
+                        ))}
+                        {/* High-fidelity pulsing processing indicator dot during active verification */}
+                        {isTranscribing && (
+                            <span className="transcribing-pulsing-dot" aria-label="Whisper ledger verifying chunk" />
                         )}
                     </p>
                 ) : (
                     <p className="transcript-placeholder" aria-hidden="true">
-                        {isSessionActive ? 'Listening…' : 'Start a session to begin speaking'}
+                        {isSessionActive ? 'Listening for speech onset envelope…' : 'Initialize a secure session to begin speaking'}
                     </p>
                 )}
             </div>
 
-            {/* CSS keyframe for token fade-in animation — injected inline for portability */}
+            {/* CSS styles injected inline to preserve portability across compilation bundles */}
             <style>{`
-                @keyframes token-fade-in {
-                    from { opacity: 0; transform: translateY(2px); }
-                    to   { opacity: 1; transform: translateY(0); }
+                @keyframes token-slide-up {
+                    from { opacity: 0; transform: translateY(3px); }
+                    to   { opacity: 0.7; transform: translateY(0); }
+                }
+                @keyframes pulsing-glow {
+                    0% { opacity: 0.3; transform: scale(0.9); }
+                    50% { opacity: 1.0; transform: scale(1.1); }
+                    100% { opacity: 0.3; transform: scale(0.9); }
                 }
                 .transcript-container {
-                    min-height: 3em;
-                    padding: 0.75rem 1rem;
+                    min-height: 4em;
+                    padding: 0.85rem 1.25rem;
                     border-radius: 0.5rem;
-                    background: var(--color-surface, rgba(255,255,255,0.05));
+                    background: var(--color-surface, rgba(255,255,255,0.04));
+                    border: 1px solid var(--color-border, rgba(0,0,0,0.05));
                     line-height: 1.6;
+                    margin-top: 1rem;
                 }
                 .transcript-text {
                     margin: 0;
                     font-size: 1rem;
                     word-break: break-word;
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                }
+                .transcribing-pulsing-dot {
+                    display: inline-block;
+                    width: 8px;
+                    height: 8px;
+                    margin-left: 0.5em;
+                    border-radius: 50%;
+                    background-color: var(--color-accent, #6366f1);
+                    animation: pulsing-glow 1.2s infinite ease-in-out;
                 }
                 .transcript-placeholder {
                     margin: 0;
@@ -244,15 +210,25 @@ export function AudioRecorder({
                     display: inline-flex;
                     align-items: center;
                     gap: 0.5rem;
-                    padding: 0.5rem 1rem;
+                    padding: 0.6rem 1.25rem;
                     border-radius: 9999px;
+                    font-weight: 600;
+                    font-size: 0.95rem;
                     border: 2px solid currentColor;
+                    background: transparent;
+                    color: var(--color-text-primary, #374151);
                     cursor: pointer;
-                    transition: opacity 120ms ease, transform 80ms ease;
+                    transition: all 150ms ease;
                 }
-                .recorder-btn:disabled {
+                .recorder-btn:hover:not(:disabled) {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+                }
+                .recorder-btn--disabled {
                     opacity: 0.4;
-                    cursor: not-allowed;
+                    cursor: not-allowed !important;
+                    transform: none !important;
+                    box-shadow: none !important;
                 }
                 .recorder-btn--active {
                     background: var(--color-error, #ef4444);
@@ -261,10 +237,10 @@ export function AudioRecorder({
                 }
                 .model-loading-bar {
                     position: relative;
-                    height: 4px;
+                    height: 6px;
                     background: var(--color-border, #e5e7eb);
-                    border-radius: 2px;
-                    margin-bottom: 0.75rem;
+                    border-radius: 3px;
+                    margin-bottom: 1rem;
                     overflow: hidden;
                 }
                 .model-loading-fill {
@@ -274,9 +250,10 @@ export function AudioRecorder({
                 }
                 .model-loading-label {
                     position: absolute;
-                    top: 6px;
+                    top: 10px;
                     left: 0;
-                    font-size: 0.7rem;
+                    font-size: 0.75rem;
+                    font-weight: 500;
                     color: var(--color-muted, #6b7280);
                 }
                 .sr-only {

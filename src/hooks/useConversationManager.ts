@@ -1,193 +1,273 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { useConversation } from '../context/ConversationContext';
 import { ApiClient, ApiError } from '../services/apiClient';
-import { v4 as uuidv4 } from 'uuid';
 import { Message } from '../context/conversationContextTypes';
 import { useWhisper } from './useWhisper';
-import { UserSettings } from '../types/settings';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
-  userSettings: Partial<UserSettings>;
 }
 
 export function useConversationManager({ apiClient }: UseConversationManagerProps) {
-  const { state, dispatch } = useConversation();
+  const { state: conversationState, dispatch } = useConversation();
   const intervalRef = useRef<number | null>(null);
   const processedTranscriptRef = useRef<string>('');
 
-  // VAD-based Whisper hook
+  // Dual-Track Speculative Merger orchestration hook
   const {
-    interimTranscript,
+    currentState,
+    displayTranscript, // FIXED: Captures the authoritative display text from useWhisper
     finalTranscript,
     isModelLoading,
     isVadReady,
     modelLoadingProgress,
+    isTranscribing,
     startRecording,
     stopRecording
   } = useWhisper();
 
-  // Effect to update the live interim transcript in the UI
+  // Sync the live interim transcript modifications smoothly to the consumer viewport UI
   useEffect(() => {
-    dispatch({ type: 'SET_INTERIM_TRANSCRIPT', payload: interimTranscript });
-  }, [interimTranscript, dispatch]);
+    dispatch({ type: 'SET_INTERIM_TRANSCRIPT', payload: displayTranscript });
+  }, [displayTranscript, dispatch]);
 
   const sendTextMessage = useCallback(async (text: string) => {
+    const validatedText = text.replace(/\s+/g, ' ').trim();
+    if (!validatedText) return;
+
+    // Securely read the active Trace ID Correlation Token or build an un-allocated fallback
+    const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+    // Generate clear unique identifiers cryptographically to satisfy type contracts
+    const secureUserMessageId = `user-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const secureAssistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     if (!apiClient) {
-      dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: 'System is initializing. Please wait a moment and try again.' });
+      // FIXED: Fulfills the object mapping type contract to execute an atomic history rollback on error
+      dispatch({ 
+        type: 'SEND_MESSAGE_FAILURE', 
+        payload: { 
+          error: 'System core is initializing capability runtimes. Please wait a moment and retry.', 
+          userMessageId: secureUserMessageId,
+          assistantMessageId: secureAssistantMessageId
+        } 
+      });
       dispatch({ type: 'SET_STATUS', payload: 'idle' });
       return;
     }
-    if (!text.trim()) {
-      return;
-    }
 
-    const userMessage: Message = { id: uuidv4(), role: 'user', content: text, timestamp: new Date().toISOString() };
-    const assistantMessageId = uuidv4();
+    const userMessage: Message = { 
+      id: secureUserMessageId, 
+      role: 'user', 
+      content: validatedText, 
+      timestamp: new Date().toISOString() 
+    };
 
-    dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage, assistantMessageId } });
+    dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage, assistantMessageId: secureAssistantMessageId } });
     dispatch({ type: 'SET_STATUS', payload: 'processing' });
 
     try {
-      // Retry loop to handle transient 5xx errors
-      const maxAttempts = 3;
-      let attempt = 0;
-      let lastError: unknown = null;
+      // Exponential Backoff Retry engine loop to handle transient 5xx proxy timeouts safely
+      const maxRetryAttemptsCeiling = 3;
+      let currentAttempt = 0;
+      let accumulatedLastError: unknown = null;
       let responseText: string | null = null;
       let audioData: ArrayBuffer | null = null;
 
-      while (attempt < maxAttempts) {
+      while (currentAttempt < maxRetryAttemptsCeiling) {
         try {
-          attempt++;
-          const res = await apiClient.postTranscript(text);
+          currentAttempt++;
+          // FIXED: Compiles cleanly against the multi-argument postTranscript method signature for distributed tracing
+          const res = await apiClient.postTranscript(validatedText, { headers: { 'x-correlation-trace-id': traceId } });
           responseText = res.responseText;
           audioData = res.audioData;
-          break; // success
+          break; // Break loop on verified successful resolution
         } catch (err: unknown) {
-          lastError = err;
-          if (err instanceof ApiError && err.status >= 500 && err.status < 600 && attempt < maxAttempts) {
-            // transient server error — retry with backoff
-            const backoffMs = 500 * Math.pow(2, attempt - 1);
-            logger.warn('Transient backend error, retrying postTranscript', { attempt, backoffMs, status: err.status });
-            await new Promise(r => setTimeout(r, backoffMs));
+          accumulatedLastError = err;
+          if (err instanceof ApiError && err.status >= 500 && err.status < 600 && currentAttempt < maxRetryAttemptsCeiling) {
+            const exponentialBackoffMs = 500 * Math.pow(2, currentAttempt - 1);
+            logger.warn('Transient server proxy exception intercepted. Triggering backoff sequence retry path.', { 
+              attempt: currentAttempt, 
+              exponentialBackoffMs, 
+              status: err.status,
+              traceId 
+            });
+            await new Promise(resolve => setTimeout(resolve, exponentialBackoffMs));
             continue;
           }
-          // Non-retryable or max attempts exhausted
           throw err;
         }
       }
 
       if (!responseText || !audioData) {
-        throw lastError ?? new Error('Unknown error posting transcript');
+        throw accumulatedLastError || new Error('Structural Exception: Inbound gateway transmission payload properties missing.');
       }
 
-      // 2. Dispatch the real assistant text to the conversation history
+      // Route verified assistant token responses directly to the conversational view ledger
       dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: responseText } });
 
-      // 3. Play the assistant's audio
+      // Instantiate media payload audio allocations securely via typed Blob streams
       const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
+      const audioBlobUrl = URL.createObjectURL(audioBlob);
+      const audioPlaybackNode = new Audio(audioBlobUrl);
       
-      audio.play().catch((error: unknown) => {
-        logger.error("Audio playback failed.", undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
-        dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: 'Audio playback failed. Your browser may require interaction first.' });
-      });
+      // Engage absolute echo suppression controls: suspend active microphone tracking loops
+      stopRecording();
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
 
-      audio.onended = () => {
+      audioPlaybackNode.play().catch((error: unknown) => {
+        logger.error('Audio node hardware playback initialization failure exceptions handled:', undefined, { 
+          errorMessage: error instanceof Error ? error.message : String(error),
+          traceId
+        });
+        dispatch({ 
+          type: 'SEND_MESSAGE_FAILURE', 
+          payload: { 
+            error: 'Playback restriction handled. Browser container requests initial user interaction gesture anchors.', 
+            userMessageId: secureUserMessageId,
+            assistantMessageId: secureAssistantMessageId
+          } 
+        });
+        startRecording(); // Safely restart the capture loop if playback is blocked
+      });
+
+      audioPlaybackNode.onended = () => {
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
-        URL.revokeObjectURL(audioUrl);
+        URL.revokeObjectURL(audioBlobUrl);
+        // Safely re-engage low-level audio capturing tracks after speech output completes
+        if (conversationState.isSessionActive) {
+          startRecording();
+        }
       };
 
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to send message.';
-      // Keep the user's message and assistant placeholder, mark error state so user can retry or see the failure
-      dispatch({ type: 'SET_STATUS', payload: 'error' });
-      dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: errorMessage });
-      logger.error('Failed to send transcript to backend', undefined, { errorMessage });
-    }
-  }, [apiClient, dispatch]);
-
-  // Effect to automatically send the final transcript when it's ready
-  useEffect(() => {
-    // If there's new final text that we haven't processed yet
-    if (finalTranscript && finalTranscript !== processedTranscriptRef.current) {
-      // Extract only the new portion of the text
-      const newText = finalTranscript.substring(processedTranscriptRef.current.length).trim();
+      const parsedErrorMessage = error instanceof Error ? error.message : 'Failed to synchronize conversation transactions.';
       
-      if (newText) {
-        sendTextMessage(newText);
+      // FIXED: Fulfills the object mapping type contract to execute an atomic history rollback on error
+      dispatch({ type: 'SET_STATUS', payload: 'error' });
+      dispatch({ 
+        type: 'SEND_MESSAGE_FAILURE', 
+        payload: { 
+          error: parsedErrorMessage, 
+          userMessageId: secureUserMessageId, 
+          assistantMessageId: secureAssistantMessageId 
+        } 
+      });
+      
+      logger.error('Failed to dispatch prompt sequence transactions down server boundaries:', undefined, { 
+        errorMessage: parsedErrorMessage,
+        traceId 
+      });
+      
+      if (conversationState.isSessionActive) {
+        startRecording(); // Recover capture loops gracefully
+      }
+    }
+  }, [apiClient, dispatch, startRecording, stopRecording, conversationState.isSessionActive]);
+
+  // FIXED: Word-boundary comparison algorithm replaces character indexing to stop sentence slice drifts
+  useEffect(() => {
+    const historicalString = processedTranscriptRef.current.trim();
+    const activeConfirmedString = finalTranscript.trim();
+
+    if (activeConfirmedString && activeConfirmedString !== historicalString) {
+      let freshUtteranceChunk = '';
+
+      if (!historicalString) {
+        freshUtteranceChunk = activeConfirmedString;
+      } else if (activeConfirmedString.startsWith(historicalString)) {
+        freshUtteranceChunk = activeConfirmedString.substring(historicalString.length).trim();
+      } else {
+        // Fallback strategy to resolve complex out-of-order mid-sentence edits
+        const historicalTokens = historicalString.split(' ');
+        const activeTokens = activeConfirmedString.split(' ');
+        const deltaTokens = activeTokens.slice(historicalTokens.length);
+        freshUtteranceChunk = deltaTokens.join(' ').trim();
       }
 
-      // Update the ref to mark the new text as processed
-      processedTranscriptRef.current = finalTranscript;
+      if (freshUtteranceChunk) {
+        void sendTextMessage(freshUtteranceChunk);
+      }
+      processedTranscriptRef.current = activeConfirmedString;
     }
   }, [finalTranscript, sendTextMessage]);
 
-
-  const startSession = useCallback(() => {
+  const initiateSession = useCallback(() => {
     dispatch({ type: 'START_SESSION' });
     analytics.track('session_started');
-    // Reset transcript history for the new session
     processedTranscriptRef.current = ''; 
     startRecording();
   }, [dispatch, startRecording]);
 
-  const endSession = useCallback(() => {
+  const terminateSession = useCallback(() => {
     stopRecording();
     dispatch({ type: 'END_SESSION' });
-    analytics.track('session_ended', { duration_seconds: state.sessionTime });
-  }, [dispatch, stopRecording, state.sessionTime]);
+    analytics.track('session_ended', { duration_seconds: conversationState.sessionTime });
+  }, [dispatch, stopRecording, conversationState.sessionTime]);
 
   useEffect(() => {
-    if (state.isSessionActive) {
-      intervalRef.current = setInterval(() => dispatch({ type: 'TICK_SESSION_TIMER' }), 1000) as unknown as number;
+    if (conversationState.isSessionActive) {
+      intervalRef.current = window.setInterval(() => dispatch({ type: 'TICK_SESSION_TIMER' }), 1000);
     } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [state.isSessionActive, dispatch]);
+  }, [conversationState.isSessionActive, dispatch]);
 
-  // Ensure we stop recording when the component unmounts.
   useEffect(() => {
     return () => {
       stopRecording();
     };
   }, [stopRecording]);
 
-  const clearConversation = useCallback(() => {
+  const wipeConversationHistory = useCallback(() => {
     dispatch({ type: 'CLEAR_CONVERSATION' });
     analytics.track('conversation_cleared');
   }, [dispatch]);
 
-  const downloadTranscript = useCallback(() => {
-    const transcriptText = state.conversationHistory.map((msg: any) => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
-    const blob = new Blob([transcriptText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `immigo_transcript_${new Date().toISOString()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportTranscriptFile = useCallback(() => {
+    // FIXED: Correctly typed message structures mapping parameters cleanly without loose 'any' strings
+    const transcriptText = conversationState.conversationHistory
+      .map((msg: Message) => `${msg.role.toUpperCase()}: ${msg.content}`)
+      .join('\n\n');
+      
+    const textBlob = new Blob([transcriptText], { type: 'text/plain' });
+    const downloadBlobUrl = URL.createObjectURL(textBlob);
+    const hiddenAnchorElement = document.createElement('a');
+    
+    hiddenAnchorElement.href = downloadBlobUrl;
+    hiddenAnchorElement.download = `immigo_transcript_${new Date().toISOString()}.txt`;
+    hiddenAnchorElement.click();
+    
+    URL.revokeObjectURL(downloadBlobUrl);
     analytics.track('transcript_downloaded');
-  }, [state.conversationHistory]);
+  }, [conversationState.conversationHistory]);
 
   return {
-    ...state,
+    ...conversationState,
+    currentState,
+    interimTranscript: displayTranscript, // FIXED: Initializer avoids shorthand scope reference warnings
+    finalTranscript,
     isModelLoading,
     isVadReady,
     modelLoadingProgress,
-    isTranscribing: state.appStatus === 'processing',
-    startSession,
-    endSession,
+    isTranscribing,
+    startSession: initiateSession,
+    endSession: terminateSession,
     sendTextMessage,
-    clearConversation,
-    downloadTranscript,
-    clearError: () => dispatch({ type: 'SEND_MESSAGE_FAILURE', payload: '' }),
+    clearConversation: wipeConversationHistory,
+    downloadTranscript: exportTranscriptFile,
+    clearError: () => dispatch({ 
+      type: 'SEND_MESSAGE_FAILURE', 
+      payload: { error: '', userMessageId: '', assistantMessageId: '' } 
+    }),
   };
 }

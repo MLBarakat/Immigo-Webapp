@@ -1,141 +1,143 @@
-export class StreamAudioManager {
-  private audioContext: AudioContext;
-private audioQueue: ArrayBuffer[] = [];
-private isPlaying = false;
-private onended: (() => void) | null = null;
+import { logger } from '../logger';
 
-  constructor() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    this.resumeAudioContext();
+export interface MicrophoneStreamOptions {
+  echoCancellation?: boolean;
+  noiseSuppression?: boolean;
+  autoGainControl?: boolean;
+}
+
+export interface AudioContextProfile {
+  context: AudioContext;
+  sampleRate: number;
+  isSuspended: boolean;
+}
+
+/**
+ * Standardized media capture device constraint factory.
+ * Enforces FR-005-B channel bounds, isolating mono recording lanes.
+ */
+export function getMicrophoneConstraints(options: MicrophoneStreamOptions = {}): MediaStreamConstraints {
+  return {
+    audio: {
+      echoCancellation: options.echoCancellation ?? true,
+      noiseSuppression: options.noiseSuppression ?? true,
+      autoGainControl: options.autoGainControl ?? false, // Disabled by default to prioritize LUFS normalization filtering
+      channelCount: { ideal: 1, max: 1 }, // Hard mono-channel restriction constraint
+      sampleRate: { ideal: 48000 },       // Target high-quality baseline before polyphase down-sampling
+    },
+    video: false
+  };
+}
+
+/**
+ * Safely requests a hardware microphone device link using strict isolated constraints.
+ */
+export async function createMicrophoneStream(options: MicrophoneStreamOptions = {}): Promise<MediaStream> {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error('Hardware Environment Exception: MediaDevices capture interface is unsupported by this browser context.');
   }
 
-  public setOnEnded(callback: () => void) {
-    this.onended = callback;
-  }
-
-  private async resumeAudioContext() {
-    if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
-    }
-  }
-
-  public addChunk(base64Data: string) {
-    this.resumeAudioContext();
-    const binaryString = window.atob(base64Data);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    this.audioQueue.push(bytes.buffer);
-    if (!this.isPlaying) {
-      this.playQueue();
-    }
-  }
-
-  private async playQueue() {
-    if (this.audioQueue.length === 0) {
-      this.isPlaying = false;
-      if (this.onended) {
-        this.onended();
-      }
-      return;
-    }
-
-    this.isPlaying = true;
-    const buffer = this.audioQueue.shift();
-    if (buffer) {
-      try {
-        const audioBuffer = await this.audioContext.decodeAudioData(buffer.slice(0));
-        const source = this.audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(this.audioContext.destination);
-        source.onended = () => this.playQueue();
-        source.start();
-      } catch (error) {
-        console.error('Error decoding audio data:', error);
-        this.playQueue();
-      }
-    }
-  }
-
-  public stop() {
-    this.audioQueue = [];
-    this.isPlaying = false;
+  const constraints = getMicrophoneConstraints(options);
+  try {
+    logger.info('Requesting secure hardware microphone stream link permissions.');
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (error) {
+    logger.error('Hardware access exception: microphone stream request denied.', undefined, {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
   }
 }
 
-// Replaces SpeechRecognitionManager
-export class DeepgramManager {
-  private socket: WebSocket | null = null;
-  private mediaRecorder: MediaRecorder | null = null;
-  private onTranscriptCallback: (transcript: string) => void = () => {};
-  private onErrorCallback: (error: string) => void = () => {};
+/**
+ * Instantiates and returns a cross-platform safe AudioContext profile.
+ * Handles browser auto-play suspension states gracefully.
+ */
+export function initializeAudioContext(): AudioContextProfile {
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContextClass) {
+    throw new Error('Runtime Environment Exception: Web Audio API context class is unsupported by this browser engine.');
+  }
 
-  public async startListening(
-    onTranscript: (transcript: string) => void,
-    onError: (error: string) => void
-  ) {
-    this.onTranscriptCallback = onTranscript;
-    this.onErrorCallback = onError;
+  const context = new AudioContextClass({
+    latencyHint: 'interactive' // Optimizes hardware loops for real-time speech ingestion latency
+  });
 
-    try {
-      // Establish WebSocket connection to the backend server
-      const websocketURL = import.meta.env.VITE_WEBSOCKET_URL;
-      this.socket = new WebSocket(websocketURL);
+  return {
+    context,
+    sampleRate: context.sampleRate,
+    isSuspended: context.state === 'suspended'
+  };
+}
 
-      this.socket.onopen = async () => {
-        console.log('WebSocket connection opened.');
+/**
+ * Computes the root-mean-square (RMS) energy level of an active Float32 frame block.
+ * Utilized for inline hardware mute detection and silent frame tracking.
+ */
+export function calculateFrameRms(frame: Float32Array): number {
+  if (frame.length === 0) return 0;
 
-        // Get microphone access
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  let sumSquares = 0;
+  for (let i = 0; i < frame.length; i++) {
+    sumSquares += frame[i] * frame[i];
+  }
 
-        // Setup MediaRecorder
-        this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+  const meanSquare = sumSquares / frame.length;
+  return Math.sqrt(meanSquare);
+}
 
-        this.mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0 && this.socket?.readyState === WebSocket.OPEN) {
-            this.socket.send(event.data);
-          }
-        };
+/**
+ * Converts a raw Float32 audio signal frame into a standardized Decibel (dBFS) value.
+ * Safely clamps outputs to a -100 dB floor to protect downstream visual dashboard components.
+ */
+export function calculateFrameDecibels(frame: Float32Array): number {
+  const rms = calculateFrameRms(frame);
+  if (rms <= 0) return -100;
 
-        this.mediaRecorder.start(250); // Start recording and send data every 250ms
-        console.log('MediaRecorder started.');
-      };
+  const db = 20 * Math.log10(rms);
+  return Math.max(-100, Math.min(0, db)); // Clamped between absolute digital silence and full clipping scale
+}
 
-      this.socket.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === 'transcript' && message.data) {
-          this.onTranscriptCallback(message.data);
-        }
-      };
+/**
+ * Helper utility to concatenate an un-allocated array slice of Float32 audio chunks.
+ * Performs linear allocation loops exactly once to preserve memory boundaries.
+ */
+export function mergeAudioSegments(chunks: Float32Array[]): Float32Array {
+  if (chunks.length === 0) return new Float32Array();
+  if (chunks.length === 1) return new Float32Array(chunks[0]);
 
-      this.socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        this.onErrorCallback('WebSocket connection error.');
-      };
+  let totalLength = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    totalLength += chunks[i].length;
+  }
 
-      this.socket.onclose = () => {
-        console.log('WebSocket connection closed.');
-        this.stopListening();
-      };
+  const continuousBuffer = new Float32Array(totalLength);
+  let currentOffset = 0;
 
-    } catch (err) {
-      console.error('Error starting microphone:', err);
-      this.onErrorCallback('Could not access the microphone.');
+  for (let i = 0; i < chunks.length; i++) {
+    continuousBuffer.set(chunks[i], currentOffset);
+    currentOffset += chunks[i].length;
+  }
+
+  return continuousBuffer;
+}
+
+/**
+ * Validates that an incoming audio buffer structure satisfies the baseline operational constraints
+ * before forwarding payloads to the background web worker thread.
+ */
+export function validateAudioPayload(audio: Float32Array, minSamples = 3200): boolean {
+  if (!audio || audio.length < minSamples) return false;
+
+  // Verify that the payload is not comprised entirely of flat zero sequences (Hardware mute guard)
+  let nonZeroCount = 0;
+  const auditWindow = Math.min(audio.length, 512); // Sample a subset of frames to preserve thread headroom
+  
+  for (let i = 0; i < auditWindow; i++) {
+    if (Math.abs(audio[i]) > 1e-5) {
+      nonZeroCount += 1;
     }
   }
 
-  public stopListening() {
-    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-      this.mediaRecorder.stop();
-      this.mediaRecorder = null;
-      console.log('MediaRecorder stopped.');
-    }
-    if (this.socket) {
-      this.socket.close();
-      this.socket = null;
-    }
-  }
+  return nonZeroCount > 0;
 }

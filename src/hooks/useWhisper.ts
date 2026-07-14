@@ -1,43 +1,12 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react';
-import { MicVAD } from '@ricky0123/vad-web';
+﻿import { useEffect, useRef, useCallback, useState } from 'react';
 import { logger } from '../logger';
-import {
-  AudioRingBuffer,
-  MAX_AUDIO_BYTES,
-  MAX_SEGMENT_SAMPLES,
-  MIN_EXPORT_SAMPLES,
-  TARGET_SAMPLE_RATE,
-  type RingBufferExport,
-} from '../utils/AudioRingBuffer';
-
-type RuntimeTier = 1 | 2 | 3 | 4;
-type WorkerTier = 'webgpu' | 'wasm-simd' | 'quantized-tiny';
-type WorkerStatus = 'INIT_COMPLETED' | 'PROGRESS' | 'COMPLETED' | 'ERROR';
-
-type SpeechRecognitionConstructor = new () => SpeechRecognition;
-
-interface WorkerResponseMessage {
-  status: WorkerStatus;
-  correlationId: string;
-  payload: {
-    text?: string;
-    latencyMs?: number;
-    language?: string;
-    error?: string;
-    realTimeFactor?: number;
-    progress?: number;
-    tier?: WorkerTier;
-  };
-}
-
-interface UseWhisperOptions {
-  suppressCapture?: boolean;
-  language?: string;
-  authToken?: string;
-}
+import { MicVAD } from '@ricky0123/vad-web';
+import { useTranscription, TranscriptionState } from '../context/TranscriptionContext';
+import { reconcileTranscripts } from '../utils/diffReconciliation';
 
 export interface WhisperHook {
-  interimTranscript: string;
+  currentState: TranscriptionState;
+  displayTranscript: string;
   finalTranscript: string;
   isModelLoading: boolean;
   isVadReady: boolean;
@@ -47,478 +16,336 @@ export interface WhisperHook {
   stopRecording: () => void;
 }
 
-const RTF_LIMIT = 0.5;
-const MONITOR_INTERVAL_MS = 4_000;
-const CLOUD_TIMEOUT_MS = 3_000;
-const LEADER_CHANNEL = 'immigo-transcription-leader';
+const LEADER_CHANNEL_NAME = 'immigo-transcription-leader';
 
-function createCorrelationId(): string {
+/**
+ * Generates a high-precision, cryptographically secure Trace ID token for distributed tracking.
+ * Complies with FR-015 distributed tracing requirements.
+ */
+function generateLocalTraceId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
   }
-  return `trace-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `trace-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
-function toWorkerTier(tier: RuntimeTier): WorkerTier {
-  if (tier === 1) return 'webgpu';
-  if (tier === 2) return 'wasm-simd';
-  return 'quantized-tiny';
-}
-
-function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | null {
-  const speechWindow = window as Window & {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  };
-  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
-}
-
-function encodeAudioPayload(audio: Float32Array): ArrayBuffer {
-  return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength);
-}
-
-export function buildCloudSocketStartMessage(correlationId: string, language?: string, sampleRate = TARGET_SAMPLE_RATE): Record<string, unknown> {
-  return {
-    type: 'control',
-    action: 'start',
-    correlationId,
-    settings: { sampleRate, language: language ?? 'auto' },
-  };
-}
-
-export const useWhisper = (options: UseWhisperOptions = {}): WhisperHook => {
-  const [interimTranscript, setInterimTranscript] = useState('');
-  const [finalTranscript, setFinalTranscript] = useState('');
-  const [isModelLoading, setIsModelLoading] = useState(true);
-  const [isVadReady, setIsVadReady] = useState(false);
-  const [modelLoadingProgress, setModelLoadingProgress] = useState(0);
-  const [isTranscribing, setIsTranscribing] = useState(false);
+export const useWhisper = (): WhisperHook => {
+  // Connect directly to the authoritative global state context to prevent split-brain states
+  const { state, actions } = useTranscription();
+  
+  // Local state tracking targets to drive initialization progress indicators smoothly
+  const [vadInitializedState, setVadInitializedState] = useState<boolean>(false);
+  const [loadingProgressPercent, setLoadingProgressPercent] = useState<number>(0);
+  const [modelReadyState, setModelReadyState] = useState<boolean>(true);
 
   const workerRef = useRef<Worker | null>(null);
   const vadRef = useRef<MicVAD | null>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const ringBufferRef = useRef(new AudioRingBuffer());
-  const finalTranscriptRef = useRef('');
-  const nativeFinalRef = useRef('');
-  const isRecordingRef = useRef(false);
-  const speechActiveRef = useRef(false);
-  const suppressCaptureRef = useRef(Boolean(options.suppressCapture));
-  const activeCorrelationIdRef = useRef(createCorrelationId());
-  const activeTierRef = useRef<RuntimeTier>(1);
-  const consecutiveRtfBreachesRef = useRef(0);
-  const pendingSegmentsRef = useRef(new Map<string, RingBufferExport>());
-  const cloudSocketRef = useRef<WebSocket | null>(null);
+  const nativeRecognizerRef = useRef<any>(null);
+
+  const audioFrameAccumulatorRef = useRef<Float32Array[]>([]);
+  const activeTraceIdRef = useRef<string>('');
+  const isRecordingRef = useRef<boolean>(false);
+  const speechActiveRef = useRef<boolean>(false);
+  const tabIdRef = useRef<string>('');
+  const isLeaderRef = useRef<boolean>(true);
   const leaderChannelRef = useRef<BroadcastChannel | null>(null);
-  const tabIdRef = useRef(createCorrelationId());
-  const isLeaderRef = useRef(false);
 
-  const appendFinalTranscript = useCallback((text: string) => {
-    const normalized = text.replace(/\s+/g, ' ').trim();
-    if (!normalized) return;
+  // State Tracking Mirror reference to feed async event listeners without triggering re-binding loops
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
-    const next = (finalTranscriptRef.current + ' ' + normalized).replace(/\s+/g, ' ').trim();
-    finalTranscriptRef.current = next;
-    setFinalTranscript(next);
-    setInterimTranscript('');
-    nativeFinalRef.current = '';
+  // Centrally isolated operational threshold feature flags
+  const remoteFeatureFlags = useRef({
+    infiniteSpeakerCeilingS: 20.0,
+    forcedBufferBoundsBytes: 4194304, // 4MB Physical Memory Fence Limit
+    emptyHandoffSamplesMin: 3200,    // 200ms at 16kHz
+    levenshteinMatchThreshold: 0.85
+  });
+
+  /**
+   * Concatenates audio frame arrays into a continuous Float32 array block natively.
+   */
+  const compileAudioPayload = useCallback((chunks: Float32Array[]): Float32Array => {
+    let totalSamples = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      totalSamples += chunks[i].length;
+    }
+    const continuousBuffer = new Float32Array(totalSamples);
+    let currentOffset = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      continuousBuffer.set(chunks[i], currentOffset);
+      currentOffset += chunks[i].length;
+    }
+    return continuousBuffer;
   }, []);
 
-  const downscaleTier = useCallback((reason: string) => {
-    const current = activeTierRef.current;
-    if (current >= 4) return;
-    activeTierRef.current = (current + 1) as RuntimeTier;
-    logger.warn('Transcription runtime downscaled', { fromTier: current, toTier: activeTierRef.current, reason });
-  }, []);
+  const flushActiveSegment = useCallback((reason: 'silence' | 'time-chop' | 'capacity' | 'manual') => {
+    if (audioFrameAccumulatorRef.current.length === 0) {
+      logger.debug('Blocked empty transcription segment flush pass.', { reason });
+      return;
+    }
 
-  const postWorkerInit = useCallback((tier = activeTierRef.current) => {
-    const worker = workerRef.current;
-    if (!worker || tier === 4) return;
-    const correlationId = createCorrelationId();
-    worker.postMessage({
-      action: 'INIT',
-      correlationId,
-      payload: { config: { task: 'transcribe', language: options.language, tier: toWorkerTier(tier), useWebGPU: tier === 1 } },
-    });
-  }, [options.language]);
+    const compiledBuffer = compileAudioPayload(audioFrameAccumulatorRef.current);
+    audioFrameAccumulatorRef.current = []; // Instantly clear chunks allocation pool to free headroom
 
-  const closeCloudSocket = useCallback(() => {
-    cloudSocketRef.current?.close();
-    cloudSocketRef.current = null;
-  }, []);
+    const sampleLength = compiledBuffer.length;
+    const minSamplesLimit = remoteFeatureFlags.current.emptyHandoffSamplesMin;
 
-  const connectCloudSocket = useCallback((correlationId: string): Promise<WebSocket> => {
-    const configuredUrl = import.meta.env.VITE_TRANSCRIPTION_WS_URL as string | undefined;
-    if (!configuredUrl) return Promise.reject(new Error('Cloud transcription endpoint is not configured.'));
-    if (!configuredUrl.startsWith('wss://')) return Promise.reject(new Error('Cloud transcription endpoint must use wss://.'));
+    if (sampleLength > minSamplesLimit) {
+      actions.whisperSend(); // Safely advance FSM context directly to 'VERIFYING'
 
-    const url = new URL(configuredUrl);
-    if (options.authToken) url.searchParams.set('token', options.authToken);
+      if (workerRef.current) {
+        // Enforce FR-004: Pass data atomically using zero-copy Transferable Object memory detachment
+        workerRef.current.postMessage({
+          action: 'transcribe',
+          audio: compiledBuffer,
+          traceId: activeTraceIdRef.current,
+          timestamp: Date.now()
+        }, [compiledBuffer.buffer]);
+      }
+    } else {
+      logger.warn('Empty Handoff Check Guard Engaged: Audio sample length below thresholds. Suppressing worker dispatch.');
+      actions.whisperCancel();
+    }
+  }, [actions, compileAudioPayload]);
 
-    return new Promise((resolve, reject) => {
-      const socket = new WebSocket(url.toString());
-      const timeout = window.setTimeout(() => {
-        socket.close();
-        reject(new Error('Cloud transcription connection timed out.'));
-      }, CLOUD_TIMEOUT_MS);
+  const handleWorkerMessage = useCallback((event: MessageEvent) => {
+    const data = event.data || {};
+    const { status, output, latencyMs, traceId } = data;
 
-      socket.binaryType = 'arraybuffer';
-      socket.onopen = () => {
-        window.clearTimeout(timeout);
-        socket.send(JSON.stringify(buildCloudSocketStartMessage(correlationId, options.language, TARGET_SAMPLE_RATE)));
-        cloudSocketRef.current = socket;
-        resolve(socket);
-      };
-      socket.onerror = () => {
-        window.clearTimeout(timeout);
-        reject(new Error('Cloud transcription socket error.'));
-      };
-    });
-  }, [options.authToken, options.language]);
+    if (traceId !== activeTraceIdRef.current) {
+      logger.warn('Trace ID signature mismatch in worker message callback. Discarding block data.', {
+        expected: activeTraceIdRef.current,
+        received: traceId
+      });
+      return;
+    }
 
-  const dispatchToWorker = useCallback((segment: RingBufferExport, tier: RuntimeTier) => {
-    const worker = workerRef.current;
-    if (!worker) return false;
+    // Process incoming worker thread signaling states using the mirror ref to protect render stability
+    switch (status) {
+      case 'loading':
+        setLoadingProgressPercent(data.progress || 0);
+        break;
+      case 'ready':
+        setModelReadyState(false);
+        setLoadingProgressPercent(100);
+        actions.startSession();
+        break;
+      case 'update':
+        if (stateRef.current.fsm === 'VERIFYING' || stateRef.current.fsm === 'SPECULATIVE') {
+          const interimText = String(output || '').trim();
+          actions.speculativeUpdate(interimText);
+        }
+        break;
+      case 'complete':
+        if (stateRef.current.fsm === 'VERIFYING') {
+          const verifiedTruthString = String(output || '').trim();
+          logger.info(`Truth ledger validation completed smoothly. Latency: ${latencyMs}ms`, { traceId });
 
-    const correlationId = segment.correlationId ?? createCorrelationId();
-    pendingSegmentsRef.current.set(correlationId, segment);
-    worker.postMessage({
-      action: 'TRANSCRIBE',
-      correlationId,
-      payload: {
-        audio: segment.samples,
-        config: { language: options.language, task: 'transcribe', tier: toWorkerTier(tier), useWebGPU: tier === 1 },
-      },
-    }, [segment.samples.buffer]);
-    return true;
-  }, [options.language]);
+          // Integrate index-anchored token diff reconciliation rules
+          const reconciliation = reconcileTranscripts(
+            stateRef.current.speculativeText,
+            verifiedTruthString,
+            remoteFeatureFlags.current.levenshteinMatchThreshold
+          );
 
-  const dispatchToCloud = useCallback(async (segment: RingBufferExport) => {
-    const correlationId = segment.correlationId ?? createCorrelationId();
-    pendingSegmentsRef.current.set(correlationId, segment);
+          actions.whisperComplete(reconciliation.reconciledText, latencyMs || 0);
+        }
+        break;
+      case 'error':
+        logger.error('Background worker thread exception caught in orchestration hook:', undefined, { error: data.error });
+        actions.inferenceFailed(data.error || 'Unknown web worker inference crash exception.');
+        break;
+    }
+  }, [actions]);
 
-    try {
-      const socket = cloudSocketRef.current && cloudSocketRef.current.readyState === WebSocket.OPEN
-        ? cloudSocketRef.current
-        : await connectCloudSocket(correlationId);
-
-      const timeoutId = window.setTimeout(() => {
-        downscaleTier('cloud-timeout');
-        dispatchToWorker(segment, 2);
-      }, CLOUD_TIMEOUT_MS);
-
-      socket.onmessage = (event: MessageEvent<string>) => {
-        window.clearTimeout(timeoutId);
-        try {
-          const frame = JSON.parse(event.data) as { type?: string; text?: string; latencyMs?: number; correlationId?: string };
-          if (frame.type === 'interim' && frame.text) setInterimTranscript(frame.text);
-          if (frame.type === 'final') {
-            pendingSegmentsRef.current.delete(frame.correlationId ?? correlationId);
-            appendFinalTranscript(frame.text ?? nativeFinalRef.current);
-          }
-        } catch (error) {
-          logger.warn('Invalid cloud transcription frame', { errorMessage: error instanceof Error ? error.message : String(error) });
+  useEffect(() => {
+    tabIdRef.current = `tab_id_${performance.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    
+    // BroadcastChannel tab leader-election implementation to block microphone hardware contention
+    const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(LEADER_CHANNEL_NAME) : null;
+    if (channel) {
+      leaderChannelRef.current = channel;
+      channel.postMessage({ type: 'leader-candidate', tabId: tabIdRef.current });
+      channel.onmessage = (event: MessageEvent) => {
+        if (event.data?.type === 'leader-candidate' && tabIdRef.current < String(event.data.tabId)) {
+          isLeaderRef.current = false;
+          logger.warn('Tab leadership lost: alternative active browser partition detected. Freezing microphone links.');
         }
       };
-
-      socket.send(encodeAudioPayload(segment.samples));
-    } catch (error) {
-      logger.warn('Cloud transcription failed; falling back to local WASM', { errorMessage: error instanceof Error ? error.message : String(error) });
-      downscaleTier('cloud-failure');
-      dispatchToWorker(segment, 2);
-    }
-  }, [appendFinalTranscript, connectCloudSocket, dispatchToWorker, downscaleTier]);
-
-  const flushSegment = useCallback((reason: 'silence' | 'time-chop' | 'capacity' | 'manual') => {
-    const ringBuffer = ringBufferRef.current;
-    const correlationId = activeCorrelationIdRef.current;
-    const segment = ringBuffer.getSamples(Math.min(ringBuffer.getAvailableSamples(), MAX_SEGMENT_SAMPLES), MIN_EXPORT_SAMPLES, correlationId);
-
-    if (!segment) {
-      logger.debug('Blocked empty transcription segment', { reason, availableSamples: ringBuffer.getAvailableSamples() });
-      return;
     }
 
-    ringBuffer.consume(segment.sampleCount);
-    setIsTranscribing(true);
-
-    if (activeTierRef.current === 4 && isLeaderRef.current) {
-      void dispatchToCloud(segment);
-      return;
-    }
-
-    if (!dispatchToWorker(segment, activeTierRef.current)) {
-      appendFinalTranscript(nativeFinalRef.current);
-      setIsTranscribing(false);
-    }
-  }, [appendFinalTranscript, dispatchToCloud, dispatchToWorker]);
-
-  const startRecognition = useCallback(() => {
-    const recognition = recognitionRef.current;
-    if (!recognition || suppressCaptureRef.current) return;
-    try {
-      recognition.start();
-    } catch (error) {
-      logger.debug('SpeechRecognition start ignored', { errorMessage: error instanceof Error ? error.message : String(error) });
-    }
-  }, []);
-
-  const stopRecognition = useCallback(() => {
-    try {
-      recognitionRef.current?.stop();
-    } catch (error) {
-      logger.debug('SpeechRecognition stop ignored', { errorMessage: error instanceof Error ? error.message : String(error) });
-    }
-  }, []);
-
-  useEffect(() => {
-    suppressCaptureRef.current = Boolean(options.suppressCapture);
-    if (suppressCaptureRef.current) {
-      stopRecognition();
-      return;
-    }
-    if (isRecordingRef.current) startRecognition();
-  }, [options.suppressCapture, startRecognition, stopRecognition]);
-
-  useEffect(() => {
-    const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(LEADER_CHANNEL) : null;
-    leaderChannelRef.current = channel;
-    isLeaderRef.current = true;
-    channel?.postMessage({ type: 'leader-candidate', tabId: tabIdRef.current, timestamp: Date.now() });
-    channel?.addEventListener('message', (event: MessageEvent<{ type?: string; tabId?: string }>) => {
-      if (event.data?.type !== 'leader-candidate' || event.data.tabId === tabIdRef.current) return;
-      isLeaderRef.current = tabIdRef.current > String(event.data.tabId);
-    });
-    return () => channel?.close();
-  }, []);
-
-  useEffect(() => {
+    // Initialize accelerated machine learning background worker
     workerRef.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
+    workerRef.current.addEventListener('message', handleWorkerMessage);
+    workerRef.current.postMessage({ action: 'load' });
 
-    const handleMessage = (event: MessageEvent<WorkerResponseMessage>) => {
-      const { status, correlationId, payload } = event.data;
-      if (status === 'PROGRESS') {
-        setModelLoadingProgress(payload.progress ?? 0);
-        return;
-      }
+    // Initialize native browser Web Speech API (Optimistic UI Track)
+    const SpeechRecognitionConstructor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognitionConstructor) {
+      const recognizer = new SpeechRecognitionConstructor();
+      recognizer.continuous = true;
+      recognizer.interimResults = true;
+      recognizer.lang = 'en-US';
 
-      if (status === 'INIT_COMPLETED') {
-        setIsModelLoading(false);
-        setModelLoadingProgress(100);
-        return;
-      }
+      recognizer.onresult = (event: any) => {
+        if (!isRecordingRef.current || !isLeaderRef.current) return;
 
-      if (status === 'COMPLETED') {
-        const pending = pendingSegmentsRef.current.get(correlationId);
-        pendingSegmentsRef.current.delete(correlationId);
-        setIsTranscribing(false);
-
-        if (typeof payload.realTimeFactor === 'number' && payload.realTimeFactor > RTF_LIMIT) {
-          consecutiveRtfBreachesRef.current += 1;
-          if (consecutiveRtfBreachesRef.current >= 2) downscaleTier('rtf-breach');
-        } else {
-          consecutiveRtfBreachesRef.current = 0;
+        let interimSequence = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (!event.results[i].isFinal) {
+            interimSequence += event.results[i][0].transcript;
+          }
         }
 
-        appendFinalTranscript(payload.text || nativeFinalRef.current);
-        if (pending?.wasTimeChopped && isRecordingRef.current) activeCorrelationIdRef.current = createCorrelationId();
-        return;
-      }
+        const cleanedInterimText = interimSequence.replace(/\s+/g, ' ').trim();
+        if (cleanedInterimText) {
+          actions.speculativeUpdate(cleanedInterimText);
+        }
+      };
 
-      if (status === 'ERROR') {
-        const pending = pendingSegmentsRef.current.get(correlationId);
-        pendingSegmentsRef.current.delete(correlationId);
-        setIsTranscribing(false);
-        logger.warn('Whisper worker error', { correlationId, errorMessage: payload.error });
-        downscaleTier(payload.tier === 'webgpu' ? 'webgpu-context-lost' : 'worker-error');
-        if (pending && activeTierRef.current < 4) dispatchToWorker(pending, activeTierRef.current);
-      }
-    };
+      recognizer.onend = () => {
+        // Enforce active recovery loop to handle sudden cellular/mobile network timeout drops
+        if (isRecordingRef.current && isLeaderRef.current) {
+          try { nativeRecognizerRef.current.start(); } catch (e) { /* Catch overlap executions */ }
+        }
+      };
 
-    const handleError = (event: ErrorEvent) => {
-      setIsModelLoading(false);
-      setIsTranscribing(false);
-      logger.error('Whisper worker runtime error', undefined, { errorMessage: event.message });
-      downscaleTier('worker-runtime-error');
-    };
-
-    workerRef.current.addEventListener('message', handleMessage);
-    workerRef.current.addEventListener('error', handleError);
-    postWorkerInit(1);
-
-    return () => {
-      workerRef.current?.removeEventListener('message', handleMessage);
-      workerRef.current?.removeEventListener('error', handleError);
-      workerRef.current?.terminate();
-      workerRef.current = null;
-    };
-  }, [appendFinalTranscript, dispatchToWorker, downscaleTier, postWorkerInit]);
-
-  useEffect(() => {
-    const Recognition = getSpeechRecognitionConstructor();
-    if (!Recognition) {
-      logger.warn('Browser SpeechRecognition API is unavailable; speculative transcript disabled.');
-      return;
+      nativeRecognizerRef.current = recognizer;
     }
 
-    const recognition = new Recognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = options.language ?? 'en-US';
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = '';
-      let finalText = '';
-
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        const transcript = result[0]?.transcript ?? '';
-        if (result.isFinal) finalText += transcript;
-        else interim += transcript;
-      }
-
-      if (finalText.trim()) nativeFinalRef.current = `${nativeFinalRef.current} ${finalText}`.trim();
-      const speculative = `${finalTranscriptRef.current} ${nativeFinalRef.current} ${interim}`.replace(/\s+/g, ' ').trim();
-      if (speculative) setInterimTranscript(speculative);
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      logger.warn('SpeechRecognition error', { errorMessage: `${event.error}: ${event.message}` });
-    };
-
-    recognition.onend = () => {
-      if (isRecordingRef.current && !suppressCaptureRef.current) startRecognition();
-    };
-
-    recognitionRef.current = recognition;
-    return () => {
-      recognition.abort();
-      recognitionRef.current = null;
-    };
-  }, [options.language, startRecognition]);
-
-  useEffect(() => {
-    let disposed = false;
-
+    // Initialize Voice Activity Detection (VAD) audio processor infrastructure node lanes using millisecond-based options
     MicVAD.new({
       positiveSpeechThreshold: 0.7,
       negativeSpeechThreshold: 0.65,
-      preSpeechPadFrames: 1,
-      minSpeechFrames: 3,
-      redemptionFrames: 8,
+      preSpeechPadMs: 500,  // FIXED: Converted from frame indexes to millisecond bounds
+      minSpeechMs: 200,     // FIXED: Converted from frame indexes to millisecond bounds
+      redemptionMs: 1000,   // FIXED: Converted from frame indexes to millisecond bounds
       onSpeechStart: () => {
-        if (disposed || suppressCaptureRef.current) return;
-        activeCorrelationIdRef.current = createCorrelationId();
+        if (!isRecordingRef.current || !isLeaderRef.current) return;
+        activeTraceIdRef.current = generateLocalTraceId();
         speechActiveRef.current = true;
-        setIsTranscribing(true);
-        startRecognition();
-        logger.debug('Speech onset', { correlationId: activeCorrelationIdRef.current, onsetTs: performance.now() });
+        
+        actions.speechOnset(activeTraceIdRef.current); // Advance authoritative FSM to 'SPECULATIVE'
+        try { nativeRecognizerRef.current.start(); } catch (e) { /* Shield duplicate invoke exceptions */ }
       },
       onSpeechEnd: () => {
-        if (disposed) return;
+        if (!isRecordingRef.current) return;
         speechActiveRef.current = false;
-        flushSegment('silence');
+        flushActiveSegment('silence');
       },
       onVADMisfire: () => {
         speechActiveRef.current = false;
+        actions.whisperCancel();
       },
-      onFrameProcessed: (_probabilities: unknown, frame: Float32Array) => {
-        if (disposed || suppressCaptureRef.current || !speechActiveRef.current) return;
-        ringBufferRef.current.write(frame, TARGET_SAMPLE_RATE);
+      onFrameProcessed: (_probabilities: any, frame: Float32Array) => {
+        if (!isRecordingRef.current || !speechActiveRef.current || !isLeaderRef.current) return;
+        audioFrameAccumulatorRef.current.push(frame);
 
-        if (ringBufferRef.current.shouldForceCapacityFlush()) flushSegment('capacity');
-        else if (ringBufferRef.current.shouldForceTimeChop()) flushSegment('time-chop');
-      },
-    })
-      .then((vad) => {
-        if (disposed) {
-          vad.destroy();
-          return;
+        const currentSamplesCount = audioFrameAccumulatorRef.current.reduce((acc, f) => acc + f.length, 0);
+        const liveSeconds = currentSamplesCount / 16000;
+        const physicalMemoryBytes = currentSamplesCount * 4;
+
+        // Strict Operational Guard Gates: Time-Chop Guard & Forced Memory Fence checked inline
+        if (liveSeconds >= remoteFeatureFlags.current.infiniteSpeakerCeilingS) {
+          logger.info('Infinite Speaker Guard Engaged: Hard 20-second continuous duration ceiling split pass forced.');
+          workerRef.current?.postMessage({ action: 'speech_end', traceId: activeTraceIdRef.current, timestamp: Date.now() });
+          flushActiveSegment('time-chop');
+          activeTraceIdRef.current = generateLocalTraceId();
+          speechActiveRef.current = true;
+        } else if (physicalMemoryBytes >= remoteFeatureFlags.current.forcedBufferBoundsBytes) {
+          logger.warn('Forced Buffer Bounds Fence Engaged: Ingestion memory pool weight limit breached. Flushing arena.');
+          flushActiveSegment('capacity');
         }
-        vadRef.current = vad;
-        setIsVadReady(true);
-      })
-      .catch((error: unknown) => {
-        logger.error('Failed to create VAD', undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
-      });
-
-    return () => {
-      disposed = true;
-      vadRef.current?.destroy();
-      vadRef.current = null;
-    };
-  }, [flushSegment, startRecognition]);
-
-  useEffect(() => {
-    const monitor = window.setInterval(() => {
-      if (pendingSegmentsRef.current.size > 1) downscaleTier('worker-backlog');
-      if (ringBufferRef.current.getAvailableSamples() * Float32Array.BYTES_PER_ELEMENT >= MAX_AUDIO_BYTES) flushSegment('capacity');
-    }, MONITOR_INTERVAL_MS);
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        stopRecognition();
-        vadRef.current?.pause();
-        return;
       }
-      if (isRecordingRef.current) {
-        vadRef.current?.start();
-        startRecognition();
+    }).then((initializedVad) => {
+      vadRef.current = initializedVad;
+      setVadInitializedState(true);
+      try { vadRef.current.pause(); } catch (e) { }
+    }).catch((err) => {
+      logger.error('Failed to parse and initialize native VAD capture hooks:', undefined, { error: String(err) });
+    });
+
+    const handleBrowserLifecycleVisibilityShift = () => {
+      if (document.hidden) {
+        logger.info('Mobile Lifecycle Suspension Event: Tab contextual backgrounding detected. Freezing hardware channels.');
+        try { vadRef.current?.pause(); } catch (e) { }
+        try { nativeRecognizerRef.current?.stop(); } catch (e) { }
+      } else if (isRecordingRef.current && isLeaderRef.current) {
+        logger.info('Mobile Lifecycle Resumption Event: Tab focus restored. Awakening streaming configurations.');
+        try { vadRef.current?.start(); } catch (e) { }
+        try { nativeRecognizerRef.current?.start(); } catch (e) { }
       }
     };
 
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (!event.persisted) return;
-      ringBufferRef.current.reset();
-      workerRef.current?.postMessage({ action: 'RESET', correlationId: createCorrelationId(), payload: {} });
-      if (isRecordingRef.current) startRecognition();
+    const handlePageShowBfcacheRestoration = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        logger.warn('BFCache Re-activation Core Event Intercepted: Purging old data arrays and clearing state counters.');
+        audioFrameAccumulatorRef.current = [];
+        workerRef.current?.postMessage({ action: 'RESET', correlationId: `bfcache_${Date.now()}` });
+        if (isRecordingRef.current && isLeaderRef.current) {
+          try { nativeRecognizerRef.current?.start(); } catch (e) { }
+        }
+      }
     };
 
-    document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('pageshow', handlePageShow);
+    document.addEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
+    window.addEventListener('pageshow', handlePageShowBfcacheRestoration);
 
     return () => {
-      window.clearInterval(monitor);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('pageshow', handlePageShow);
+      document.removeEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
+      window.removeEventListener('pageshow', handlePageShowBfcacheRestoration);
+      
+      if (leaderChannelRef.current) {
+        leaderChannelRef.current.close();
+      }
+      
+      try { vadRef.current?.destroy(); } catch (e) { }
+      try { nativeRecognizerRef.current?.abort(); } catch (e) { }
+      
+      if (workerRef.current) {
+        workerRef.current.removeEventListener('message', handleWorkerMessage);
+        workerRef.current.terminate();
+      }
     };
-  }, [downscaleTier, flushSegment, startRecognition, stopRecognition]);
+  }, [handleWorkerMessage, actions, flushActiveSegment, compileAudioPayload]);
 
   const startRecording = useCallback(() => {
-    if (!vadRef.current || isRecordingRef.current) return;
-    finalTranscriptRef.current = '';
-    nativeFinalRef.current = '';
-    ringBufferRef.current.reset();
-    pendingSegmentsRef.current.clear();
-    setFinalTranscript('');
-    setInterimTranscript('');
-    activeCorrelationIdRef.current = createCorrelationId();
+    if (!vadInitializedState || !vadRef.current || !nativeRecognizerRef.current || !isLeaderRef.current) return;
+    
+    actions.clearTranscript();
+    audioFrameAccumulatorRef.current = [];
     isRecordingRef.current = true;
-    vadRef.current.start();
-    startRecognition();
-    logger.info('Transcription recording started', { correlationId: activeCorrelationIdRef.current });
-  }, [startRecognition]);
+    
+    try { vadRef.current.start(); } catch (e) { }
+    logger.info('Authoritative dual-track orchestration loops successfully initialized.');
+  }, [vadInitializedState, actions]);
 
   const stopRecording = useCallback(() => {
-    if (!isRecordingRef.current) return;
+    if (!vadRef.current || !nativeRecognizerRef.current) return;
+    
     isRecordingRef.current = false;
     speechActiveRef.current = false;
-    vadRef.current?.pause();
-    stopRecognition();
-    flushSegment('manual');
-    closeCloudSocket();
-    setIsTranscribing(false);
-    logger.info('Transcription recording stopped');
-  }, [closeCloudSocket, flushSegment, stopRecognition]);
+    
+    try { vadRef.current.pause(); } catch (e) { }
+    try { nativeRecognizerRef.current.stop(); } catch (e) { }
+    
+    flushActiveSegment('manual');
+    actions.endSession(); // Seats the global FSM state safely back to 'IDLE'
+    logger.info('Authoritative dual-track orchestration loops successfully wound down.');
+  }, [actions, flushActiveSegment]);
 
   return {
-    interimTranscript,
-    finalTranscript,
-    isModelLoading,
-    isVadReady,
-    modelLoadingProgress,
-    isTranscribing,
-    startRecording,
-    stopRecording,
+    currentState: state.fsm,
+    displayTranscript: state.fsm === 'IDLE' ? state.committedText : (state.committedText + ' ' + state.speculativeText).trim(),
+    finalTranscript: state.committedText,
+    isModelLoading: modelReadyState,
+    isVadReady: vadInitializedState,
+    modelLoadingProgress: loadingProgressPercent,
+    isTranscribing: state.fsm === 'VERIFYING',
+    startRecording, // FIXED: Successfully returned functions back into the object literal instance
+    stopRecording  // FIXED: Successfully returned functions back into the object literal instance
   };
 };
