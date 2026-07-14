@@ -27,3 +27,12 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
+  test:
+    phases:
+      preTest:
+        commands:
+          - npm ci
+      test:
+        commands:
+          - npm run test:e2e
+          - node scripts/run-benchmarks.js
