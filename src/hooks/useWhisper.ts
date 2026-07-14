@@ -1,416 +1,524 @@
-// src/hooks/useWhisper.ts
-
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { logger } from '../logger';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { MicVAD } from '@ricky0123/vad-web';
+import { logger } from '../logger';
+import {
+  AudioRingBuffer,
+  MAX_AUDIO_BYTES,
+  MAX_SEGMENT_SAMPLES,
+  MIN_EXPORT_SAMPLES,
+  TARGET_SAMPLE_RATE,
+  type RingBufferExport,
+} from '../utils/AudioRingBuffer';
 
-type VadOptions = {
-    positiveSpeechThreshold?: number;
-    negativeSpeechThreshold?: number;
-    preSpeechPadFrames?: number;
-    postSpeechPadFrames?: number;
-};
+type RuntimeTier = 1 | 2 | 3 | 4;
+type WorkerTier = 'webgpu' | 'wasm-simd' | 'quantized-tiny';
+type WorkerStatus = 'INIT_COMPLETED' | 'PROGRESS' | 'COMPLETED' | 'ERROR';
 
-export interface WhisperHook {
-    interimTranscript: string;
-    finalTranscript: string;
-    isModelLoading: boolean;
-    isVadReady: boolean;
-    modelLoadingProgress: number;
-    isTranscribing: boolean;
-    startRecording: () => void;
-    stopRecording: () => void;
+type SpeechRecognitionConstructor = new () => SpeechRecognition;
+
+interface WorkerResponseMessage {
+  status: WorkerStatus;
+  correlationId: string;
+  payload: {
+    text?: string;
+    latencyMs?: number;
+    language?: string;
+    error?: string;
+    realTimeFactor?: number;
+    progress?: number;
+    tier?: WorkerTier;
+  };
 }
 
-export const useWhisper = (): WhisperHook => {
-    const [interimTranscript, setInterimTranscript] = useState<string>('');
-    const [finalTranscript, setFinalTranscript] = useState<string>('');
-    const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
-    const [isVadReady, setIsVadReady] = useState<boolean>(false);
-    const [modelLoadingProgress, setModelLoadingProgress] = useState<number>(0);
-    const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+interface UseWhisperOptions {
+  suppressCapture?: boolean;
+  language?: string;
+  authToken?: string;
+}
 
-    const worker = useRef<Worker | null>(null);
-    const vad = useRef<MicVAD | null>(null);
-    const finalTranscriptRef = useRef<string>('');
+export interface WhisperHook {
+  interimTranscript: string;
+  finalTranscript: string;
+  isModelLoading: boolean;
+  isVadReady: boolean;
+  modelLoadingProgress: number;
+  isTranscribing: boolean;
+  startRecording: () => void;
+  stopRecording: () => void;
+}
 
-    const isSpeechActiveRef = useRef<boolean>(false);
-    const audioBufferRef = useRef<Float32Array[]>([]);
-    const partialFlushTimerRef = useRef<number | null>(null);
+const RTF_LIMIT = 0.5;
+const MONITOR_INTERVAL_MS = 4_000;
+const CLOUD_TIMEOUT_MS = 3_000;
+const LEADER_CHANNEL = 'immigo-transcription-leader';
 
-    // UI thread processing lock barrier to prevent event congestion
-    const partialInProgressRef = useRef<boolean>(false);
+function createCorrelationId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `trace-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
-    // Keep references fresh to avoid stale closures in listeners without tearing down the worker loop
-    const handleWorkerMessageRef = useRef<any>(null);
-    const onSpeechEndRef = useRef<any>(null);
-    const flushPartialRef = useRef<any>(null);
+function toWorkerTier(tier: RuntimeTier): WorkerTier {
+  if (tier === 1) return 'webgpu';
+  if (tier === 2) return 'wasm-simd';
+  return 'quantized-tiny';
+}
 
-    handleWorkerMessageRef.current = (event: MessageEvent) => {
-        const data = event.data || {};
-        const status = data.status;
+function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | null {
+  const speechWindow = window as Window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
+}
 
-        logger.debug('Worker message', { status, inferenceId: data?.inferenceId, progress: data?.progress });
+function encodeAudioPayload(audio: Float32Array): ArrayBuffer {
+  return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength);
+}
 
-        switch (status) {
-            case 'loading':
-                setIsModelLoading(true);
-                setModelLoadingProgress(data.progress ?? 0);
-                break;
-            case 'ready':
-                setIsModelLoading(false);
-                logger.info('Whisper model is ready.');
-                break;
-            case 'error':
-                setIsModelLoading(false);
-                partialInProgressRef.current = false;
-                logger.error('Whisper worker error:', undefined, { errorMessage: data?.error });
-                break;
+export function buildCloudSocketStartMessage(correlationId: string, language?: string, sampleRate = TARGET_SAMPLE_RATE): Record<string, unknown> {
+  return {
+    type: 'control',
+    action: 'start',
+    correlationId,
+    settings: { sampleRate, language: language ?? 'auto' },
+  };
+}
 
-            case 'partial-complete':
-                partialInProgressRef.current = false;
-                break;
+export const useWhisper = (options: UseWhisperOptions = {}): WhisperHook => {
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [finalTranscript, setFinalTranscript] = useState('');
+  const [isModelLoading, setIsModelLoading] = useState(true);
+  const [isVadReady, setIsVadReady] = useState(false);
+  const [modelLoadingProgress, setModelLoadingProgress] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
-            case 'update': { // Clean lexical isolation block wrapper
-                logger.info('Whisper interim update', { inferenceId: data?.inferenceId, text: data?.output });
-                const incoming = String(data?.output || '').trim();
-                if (!incoming) break;
+  const workerRef = useRef<Worker | null>(null);
+  const vadRef = useRef<MicVAD | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const ringBufferRef = useRef(new AudioRingBuffer());
+  const finalTranscriptRef = useRef('');
+  const nativeFinalRef = useRef('');
+  const isRecordingRef = useRef(false);
+  const speechActiveRef = useRef(false);
+  const suppressCaptureRef = useRef(Boolean(options.suppressCapture));
+  const activeCorrelationIdRef = useRef(createCorrelationId());
+  const activeTierRef = useRef<RuntimeTier>(1);
+  const consecutiveRtfBreachesRef = useRef(0);
+  const pendingSegmentsRef = useRef(new Map<string, RingBufferExport>());
+  const cloudSocketRef = useRef<WebSocket | null>(null);
+  const leaderChannelRef = useRef<BroadcastChannel | null>(null);
+  const tabIdRef = useRef(createCorrelationId());
+  const isLeaderRef = useRef(false);
 
-                if (data?.inferenceId == null) {
-                    if (typeof data?.clientSendTs === 'number') {
-                        const roundTripMs = Date.now() - data.clientSendTs;
-                        logger.info('Partial update RTT (ms)', { roundTripMs });
-                    }
+  const appendFinalTranscript = useCallback((text: string) => {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    if (!normalized) return;
 
-                    const sentenceRegex = /([^\.!?]*[\.!?]+)/g;
-                    const matches = Array.from(incoming.matchAll(sentenceRegex)).map(m => m[0].trim()).filter(Boolean);
-                    const remainder = incoming.replace(sentenceRegex, '').trim();
+    const next = (finalTranscriptRef.current + ' ' + normalized).replace(/\s+/g, ' ').trim();
+    finalTranscriptRef.current = next;
+    setFinalTranscript(next);
+    setInterimTranscript('');
+    nativeFinalRef.current = '';
+  }, []);
 
-                    if (matches.length > 0) {
-                        const committedText = matches.join(' ').trim();
-                        if (committedText) {
-                            const newFinal = (finalTranscriptRef.current + ' ' + committedText).trim();
-                            finalTranscriptRef.current = newFinal;
-                            setFinalTranscript(newFinal);
-                            logger.info('Committed complete sentences from partial update', { committedText });
-                        }
-                    }
+  const downscaleTier = useCallback((reason: string) => {
+    const current = activeTierRef.current;
+    if (current >= 4) return;
+    activeTierRef.current = (current + 1) as RuntimeTier;
+    logger.warn('Transcription runtime downscaled', { fromTier: current, toTier: activeTierRef.current, reason });
+  }, []);
 
-                    const interimText = remainder ? (finalTranscriptRef.current + ' ' + remainder).trim() : finalTranscriptRef.current;
-                    setInterimTranscript(interimText);
-                } else {
-                    setInterimTranscript(finalTranscriptRef.current + ' ' + incoming);
-                }
-                break;
-            }
+  const postWorkerInit = useCallback((tier = activeTierRef.current) => {
+    const worker = workerRef.current;
+    if (!worker || tier === 4) return;
+    const correlationId = createCorrelationId();
+    worker.postMessage({
+      action: 'INIT',
+      correlationId,
+      payload: { config: { task: 'transcribe', language: options.language, tier: toWorkerTier(tier), useWebGPU: tier === 1 } },
+    });
+  }, [options.language]);
 
-            case 'complete': {
-                logger.info('Whisper transcription complete', { inferenceId: data?.inferenceId, text: data?.output });
-                const newTranscript = (finalTranscriptRef.current + ' ' + data.output).trim();
-                finalTranscriptRef.current = newTranscript;
-                setFinalTranscript(newTranscript);
-                setInterimTranscript('');
-                partialInProgressRef.current = false;
-                break;
-            }
+  const closeCloudSocket = useCallback(() => {
+    cloudSocketRef.current?.close();
+    cloudSocketRef.current = null;
+  }, []);
 
-            case 'inference-start':
-                logger.info('Worker inference started', { inferenceId: data.inferenceId });
-                break;
-            case 'latency':
-                logger.info('Transcription latency (ms)', { latencyMs: data.latencyMs, inferenceId: data.inferenceId });
-                break;
-            case 'cancelled':
-                logger.info('Inference cancelled/ignored', { inferenceId: data.inferenceId });
-                break;
-            case 'speech-end-ack':
-                logger.info('Worker acknowledged speech end', { inferenceId: data.inferenceId, timestamp: data.timestamp });
-                break;
-            case 'log':
-                logger.info('Worker log', { message: data?.message });
-                break;
-            case 'pong':
-                logger.info('Worker pong');
-                break;
+  const connectCloudSocket = useCallback((correlationId: string): Promise<WebSocket> => {
+    const configuredUrl = import.meta.env.VITE_TRANSCRIPTION_WS_URL as string | undefined;
+    if (!configuredUrl) return Promise.reject(new Error('Cloud transcription endpoint is not configured.'));
+    if (!configuredUrl.startsWith('wss://')) return Promise.reject(new Error('Cloud transcription endpoint must use wss://.'));
 
-            default:
-                if (typeof data.progress === 'number') {
-                    setModelLoadingProgress(data.progress);
-                }
-                break;
-        }
-    };
+    const url = new URL(configuredUrl);
+    if (options.authToken) url.searchParams.set('token', options.authToken);
 
-    const DEFAULT_PARTIAL_FLUSH_MS = 200;
-    const DEFAULT_PARTIAL_WINDOW_S = 1.5;
-    const DEFAULT_PARTIAL_MIN_MS = 200;
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(url.toString());
+      const timeout = window.setTimeout(() => {
+        socket.close();
+        reject(new Error('Cloud transcription connection timed out.'));
+      }, CLOUD_TIMEOUT_MS);
+
+      socket.binaryType = 'arraybuffer';
+      socket.onopen = () => {
+        window.clearTimeout(timeout);
+        socket.send(JSON.stringify(buildCloudSocketStartMessage(correlationId, options.language, TARGET_SAMPLE_RATE)));
+        cloudSocketRef.current = socket;
+        resolve(socket);
+      };
+      socket.onerror = () => {
+        window.clearTimeout(timeout);
+        reject(new Error('Cloud transcription socket error.'));
+      };
+    });
+  }, [options.authToken, options.language]);
+
+  const dispatchToWorker = useCallback((segment: RingBufferExport, tier: RuntimeTier) => {
+    const worker = workerRef.current;
+    if (!worker) return false;
+
+    const correlationId = segment.correlationId ?? createCorrelationId();
+    pendingSegmentsRef.current.set(correlationId, segment);
+    worker.postMessage({
+      action: 'TRANSCRIBE',
+      correlationId,
+      payload: {
+        audio: segment.samples,
+        config: { language: options.language, task: 'transcribe', tier: toWorkerTier(tier), useWebGPU: tier === 1 },
+      },
+    }, [segment.samples.buffer]);
+    return true;
+  }, [options.language]);
+
+  const dispatchToCloud = useCallback(async (segment: RingBufferExport) => {
+    const correlationId = segment.correlationId ?? createCorrelationId();
+    pendingSegmentsRef.current.set(correlationId, segment);
 
     try {
-        if (!(window as any).__ASR) {
-            (window as any).__ASR = {
-                partialFlushMs: 300,   // Flush and evaluate text every 300ms
-                partialWindowS: 1.0,   // Look back at exactly 1.0 second of audio context
-                partialMinMs: 150,     // Minimum duration of new speech required to trigger an update
-                partialChunkS: 0.5,    // Process small 500ms chunks inside the worker
-                partialStrideS: 0.1,   // Keep the stride boundary tight at 100ms
-                // partialFlushMs: DEFAULT_PARTIAL_FLUSH_MS,
-                // partialWindowS: DEFAULT_PARTIAL_WINDOW_S,
-                // partialMinMs: DEFAULT_PARTIAL_MIN_MS,
-                // partialChunkS: 0.8,
-                // partialStrideS: 0.2,
-            };
-        }
-    } catch (e) { }
+      const socket = cloudSocketRef.current && cloudSocketRef.current.readyState === WebSocket.OPEN
+        ? cloudSocketRef.current
+        : await connectCloudSocket(correlationId);
 
-    const getAsrParam = (key: string, fallback: number) => {
+      const timeoutId = window.setTimeout(() => {
+        downscaleTier('cloud-timeout');
+        dispatchToWorker(segment, 2);
+      }, CLOUD_TIMEOUT_MS);
+
+      socket.onmessage = (event: MessageEvent<string>) => {
+        window.clearTimeout(timeoutId);
         try {
-            const cfg = (window as any).__ASR;
-            if (cfg && typeof cfg[key] === 'number') return cfg[key] as number;
-        } catch (e) { }
-        return fallback;
-    };
-
-    flushPartialRef.current = (force = false) => {
-        if (!vad.current?.listening && !force) return;
-        if (partialInProgressRef.current) return;
-
-        const samples = audioBufferRef.current;
-        if (!samples || samples.length === 0) return;
-
-        let totalLen = 0;
-        for (const s of samples) totalLen += s.length;
-        const concat = new Float32Array(totalLen);
-        let offset = 0;
-        for (const s of samples) {
-            concat.set(s, offset);
-            offset += s.length;
+          const frame = JSON.parse(event.data) as { type?: string; text?: string; latencyMs?: number; correlationId?: string };
+          if (frame.type === 'interim' && frame.text) setInterimTranscript(frame.text);
+          if (frame.type === 'final') {
+            pendingSegmentsRef.current.delete(frame.correlationId ?? correlationId);
+            appendFinalTranscript(frame.text ?? nativeFinalRef.current);
+          }
+        } catch (error) {
+          logger.warn('Invalid cloud transcription frame', { errorMessage: error instanceof Error ? error.message : String(error) });
         }
+      };
 
-        const partialWindowS = getAsrParam('partialWindowS', DEFAULT_PARTIAL_WINDOW_S);
-        const targetSamples = Math.floor(partialWindowS * 16000);
-        const start = Math.max(0, concat.length - targetSamples);
-        const partial = concat.slice(start);
+      socket.send(encodeAudioPayload(segment.samples));
+    } catch (error) {
+      logger.warn('Cloud transcription failed; falling back to local WASM', { errorMessage: error instanceof Error ? error.message : String(error) });
+      downscaleTier('cloud-failure');
+      dispatchToWorker(segment, 2);
+    }
+  }, [appendFinalTranscript, connectCloudSocket, dispatchToWorker, downscaleTier]);
 
-        if (worker.current && partial.length > 0) {
-            const clientSendTs = Date.now();
-            partialInProgressRef.current = true;
-            try {
-                worker.current.postMessage({ action: 'transcribe-partial', audio: partial, clientSendTs }, [partial.buffer]);
-                logger.debug('Sent partial audio to worker', { partialLength: partial.length, clientSendTs });
-            } catch (e) {
-                logger.warn('Failed to transfer partial audio buffer, falling back to copy', { errorMessage: String(e) });
-                worker.current.postMessage({ action: 'transcribe-partial', audio: partial, clientSendTs });
-            }
-        }
+  const flushSegment = useCallback((reason: 'silence' | 'time-chop' | 'capacity' | 'manual') => {
+    const ringBuffer = ringBufferRef.current;
+    const correlationId = activeCorrelationIdRef.current;
+    const segment = ringBuffer.getSamples(Math.min(ringBuffer.getAvailableSamples(), MAX_SEGMENT_SAMPLES), MIN_EXPORT_SAMPLES, correlationId);
 
-        audioBufferRef.current = [concat.slice(Math.max(0, concat.length - targetSamples))];
-    };
+    if (!segment) {
+      logger.debug('Blocked empty transcription segment', { reason, availableSamples: ringBuffer.getAvailableSamples() });
+      return;
+    }
 
-    const flushPartial = useCallback((force = false) => {
-        flushPartialRef.current(force);
-    }, []);
+    ringBuffer.consume(segment.sampleCount);
+    setIsTranscribing(true);
 
-    const startPartialFlushTimer = useCallback(() => {
-        if (partialFlushTimerRef.current !== null) return;
-        const flushMs = getAsrParam('partialFlushMs', DEFAULT_PARTIAL_FLUSH_MS);
-        partialFlushTimerRef.current = window.setInterval(() => {
-            try { flushPartial(); } catch (e) { logger.warn('Partial flush timer error', { errorMessage: String(e) }); }
-        }, flushMs);
-    }, [flushPartial]);
+    if (activeTierRef.current === 4 && isLeaderRef.current) {
+      void dispatchToCloud(segment);
+      return;
+    }
 
-    const stopPartialFlushTimer = useCallback(() => {
-        if (partialFlushTimerRef.current !== null) {
-            clearInterval(partialFlushTimerRef.current);
-            partialFlushTimerRef.current = null;
-        }
-    }, []);
+    if (!dispatchToWorker(segment, activeTierRef.current)) {
+      appendFinalTranscript(nativeFinalRef.current);
+      setIsTranscribing(false);
+    }
+  }, [appendFinalTranscript, dispatchToCloud, dispatchToWorker]);
 
-    onSpeechEndRef.current = (audio?: Float32Array) => {
-        logger.debug('VAD: Speech ended.', { audioLength: audio?.length });
+  const startRecognition = useCallback(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition || suppressCaptureRef.current) return;
+    try {
+      recognition.start();
+    } catch (error) {
+      logger.debug('SpeechRecognition start ignored', { errorMessage: error instanceof Error ? error.message : String(error) });
+    }
+  }, []);
+
+  const stopRecognition = useCallback(() => {
+    try {
+      recognitionRef.current?.stop();
+    } catch (error) {
+      logger.debug('SpeechRecognition stop ignored', { errorMessage: error instanceof Error ? error.message : String(error) });
+    }
+  }, []);
+
+  useEffect(() => {
+    suppressCaptureRef.current = Boolean(options.suppressCapture);
+    if (suppressCaptureRef.current) {
+      stopRecognition();
+      return;
+    }
+    if (isRecordingRef.current) startRecognition();
+  }, [options.suppressCapture, startRecognition, stopRecognition]);
+
+  useEffect(() => {
+    const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(LEADER_CHANNEL) : null;
+    leaderChannelRef.current = channel;
+    isLeaderRef.current = true;
+    channel?.postMessage({ type: 'leader-candidate', tabId: tabIdRef.current, timestamp: Date.now() });
+    channel?.addEventListener('message', (event: MessageEvent<{ type?: string; tabId?: string }>) => {
+      if (event.data?.type !== 'leader-candidate' || event.data.tabId === tabIdRef.current) return;
+      isLeaderRef.current = tabIdRef.current > String(event.data.tabId);
+    });
+    return () => channel?.close();
+  }, []);
+
+  useEffect(() => {
+    workerRef.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
+
+    const handleMessage = (event: MessageEvent<WorkerResponseMessage>) => {
+      const { status, correlationId, payload } = event.data;
+      if (status === 'PROGRESS') {
+        setModelLoadingProgress(payload.progress ?? 0);
+        return;
+      }
+
+      if (status === 'INIT_COMPLETED') {
+        setIsModelLoading(false);
+        setModelLoadingProgress(100);
+        return;
+      }
+
+      if (status === 'COMPLETED') {
+        const pending = pendingSegmentsRef.current.get(correlationId);
+        pendingSegmentsRef.current.delete(correlationId);
         setIsTranscribing(false);
-        stopPartialFlushTimer();
 
-        if (worker.current) {
-            try {
-                if (audio && audio.length > 0) {
-                    logger.info('Sending final audio chunk to worker on speech end', { audioLength: audio.length });
-                    try {
-                        worker.current.postMessage({ action: 'transcribe', audio }, [audio.buffer]);
-                    } catch (e) {
-                        logger.warn('Failed to transfer final audio buffer, falling back to copy', { errorMessage: String(e) });
-                        worker.current.postMessage({ action: 'transcribe', audio });
-                    }
-
-                    try {
-                        worker.current.postMessage({ action: 'speech_end', timestamp: Date.now() });
-                    } catch (e) {
-                        logger.warn('Failed to send speech_end to worker', { errorMessage: String(e) });
-                    }
-
-                    audioBufferRef.current = [];
-                } else {
-                    setInterimTranscript(currentInterim => {
-                        if (currentInterim.trim()) {
-                            const newFinal = currentInterim.trim();
-                            finalTranscriptRef.current = newFinal;
-                            setFinalTranscript(newFinal);
-                            logger.info('Finalizing transcript on speech end (no audio):', { text: newFinal });
-                        }
-                        return '';
-                    });
-
-                    try {
-                        worker.current.postMessage({ action: 'speech_end', timestamp: Date.now() });
-                    } catch (e) {
-                        logger.warn('Failed to send speech_end to worker', { errorMessage: String(e) });
-                    }
-                }
-            } catch (e) {
-                logger.error('Error handling onSpeechEnd audio', undefined, { errorMessage: String(e) });
-            }
+        if (typeof payload.realTimeFactor === 'number' && payload.realTimeFactor > RTF_LIMIT) {
+          consecutiveRtfBreachesRef.current += 1;
+          if (consecutiveRtfBreachesRef.current >= 2) downscaleTier('rtf-breach');
+        } else {
+          consecutiveRtfBreachesRef.current = 0;
         }
 
-        if (vad.current?.listening) {
-            vad.current.pause();
-        }
+        appendFinalTranscript(payload.text || nativeFinalRef.current);
+        if (pending?.wasTimeChopped && isRecordingRef.current) activeCorrelationIdRef.current = createCorrelationId();
+        return;
+      }
+
+      if (status === 'ERROR') {
+        const pending = pendingSegmentsRef.current.get(correlationId);
+        pendingSegmentsRef.current.delete(correlationId);
+        setIsTranscribing(false);
+        logger.warn('Whisper worker error', { correlationId, errorMessage: payload.error });
+        downscaleTier(payload.tier === 'webgpu' ? 'webgpu-context-lost' : 'worker-error');
+        if (pending && activeTierRef.current < 4) dispatchToWorker(pending, activeTierRef.current);
+      }
     };
 
-    // Core worker and listener synchronization effect block
-    useEffect(() => {
-        worker.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
+    const handleError = (event: ErrorEvent) => {
+      setIsModelLoading(false);
+      setIsTranscribing(false);
+      logger.error('Whisper worker runtime error', undefined, { errorMessage: event.message });
+      downscaleTier('worker-runtime-error');
+    };
 
-        worker.current.addEventListener('message', (e) => handleWorkerMessageRef.current(e));
-        worker.current.addEventListener('error', (e) => console.error('Whisper worker runtime error:', e));
-        worker.current.addEventListener('messageerror', (e) => console.error('Whisper worker message error:', e));
+    workerRef.current.addEventListener('message', handleMessage);
+    workerRef.current.addEventListener('error', handleError);
+    postWorkerInit(1);
 
-        try {
-            const envChunk = Number(import.meta.env.VITE_ASR_CHUNK_LENGTH_S ?? '');
-            const envStride = Number(import.meta.env.VITE_ASR_STRIDE_LENGTH_S ?? '');
-            const envPartialChunk = Number(import.meta.env.VITE_ASR_PARTIAL_CHUNK_S ?? '');
-            const envPartialStride = Number(import.meta.env.VITE_ASR_PARTIAL_STRIDE_S ?? '');
-            const runtimeASR = (window as any).__ASR ?? {};
+    return () => {
+      workerRef.current?.removeEventListener('message', handleMessage);
+      workerRef.current?.removeEventListener('error', handleError);
+      workerRef.current?.terminate();
+      workerRef.current = null;
+    };
+  }, [appendFinalTranscript, dispatchToWorker, downscaleTier, postWorkerInit]);
 
-            const cfg: Record<string, number> = {};
-            if (Number.isFinite(envChunk)) cfg.chunk_length_s = envChunk;
-            if (Number.isFinite(envStride)) cfg.stride_length_s = envStride;
-            if (Number.isFinite(envPartialChunk)) cfg.partial_chunk_length_s = envPartialChunk;
-            if (Number.isFinite(envPartialStride)) cfg.partial_stride_length_s = envPartialStride;
+  useEffect(() => {
+    const Recognition = getSpeechRecognitionConstructor();
+    if (!Recognition) {
+      logger.warn('Browser SpeechRecognition API is unavailable; speculative transcript disabled.');
+      return;
+    }
 
-            if (typeof runtimeASR.partialChunkS === 'number') cfg.partial_chunk_length_s = runtimeASR.partialChunkS;
-            if (typeof runtimeASR.partialStrideS === 'number') cfg.partial_stride_length_s = runtimeASR.partialStrideS;
+    const recognition = new Recognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = options.language ?? 'en-US';
+    recognition.maxAlternatives = 1;
 
-            worker.current.postMessage({ action: 'load', config: cfg });
-            if (Object.keys(cfg).length) logger.info('Sent ASR config to worker', cfg);
-        } catch (e) {
-            worker.current.postMessage({ action: 'load' });
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interim = '';
+      let finalText = '';
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const transcript = result[0]?.transcript ?? '';
+        if (result.isFinal) finalText += transcript;
+        else interim += transcript;
+      }
+
+      if (finalText.trim()) nativeFinalRef.current = `${nativeFinalRef.current} ${finalText}`.trim();
+      const speculative = `${finalTranscriptRef.current} ${nativeFinalRef.current} ${interim}`.replace(/\s+/g, ' ').trim();
+      if (speculative) setInterimTranscript(speculative);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      logger.warn('SpeechRecognition error', { errorMessage: `${event.error}: ${event.message}` });
+    };
+
+    recognition.onend = () => {
+      if (isRecordingRef.current && !suppressCaptureRef.current) startRecognition();
+    };
+
+    recognitionRef.current = recognition;
+    return () => {
+      recognition.abort();
+      recognitionRef.current = null;
+    };
+  }, [options.language, startRecognition]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    MicVAD.new({
+      positiveSpeechThreshold: 0.7,
+      negativeSpeechThreshold: 0.65,
+      preSpeechPadFrames: 1,
+      minSpeechFrames: 3,
+      redemptionFrames: 8,
+      onSpeechStart: () => {
+        if (disposed || suppressCaptureRef.current) return;
+        activeCorrelationIdRef.current = createCorrelationId();
+        speechActiveRef.current = true;
+        setIsTranscribing(true);
+        startRecognition();
+        logger.debug('Speech onset', { correlationId: activeCorrelationIdRef.current, onsetTs: performance.now() });
+      },
+      onSpeechEnd: () => {
+        if (disposed) return;
+        speechActiveRef.current = false;
+        flushSegment('silence');
+      },
+      onVADMisfire: () => {
+        speechActiveRef.current = false;
+      },
+      onFrameProcessed: (_probabilities: unknown, frame: Float32Array) => {
+        if (disposed || suppressCaptureRef.current || !speechActiveRef.current) return;
+        ringBufferRef.current.write(frame, TARGET_SAMPLE_RATE);
+
+        if (ringBufferRef.current.shouldForceCapacityFlush()) flushSegment('capacity');
+        else if (ringBufferRef.current.shouldForceTimeChop()) flushSegment('time-chop');
+      },
+    })
+      .then((vad) => {
+        if (disposed) {
+          vad.destroy();
+          return;
         }
+        vadRef.current = vad;
+        setIsVadReady(true);
+      })
+      .catch((error: unknown) => {
+        logger.error('Failed to create VAD', undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
+      });
 
-        try {
-            worker.current.postMessage({ action: 'ping' });
-        } catch (e) { }
+    return () => {
+      disposed = true;
+      vadRef.current?.destroy();
+      vadRef.current = null;
+    };
+  }, [flushSegment, startRecognition]);
 
-        const vadOptions: VadOptions & {
-            minSpeechFrames: number;
-            redemptionFrames: number;
-            onSpeechStart: () => void;
-            onSpeechEnd: (audio?: Float32Array) => void;
-            onVADMisfire: () => void;
-            onFrameProcessed: (probabilities: any, frame: Float32Array) => void;
-        } = {
-            minSpeechFrames: 3,
-            redemptionFrames: 8,
-            positiveSpeechThreshold: 0.7,
-            negativeSpeechThreshold: 0.65,
-            preSpeechPadFrames: 1,
-            onSpeechStart: () => {
-                logger.debug('VAD: Speech started');
-                isSpeechActiveRef.current = true;
-                setIsTranscribing(true);
-                try { startPartialFlushTimer(); } catch (e) { }
-            },
-            onSpeechEnd: (audio?: Float32Array) => {
-                isSpeechActiveRef.current = false;
-                onSpeechEndRef.current(audio);
-            },
-            onVADMisfire: () => {
-                logger.debug('VAD: Misfire (Short noise ignored)');
-            },
-            onFrameProcessed: (_probabilities: any, frame: Float32Array) => {
-                if (!isSpeechActiveRef.current) return;
+  useEffect(() => {
+    const monitor = window.setInterval(() => {
+      if (pendingSegmentsRef.current.size > 1) downscaleTier('worker-backlog');
+      if (ringBufferRef.current.getAvailableSamples() * Float32Array.BYTES_PER_ELEMENT >= MAX_AUDIO_BYTES) flushSegment('capacity');
+    }, MONITOR_INTERVAL_MS);
 
-                try {
-                    audioBufferRef.current.push(frame);
-                } catch (e) { }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        stopRecognition();
+        vadRef.current?.pause();
+        return;
+      }
+      if (isRecordingRef.current) {
+        vadRef.current?.start();
+        startRecognition();
+      }
+    };
 
-                try {
-                    const partialMinMs = getAsrParam('partialMinMs', DEFAULT_PARTIAL_MIN_MS);
-                    let totalSamples = 0;
-                    for (const s of audioBufferRef.current) totalSamples += s.length;
-                    const totalMs = Math.floor(totalSamples / 16);
-                    if (totalMs >= partialMinMs) {
-                        flushPartialRef.current();
-                    }
-                } catch (e) { }
-            },
-        };
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      ringBufferRef.current.reset();
+      workerRef.current?.postMessage({ action: 'RESET', correlationId: createCorrelationId(), payload: {} });
+      if (isRecordingRef.current) startRecognition();
+    };
 
-        MicVAD.new(vadOptions)
-            .then(newVad => {
-                vad.current = newVad;
-                setIsVadReady(true);
-                try {
-                    if (vad.current?.listening) {
-                        vad.current.pause();
-                    }
-                } catch (e) { }
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pageshow', handlePageShow);
 
-                try {
-                    (window as any).__vadInstance = vad.current;
-                    (window as any).__whisperWorker = worker.current;
-                } catch (e) { }
-            })
-            .catch((error: unknown) => {
-                logger.error("Failed to create VAD:", undefined, { errorMessage: error instanceof Error ? error.message : String(error) });
-            });
+    return () => {
+      window.clearInterval(monitor);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [downscaleTier, flushSegment, startRecognition, stopRecognition]);
 
-        return () => {
-            vad.current?.destroy();
-            worker.current?.terminate();
-        };
-    }, [startPartialFlushTimer]); // Safe static array - Worker remains anchored permanently on mount without model reloading
+  const startRecording = useCallback(() => {
+    if (!vadRef.current || isRecordingRef.current) return;
+    finalTranscriptRef.current = '';
+    nativeFinalRef.current = '';
+    ringBufferRef.current.reset();
+    pendingSegmentsRef.current.clear();
+    setFinalTranscript('');
+    setInterimTranscript('');
+    activeCorrelationIdRef.current = createCorrelationId();
+    isRecordingRef.current = true;
+    vadRef.current.start();
+    startRecognition();
+    logger.info('Transcription recording started', { correlationId: activeCorrelationIdRef.current });
+  }, [startRecognition]);
 
-    const startRecording = useCallback(() => {
-        if (!vad.current) return;
-        if (vad.current.listening) return;
-        finalTranscriptRef.current = '';
-        setFinalTranscript('');
-        setInterimTranscript('');
-        isSpeechActiveRef.current = false;
-        vad.current.start();
-        logger.info('VAD started. Listening...');
-    }, []);
+  const stopRecording = useCallback(() => {
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
+    speechActiveRef.current = false;
+    vadRef.current?.pause();
+    stopRecognition();
+    flushSegment('manual');
+    closeCloudSocket();
+    setIsTranscribing(false);
+    logger.info('Transcription recording stopped');
+  }, [closeCloudSocket, flushSegment, stopRecognition]);
 
-    const stopRecording = useCallback(() => {
-        if (!vad.current || !vad.current.listening) return;
-        vad.current.pause();
-        isSpeechActiveRef.current = false;
-
-        const samples = audioBufferRef.current;
-        let finalUtteranceAudio: Float32Array | undefined = undefined;
-
-        if (samples && samples.length > 0) {
-            let totalLen = 0;
-            for (const s of samples) totalLen += s.length;
-            finalUtteranceAudio = new Float32Array(totalLen);
-            let offset = 0;
-            for (const s of samples) {
-                finalUtteranceAudio.set(s, offset);
-                offset += s.length;
-            }
-        }
-
-        onSpeechEndRef.current(finalUtteranceAudio);
-    }, []);
-
-    return { interimTranscript, finalTranscript, isModelLoading, isVadReady, modelLoadingProgress, isTranscribing, startRecording, stopRecording };
+  return {
+    interimTranscript,
+    finalTranscript,
+    isModelLoading,
+    isVadReady,
+    modelLoadingProgress,
+    isTranscribing,
+    startRecording,
+    stopRecording,
+  };
 };

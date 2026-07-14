@@ -1,8 +1,6 @@
 // tests/setup.ts
 // Global test setup executed before each Vitest test file.
 
-import '@vitest/globals';
-
 // Stub browser APIs that are not available in jsdom
 // ─────────────────────────────────────────────────
 // AudioContext — jsdom does not implement Web Audio API
