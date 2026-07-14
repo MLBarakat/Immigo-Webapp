@@ -10,7 +10,11 @@
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "deploy": "npm run build && amplify push",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.7.6",
@@ -30,6 +34,7 @@
   "devDependencies": {
     "@aws-amplify/backend": "^1.2.1",
     "@aws-amplify/backend-cli": "^1.2.2",
+    "@playwright/test": "^1.44.0",
     "@types/node": "^20.12.12",
     "@types/prop-types": "^15.7.15",
     "@types/react": "^18.2.66",
@@ -38,6 +43,8 @@
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^2.0.0",
+    "@vitest/ui": "^2.0.0",
     "autoprefixer": "^10.4.19",
     "aws-cdk-lib": "^2.147.1",
     "constructs": "^10.3.0",
@@ -46,12 +53,17 @@
     "eslint": "^9.39.2",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.6",
+    "jsdom": "^24.1.0",
     "postcss": "^8.4.38",
     "rimraf": "^5.0.7",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.46.2",
     "vite": "^6.4.1",
-    "vite-plugin-static-copy": "^3.1.4"
+    "vite-plugin-static-copy": "^3.1.4",
+    "vitest": "^2.0.0"
+  },
+  "overrides": {
+    "onnxruntime-web": "1.19.2"
   }
 }

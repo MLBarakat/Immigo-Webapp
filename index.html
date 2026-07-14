@@ -5,13 +5,33 @@
     <link rel="icon" type="image/svg+xml" href="/src/assets/immigo_logo_no_background.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ImmiGO</title>
-    <script type="importmap">
-      {
-        "imports": {
-          "@xenova/transformers": "https://cdn.jsdelivr.net/npm/@xenova/transformers/dist/transformers.min.js"
-        }
-      }
-    </script>
+
+    <!--
+      Content Security Policy (T003)
+      ─────────────────────────────
+      • script-src: Allow same-origin + blob: (Web Workers), wasm-unsafe-eval (ONNX WASM JIT),
+        unsafe-inline is scoped to Vite HMR only (stripped in production builds by Vite).
+        CDN fallback removed — all model assets are now served locally via @huggingface/transformers.
+      • worker-src: blob: is required for dynamically-constructed Worker URLs emitted by Vite.
+      • connect-src: wss: for WebSocket cloud fallback; https://*.amazonaws.com for Amplify/Bedrock/Polly.
+      • media-src: blob: for AudioContext decoded buffers played via Web Audio API.
+      Note: frame-ancestors cannot be set via <meta> and must be set via HTTP response headers
+      in amplify.yml custom rules (planned in T032 canary gate).
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'wasm-unsafe-eval' blob:;
+      worker-src 'self' blob:;
+      connect-src 'self' wss: https://*.amazonaws.com https://*.supabase.co;
+      style-src 'self' 'unsafe-inline';
+      font-src 'self' data:;
+      img-src 'self' data: blob:;
+      media-src 'self' blob:;
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+    ">
+
     <meta name="description" content="Ace your upcoming USCIS interview with a personal AI coach. ImmiGO is your companion to practice the English test and walk into the interview with total confidence.">
   </head>
   <body class="antialiased bg-gray-50 text-gray-900">
