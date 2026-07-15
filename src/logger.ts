@@ -32,7 +32,6 @@ class ProductionTelemetryLogger {
   };
 
   constructor() {
-    // Safely evaluate environment targets using polyfilled environment structures
     const runtimeEnv = typeof process !== 'undefined' && process.env?.NODE_ENV;
     this.isDevelopment = runtimeEnv === 'development' || runtimeEnv === 'test';
     
@@ -48,17 +47,10 @@ class ProductionTelemetryLogger {
     return this.severityWeights[level] >= this.severityWeights[this.minLevel];
   }
 
-  /**
-   * FIXED: Internal output routing channel explicitly declared as a bound property
-   * to guarantee the compiler never drops context execution bindings.
-   */
   private readonly emitProductionTelemetry = (entry: LogEntry): void => {
     console.log(JSON.stringify(entry));
   };
 
-  /**
-   * FIXED: Local development console formatter declared as a bound property.
-   */
   private readonly renderDevelopmentConsole = (entry: LogEntry): void => {
     const styleMap: Record<LogLevel, string> = {
       DEBUG: 'color: #00b4d8; font-weight: bold;',
@@ -81,9 +73,6 @@ class ProductionTelemetryLogger {
     }
   };
 
-  /**
-   * Strips circular references and cleans up context structures before serialization.
-   */
   private sanitizeContext(context?: LogContext): LogContext | undefined {
     if (!context) return undefined;
     
@@ -110,19 +99,25 @@ class ProductionTelemetryLogger {
   }
 
   /**
-   * Asynchronously groups logging actions to avoid locking up main layout paint drops.
+   * Consolidated internal write loop capable of shifting context mappings dynamically.
    */
-  private queueWrite(level: LogLevel, message: string, context?: LogContext): void {
+  private queueWrite(level: LogLevel, message: string, componentOrContext?: string | LogContext, context?: LogContext): void {
     if (!this.shouldLog(level)) return;
+
+    let resolvedContext: LogContext | undefined;
+    if (typeof componentOrContext === 'string') {
+      resolvedContext = { component: componentOrContext, ...context };
+    } else if (componentOrContext && typeof componentOrContext === 'object') {
+      resolvedContext = componentOrContext as LogContext;
+    }
 
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
       message: message.trim(),
-      context: this.sanitizeContext(context),
+      context: this.sanitizeContext(resolvedContext),
     };
 
-    // Defers trace string execution to protect heavy animation frames
     Promise.resolve().then(() => {
       if (this.isDevelopment) {
         this.renderDevelopmentConsole(entry);
@@ -134,20 +129,21 @@ class ProductionTelemetryLogger {
     });
   }
 
-  public debug(message: string, component?: string, context?: LogContext): void {
-    this.queueWrite('DEBUG', message, { component, ...context });
+  // FIXED: Signatures overload maps accept polymorphic arguments to safely clear TS2345 errors
+  public debug(message: string, componentOrContext?: string | LogContext, context?: LogContext): void {
+    this.queueWrite('DEBUG', message, componentOrContext, context);
   }
 
-  public info(message: string, component?: string, context?: LogContext): void {
-    this.queueWrite('INFO', message, { component, ...context });
+  public info(message: string, componentOrContext?: string | LogContext, context?: LogContext): void {
+    this.queueWrite('INFO', message, componentOrContext, context);
   }
 
-  public warn(message: string, component?: string, context?: LogContext): void {
-    this.queueWrite('WARN', message, { component, ...context });
+  public warn(message: string, componentOrContext?: string | LogContext, context?: LogContext): void {
+    this.queueWrite('WARN', message, componentOrContext, context);
   }
 
-  public error(message: string, component?: string, context?: LogContext): void {
-    this.queueWrite('ERROR', message, { component, ...context });
+  public error(message: string, componentOrContext?: string | LogContext, context?: LogContext): void {
+    this.queueWrite('ERROR', message, componentOrContext, context);
   }
 }
 
