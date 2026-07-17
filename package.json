@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.7.6",
+    "@opentelemetry/core": "2.0.0",
     "@ricky0123/vad-web": "^0.0.29",
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
