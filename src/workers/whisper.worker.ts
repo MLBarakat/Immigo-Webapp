@@ -1,4 +1,4 @@
-﻿type WorkerAction = 'INIT' | 'TRANSCRIBE' | 'RESET';
+type WorkerAction = 'INIT' | 'TRANSCRIBE' | 'RESET';
 type WorkerStatus = 'INIT_COMPLETED' | 'PROGRESS' | 'COMPLETED' | 'ERROR' | 'UPDATE';
 type RuntimeTier = 'webgpu' | 'wasm-simd' | 'quantized-tiny';
 
@@ -95,7 +95,7 @@ function disposeDeep(value: unknown, seen = new Set<unknown>()): void {
     if (typeof candidate.dispose === 'function') {
       try {
         candidate.dispose();
-      } catch (e) {
+      } catch {
         // Prevent disposal errors from interrupting the thread context
       }
     }
@@ -131,6 +131,7 @@ function calculateProgress(progress: ProgressMessage): number {
  */
 function queryVramTelemetry(): { vramUsageBytes: number; fragmentation: number } {
   if (typeof performance !== 'undefined' && 'memory' in performance) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mem = (performance as any).memory;
     return {
       vramUsageBytes: mem.usedJSHeapSize || 0,
@@ -147,6 +148,7 @@ function queryVramTelemetry(): { vramUsageBytes: number; fragmentation: number }
 async function createTranscriber(correlationId: string, tier: RuntimeTier): Promise<Transcriber> {
   // Enforce explicit package loading parameters from pinned CDN endpoints
   const module = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@3.0.0-alpha.12');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const transformers = module as any;
 
   if (transformers.env) {
@@ -173,19 +175,22 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
   // Connect explicit hardware context-loss observers if WebGPU target is elected
   if (useWebGpu && typeof navigator !== 'undefined' && 'gpu' in navigator) {
     try {
-      const adapter = await navigator.gpu.requestAdapter();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const gpu = (navigator as any).gpu;
+      const adapter = await gpu.requestAdapter();
       const device = await adapter?.requestDevice();
-      device?.lost.then((info) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      device?.lost.then((info: any) => {
         postMessageToMain({
           status: 'ERROR',
           correlationId,
-          payload: { error: `FR-006 Context lost alert: WebGPU device unallocated. Reason: ${info.message}`, tier },
+          payload: { error: `FR-006 Context lost alert: WebGPU device unallocated. Reason: ${info?.message || 'unknown'}`, tier },
         });
         // Clear cached instances to force a clean runtime graph rebuild on the next pass
         transcriberInstance = null;
         activeLoadingPromise = null;
       });
-    } catch (e) {
+    } catch {
       // Gracefully continue if manual adapter registration is blocked by background containers
     }
   }
@@ -298,6 +303,7 @@ async function handleTranscribe(message: WorkerRequestMessage): Promise<void> {
       stride_length_s: 1,
       language: message.payload?.config?.language,
       task: message.payload?.config?.task ?? 'transcribe',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       callback_function: (beams: any[]) => {
         const primaryBeam = beams && beams[0];
         if (!primaryBeam || currentId !== activeInferenceId) return;
@@ -375,6 +381,7 @@ self.addEventListener('error', (event) => {
   });
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (self as any).addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
   postMessageToMain({
     status: 'ERROR',

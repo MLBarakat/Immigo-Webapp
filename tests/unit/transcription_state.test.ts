@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 
 // We test the pure reducer logic directly without mounting a React tree.
 // Re-export the reducer and types from context file for white-box testing.
-import type { TranscriptionContextState, TranscriptionAction, TranscriptionState } from '../../src/context/TranscriptionContext';
+import type { TranscriptionContextState, TranscriptionAction } from '../../src/context/TranscriptionContext';
 
 // Inline re-implementation of initial state + reducer for pure unit testing
 // (avoids JSX rendering overhead; tests the state machine logic only)

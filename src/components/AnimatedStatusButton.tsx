@@ -6,16 +6,16 @@ interface AnimatedStatusButtonProps {
 }
 
 // Sub-components for each animation state
-function IdleAnimation() {
-  const BaseMicIcon = ({ className }: { readonly className?: string }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"></path>
-      <path d="M19 10v1a7 7 0 11-14 0v-1"></path>
-      <line x1="12" y1="19" x2="12" y2="23"></line>
-      <line x1="8" y1="23" x2="16" y2="23"></line>
-    </svg>
-  );
+const BaseMicIcon = ({ className }: { readonly className?: string }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"></path>
+    <path d="M19 10v1a7 7 0 11-14 0v-1"></path>
+    <line x1="12" y1="19" x2="12" y2="23"></line>
+    <line x1="8" y1="23" x2="16" y2="23"></line>
+  </svg>
+);
 
+function IdleAnimation() {
   return (
     <div className="w-full h-full text-art-blue-400 flex items-center justify-center">
       <div className="w-3/4 h-3/4 relative">

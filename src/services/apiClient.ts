@@ -32,6 +32,7 @@ export class ApiError extends Error {
     
     Object.setPrototypeOf(this, ApiError.prototype);
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const extendedError = Error as any;
     if (typeof extendedError.captureStackTrace === 'function') {
       extendedError.captureStackTrace(this, ApiError);

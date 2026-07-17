@@ -18,6 +18,13 @@ interface ApplicationSettingsModalProps {
   isDesktop: boolean;
 }
 
+const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; }> = ({ checked, onChange }) => (
+  <button role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+    className={`w-12 h-6 rounded-full p-1 flex items-center transition-colors ${checked ? 'bg-art-blue-600 justify-end' : 'bg-immigo-gray-300 justify-start'}`}>
+    <div className="w-4 h-4 bg-white rounded-full shadow-md" />
+  </button>
+);
+
 const THEME_OPTIONS: { value: ThemeOption; label: string }[] = [ { value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, ];
 
 export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, onSettingChange, pollyVoices = [], isDesktop }) => {
@@ -26,6 +33,7 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (isOpen) { setDraft({ ...defaults, ...settings }); } }, [isOpen, settings, defaults]); // Added defaults to dependency array
 
   // Propagate changes from internal draft state to the parent's onSettingChange
@@ -46,13 +54,6 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
       setSaving(false);
     }
   }, [draft, onSave, onClose]);
-
-  const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; }> = ({ checked, onChange }) => (
-    <button role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
-      className={`w-12 h-6 rounded-full p-1 flex items-center transition-colors ${checked ? 'bg-art-blue-600 justify-end' : 'bg-immigo-gray-300 justify-start'}`}>
-      <div className="w-4 h-4 bg-white rounded-full shadow-md" />
-    </button>
-  );
 
   if (!isOpen) return null;
 

@@ -117,7 +117,8 @@ export function useVAD(callbacks: VADCallbacks = {}): VADHook {
                 setVadReady(true);
                 logger.info('Standalone VAD context successfully loaded.');
 
-                try { (window as any).__vadInstance = vad; } catch (_) {}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                try { (window as any).__vadInstance = vad; } catch { /* ignore */ }
             })
             .catch((err: unknown) => {
                 logger.error('Standalone VAD initialization failed exception:', undefined, {

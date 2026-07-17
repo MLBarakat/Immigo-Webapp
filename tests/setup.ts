@@ -1,4 +1,6 @@
 // tests/setup.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // Global test setup executed before each Vitest test file.
 
 // Stub browser APIs that are not available in jsdom

@@ -54,6 +54,7 @@ export async function createMicrophoneStream(options: MicrophoneStreamOptions = 
  * Handles browser auto-play suspension states gracefully.
  */
 export function initializeAudioContext(): AudioContextProfile {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
   if (!AudioContextClass) {
     throw new Error('Runtime Environment Exception: Web Audio API context class is unsupported by this browser engine.');

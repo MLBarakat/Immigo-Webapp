@@ -4,6 +4,7 @@ import { data } from './data/resource';
 import { transcriptFunction } from './functions/transcript/resource';
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
 import { LambdaIntegration, RestApi, Cors } from 'aws-cdk-lib/aws-apigateway';
+import { Function as CDKFunction } from 'aws-cdk-lib/aws-lambda';
 
 /**
  * Authoritative AWS Amplify Gen 2 Cloud Stack Orchestrator.
@@ -16,7 +17,7 @@ const backend = defineBackend({
 });
 
 // Extract a stable reference to the underlying native L2 Lambda construct
-const lambdaFunctionInstance = backend.transcriptFunction.resources.lambda;
+const lambdaFunctionInstance = backend.transcriptFunction.resources.lambda as CDKFunction;
 
 if (lambdaFunctionInstance.role) {
   // 1. Inject the least-privilege IAM policy block for Amazon Bedrock foundation models

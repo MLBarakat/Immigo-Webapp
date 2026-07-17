@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { logger } from '../logger';
 import { MicVAD } from '@ricky0123/vad-web';
 import { useTranscription, TranscriptionState } from '../context/TranscriptionContext';
@@ -40,6 +40,7 @@ export const useWhisper = (): WhisperHook => {
 
   const workerRef = useRef<Worker | null>(null);
   const vadRef = useRef<MicVAD | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nativeRecognizerRef = useRef<any>(null);
 
   const audioFrameAccumulatorRef = useRef<Float32Array[]>([]);
@@ -183,6 +184,7 @@ export const useWhisper = (): WhisperHook => {
     workerRef.current.postMessage({ action: 'load' });
 
     // Initialize native browser Web Speech API (Optimistic UI Track)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognitionConstructor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognitionConstructor) {
       const recognizer = new SpeechRecognitionConstructor();
@@ -190,6 +192,7 @@ export const useWhisper = (): WhisperHook => {
       recognizer.interimResults = true;
       recognizer.lang = 'en-US';
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognizer.onresult = (event: any) => {
         if (!isRecordingRef.current || !isLeaderRef.current) return;
 
@@ -209,7 +212,7 @@ export const useWhisper = (): WhisperHook => {
       recognizer.onend = () => {
         // Enforce active recovery loop to handle sudden cellular/mobile network timeout drops
         if (isRecordingRef.current && isLeaderRef.current) {
-          try { nativeRecognizerRef.current.start(); } catch (e) { /* Catch overlap executions */ }
+          try { nativeRecognizerRef.current.start(); } catch { /* Catch overlap executions */ }
         }
       };
 
@@ -229,7 +232,7 @@ export const useWhisper = (): WhisperHook => {
         speechActiveRef.current = true;
         
         actions.speechOnset(activeTraceIdRef.current); // Advance authoritative FSM to 'SPECULATIVE'
-        try { nativeRecognizerRef.current.start(); } catch (e) { /* Shield duplicate invoke exceptions */ }
+        try { nativeRecognizerRef.current.start(); } catch { /* Shield duplicate invoke exceptions */ }
       },
       onSpeechEnd: () => {
         if (!isRecordingRef.current) return;
@@ -240,6 +243,7 @@ export const useWhisper = (): WhisperHook => {
         speechActiveRef.current = false;
         actions.whisperCancel();
       },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onFrameProcessed: (_probabilities: any, frame: Float32Array) => {
         if (!isRecordingRef.current || !speechActiveRef.current || !isLeaderRef.current) return;
         audioFrameAccumulatorRef.current.push(frame);
@@ -263,7 +267,7 @@ export const useWhisper = (): WhisperHook => {
     }).then((initializedVad) => {
       vadRef.current = initializedVad;
       setVadInitializedState(true);
-      try { vadRef.current.pause(); } catch (e) { }
+      try { vadRef.current.pause(); } catch { /* ignore */ }
     }).catch((err) => {
       logger.error('Failed to parse and initialize native VAD capture hooks:', undefined, { error: String(err) });
     });
@@ -271,12 +275,12 @@ export const useWhisper = (): WhisperHook => {
     const handleBrowserLifecycleVisibilityShift = () => {
       if (document.hidden) {
         logger.info('Mobile Lifecycle Suspension Event: Tab contextual backgrounding detected. Freezing hardware channels.');
-        try { vadRef.current?.pause(); } catch (e) { }
-        try { nativeRecognizerRef.current?.stop(); } catch (e) { }
+        try { vadRef.current?.pause(); } catch { /* ignore */ }
+        try { nativeRecognizerRef.current?.stop(); } catch { /* ignore */ }
       } else if (isRecordingRef.current && isLeaderRef.current) {
         logger.info('Mobile Lifecycle Resumption Event: Tab focus restored. Awakening streaming configurations.');
-        try { vadRef.current?.start(); } catch (e) { }
-        try { nativeRecognizerRef.current?.start(); } catch (e) { }
+        try { vadRef.current?.start(); } catch { /* ignore */ }
+        try { nativeRecognizerRef.current?.start(); } catch { /* ignore */ }
       }
     };
 
@@ -286,7 +290,7 @@ export const useWhisper = (): WhisperHook => {
         audioFrameAccumulatorRef.current = [];
         workerRef.current?.postMessage({ action: 'RESET', correlationId: `bfcache_${Date.now()}` });
         if (isRecordingRef.current && isLeaderRef.current) {
-          try { nativeRecognizerRef.current?.start(); } catch (e) { }
+          try { nativeRecognizerRef.current?.start(); } catch { /* ignore */ }
         }
       }
     };
@@ -302,8 +306,8 @@ export const useWhisper = (): WhisperHook => {
         leaderChannelRef.current.close();
       }
       
-      try { vadRef.current?.destroy(); } catch (e) { }
-      try { nativeRecognizerRef.current?.abort(); } catch (e) { }
+      try { vadRef.current?.destroy(); } catch { /* ignore */ }
+      try { nativeRecognizerRef.current?.abort(); } catch { /* ignore */ }
       
       if (workerRef.current) {
         workerRef.current.removeEventListener('message', handleWorkerMessage);
@@ -319,7 +323,7 @@ export const useWhisper = (): WhisperHook => {
     audioFrameAccumulatorRef.current = [];
     isRecordingRef.current = true;
     
-    try { vadRef.current.start(); } catch (e) { }
+    try { vadRef.current.start(); } catch { /* ignore */ }
     logger.info('Authoritative dual-track orchestration loops successfully initialized.');
   }, [vadInitializedState, actions]);
 
@@ -329,8 +333,8 @@ export const useWhisper = (): WhisperHook => {
     isRecordingRef.current = false;
     speechActiveRef.current = false;
     
-    try { vadRef.current.pause(); } catch (e) { }
-    try { nativeRecognizerRef.current.stop(); } catch (e) { }
+    try { vadRef.current.pause(); } catch { /* ignore */ }
+    try { nativeRecognizerRef.current.stop(); } catch { /* ignore */ }
     
     flushActiveSegment('manual');
     actions.endSession(); // Seats the global FSM state safely back to 'IDLE'

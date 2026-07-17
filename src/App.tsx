@@ -1,9 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Amplify } from 'aws-amplify';
 
-// Bypasses static compiler blocks during dynamic cloud asset initialization periods safely
-// @ts-ignore
-import amplifyOutputs from './amplify_outputs.json';
+import amplifyOutputs from '../amplify_outputs.json';
 
 import { TranscriptionProvider } from './context/TranscriptionContext';
 import { ConversationProvider } from './context/ConversationContext';
@@ -182,6 +180,7 @@ export default function App(): JSX.Element {
     if (!mockUserToken) return null;
     try {
       // Resolves custom CDK REST endpoints directly from the config graph to eliminate static .env tracking errors
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dynamicGatewayUrl = (amplifyOutputs as any)?.custom?.apiBaseUrl;
       return new ApiClient(mockUserToken, dynamicGatewayUrl);
     } catch (error) {
