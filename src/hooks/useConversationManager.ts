@@ -265,9 +265,6 @@ export function useConversationManager({ apiClient }: UseConversationManagerProp
     sendTextMessage,
     clearConversation: wipeConversationHistory,
     downloadTranscript: exportTranscriptFile,
-    clearError: () => dispatch({ 
-      type: 'SEND_MESSAGE_FAILURE', 
-      payload: { error: '', userMessageId: '', assistantMessageId: '' } 
-    }),
+    clearError: () => dispatch({ type: 'CLEAR_ERROR' }),
   };
 }

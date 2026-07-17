@@ -207,7 +207,7 @@ export default function App(): JSX.Element {
 
   return (
     <TranscriptionProvider>
-      <ConversationProvider apiClient={apiClientInstance}>
+      <ConversationProvider>
         <ConversationWorkspace apiClientInstance={apiClientInstance} />
       </ConversationProvider>
     </TranscriptionProvider>

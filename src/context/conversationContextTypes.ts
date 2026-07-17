@@ -1,3 +1,4 @@
+import type React from 'react';
 import { createContext } from 'react';
 
 // Synchronized directly with the Authoritative FSM state machine targets
@@ -35,7 +36,8 @@ export type ConversationAction =
   | { type: 'FINISH_ASSISTANT_RESPONSE' }
   | { type: 'SEND_MESSAGE_FAILURE'; payload: { error: string; userMessageId: string; assistantMessageId: string } }
   | { type: 'SEND_MESSAGE_ROLLBACK'; payload: { userMessageId: string; assistantMessageId: string } }
-  | { type: 'SET_STATUS'; payload: AppStatus };
+  | { type: 'SET_STATUS'; payload: AppStatus }
+  | { type: 'CLEAR_ERROR' };
 
 export const initialState: ConversationState = {
   conversationHistory: [],
@@ -142,6 +144,9 @@ export const conversationReducer = (state: ConversationState, action: Conversati
           msg => msg.id !== action.payload.userMessageId && msg.id !== action.payload.assistantMessageId
         ),
       };
+
+    case 'CLEAR_ERROR':
+      return { ...state, errorMessage: null, appStatus: 'idle' };
 
     default:
       return state;

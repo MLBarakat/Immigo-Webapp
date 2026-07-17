@@ -86,5 +86,3 @@ export function LanguageSelector({
     </div>
   );
 }
-
-export { SUPPORTED_LANGUAGES };

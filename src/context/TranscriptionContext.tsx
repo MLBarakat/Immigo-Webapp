@@ -69,16 +69,12 @@ const VALID_TRANSITIONS: Record<TranscriptionState, TranscriptionState[]> = {
 function isValidTransition(from: TranscriptionState, to: TranscriptionState): boolean {
     const allowed = VALID_TRANSITIONS[from].includes(to);
     if (!allowed) {
-        logger.warn(`[TranscriptionFSM] Invalid lifecycle transition attempted: ${from} → ${targetStateRejected(to)}. Gatekeeper blocking update.`, {
+        logger.warn(`[TranscriptionFSM] Invalid lifecycle transition attempted: ${from} → ${to}. Gatekeeper blocking update.`, {
             fromState: from,
             attemptedTarget: to
         });
     }
     return allowed;
-}
-
-function targetStateRejected(state: string): string {
-    return state;
 }
 
 // ─── Initial State ────────────────────────────────────────────────────────────

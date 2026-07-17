@@ -1,6 +1,6 @@
 import { createContext } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { UserProfile } from '../components/UserProfile';
+import { UserProfile } from '../types/profile';
 
 export interface SignUpPayload {
   email: string;

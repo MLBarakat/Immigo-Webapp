@@ -1,7 +1,7 @@
 import { useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { Session, User, SupabaseClient, AuthChangeEvent } from '@supabase/supabase-js';
 import { getSupabaseClient } from '../supabaseClient';
-import { UserProfile } from '../components/UserProfile';
+import { UserProfile } from '../types/profile';
 import { analytics } from '../analytics';
 import { AuthContext, SignUpPayload } from './authContextTypes';
 

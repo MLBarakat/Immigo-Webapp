@@ -24,7 +24,6 @@ export function ConversationHub({
   status,
   isSessionActive,
   sessionTime,
-  errorMessage,
   onStartSession,
   onEndSession,
   onClearConversation,

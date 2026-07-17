@@ -4,14 +4,6 @@ interface UserProfileProps {
   readonly user: DisplayUser;
 }
 
-export interface UserProfile {
-    id: string;
-    full_name: string;
-    language: string;
-    created_at: string;
-    updated_at: string;
-}
-
 export function UserBubble({ user }: UserProfileProps): JSX.Element {
   return (
     <div className="flex items-center space-x-2">
