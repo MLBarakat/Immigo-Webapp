@@ -3,11 +3,16 @@ backend:
   phases:
     build:
       commands:
-        # 1. Complete primary initialization
-        - npm ci
-        # 2. Fix 2: Re-populate modules inside functions that were stripped by the preinstall script to pass TypeScript compilation checks
-        - cd amplify/functions && npm install && cd ../..
-        # 3. Deploy full cloud orchestration stacks
+        # 1. Dynamically sync the Windows lockfile with the Linux environment constraints
+        - npm install --package-lock-only --legacy-peer-deps
+        
+        # 2. Run the strict deterministic clean installation using legacy peer mapping gates
+        - npm ci --legacy-peer-deps
+        
+        # 3. Re-populate modules inside internal backend functions safely
+        - cd amplify/functions && npm install --legacy-peer-deps && cd ../..
+        
+        # 4. Deploy full cloud orchestration stacks
         - npx ampx pipeline-deploy --app-id d3878p0w684f30 --branch dev
 frontend:
   phases:
@@ -15,7 +20,8 @@ frontend:
       commands:
         - rm -rf node_modules
         - npm cache clean --force
-        - npm ci
+        # Enforce the synchronized lockfile state cleanly
+        - npm ci --legacy-peer-deps
     build:
       commands:
         - npm run test
@@ -27,12 +33,12 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
-  test:
-    phases:
-      preTest:
-        commands:
-          - npm ci
-      test:
-        commands:
-          - npm run test:e2e
-          - node scripts/run-benchmarks.js
+test:
+  phases:
+    preTest:
+      commands:
+        - npm ci --legacy-peer-deps
+    test:
+      commands:
+        - npm run test:e2e
+        - node scripts/run-benchmarks.js
