@@ -1,8 +1,9 @@
+import amplifyOutputs from '../../amplify_outputs.json';
 import { Message } from '../context/conversationContextTypes';
 import { UserSettings } from '../types/settings';
 import { logger } from '../logger';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (amplifyOutputs as { custom?: { API_URL?: string } }).custom?.API_URL || '';
 const API_KEY = import.meta.env.VITE_API_KEY;
 
 export interface FeedbackResponse {
@@ -55,6 +56,17 @@ export class ApiClient {
     this.baseUrl = baseUrl || API_BASE_URL || '';
   }
 
+  private buildRequestUrl(url: string): string {
+    const normalizedPath = url.replace(/^\//, '');
+
+    if (!this.baseUrl) {
+      return normalizedPath ? `/${normalizedPath}` : '/';
+    }
+
+    const normalizedBase = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
+    return new URL(normalizedPath, normalizedBase).toString();
+  }
+
   private async fetchWithAuth(url: string, options: ApiRequestOptions = {}): Promise<Response> {
     const headersInstance = new Headers();
     
@@ -73,10 +85,7 @@ export class ApiClient {
       }
     }
 
-    // FIXED: Resolves paths smoothly using the dynamic instance base URL configuration context
-    const cleanBase = this.baseUrl.replace(/\/$/, '');
-    const cleanPath = url.replace(/^\//, '');
-    const fullUrl = `${cleanBase}/${cleanPath}`;
+    const fullUrl = this.buildRequestUrl(url);
     
     logger.debug(`API Request: ${options.method || 'GET'} ${fullUrl}`);
 
