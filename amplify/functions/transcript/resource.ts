@@ -6,8 +6,7 @@ export const transcriptFunction = defineFunction({
   timeoutSeconds: 60,
   memoryMB: 512,
   runtime: 20,
-  
-  // NATIVE FIX: Variables defined here are injected automatically at build time
+
   environment: {
     DEFAULT_MODEL_ID: 'anthropic.claude-3-haiku-20240307-v1:0',
     SUPABASE_URL: process.env.SUPABASE_URL || '',
