@@ -16,7 +16,6 @@ import { Footer } from './components/Footer';
 import { ConversationHistory } from './components/ConversationHistory';
 import { ChatInput } from './components/ChatInput';
 import { VoiceHub } from './components/VoiceHub';
-import { AudioRecorder } from './components/AudioRecorder';
 import { WelcomeModal } from './components/WelcomeModal';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
@@ -70,7 +69,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   return (
-    <div className="flex flex-col min-h-screen w-full bg-immigo-gray-50 text-deep-navy font-sans antialiased overflow-x-hidden">
+    /* FIXED: Enforced h-screen and overflow-hidden to lock the app to the viewport size exactly */
+    <div className="flex flex-col h-screen w-full bg-immigo-gray-50 text-deep-navy font-sans antialiased overflow-hidden">
 
       {/* Absolute Positioning Overlays */}
       {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={() => setShowWelcomeModal(false)} />}
@@ -90,7 +90,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         />
       )}
 
-      {/* FIXED: Passed onNavigateBack and isDesktop to satisfy AccountSettingsPageProps */}
       {showAccountSettings && (
         <AccountSettingsPage
           onNavigateBack={() => setShowAccountSettings(false)}
@@ -98,7 +97,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         />
       )}
 
-      {/* FIXED: Passed user prop and corrected onDownloadTranscript naming */}
       <MobileMenuOverlay
         isOpen={showMobileMenu}
         onClose={() => setShowMobileMenu(false)}
@@ -123,37 +121,23 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         onLanguageChange={setCurrentLanguageCode}
       />
 
-      {/* Main Structural Grid Container */}
-      <main className="flex-grow flex max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 gap-6 justify-center items-stretch">
+      {/* FIXED: min-h-0 prevents children from breaking out of the strict flex bounds */}
+      <main className="flex-grow flex max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 gap-6 justify-center items-stretch min-h-0">
 
         {/* Left Hand: Scrollable Chat Window Area */}
-        <section className="flex-grow flex flex-col bg-star-white rounded-xl shadow-md p-4 md:p-6 overflow-hidden relative border border-immigo-gray-200">
+        <section className="flex-grow flex flex-col bg-star-white rounded-xl shadow-md p-4 md:p-6 overflow-hidden relative border border-immigo-gray-200 min-h-0 w-full">
 
-          {/* Background Audio Worker Hook Loading Engine */}
-          <div className={manager.isModelLoading ? 'mb-4 border-b border-immigo-gray-200 pb-4' : 'hidden'}>
-            <AudioRecorder
-              speculativeText={manager.interimTranscript}
-              committedText={manager.finalTranscript}
-              isSessionActive={manager.isSessionActive}
-              vadReady={manager.isVadReady}
-              isModelLoading={manager.isModelLoading}
-              modelLoadingProgress={manager.modelLoadingProgress}
-              fsmState={manager.currentState}
-              isTranscribing={manager.isTranscribing}
-              onStart={manager.startSession}
-              onStop={manager.endSession}
-            />
-          </div>
+          {/* FIXED: Removed redundant AudioRecorder (and its placeholder text/button) completely */}
 
           {manager.errorMessage && (
-            <div className="p-4 mb-4 bg-art-red-50 border-l-4 border-art-red-600 rounded text-sm text-art-red-800 flex justify-between items-center" role="alert">
+            <div className="p-4 mb-4 bg-art-red-50 border-l-4 border-art-red-600 rounded text-sm text-art-red-800 flex justify-between items-center shrink-0" role="alert">
               <p className="font-medium">System Intercept Exception: {manager.errorMessage}</p>
               <button onClick={manager.clearError} className="text-xs underline hover:text-art-red-900 cursor-pointer">Acknowledge</button>
             </div>
           )}
 
           {/* Core Chat Scroll Viewport */}
-          <div className="flex-1 overflow-y-auto min-h-[300px] flex flex-col mb-4">
+          <div className="flex-1 overflow-y-auto flex flex-col mb-4 min-h-0">
             {manager.conversationHistory.length > 0 || manager.interimTranscript ? (
               <ConversationHistory
                 messages={manager.conversationHistory}
@@ -169,12 +153,12 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           </div>
 
           {/* Desktop/Mobile Universal Text Interface */}
-          <div className="border-t border-immigo-gray-200 pt-4 mt-auto">
+          <div className="border-t border-immigo-gray-200 pt-4 mt-auto shrink-0">
             <ChatInput onSendMessage={manager.sendTextMessage} disabled={manager.isSessionActive} />
           </div>
 
           {/* Mobile Footer Voice Hub (Hidden on Desktop) */}
-          <div className="md:hidden flex justify-center mt-4 border-t border-immigo-gray-200 pt-4">
+          <div className="md:hidden flex justify-center mt-4 border-t border-immigo-gray-200 pt-4 shrink-0">
             <VoiceHub
               status={manager.appStatus}
               isSessionActive={manager.isSessionActive}
@@ -186,7 +170,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         </section>
 
         {/* Right Hand: Fixed Tool Sidebar (Hidden on Mobile) */}
-        <aside className="hidden md:flex w-72 flex-col shrink-0 bg-star-white rounded-xl shadow-md p-6 space-y-6 border border-immigo-gray-200">
+        <aside className="hidden md:flex w-72 flex-col shrink-0 bg-star-white rounded-xl shadow-md p-6 space-y-6 border border-immigo-gray-200 overflow-y-auto">
           <div className="flex flex-col space-y-3 pb-6 border-b border-immigo-gray-200">
             <button
               onClick={manager.clearConversation}
@@ -236,7 +220,7 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-deep-navy flex flex-col items-center justify-center text-star-white p-6" role="alert" aria-busy="true">
+      <div className="h-screen w-full bg-deep-navy flex flex-col items-center justify-center text-star-white p-6" role="alert" aria-busy="true">
         <div className="w-10 h-10 border-4 border-art-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
         <h2 className="text-base font-bold tracking-wide">Securing Processing Environment…</h2>
       </div>
