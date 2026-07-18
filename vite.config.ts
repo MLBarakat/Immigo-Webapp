@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
@@ -8,7 +9,7 @@ import { resolve } from 'path';
  */
 export default defineConfig({
   plugins: [react()],
-  
+
   resolve: {
     alias: {
       // Establish strict absolute import pathways across project directories
@@ -50,6 +51,11 @@ export default defineConfig({
     plugins: () => [react()],
   },
 
+  // FIXED: Isolates Vitest from Playwright E2E suites to prevent pipeline crashes
+  test: {
+    exclude: ['node_modules', 'dist', 'tests/e2e/**/*'],
+  },
+
   build: {
     // Elevate the production baseline compilation rules to support modern JS runtimes
     target: 'esnext',
@@ -79,7 +85,7 @@ export default defineConfig({
             return 'viewport-graphic-assets';
           }
         },
-        
+
         // Ensure asset distribution filenames utilize distinct version hashes to prevent caching issues
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',

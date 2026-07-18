@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { alignJitterClock, AudioRingBuffer, MAX_SEGMENT_SAMPLES, MIN_EXPORT_SAMPLES, TARGET_SAMPLE_RATE } from '../../src/utils/AudioRingBuffer';
+import {
+  alignJitterClock,
+  AudioRingBuffer,
+  MAX_SEGMENT_SAMPLES,
+  MIN_EXPORT_SAMPLES,
+  TARGET_SAMPLE_RATE,
+} from '../../src/utils/AudioRingBuffer';
 
 describe('AudioRingBuffer', () => {
   it('aligns jittered audio to the expected duration', () => {
@@ -18,7 +24,7 @@ describe('AudioRingBuffer', () => {
     const buffer = new AudioRingBuffer();
     const samples = new Float32Array(MIN_EXPORT_SAMPLES);
     for (let index = 0; index < samples.length; index += 1) {
-      samples[index] = 0.1;
+      samples[index] = Math.sin(index / 32) * 0.1;
     }
 
     buffer.write(samples, TARGET_SAMPLE_RATE);
@@ -33,7 +39,7 @@ describe('AudioRingBuffer', () => {
     const buffer = new AudioRingBuffer();
     const largeWindow = new Float32Array(MAX_SEGMENT_SAMPLES + 1_000);
     for (let index = 0; index < largeWindow.length; index += 1) {
-      largeWindow[index] = 0.25;
+      largeWindow[index] = Math.sin(index / 64) * 0.25;
     }
 
     buffer.write(largeWindow, TARGET_SAMPLE_RATE);
