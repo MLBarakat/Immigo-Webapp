@@ -1,18 +1,19 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
-import { data } from './data/resource';
+import { storage } from './storage/resource';
 import { transcriptFunction } from './functions/transcript/resource';
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
 import { LambdaIntegration, RestApi, Cors } from 'aws-cdk-lib/aws-apigateway';
 import { Function as CDKFunction } from 'aws-cdk-lib/aws-lambda';
+import { Duration } from 'aws-cdk-lib';
 
 /**
  * Authoritative AWS Amplify Gen 2 Cloud Stack Orchestrator.
  */
 const backend = defineBackend({
   auth,
-  data,
   transcriptFunction,
+  storage,
 });
 
 // Extract a stable reference to the underlying native L2 Lambda construct
@@ -57,7 +58,7 @@ const restApiGateway = new RestApi(apiGatewayCustomStack, 'ImmigoRestApiGateway'
     allowOrigins: Cors.ALL_ORIGINS,
     allowMethods: Cors.ALL_METHODS,
     allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'x-correlation-trace-id'],
-    maxAge: typeof window !== 'undefined' ? undefined : anyHelperCdkDurationCast(300)
+    maxAge: Duration.seconds(300)
   }
 });
 
@@ -74,12 +75,5 @@ backend.addOutput({
     apiBaseUrl: restApiGateway.url,
   },
 });
-
-/**
- * Basic type casting helper block to satisfy cross-compilation checks inside Node pipelines.
- */
-function anyHelperCdkDurationCast(seconds: number): any {
-  return { seconds };
-}
 
 export default backend;

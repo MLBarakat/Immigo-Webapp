@@ -4,6 +4,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
+import { createClient } from '@supabase/supabase-js';
 
 // Initialize AWS Clients outside the handler loop to leverage runtime global container TCP socket reuse
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
@@ -11,6 +12,10 @@ const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-3-haiku-202403
 
 const bedrockClient = new BedrockRuntimeClient({ region });
 const pollyClient = new PollyClient({ region });
+
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
 interface RequestBody {
   transcript?: string;
@@ -58,6 +63,27 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   };
 
   try {
+    // 0. JWT Authentication Guard
+    const authHeader = getCaseInsensitiveHeader(event.headers || {}, 'authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return {
+        statusCode: 401,
+        headers: responseHeaders,
+        body: JSON.stringify({ error: 'Unauthorized: Missing or invalid Bearer token.' })
+      };
+    }
+    
+    const token = authHeader.replace('Bearer ', '').trim();
+    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    if (authError || !userData?.user) {
+      return {
+        statusCode: 401,
+        headers: responseHeaders,
+        body: JSON.stringify({ error: 'Unauthorized: Invalid authentication token.' })
+      };
+    }
+
     // 1. Inbound Ingestion Guard Gates
     if (!event.body) {
       return {
