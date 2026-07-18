@@ -1,107 +1,60 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import amplifyOutputs from '../amplify_outputs.json';
 import { logger } from './logger';
 
-interface AmplifyOutputShape {
-  custom?: {
-    SUPABASE_URL?: string;
-    SUPABASE_ANON_KEY?: string;
-    API_URL?: string;
-  };
-}
+let supabaseClient: SupabaseClient | null = null;
 
-let supabasePromise: Promise<SupabaseClient> | null = null;
+/**
+ * Returns the singleton Supabase client.
+ *
+ * Required Amplify Environment Variables:
+ * - VITE_SUPABASE_URL
+ * - VITE_SUPABASE_ANON_KEY
+ */
+export const getSupabaseClient = (): SupabaseClient => {
+  if (supabaseClient) {
+    return supabaseClient;
+  }
 
-const resolveSupabaseConfig = (): {
-  supabaseUrl: string;
-  supabaseAnonKey: string;
-} => {
-  const manifest = amplifyOutputs as AmplifyOutputShape;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  console.group('========== SUPABASE CONFIG DEBUG ==========');
-
-  console.log('VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL);
+  // Helpful debug information (safe to keep in development)
+  console.group('========== SUPABASE CONFIG ==========');
+  console.log('VITE_SUPABASE_URL:', supabaseUrl);
   console.log(
     'VITE_SUPABASE_ANON_KEY:',
-    import.meta.env.VITE_SUPABASE_ANON_KEY
-      ? '[PRESENT]'
-      : '[MISSING]'
-  );
-
-  console.log('Amplify Outputs:', manifest);
-
-  const supabaseUrl =
-    import.meta.env.VITE_SUPABASE_URL ??
-    manifest.custom?.SUPABASE_URL ??
-    '';
-
-  const supabaseAnonKey =
-    import.meta.env.VITE_SUPABASE_ANON_KEY ??
-    manifest.custom?.SUPABASE_ANON_KEY ??
-    '';
-
-  console.log('Resolved URL:', supabaseUrl);
-  console.log(
-    'Resolved Key:',
     supabaseAnonKey ? '[PRESENT]' : '[MISSING]'
   );
-
   console.groupEnd();
 
   if (!supabaseUrl) {
     throw new Error(
-      'Supabase URL is missing.\n\n' +
-      'Checked:\n' +
-      '1. import.meta.env.VITE_SUPABASE_URL\n' +
-      '2. amplify_outputs.json -> custom.SUPABASE_URL'
+      'Missing environment variable: VITE_SUPABASE_URL'
     );
   }
 
   if (!supabaseAnonKey) {
     throw new Error(
-      'Supabase Anon Key is missing.\n\n' +
-      'Checked:\n' +
-      '1. import.meta.env.VITE_SUPABASE_ANON_KEY\n' +
-      '2. amplify_outputs.json -> custom.SUPABASE_ANON_KEY'
+      'Missing environment variable: VITE_SUPABASE_ANON_KEY'
     );
   }
 
-  return {
-    supabaseUrl,
-    supabaseAnonKey,
-  };
-};
+  try {
+    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
-export const getSupabaseClient = (): Promise<SupabaseClient> => {
-  if (supabasePromise) {
-    return supabasePromise;
+    logger.info('Supabase client initialized successfully.');
+
+    return supabaseClient;
+  } catch (error) {
+    logger.error('Failed to initialize Supabase client.', undefined, {
+      error:
+        error instanceof Error
+          ? error.stack
+          : JSON.stringify(error),
+    });
+
+    console.error(error);
+
+    throw error;
   }
-
-  supabasePromise = (async () => {
-    try {
-      const { supabaseUrl, supabaseAnonKey } = resolveSupabaseConfig();
-
-      console.log('Creating Supabase client...');
-
-      const client = createClient(supabaseUrl, supabaseAnonKey);
-
-      console.log('Supabase client initialized successfully.');
-
-      return client;
-    } catch (error) {
-      console.error('SUPABASE INITIALIZATION FAILED');
-      console.error(error);
-
-      logger.error('Supabase initialization failure', undefined, {
-        error:
-          error instanceof Error ? error.stack : String(error),
-      });
-
-      supabasePromise = null;
-
-      throw error;
-    }
-  })();
-
-  return supabasePromise;
 };
