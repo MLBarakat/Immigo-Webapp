@@ -21,6 +21,9 @@ frontend:
         - rm -rf node_modules
         - npm cache clean --force
         - npm ci --legacy-peer-deps
+        # Read standard variables with $, but read Amplify SECRETS using ${SECRET_NAME}
+        - echo "VITE_SUPABASE_URL=$SUPABASE_URL" >> .env
+        - echo "VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" >> .env
     build:
       commands:
         - npm run build
