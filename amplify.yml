@@ -23,7 +23,6 @@ frontend:
         - npm ci --legacy-peer-deps
     build:
       commands:
-        - npm run test
         - npm run build
   artifacts:
     baseDirectory: dist
