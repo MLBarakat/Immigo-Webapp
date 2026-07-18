@@ -5,7 +5,7 @@ import amplifyOutputs from '../amplify_outputs.json';
 
 import { TranscriptionProvider } from './context/TranscriptionContext';
 import { ConversationProvider } from './context/ConversationContext';
-import { useConversationManager } from './hooks/useConversationManager';
+import { useConversation } from './hooks/useConversation';
 import { ApiClient } from './services/apiClient';
 import { VoiceHub } from './components/VoiceHub';
 import { AudioRecorder } from './components/AudioRecorder';
@@ -28,7 +28,7 @@ interface ConversationWorkspaceProps {
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
   // Mount the continuous dual-track speculative orchestration manager
-  const manager = useConversationManager({ apiClient: apiClientInstance });
+  const manager = useConversation({ apiClient: apiClientInstance });
 
   return (
     <div className="min-h-screen bg-immigo-gray-50 flex flex-col justify-between">

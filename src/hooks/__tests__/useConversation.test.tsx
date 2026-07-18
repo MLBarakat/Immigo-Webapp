@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useConversationManager } from '../useConversationManager';
-import { useConversation } from '../../context/ConversationContext';
+import { useConversation } from '../useConversation';
+import { useConversation as useConversationContext } from '../../context/ConversationContext';
 import { useWhisper } from '../useWhisper';
 import { ApiClient, ApiError } from '../../services/apiClient';
 
@@ -29,7 +29,7 @@ vi.mock('../../logger', () => ({
   },
 }));
 
-describe('Orchestration Hook Runtime Validation: useConversationManager', () => {
+describe('Orchestration Hook Runtime Validation: useConversation', () => {
   // Functional execution context tracker references
   let mockDispatch: any;
   let mockStartRecording: any;
@@ -43,7 +43,7 @@ describe('Orchestration Hook Runtime Validation: useConversationManager', () => 
     mockStopRecording = vi.fn();
 
     // Seed mock context states matching our authoritative FSM definitions
-    (useConversation as any).mockReturnValue({
+    (useConversationContext as any).mockReturnValue({
       state: {
         conversationHistory: [],
         appStatus: 'idle',
@@ -96,7 +96,7 @@ describe('Orchestration Hook Runtime Validation: useConversationManager', () => 
       audioData: syntheticBuffer,
     });
 
-    const { result } = renderHook(() => useConversationManager({ apiClient: mockApiClient }));
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }));
 
     // Execute transmission prompt processing loops inside isolated context ticks
     await act(async () => {
@@ -132,7 +132,7 @@ describe('Orchestration Hook Runtime Validation: useConversationManager', () => 
     );
     mockApiClient.postTranscript.mockRejectedValue(networkChaosException);
 
-    const { result } = renderHook(() => useConversationManager({ apiClient: mockApiClient }));
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }));
 
     await act(async () => {
       await result.current.sendTextMessage('Trigger state mutation sequence.');

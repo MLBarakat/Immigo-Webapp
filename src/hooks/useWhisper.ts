@@ -53,9 +53,12 @@ export const useWhisper = (): WhisperHook => {
 
   // State Tracking Mirror reference to feed async event listeners without triggering re-binding loops
   const stateRef = useRef(state);
+  const actionsRef = useRef(actions);
+  
   useEffect(() => {
     stateRef.current = state;
-  }, [state]);
+    actionsRef.current = actions;
+  }, [state, actions]);
 
   // Centrally isolated operational threshold feature flags
   const remoteFeatureFlags = useRef({
@@ -95,7 +98,7 @@ export const useWhisper = (): WhisperHook => {
     const minSamplesLimit = remoteFeatureFlags.current.emptyHandoffSamplesMin;
 
     if (sampleLength > minSamplesLimit) {
-      actions.whisperSend(); // Safely advance FSM context directly to 'VERIFYING'
+      actionsRef.current.whisperSend(); // Safely advance FSM context directly to 'VERIFYING'
 
       if (workerRef.current) {
         // Enforce FR-004: Pass data atomically using zero-copy Transferable Object memory detachment
@@ -108,9 +111,9 @@ export const useWhisper = (): WhisperHook => {
       }
     } else {
       logger.warn('Empty Handoff Check Guard Engaged: Audio sample length below thresholds. Suppressing worker dispatch.');
-      actions.whisperCancel();
+      actionsRef.current.whisperCancel();
     }
-  }, [actions, compileAudioPayload]);
+  }, [compileAudioPayload]);
 
   const handleWorkerMessage = useCallback((event: MessageEvent) => {
     const data = event.data || {};
@@ -132,12 +135,12 @@ export const useWhisper = (): WhisperHook => {
       case 'ready':
         setModelReadyState(false);
         setLoadingProgressPercent(100);
-        actions.startSession();
+        actionsRef.current.startSession();
         break;
       case 'update':
         if (stateRef.current.fsm === 'VERIFYING' || stateRef.current.fsm === 'SPECULATIVE') {
           const interimText = String(output || '').trim();
-          actions.speculativeUpdate(interimText);
+          actionsRef.current.speculativeUpdate(interimText);
         }
         break;
       case 'complete':
@@ -152,15 +155,15 @@ export const useWhisper = (): WhisperHook => {
             remoteFeatureFlags.current.levenshteinMatchThreshold
           );
 
-          actions.whisperComplete(reconciliation.reconciledText, latencyMs || 0);
+          actionsRef.current.whisperComplete(reconciliation.reconciledText, latencyMs || 0);
         }
         break;
       case 'error':
         logger.error('Background worker thread exception caught in orchestration hook:', undefined, { error: data.error });
-        actions.inferenceFailed(data.error || 'Unknown web worker inference crash exception.');
+        actionsRef.current.inferenceFailed(data.error || 'Unknown web worker inference crash exception.');
         break;
     }
-  }, [actions]);
+  }, []);
 
   useEffect(() => {
     tabIdRef.current = `tab_id_${performance.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -205,7 +208,7 @@ export const useWhisper = (): WhisperHook => {
 
         const cleanedInterimText = interimSequence.replace(/\s+/g, ' ').trim();
         if (cleanedInterimText) {
-          actions.speculativeUpdate(cleanedInterimText);
+          actionsRef.current.speculativeUpdate(cleanedInterimText);
         }
       };
 
@@ -231,7 +234,7 @@ export const useWhisper = (): WhisperHook => {
         activeTraceIdRef.current = generateLocalTraceId();
         speechActiveRef.current = true;
         
-        actions.speechOnset(activeTraceIdRef.current); // Advance authoritative FSM to 'SPECULATIVE'
+        actionsRef.current.speechOnset(activeTraceIdRef.current); // Advance authoritative FSM to 'SPECULATIVE'
         try { nativeRecognizerRef.current.start(); } catch { /* Shield duplicate invoke exceptions */ }
       },
       onSpeechEnd: () => {
@@ -241,7 +244,7 @@ export const useWhisper = (): WhisperHook => {
       },
       onVADMisfire: () => {
         speechActiveRef.current = false;
-        actions.whisperCancel();
+        actionsRef.current.whisperCancel();
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onFrameProcessed: (_probabilities: any, frame: Float32Array) => {
@@ -314,7 +317,7 @@ export const useWhisper = (): WhisperHook => {
         workerRef.current.terminate();
       }
     };
-  }, [handleWorkerMessage, actions, flushActiveSegment, compileAudioPayload]);
+  }, [handleWorkerMessage, flushActiveSegment, compileAudioPayload]);
 
   const startRecording = useCallback(() => {
     if (!vadInitializedState || !vadRef.current || !nativeRecognizerRef.current || !isLeaderRef.current) return;

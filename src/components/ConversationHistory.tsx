@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Message } from '../types/conversation';
+import { Message } from '../context/conversationContextTypes';
 import { DisplayUser } from '../types/user';
 import ImmigoLogo from '../assets/immigo_logo.png';
 

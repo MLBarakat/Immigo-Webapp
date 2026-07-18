@@ -1,4 +1,4 @@
-import { Message } from '../types/conversation';
+import { Message } from '../context/conversationContextTypes';
 import { UserSettings } from '../types/settings';
 import { logger } from '../logger';
 
