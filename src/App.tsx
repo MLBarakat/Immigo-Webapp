@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Amplify } from 'aws-amplify';
 
 import amplifyOutputs from '../amplify_outputs.json';
@@ -22,23 +22,46 @@ try {
   logger.warn('Amplify Core Hook Warning: Sandbox metadata file unavailable during early compiler stage.', { error: String(configError) });
 }
 
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './hooks/useAuth';
+import { AuthPage } from './components/AuthPage';
+import { ConversationHistory } from './components/ConversationHistory';
+import { UserBubble } from './components/UserProfile';
+import { WelcomeModal } from './components/WelcomeModal';
+import { DisplayUser } from './types/user';
+
 interface ConversationWorkspaceProps {
   readonly apiClientInstance: ApiClient | null;
 }
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
-  // Mount the continuous dual-track speculative orchestration manager
   const manager = useConversation({ apiClient: apiClientInstance });
+  const { user, profile, logout } = useAuth();
+  const [showWelcomeModal, setShowWelcomeModal] = useState(true);
+
+  // Construct DisplayUser context cleanly to satisfy isolated UI elements
+  const displayUser: DisplayUser = {
+    name: profile?.full_name || user?.email || 'User',
+    initials: (profile?.full_name || user?.email || 'U').substring(0, 2).toUpperCase()
+  };
 
   return (
     <div className="min-h-screen bg-immigo-gray-50 flex flex-col justify-between">
+      {showWelcomeModal && (
+        <WelcomeModal 
+          userName={displayUser.name} 
+          onClose={() => setShowWelcomeModal(false)} 
+        />
+      )}
+
       {/* Universal Workspace Header bar */}
       <header className="bg-deep-navy text-star-white px-6 py-4 shadow-md flex justify-between items-center" role="banner">
         <div>
           <h1 className="text-xl font-bold tracking-wide">Immigo Interactive Speech Sandbox</h1>
           <p className="text-xs text-immigo-gray-300 mt-0.5">Automated Real-Time AI Language Training Core</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-4 items-center">
+          <UserBubble user={displayUser} />
           <button
             onClick={manager.downloadTranscript}
             disabled={manager.conversationHistory.length === 0}
@@ -54,6 +77,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
             aria-label="Clear active conversation view window"
           >
             Reset Arena
+          </button>
+          <button
+            onClick={logout}
+            className="px-3 py-1.5 text-xs font-semibold bg-art-red-600 hover:bg-art-red-700 rounded transition-all cursor-pointer"
+            aria-label="Securely log out of the workspace session"
+          >
+            Logout
           </button>
         </div>
       </header>
@@ -109,37 +139,15 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 
         {/* Historical Conversation Message Stream Log View */}
         <section 
-          className="flex-1 bg-white rounded-xl shadow-sm border border-immigo-gray-200 p-4 min-h-[300px] flex flex-col gap-4 overflow-y-auto"
+          className="flex-1 bg-white rounded-xl shadow-sm border border-immigo-gray-200 min-h-[300px] flex flex-col overflow-y-auto"
           aria-label="Historical Conversation Messages Ledger"
         >
           {manager.conversationHistory.length > 0 ? (
-            manager.conversationHistory.map((message) => (
-              <div 
-                key={message.id}
-                className={`flex flex-col max-w-[80%] ${
-                  message.role === 'user' ? 'self-end items-end' : 'self-start items-start'
-                }`}
-              >
-                <span className="text-[10px] text-immigo-gray-400 capitalize mb-0.5 px-1">
-                  {message.role} • {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </span>
-                <div 
-                  className={`p-3 rounded-xl text-sm leading-relaxed ${
-                    message.role === 'user'
-                      ? 'bg-art-blue-600 text-star-white rounded-tr-none'
-                      : 'bg-immigo-gray-100 text-deep-navy rounded-tl-none border border-immigo-gray-200'
-                  }`}
-                >
-                  {message.content ? message.content : (
-                    <span className="inline-flex gap-1 items-center py-1 px-2" aria-label="Assistant is writing">
-                      <span className="w-1.5 h-1.5 bg-deep-navy rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-1.5 h-1.5 bg-deep-navy rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-1.5 h-1.5 bg-deep-navy rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))
+            <ConversationHistory 
+              messages={manager.conversationHistory}
+              displayUser={displayUser}
+              interimTranscript={manager.interimTranscript}
+            />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6" aria-hidden="true">
               <p className="text-sm text-immigo-gray-400 italic">No conversational messages logged in active workspace buffer.</p>
@@ -160,37 +168,25 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   );
 }
 
-export default function App(): JSX.Element {
-  // Local identity string state holder simulated to anchor Cognito JWT structures
-  const [mockUserToken, setMockUserToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Simulate an authentication handshake phase
-    const authTimeoutTimer = setTimeout(() => {
-      const secureSimulatedJwtToken = 'bearer_simulation_token_key_hash_ident_v1';
-      setMockUserToken(secureSimulatedJwtToken);
-      logger.info('Authoritative Cognito JWT Security context successfully bound to main workspace context.');
-    }, 400);
-
-    return () => clearTimeout(authTimeoutTimer);
-  }, []);
+function AppContent(): JSX.Element {
+  const { session, loading } = useAuth();
 
   // Optimize ApiClient initialization to prevent instance recreating loops on minor parent triggers
   const apiClientInstance = useMemo<ApiClient | null>(() => {
-    if (!mockUserToken) return null;
+    if (!session?.access_token) return null;
     try {
       // Resolves custom CDK REST endpoints directly from the config graph to eliminate static .env tracking errors
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dynamicGatewayUrl = (amplifyOutputs as any)?.custom?.apiBaseUrl;
-      return new ApiClient(mockUserToken, dynamicGatewayUrl);
+      return new ApiClient(session.access_token, dynamicGatewayUrl);
     } catch (error) {
       logger.error('Security Failure: Client layer initialization crash exception encountered:', undefined, { error: String(error) });
       return null;
     }
-  }, [mockUserToken]);
+  }, [session?.access_token]);
 
   // Global loading overlay display shield protecting early component mounts
-  if (!mockUserToken) {
+  if (loading) {
     return (
       <div 
         className="min-h-screen bg-deep-navy flex flex-col items-center justify-center text-star-white p-6"
@@ -205,11 +201,24 @@ export default function App(): JSX.Element {
     );
   }
 
+  // Intercept unauthorized users directly to the authentication portal layout
+  if (!session) {
+    return <AuthPage />;
+  }
+
   return (
     <TranscriptionProvider>
       <ConversationProvider>
         <ConversationWorkspace apiClientInstance={apiClientInstance} />
       </ConversationProvider>
     </TranscriptionProvider>
+  );
+}
+
+export default function App(): JSX.Element {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

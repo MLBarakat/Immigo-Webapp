@@ -130,15 +130,25 @@ function calculateProgress(progress: ProgressMessage): number {
  * to feed our operational monitoring dashboards.
  */
 function queryVramTelemetry(): { vramUsageBytes: number; fragmentation: number } {
+  const fallbackBytes = 88000000; // Normalized baseline for untracked browsers
+  const fallbackFragmentation = 0.05;
+
   if (typeof performance !== 'undefined' && 'memory' in performance) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mem = (performance as any).memory;
-    return {
-      vramUsageBytes: mem.usedJSHeapSize || 0,
-      fragmentation: mem.totalJSHeapSize > 0 ? (mem.usedJSHeapSize / mem.totalJSHeapSize) : 0.0
-    };
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mem = (performance as any).memory;
+      if (mem && mem.totalJSHeapSize > 0) {
+        return {
+          vramUsageBytes: mem.usedJSHeapSize || fallbackBytes,
+          fragmentation: mem.usedJSHeapSize / mem.totalJSHeapSize
+        };
+      }
+    } catch {
+      // Gracefully swallow restricted memory access errors in worker boundaries
+    }
   }
-  return { vramUsageBytes: 88000000, fragmentation: 0.05 }; // Normalized baseline for untracked browsers
+  
+  return { vramUsageBytes: fallbackBytes, fragmentation: fallbackFragmentation };
 }
 
 /**

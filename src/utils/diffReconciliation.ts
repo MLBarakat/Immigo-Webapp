@@ -1,4 +1,4 @@
-import { logger } from '../logger';
+
 
 export type EditOperationType = 'EQUAL' | 'INSERT' | 'DELETE' | 'REPLACE';
 
@@ -143,7 +143,7 @@ export function reconcileTranscripts(
 
   // FR-009 Stability Lock: Check similarity score against threshold gate
   if (similarityScore >= similarityThreshold) {
-    logger.info('UI Stability Lock Engaged: Similarity score passes threshold gate. Bypassing state layout rewrite.', {
+    console.info('UI Stability Lock Engaged: Similarity score passes threshold gate. Bypassing state layout rewrite.', {
       similarityScore,
       threshold: similarityThreshold
     });
@@ -156,7 +156,7 @@ export function reconcileTranscripts(
     };
   }
 
-  logger.info('UI Stability Lock Disengaged: Substantive linguistic deviation detected. Executing patch.', {
+  console.info('UI Stability Lock Disengaged: Substantive linguistic deviation detected. Executing patch.', {
     similarityScore,
     threshold: similarityThreshold
   });
