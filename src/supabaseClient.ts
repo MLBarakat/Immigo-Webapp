@@ -6,31 +6,72 @@ interface AmplifyOutputShape {
   custom?: {
     SUPABASE_URL?: string;
     SUPABASE_ANON_KEY?: string;
+    API_URL?: string;
   };
 }
 
 let supabasePromise: Promise<SupabaseClient> | null = null;
 
-const resolveSupabaseConfig = (): { supabaseUrl: string; supabaseAnonKey: string } => {
+const resolveSupabaseConfig = (): {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+} => {
   const manifest = amplifyOutputs as AmplifyOutputShape;
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || manifest.custom?.SUPABASE_URL || '';
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || manifest.custom?.SUPABASE_ANON_KEY || '';
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  console.group('========== SUPABASE CONFIG DEBUG ==========');
+
+  console.log('VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL);
+  console.log(
+    'VITE_SUPABASE_ANON_KEY:',
+    import.meta.env.VITE_SUPABASE_ANON_KEY
+      ? '[PRESENT]'
+      : '[MISSING]'
+  );
+
+  console.log('Amplify Outputs:', manifest);
+
+  const supabaseUrl =
+    import.meta.env.VITE_SUPABASE_URL ??
+    manifest.custom?.SUPABASE_URL ??
+    '';
+
+  const supabaseAnonKey =
+    import.meta.env.VITE_SUPABASE_ANON_KEY ??
+    manifest.custom?.SUPABASE_ANON_KEY ??
+    '';
+
+  console.log('Resolved URL:', supabaseUrl);
+  console.log(
+    'Resolved Key:',
+    supabaseAnonKey ? '[PRESENT]' : '[MISSING]'
+  );
+
+  console.groupEnd();
+
+  if (!supabaseUrl) {
     throw new Error(
-      'Supabase runtime configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY or provide them in amplify_outputs.json.'
+      'Supabase URL is missing.\n\n' +
+      'Checked:\n' +
+      '1. import.meta.env.VITE_SUPABASE_URL\n' +
+      '2. amplify_outputs.json -> custom.SUPABASE_URL'
     );
   }
 
-  return { supabaseUrl, supabaseAnonKey };
+  if (!supabaseAnonKey) {
+    throw new Error(
+      'Supabase Anon Key is missing.\n\n' +
+      'Checked:\n' +
+      '1. import.meta.env.VITE_SUPABASE_ANON_KEY\n' +
+      '2. amplify_outputs.json -> custom.SUPABASE_ANON_KEY'
+    );
+  }
+
+  return {
+    supabaseUrl,
+    supabaseAnonKey,
+  };
 };
 
-/**
- * Initializes the Supabase client from the authoritative runtime config manifest
- * without performing an obsolete fetch to a legacy backend /config endpoint.
- * Uses a Promise singleton pattern to prevent race conditions during initialization.
- * @returns {Promise<SupabaseClient>} A promise that resolves to the initialized Supabase client.
- */
 export const getSupabaseClient = (): Promise<SupabaseClient> => {
   if (supabasePromise) {
     return supabasePromise;
@@ -39,14 +80,26 @@ export const getSupabaseClient = (): Promise<SupabaseClient> => {
   supabasePromise = (async () => {
     try {
       const { supabaseUrl, supabaseAnonKey } = resolveSupabaseConfig();
+
+      console.log('Creating Supabase client...');
+
       const client = createClient(supabaseUrl, supabaseAnonKey);
+
+      console.log('Supabase client initialized successfully.');
+
       return client;
-    } catch (error: unknown) {
-      logger.error('Error initializing Supabase client:', undefined, {
-        errorMessage: error instanceof Error ? error.message : String(error),
+    } catch (error) {
+      console.error('SUPABASE INITIALIZATION FAILED');
+      console.error(error);
+
+      logger.error('Supabase initialization failure', undefined, {
+        error:
+          error instanceof Error ? error.stack : String(error),
       });
+
       supabasePromise = null;
-      throw new Error('Could not initialize Supabase client.');
+
+      throw error;
     }
   })();
 
