@@ -93,12 +93,12 @@ export default defineConfig({
           const fileNameString = assetInfo.name || '';
           // Guarantee WebAssembly files retain pristine asset mapping markers during distribution
           if (fileNameString.endsWith('.wasm')) {
-            return 'assets/wasm/[name]-[hash][ext]';
+            return 'assets/wasm/[name]-[hash].[ext]'; // <-- Added Dot
           }
           if (fileNameString.endsWith('.css')) {
-            return 'assets/css/[name]-[hash][ext]';
+            return 'assets/css/[name]-[hash].[ext]'; // <-- Added Dot
           }
-          return 'assets/[ext]/[name]-[hash][ext]';
+          return 'assets/[ext]/[name]-[hash].[ext]'; // <-- Added Dot
         },
       },
     },
