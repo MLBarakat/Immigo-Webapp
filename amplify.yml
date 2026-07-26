@@ -23,6 +23,26 @@ frontend:
         - npm ci --legacy-peer-deps
     build:
       commands:
+        # 1. Create public directory for static binary assets (not committed to git)
+        - mkdir -p public/assets/js
+
+        # 2. VAD assets — served at root path (/silero_vad_legacy.onnx, /vad.worklet.bundle.min.js)
+        - cp node_modules/@ricky0123/vad-web/dist/silero_vad_legacy.onnx public/
+        - cp node_modules/@ricky0123/vad-web/dist/silero_vad_v5.onnx public/
+        - cp node_modules/@ricky0123/vad-web/dist/vad.worklet.bundle.min.js public/
+
+        # 3. ONNX Runtime WASM binaries at root (for direct fetch fallback)
+        - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm public/
+        - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm public/
+
+        # 4. ONNX Runtime MJS/WASM siblings also in assets/js/ so onnxruntime-web's
+        #    internal dynamic loader (which resolves relative to its own bundle URL) finds them
+        - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm public/assets/js/
+        - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm public/assets/js/
+        - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs public/assets/js/
+        - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs public/assets/js/
+
+        # 5. Run Vite production build (Vite auto-copies public/ → dist/)
         - npm run build
   artifacts:
     baseDirectory: dist
