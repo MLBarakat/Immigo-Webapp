@@ -51,9 +51,8 @@ export function useVAD(callbacks: VADCallbacks = {}): VADHook {
         let destroyed = false;
 
         MicVAD.new({
-            // Absolute root-level paths so assets are served from public/ regardless of URL context
-            modelURL: '/silero_vad_legacy.onnx',
-            workletURL: '/vad.worklet.bundle.min.js',
+            // Serve VAD assets from public/ root; the library resolves model + worklet bundle from this base path
+            baseAssetPath: '/',
             // Speech detection thresholds tuned for conversational speech structures
             positiveSpeechThreshold: 0.70,
             negativeSpeechThreshold: 0.65,

@@ -224,9 +224,10 @@ export const useWhisper = (): WhisperHook => {
 
     // Initialize Voice Activity Detection (VAD) audio processor infrastructure node lanes using millisecond-based options
     MicVAD.new({
-      // Absolute root-level paths so assets are served from public/ regardless of URL context
-      modelURL: '/silero_vad_legacy.onnx',
-      workletURL: '/vad.worklet.bundle.min.js',
+      // Asset directory served from public/ — the library resolves the .onnx model and worklet bundle relative to this path
+      baseAssetPath: '/',
+      onnxWASMBasePath: '/',
+      model: 'legacy',
       positiveSpeechThreshold: 0.7,
       negativeSpeechThreshold: 0.65,
       preSpeechPadMs: 500,  // FIXED: Converted from frame indexes to millisecond bounds
