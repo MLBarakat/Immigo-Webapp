@@ -49,6 +49,7 @@ export default defineConfig({
 
   // Isolates Vitest from Playwright E2E suites to prevent pipeline crashes
   test: {
+    environment: 'jsdom',
     exclude: ['node_modules', 'dist', 'tests/e2e/**/*'],
   },
 

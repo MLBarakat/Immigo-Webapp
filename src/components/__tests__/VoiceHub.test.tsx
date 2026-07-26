@@ -1,7 +1,5 @@
-// src/components/__tests__/VoiceHub.test.tsx
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent, screen } from '@testing-library/react';
+import { render, fireEvent, screen, cleanup } from '@testing-library/react';
 import { VoiceHub } from '../VoiceHub';
 
 // Mock the nested sub-component to prevent rendering dependencies from polluting tests
@@ -24,13 +22,12 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
   beforeEach(() => {
     mockStartSession = vi.fn();
     mockEndSession = vi.fn();
-    // Use virtual time configurations to ensure robust execution spacing
-    vi.useFakeTimers();
   });
 
   afterEach(() => {
+    cleanup();
     vi.clearAllMocks();
-    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('should render standard textual labels and accessibility markup accurately when idle', () => {
@@ -44,17 +41,17 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    const interactiveButton = screen.getByRole('button', { name: /start voice recording session/i });
-    expect(interactiveButton).toBeInTheDocument();
-    expect(interactiveButton).not.toBeDisabled();
+    const interactiveButton = screen.getByRole('button', { name: /start voice recording session/i }) as HTMLButtonElement;
+    expect(interactiveButton).not.toBeNull();
+    expect(interactiveButton.disabled).toBe(false);
     
     // Validate structural WAI-ARIA compliance attributes
-    expect(interactiveButton).toHaveAttribute('aria-busy', 'false');
-    expect(interactiveButton).toHaveAttribute('aria-live', 'polite');
+    expect(interactiveButton.getAttribute('aria-busy')).toBe('false');
+    expect(interactiveButton.getAttribute('aria-live')).toBe('polite');
     
     const operationalStatusLabel = screen.getByRole('status');
-    expect(operationalStatusLabel).toHaveTextContent(/^Ready$/);
-    expect(screen.getByText('00:00')).toBeInTheDocument();
+    expect(operationalStatusLabel.textContent).toBe('Ready');
+    expect(screen.getByText('00:00')).not.toBeNull();
   });
 
   it('should correctly format internal numeric clock entries into legible string formats', () => {
@@ -68,7 +65,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    expect(screen.getByText('02:05')).toBeInTheDocument();
+    expect(screen.getByText('02:05')).not.toBeNull();
   });
 
   it('should block manual user selection triggers when backend processing loops are running', () => {
@@ -82,12 +79,12 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    const interactiveButton = screen.getByRole('button', { name: /stop voice recording session/i });
+    const interactiveButton = screen.getByRole('button', { name: /stop voice recording session/i }) as HTMLButtonElement;
     
     // Assert structural lock states are correctly registered by the browser DOM layer
-    expect(interactiveButton).toBeDisabled();
-    expect(interactiveButton).toHaveAttribute('aria-busy', 'true');
-    expect(screen.getByRole('status')).toHaveTextContent(/^Thinking\.\.\.$/);
+    expect(interactiveButton.disabled).toBe(true);
+    expect(interactiveButton.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('status').textContent).toBe('Thinking...');
 
     // Verify interaction inputs are dropped when clicked during an active inference lock
     fireEvent.click(interactiveButton);
@@ -96,6 +93,9 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
   });
 
   it('should suppress rapid click spamming patterns to safeguard background audio recording channels', () => {
+    let mockTime = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => mockTime);
+
     render(
       <VoiceHub
         status="idle"
@@ -110,7 +110,9 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
 
     // Simulate rapid, consecutive user click inputs
     fireEvent.click(interactiveButton);
+    mockTime += 100;
     fireEvent.click(interactiveButton);
+    mockTime += 100;
     fireEvent.click(interactiveButton);
 
     // Verify the system processes the initial click but drops subsequent rapid inputs
@@ -118,7 +120,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     expect(mockEndSession).not.toHaveBeenCalled();
 
     // Advance virtual clocks past the protective 800 ms interaction guard window
-    vi.advanceTimersByTime(850);
+    mockTime += 1000;
 
     // Verify inputs are accepted normally after the safety window expires
     fireEvent.click(interactiveButton);

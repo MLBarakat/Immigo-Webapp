@@ -226,11 +226,16 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
     };
   }, [conversationState.isSessionActive, dispatch]);
 
+  const stopRecordingRef = useRef(stopRecording);
+  useEffect(() => {
+    stopRecordingRef.current = stopRecording;
+  }, [stopRecording]);
+
   useEffect(() => {
     return () => {
-      stopRecording();
+      stopRecordingRef.current();
     };
-  }, [stopRecording]);
+  }, []);
 
   const wipeConversationHistory = useCallback(() => {
     dispatch({ type: 'CLEAR_CONVERSATION' });

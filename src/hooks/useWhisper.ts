@@ -29,6 +29,15 @@ function generateLocalTraceId(): string {
   return `trace-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
+export function buildCloudSocketStartMessage(correlationId: string, language = 'en-US', sampleRate = 16000) {
+  return {
+    type: 'control',
+    action: 'start',
+    correlationId,
+    settings: { sampleRate, language },
+  };
+}
+
 export const useWhisper = (): WhisperHook => {
   // Connect directly to the authoritative global state context to prevent split-brain states
   const { state, actions } = useTranscription();
@@ -328,13 +337,13 @@ export const useWhisper = (): WhisperHook => {
     // VAD + Whisper must still run even when Web Speech API is unavailable.
     if (!vadInitializedState || !vadRef.current || !isLeaderRef.current) return;
     
-    actions.clearTranscript();
+    actionsRef.current.clearTranscript();
     audioFrameAccumulatorRef.current = [];
     isRecordingRef.current = true;
     
     try { vadRef.current.start(); } catch { /* ignore */ }
     logger.info('Authoritative dual-track orchestration loops successfully initialized.');
-  }, [vadInitializedState, actions]);
+  }, [vadInitializedState]);
 
   const stopRecording = useCallback(() => {
     if (!vadRef.current) return;
@@ -343,12 +352,12 @@ export const useWhisper = (): WhisperHook => {
     speechActiveRef.current = false;
     
     try { vadRef.current.pause(); } catch { /* ignore */ }
-    try { nativeRecognizerRef.current.stop(); } catch { /* ignore */ }
+    try { nativeRecognizerRef.current?.stop(); } catch { /* ignore */ }
     
     flushActiveSegment('manual');
-    actions.endSession(); // Seats the global FSM state safely back to 'IDLE'
+    actionsRef.current.endSession(); // Seats the global FSM state safely back to 'IDLE'
     logger.info('Authoritative dual-track orchestration loops successfully wound down.');
-  }, [actions, flushActiveSegment]);
+  }, [flushActiveSegment]);
 
   return {
     currentState: state.fsm,

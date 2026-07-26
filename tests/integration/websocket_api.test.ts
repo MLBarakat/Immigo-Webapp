@@ -1,4 +1,16 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+vi.mock('@ricky0123/vad-web', () => ({
+  MicVAD: {
+    new: vi.fn().mockResolvedValue({
+      start: vi.fn(),
+      pause: vi.fn(),
+      destroy: vi.fn(),
+    }),
+  },
+}));
+
 import { buildCloudSocketStartMessage } from '../../src/hooks/useWhisper';
 
 describe('WebSocket API Integration', () => {

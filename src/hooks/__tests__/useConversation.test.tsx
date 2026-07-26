@@ -1,14 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import React from 'react';
 import { useConversation } from '../useConversation';
-import { useConversation as useConversationContext } from '../../context/ConversationContext';
+import { ConversationContext } from '../../context/conversationContextTypes';
 import { useWhisper } from '../useWhisper';
 import { ApiClient, ApiError } from '../../services/apiClient';
-
-// Formally mock the state context hooks and hardware acquisition modules
-vi.mock('../../context/ConversationContext', () => ({
-  useConversation: vi.fn(),
-}));
 
 vi.mock('../useWhisper', () => ({
   useWhisper: vi.fn(),
@@ -36,14 +32,14 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   let mockStopRecording: any;
   let mockApiClient: vi.Mocked<ApiClient>;
   let mockAudioInstance: any;
+  let mockContextValue: any;
 
   beforeEach(() => {
     mockDispatch = vi.fn();
     mockStartRecording = vi.fn();
     mockStopRecording = vi.fn();
 
-    // Seed mock context states matching our authoritative FSM definitions
-    (useConversationContext as any).mockReturnValue({
+    mockContextValue = {
       state: {
         conversationHistory: [],
         appStatus: 'idle',
@@ -52,7 +48,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         errorMessage: null,
       },
       dispatch: mockDispatch,
-    });
+    };
 
     (useWhisper as any).mockReturnValue({
       currentState: 'IDLE',
@@ -96,7 +92,13 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       audioData: syntheticBuffer,
     });
 
-    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
 
     // Execute transmission prompt processing loops inside isolated context ticks
     await act(async () => {
@@ -132,7 +134,13 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     );
     mockApiClient.postTranscript.mockRejectedValue(networkChaosException);
 
-    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
 
     await act(async () => {
       await result.current.sendTextMessage('Trigger state mutation sequence.');

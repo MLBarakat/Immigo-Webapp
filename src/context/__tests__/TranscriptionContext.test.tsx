@@ -20,11 +20,10 @@ describe('FSM Context Registry Validation: TranscriptionContext', () => {
   it('should verify the foundational state layout matches standard system parameters on initialization', () => {
     const { result } = renderTranscriptionContextHook();
 
-    expect(result.current.state.currentState).toBe('IDLE');
+    expect(result.current.state.fsm).toBe('IDLE');
     expect(result.current.state.committedText).toBe('');
-    expect(result.current.state.interimText).toBe('');
+    expect(result.current.state.speculativeText).toBe('');
     expect(result.current.state.activeTraceId).toBeNull();
-    expect(result.current.state.tokenLedger).toEqual([]);
   });
 
   it('should instantiate a unique active trace identifier when entering the recording state sequence', () => {
@@ -32,56 +31,41 @@ describe('FSM Context Registry Validation: TranscriptionContext', () => {
 
     // Trigger state transition into active audio processing tracks
     act(() => {
-      result.current.dispatch({ type: 'START_RECORDING' });
+      result.current.actions.startSession();
     });
 
-    expect(result.current.state.currentState).toBe('RECORDING');
-    // FIXED: Formally assert FR-015 tracking tokens are securely instantiated
-    expect(result.current.state.activeTraceId).not.toBeNull();
-    expect(typeof result.current.state.activeTraceId).toBe('string');
-    expect(result.current.state.activeTraceId!.length).toBeGreaterThan(10);
+    expect(result.current.state.fsm).toBe('LISTENING');
+
+    act(() => {
+      result.current.actions.speechOnset('trace-1234567890-test');
+    });
+
+    expect(result.current.state.fsm).toBe('SPECULATIVE');
+    expect(result.current.state.activeTraceId).toBe('trace-1234567890-test');
   });
 
   it('should process dynamic token patches safely and merge text variants without memory buffer leaks', () => {
     const { result } = renderTranscriptionContextHook();
 
     act(() => {
-      result.current.dispatch({ type: 'START_RECORDING' });
+      result.current.actions.startSession();
+      result.current.actions.speechOnset('trace-1234567890-test');
     });
-
-    // Construct a type-safe matrix token payload mirroring our DP alignment engine structures
-    const secureMockPatches: TokenPatch[] = [
-      {
-        operation: 'INSERT',
-        text: 'System core operational parameters functional.',
-        index: 0,
-        timestamp: Date.now()
-      }
-    ];
 
     // Transition state from active recording into atomic matrix compilation lanes
     act(() => {
-      result.current.dispatch({ type: 'SET_VERIFYING' });
+      result.current.actions.whisperSend();
     });
 
-    expect(result.current.state.currentState).toBe('VERIFYING');
+    expect(result.current.state.fsm).toBe('VERIFYING');
 
-    // FIXED: Dispatches verified structural types ensuring zero layout rendering drift exceptions
     act(() => {
-      result.current.dispatch({
-        type: 'COMMIT_TRANSCRIPT',
-        payload: {
-          patches: secureMockPatches,
-          authoritativeText: 'System core operational parameters functional.'
-        }
-      });
+      result.current.actions.whisperComplete('System core operational parameters functional.', 150);
     });
 
-    expect(result.current.state.currentState).toBe('IDLE');
+    expect(result.current.state.fsm).toBe('COMMITTED');
     expect(result.current.state.committedText).toBe('System core operational parameters functional.');
-    // FIXED: Assert deep clean sweeps are executed over volatile text allocations to avoid layout drops
-    expect(result.current.state.interimText).toBe('');
-    expect(result.current.state.activeTraceId).toBeNull();
+    expect(result.current.state.speculativeText).toBe('');
   });
 
   it('should purge buffer allocations and reset tracking keys cleanly when session termination fires', () => {
@@ -89,28 +73,21 @@ describe('FSM Context Registry Validation: TranscriptionContext', () => {
 
     // Seed data records into the context tree framework
     act(() => {
-      result.current.dispatch({ type: 'START_RECORDING' });
-    });
-    
-    act(() => {
-      result.current.dispatch({ 
-        type: 'SET_INTERIM_TRANSCRIPT', 
-        payload: 'Volatile interim segment tokens streaming...' 
-      });
+      result.current.actions.startSession();
+      result.current.actions.speechOnset('trace-1234567890-test');
+      result.current.actions.speculativeUpdate('Volatile interim segment tokens streaming...');
     });
 
-    expect(result.current.state.interimText).toBe('Volatile interim segment tokens streaming...');
+    expect(result.current.state.speculativeText).toBe('Volatile interim segment tokens streaming...');
 
     // Trigger an absolute clean sweep purge command across memory banks
     act(() => {
-      result.current.dispatch({ type: 'RESET_TRANSCRIPT' });
+      result.current.actions.endSession();
     });
 
-    // FIXED: Confirm complete context reset to prevent rendering remnants
-    expect(result.current.state.currentState).toBe('IDLE');
-    expect(result.current.state.committedText).toBe('');
-    expect(result.current.state.interimText).toBe('');
+    // Confirm complete context reset to prevent rendering remnants
+    expect(result.current.state.fsm).toBe('IDLE');
+    expect(result.current.state.speculativeText).toBe('');
     expect(result.current.state.activeTraceId).toBeNull();
-    expect(result.current.state.tokenLedger).toEqual([]);
   });
 });

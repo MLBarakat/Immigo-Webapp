@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useMemo } from 'react';
 import { logger } from '../logger';
 
 // ─── FSM State Definitions ────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ export type TranscriptionAction =
 const VALID_TRANSITIONS: Record<TranscriptionState, TranscriptionState[]> = {
     IDLE:        ['LISTENING'],
     LISTENING:   ['IDLE', 'SPECULATIVE'],
-    SPECULATIVE: ['LISTENING', 'VERIFYING', 'COMMITTED'],
+    SPECULATIVE: ['LISTENING', 'VERIFYING', 'COMMITTED', 'IDLE'],
     VERIFYING:   ['COMMITTED', 'FAILED', 'LISTENING'],
     COMMITTED:   ['LISTENING', 'IDLE'],
     FAILED:      ['RECOVERING'],
@@ -248,23 +248,37 @@ export function TranscriptionProvider({ children }: { children: React.ReactNode 
     const tierDownscale = useCallback(() => dispatch({ type: 'TIER_DOWNSCALE' }), []);
     const clearTranscript = useCallback(() => dispatch({ type: 'CLEAR_TRANSCRIPT' }), []);
 
-    const value: TranscriptionContextValue = {
+    const actions = useMemo(() => ({
+        startSession,
+        endSession,
+        speechOnset,
+        speculativeUpdate,
+        whisperSend,
+        whisperComplete,
+        whisperCancel,
+        inferenceFailed,
+        recoveryComplete,
+        tierDownscale,
+        clearTranscript,
+    }), [
+        startSession,
+        endSession,
+        speechOnset,
+        speculativeUpdate,
+        whisperSend,
+        whisperComplete,
+        whisperCancel,
+        inferenceFailed,
+        recoveryComplete,
+        tierDownscale,
+        clearTranscript,
+    ]);
+
+    const value: TranscriptionContextValue = useMemo(() => ({
         state,
         dispatch,
-        actions: {
-            startSession,
-            endSession,
-            speechOnset,
-            speculativeUpdate,
-            whisperSend,
-            whisperComplete,
-            whisperCancel,
-            inferenceFailed,
-            recoveryComplete,
-            tierDownscale,
-            clearTranscript,
-        }
-    };
+        actions,
+    }), [state, actions]);
 
     return (
         <TranscriptionContext.Provider value={value}>

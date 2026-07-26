@@ -7,10 +7,13 @@ export interface TokenPatch {
   operation: EditOperationType;
   speculativeToken: string;
   truthToken: string;
+  text: string;
+  timestamp: number;
 }
 
 export interface ReconciliationResult {
   reconciledText: string;
+  authoritativeText: string;
   similarityScore: number;
   uiStabilityLockEngaged: boolean;
   patches: TokenPatch[];
@@ -21,8 +24,8 @@ export interface ReconciliationResult {
  * Returns a value bound strictly between 0.0 (no match) and 1.0 (exact match).
  */
 export function calculateStringSimilarity(speculative: string, truthLedger: string): number {
-  const s1 = speculative.replace(/\s+/g, ' ').trim();
-  const s2 = truthLedger.replace(/\s+/g, ' ').trim();
+  const s1 = (speculative || '').replace(/\s+/g, ' ').trim();
+  const s2 = (truthLedger || '').replace(/\s+/g, ' ').trim();
 
   if (s1 === s2) return 1.0;
   if (s1.length === 0 || s2.length === 0) return 0.0;
@@ -55,9 +58,16 @@ export function calculateStringSimilarity(speculative: string, truthLedger: stri
  * Tokenizes text streams and aligns them using a dynamic programming edit distance matrix.
  * Tracks character sequences to construct single-word granular patches.
  */
-export function alignTokenSequences(speculative: string, truthLedger: string): TokenPatch[] {
-  const specTokens = speculative.split(/\s+/).filter(t => t.length > 0);
-  const truthTokens = truthLedger.split(/\s+/).filter(t => t.length > 0);
+export function alignTokenSequences(
+  speculative: string | string[] = '',
+  truthLedger: string | string[] = ''
+): TokenPatch[] {
+  const specTokens = Array.isArray(speculative)
+    ? speculative
+    : (speculative || '').split(/\s+/).filter(t => t.length > 0);
+  const truthTokens = Array.isArray(truthLedger)
+    ? truthLedger
+    : (truthLedger || '').split(/\s+/).filter(t => t.length > 0);
 
   const m = specTokens.length;
   const n = truthTokens.length;
@@ -84,6 +94,7 @@ export function alignTokenSequences(speculative: string, truthLedger: string): T
   const patches: TokenPatch[] = [];
   let i = m;
   let j = n;
+  const now = Date.now();
 
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && specTokens[i - 1].toLowerCase() === truthTokens[j - 1].toLowerCase()) {
@@ -91,7 +102,9 @@ export function alignTokenSequences(speculative: string, truthLedger: string): T
         index: i - 1,
         operation: 'EQUAL',
         speculativeToken: specTokens[i - 1],
-        truthToken: truthTokens[j - 1]
+        truthToken: truthTokens[j - 1],
+        text: specTokens[i - 1],
+        timestamp: now
       });
       i--;
       j--;
@@ -100,7 +113,9 @@ export function alignTokenSequences(speculative: string, truthLedger: string): T
         index: i - 1,
         operation: 'REPLACE',
         speculativeToken: specTokens[i - 1],
-        truthToken: truthTokens[j - 1]
+        truthToken: truthTokens[j - 1],
+        text: truthTokens[j - 1],
+        timestamp: now
       });
       i--;
       j--;
@@ -109,7 +124,9 @@ export function alignTokenSequences(speculative: string, truthLedger: string): T
         index: i - 1,
         operation: 'DELETE',
         speculativeToken: specTokens[i - 1],
-        truthToken: ''
+        truthToken: '',
+        text: specTokens[i - 1],
+        timestamp: now
       });
       i--;
     } else {
@@ -117,7 +134,9 @@ export function alignTokenSequences(speculative: string, truthLedger: string): T
         index: Math.max(0, i - 1),
         operation: 'INSERT',
         speculativeToken: '',
-        truthToken: truthTokens[j - 1]
+        truthToken: truthTokens[j - 1],
+        text: truthTokens[j - 1],
+        timestamp: now
       });
       j--;
     }
@@ -135,11 +154,22 @@ export function reconcileTranscripts(
   truthLedgerText: string,
   similarityThreshold = 0.85
 ): ReconciliationResult {
-  const specClean = speculativeText.replace(/\s+/g, ' ').trim();
-  const truthClean = truthLedgerText.replace(/\s+/g, ' ').trim();
+  const specClean = (speculativeText || '').replace(/\s+/g, ' ').trim();
+  const truthClean = (truthLedgerText || '').replace(/\s+/g, ' ').trim();
 
   const similarityScore = calculateStringSimilarity(specClean, truthClean);
-  const patches = alignTokenSequences(specClean, truthClean);
+  const rawPatches = alignTokenSequences(specClean, truthClean);
+
+  const nonEqual = rawPatches.filter(p => p.operation !== 'EQUAL');
+  const groupedPatches: TokenPatch[] = [];
+  for (const patch of nonEqual) {
+    const last = groupedPatches[groupedPatches.length - 1];
+    if (last && last.operation === patch.operation) {
+      last.text += ' ' + patch.text;
+    } else {
+      groupedPatches.push({ ...patch });
+    }
+  }
 
   // FR-009 Stability Lock: Check similarity score against threshold gate
   if (similarityScore >= similarityThreshold) {
@@ -150,9 +180,10 @@ export function reconcileTranscripts(
     
     return {
       reconciledText: specClean, // Retain current layout view to block word jitter
+      authoritativeText: specClean,
       similarityScore,
       uiStabilityLockEngaged: true,
-      patches
+      patches: rawPatches
     };
   }
 
@@ -163,8 +194,8 @@ export function reconcileTranscripts(
 
   // Construct a newly reconstructed, stabilized sentence string out of aligned truth tokens
   const outputTokens: string[] = [];
-  for (let k = 0; k < patches.length; k++) {
-    const patch = patches[k];
+  for (let k = 0; k < rawPatches.length; k++) {
+    const patch = rawPatches[k];
     if (patch.operation === 'EQUAL' || patch.operation === 'REPLACE') {
       outputTokens.push(patch.truthToken);
     } else if (patch.operation === 'INSERT') {
@@ -177,8 +208,9 @@ export function reconcileTranscripts(
 
   return {
     reconciledText,
+    authoritativeText: reconciledText,
     similarityScore,
     uiStabilityLockEngaged: false,
-    patches
+    patches: rawPatches
   };
 }
