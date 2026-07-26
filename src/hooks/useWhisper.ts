@@ -324,7 +324,9 @@ export const useWhisper = (): WhisperHook => {
   }, [handleWorkerMessage, flushActiveSegment, compileAudioPayload]);
 
   const startRecording = useCallback(() => {
-    if (!vadInitializedState || !vadRef.current || !nativeRecognizerRef.current || !isLeaderRef.current) return;
+    // nativeRecognizerRef is the optional "optimistic UI" speculative track — not a hard prerequisite.
+    // VAD + Whisper must still run even when Web Speech API is unavailable.
+    if (!vadInitializedState || !vadRef.current || !isLeaderRef.current) return;
     
     actions.clearTranscript();
     audioFrameAccumulatorRef.current = [];
@@ -335,7 +337,7 @@ export const useWhisper = (): WhisperHook => {
   }, [vadInitializedState, actions]);
 
   const stopRecording = useCallback(() => {
-    if (!vadRef.current || !nativeRecognizerRef.current) return;
+    if (!vadRef.current) return;
     
     isRecordingRef.current = false;
     speechActiveRef.current = false;
