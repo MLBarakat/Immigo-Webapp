@@ -110,12 +110,15 @@ export const useWhisper = (): WhisperHook => {
       actionsRef.current.whisperSend(); // Safely advance FSM context directly to 'VERIFYING'
 
       if (workerRef.current) {
-        // Enforce FR-004: Pass data atomically using zero-copy Transferable Object memory detachment
+        // Worker expects action: 'TRANSCRIBE' (uppercase) with payload.audio and correlationId.
+        // Enforce FR-004: Pass data atomically using zero-copy Transferable Object memory detachment.
         workerRef.current.postMessage({
-          action: 'transcribe',
-          audio: compiledBuffer,
-          traceId: activeTraceIdRef.current,
-          timestamp: Date.now()
+          action: 'TRANSCRIBE',
+          correlationId: activeTraceIdRef.current,
+          payload: {
+            audio: compiledBuffer,
+            config: { language: 'en', task: 'transcribe' }
+          }
         }, [compiledBuffer.buffer]);
       }
     } else {
@@ -126,36 +129,46 @@ export const useWhisper = (): WhisperHook => {
 
   const handleWorkerMessage = useCallback((event: MessageEvent) => {
     const data = event.data || {};
-    const { status, output, latencyMs, traceId } = data;
+    // Worker wraps all results inside a `payload` object and uses `correlationId` (not `traceId`).
+    const status: string = data.status || '';
+    const payload = data.payload || {};
+    const correlationId: string = data.correlationId || '';
 
-    if (traceId !== activeTraceIdRef.current) {
-      logger.warn('Trace ID signature mismatch in worker message callback. Discarding block data.', {
+    // For transcription responses, validate that the correlationId matches the active trace.
+    // INIT_COMPLETED and PROGRESS messages are broadcast-level and should never be filtered.
+    const isTranscriptionResponse = status === 'COMPLETED' || status === 'UPDATE';
+    if (isTranscriptionResponse && correlationId && correlationId !== activeTraceIdRef.current) {
+      logger.warn('Correlation ID mismatch in worker message callback. Discarding stale transcription block.', {
         expected: activeTraceIdRef.current,
-        received: traceId
+        received: correlationId
       });
       return;
     }
 
-    // Process incoming worker thread signaling states using the mirror ref to protect render stability
+    // Process incoming worker thread signaling states using the mirror ref to protect render stability.
+    // Worker protocol: INIT_COMPLETED | PROGRESS | UPDATE | COMPLETED | ERROR
     switch (status) {
-      case 'loading':
-        setLoadingProgressPercent(data.progress || 0);
+      case 'PROGRESS':
+        setLoadingProgressPercent(payload.progress || 0);
         break;
-      case 'ready':
+      case 'INIT_COMPLETED':
         setModelReadyState(false);
         setLoadingProgressPercent(100);
-        actionsRef.current.startSession();
+        logger.info(`Whisper worker initialized on tier: ${payload.tier || 'unknown'}`);
+        // Model is ready — the FSM will be advanced to LISTENING via startRecording() calls.
+        // We do NOT call startSession() here because the user has not yet pressed Start.
         break;
-      case 'update':
+      case 'UPDATE':
         if (stateRef.current.fsm === 'VERIFYING' || stateRef.current.fsm === 'SPECULATIVE') {
-          const interimText = String(output || '').trim();
-          actionsRef.current.speculativeUpdate(interimText);
+          const interimText = String(payload.text || '').trim();
+          if (interimText) actionsRef.current.speculativeUpdate(interimText);
         }
         break;
-      case 'complete':
+      case 'COMPLETED': {
         if (stateRef.current.fsm === 'VERIFYING') {
-          const verifiedTruthString = String(output || '').trim();
-          logger.info(`Truth ledger validation completed smoothly. Latency: ${latencyMs}ms`, { traceId });
+          const verifiedTruthString = String(payload.text || '').trim();
+          const latencyMs: number = payload.latencyMs || 0;
+          logger.info(`Truth ledger validation completed. Latency: ${latencyMs}ms`, { correlationId });
 
           // Integrate index-anchored token diff reconciliation rules
           const reconciliation = reconcileTranscripts(
@@ -164,12 +177,13 @@ export const useWhisper = (): WhisperHook => {
             remoteFeatureFlags.current.levenshteinMatchThreshold
           );
 
-          actionsRef.current.whisperComplete(reconciliation.reconciledText, latencyMs || 0);
+          actionsRef.current.whisperComplete(reconciliation.reconciledText, latencyMs);
         }
         break;
-      case 'error':
-        logger.error('Background worker thread exception caught in orchestration hook:', undefined, { error: data.error });
-        actionsRef.current.inferenceFailed(data.error || 'Unknown web worker inference crash exception.');
+      }
+      case 'ERROR':
+        logger.error('Background worker thread exception caught in orchestration hook:', undefined, { error: payload.error });
+        actionsRef.current.inferenceFailed(payload.error || 'Unknown web worker inference crash exception.');
         break;
     }
   }, []);
@@ -190,10 +204,12 @@ export const useWhisper = (): WhisperHook => {
       };
     }
 
-    // Initialize accelerated machine learning background worker
+    // Initialize accelerated machine learning background worker.
+    // Worker expects action: 'INIT' (uppercase) with a correlationId field.
+    const initCorrelationId = `init-${Date.now()}`;
     workerRef.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
     workerRef.current.addEventListener('message', handleWorkerMessage);
-    workerRef.current.postMessage({ action: 'load' });
+    workerRef.current.postMessage({ action: 'INIT', correlationId: initCorrelationId, payload: { config: {} } });
 
     // Initialize native browser Web Speech API (Optimistic UI Track)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -271,7 +287,7 @@ export const useWhisper = (): WhisperHook => {
         // Strict Operational Guard Gates: Time-Chop Guard & Forced Memory Fence checked inline
         if (liveSeconds >= remoteFeatureFlags.current.infiniteSpeakerCeilingS) {
           logger.info('Infinite Speaker Guard Engaged: Hard 20-second continuous duration ceiling split pass forced.');
-          workerRef.current?.postMessage({ action: 'speech_end', traceId: activeTraceIdRef.current, timestamp: Date.now() });
+          // flushActiveSegment sends the audio via TRANSCRIBE — no separate signal needed.
           flushActiveSegment('time-chop');
           activeTraceIdRef.current = generateLocalTraceId();
           speechActiveRef.current = true;
