@@ -56,11 +56,14 @@ const VALID_TRANSITIONS: Record<TranscriptionState, TranscriptionState[]> = {
     IDLE:        ['LISTENING'],
     LISTENING:   ['IDLE', 'SPECULATIVE'],
     SPECULATIVE: ['LISTENING', 'VERIFYING', 'COMMITTED', 'IDLE'],
-    VERIFYING:   ['COMMITTED', 'FAILED', 'LISTENING'],
+    VERIFYING:   ['COMMITTED', 'FAILED', 'LISTENING', 'IDLE'],  // IDLE added for session teardown mid-inference
     COMMITTED:   ['LISTENING', 'IDLE'],
-    FAILED:      ['RECOVERING'],
+    FAILED:      ['RECOVERING', 'IDLE'],                        // IDLE added for session teardown during failure
     RECOVERING:  ['LISTENING', 'IDLE'],
 };
+
+/** States from which SESSION_START is permitted to restart a LISTENING phase. */
+const SESSION_START_PERMITTED_STATES: TranscriptionState[] = ['IDLE', 'COMMITTED', 'FAILED', 'RECOVERING'];
 
 /**
  * Validates state transitions. Returns true if the operation is valid, false otherwise.
@@ -100,7 +103,9 @@ function transcriptionReducer(
     switch (action.type) {
 
         case 'SESSION_START': {
-            if (!isValidTransition(state.fsm, 'LISTENING')) return state;
+            // Allow re-entry to LISTENING from any logically terminal or idle-equivalent state.
+            // This handles both first-start (IDLE) and mid-session restarts (COMMITTED, FAILED, RECOVERING).
+            if (!SESSION_START_PERMITTED_STATES.includes(state.fsm)) return state;
             return {
                 ...initialTranscriptionState,
                 fsm: 'LISTENING',
@@ -148,9 +153,11 @@ function transcriptionReducer(
                 ? `${state.committedText} ${addition}`.replace(/\s+/g, ' ').trim()
                 : addition;
 
+            // Immediately return to LISTENING so the next SPEECH_ONSET is accepted mid-session.
+            // Without this, the FSM strands in COMMITTED and blocks all subsequent utterances.
             return {
                 ...state,
-                fsm: 'COMMITTED',
+                fsm: 'LISTENING',
                 committedText: accumulatedHistory,
                 speculativeText: '',
                 lastLatencyMs: action.payload.latencyMs,

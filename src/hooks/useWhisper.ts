@@ -340,6 +340,13 @@ export const useWhisper = (): WhisperHook => {
     actionsRef.current.clearTranscript();
     audioFrameAccumulatorRef.current = [];
     isRecordingRef.current = true;
+
+    // Advance the FSM from IDLE → LISTENING on every recording start.
+    // The first session is started by the worker 'ready' message, but all
+    // subsequent sessions (after stopRecording resets the FSM to IDLE) must
+    // re-enter LISTENING here — otherwise SPEECH_ONSET fires from IDLE and
+    // the gatekeeper blocks every transition, producing no transcription output.
+    actionsRef.current.startSession();
     
     try { vadRef.current.start(); } catch { /* ignore */ }
     logger.info('Authoritative dual-track orchestration loops successfully initialized.');
