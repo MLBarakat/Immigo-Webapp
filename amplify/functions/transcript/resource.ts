@@ -1,7 +1,7 @@
 import { defineFunction } from '@aws-amplify/backend';
 
-export const transcriptFunction = defineFunction({
-  name: 'transcriptFunction',
+export const llmTranscriptFunction = defineFunction({
+  name: 'llmTranscriptFunction',
   entry: './handler.ts',
   timeoutSeconds: 60,
   memoryMB: 512,
