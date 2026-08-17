@@ -1,7 +1,7 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { storage } from './storage/resource';
-import { llmTranscriptFunction } from './functions/transcript/resource';
+import { transcriptFunction } from './functions/transcript/resource';
 import { aggregateSessionFunction } from './functions/aggregateSession/resource';
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
 import { LambdaIntegration, RestApi, Cors } from 'aws-cdk-lib/aws-apigateway';
@@ -13,13 +13,13 @@ import { Duration } from 'aws-cdk-lib';
  */
 const backend = defineBackend({
   auth,
-  llmTranscriptFunction,
+  transcriptFunction,
   aggregateSessionFunction,
   storage,
 });
 
 // Extract references to native CDK L2 Lambda constructs
-const transcriptLambdaInstance = backend.llmTranscriptFunction.resources.lambda as CDKFunction;
+const transcriptLambdaInstance = backend.transcriptFunction.resources.lambda as CDKFunction;
 const aggregateLambdaInstance = backend.aggregateSessionFunction.resources.lambda as CDKFunction;
 
 const bedrockStatement = new PolicyStatement({
