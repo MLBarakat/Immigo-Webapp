@@ -68,20 +68,25 @@ function getCaseInsensitiveHeader(headers: Record<string, string | undefined>, t
 async function fetchUserProgressReport(userId: string): Promise<string> {
   const today = new Date().toISOString().split('T')[0];
   try {
-    // 1. Try today's living report
-    const { data: todayReport } = await supabaseClient
+    console.log(`[Lambda-FetchReport] Querying daily_progress_reports for user=${userId}, date=${today}`);
+    const { data: todayReport, error: todayErr } = await supabaseClient
       .from('daily_progress_reports')
       .select('report_markdown')
       .eq('user_id', userId)
       .eq('date', today)
       .maybeSingle();
 
+    if (todayErr) {
+      console.warn(`[Lambda-FetchReport] Today report query error: ${todayErr.message}`);
+    }
+
     if (todayReport?.report_markdown) {
+      console.log(`[Lambda-FetchReport] Successfully fetched today's living report (${todayReport.report_markdown.length} chars)`);
       return todayReport.report_markdown;
     }
 
-    // 2. Fall back to most recent report
-    const { data: recentReport } = await supabaseClient
+    console.log(`[Lambda-FetchReport] Today's report not found. Querying most recent past report...`);
+    const { data: recentReport, error: recentErr } = await supabaseClient
       .from('daily_progress_reports')
       .select('report_markdown')
       .eq('user_id', userId)
@@ -89,18 +94,25 @@ async function fetchUserProgressReport(userId: string): Promise<string> {
       .limit(1)
       .maybeSingle();
 
+    if (recentErr) {
+      console.warn(`[Lambda-FetchReport] Recent report query error: ${recentErr.message}`);
+    }
+
     if (recentReport?.report_markdown) {
+      console.log(`[Lambda-FetchReport] Successfully fetched past report (${recentReport.report_markdown.length} chars)`);
       return recentReport.report_markdown;
     }
   } catch (err) {
-    console.error('[Lambda-FetchReport] Error fetching progress report:', err);
+    console.error('[Lambda-FetchReport] Exception fetching progress report:', err);
   }
 
+  console.log('[Lambda-FetchReport] No prior report found. Using baseline prompt.');
   return 'No prior progress history available. Begin baseline assessment across American Government, American History, and Integrated Civics.';
 }
 
 async function getTitanEmbedding(text: string): Promise<number[] | null> {
   try {
+    console.log(`[Lambda-Embedding] Generating Titan v2 embedding for text length ${text.length}...`);
     const command = new InvokeModelCommand({
       modelId: embeddingModelId,
       contentType: 'application/json',
@@ -114,9 +126,11 @@ async function getTitanEmbedding(text: string): Promise<number[] | null> {
     const response = await bedrockClient.send(command);
     const bodyStr = Buffer.from(response.body).toString('utf-8');
     const parsed = JSON.parse(bodyStr);
-    return parsed.embedding || null;
+    const embedding = parsed.embedding || null;
+    console.log(`[Lambda-Embedding] Successfully generated embedding (${embedding?.length || 0} dims)`);
+    return embedding;
   } catch (err) {
-    console.error('[Lambda-Embedding] Error generating Titan v2 embedding:', err);
+    console.error('[Lambda-Embedding] Exception generating Titan v2 embedding:', err);
     return null;
   }
 }
@@ -132,10 +146,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     'x-correlation-trace-id': traceId
   };
 
+  console.log(`[Lambda-Execution-Start] [${traceId}] Method: ${event.httpMethod}, Path: ${event.path}`);
+
   try {
     // 0. JWT Authentication Guard
     const authHeader = getCaseInsensitiveHeader(event.headers || {}, 'authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.warn(`[Lambda-Auth-Warning] [${traceId}] Missing or invalid Authorization header.`);
       return {
         statusCode: 401,
         headers: responseHeaders,
@@ -144,9 +161,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const token = authHeader.replace('Bearer ', '').trim();
+    console.log(`[Lambda-Auth] [${traceId}] Validating JWT token with Supabase Auth...`);
     const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
 
     if (authError || !userData?.user) {
+      console.error(`[Lambda-Auth-Error] [${traceId}] Supabase auth validation failed:`, authError?.message);
       return {
         statusCode: 401,
         headers: responseHeaders,
@@ -155,9 +174,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const userId = userData.user.id;
+    console.log(`[Lambda-Auth-Success] [${traceId}] Authenticated User ID: ${userId}`);
 
     // 1. Inbound Guard
     if (!event.body) {
+      console.warn(`[Lambda-Payload-Warning] [${traceId}] Empty request body.`);
       return {
         statusCode: 400,
         headers: responseHeaders,
@@ -168,7 +189,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let parsedBody: RequestBody;
     try {
       parsedBody = JSON.parse(event.body) as RequestBody;
-    } catch {
+    } catch (jsonErr) {
+      console.error(`[Lambda-Payload-Error] [${traceId}] Failed to parse JSON body:`, jsonErr);
       return {
         statusCode: 400,
         headers: responseHeaders,
@@ -181,6 +203,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const conversationWindow = parsedBody.conversationWindow || [];
 
     if (!cleanedTranscript) {
+      console.log(`[Lambda-Execution] [${traceId}] Empty transcript received. Returning 200 empty payload.`);
       return {
         statusCode: 200,
         headers: responseHeaders,
@@ -188,7 +211,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     }
 
-    console.log(`[Lambda-Execution] [${traceId}] User [${userId}] Text: "${cleanedTranscript}"`);
+    console.log(`[Lambda-Execution] [${traceId}] User: "${cleanedTranscript}", Window turns: ${conversationWindow.length}`);
 
     // 2. Fetch Progress Report
     const progressReportText = await fetchUserProgressReport(userId);
@@ -202,6 +225,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const queryVector = await getTitanEmbedding(cleanedTranscript);
 
       if (queryVector) {
+        console.log(`[Lambda-RAG] [${traceId}] Querying match_progress_reports RPC...`);
         const { data: matchedReports, error: rpcError } = await supabaseClient.rpc('match_progress_reports', {
           query_embedding: queryVector,
           match_threshold: 0.3,
@@ -212,6 +236,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         if (rpcError) {
           console.error(`[Lambda-RAG] RPC Error: ${rpcError.message}`);
         } else if (matchedReports && matchedReports.length > 0) {
+          console.log(`[Lambda-RAG] Found ${matchedReports.length} matching progress report sections.`);
           const ragContext = matchedReports
             .map((r: { date: string; report_markdown: string }) => `[Report Date: ${r.date}]\n${r.report_markdown}`)
             .join('\n\n');
@@ -224,11 +249,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             role: 'assistant',
             content: [{ type: 'text', text: 'Understood. I have reviewed your historical performance reports. How can I help you regarding your progress?' }]
           });
+        } else {
+          console.log(`[Lambda-RAG] No matching reports above similarity threshold.`);
         }
       }
     } else if (conversationWindow.length > 0) {
-      // Append last 6 sliding window turns
       const slicedWindow = conversationWindow.slice(-6);
+      console.log(`[Lambda-Window] [${traceId}] Slicing 6-turn conversation window (using ${slicedWindow.length} turns)`);
       for (const turn of slicedWindow) {
         bedrockMessages.push({
           role: turn.role === 'assistant' ? 'assistant' : 'user',
@@ -237,13 +264,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    // Append current user utterance as the final turn
     bedrockMessages.push({
       role: 'user',
       content: [{ type: 'text', text: cleanedTranscript }]
     });
 
     // 4. Call Bedrock
+    console.log(`[Lambda-Bedrock] [${traceId}] Invoking Bedrock modelId="${modelId}" with ${bedrockMessages.length} message turns...`);
+
     const bedrockRequestPayload = {
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: 300,
@@ -265,12 +293,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const generatedAssistantText = parsedBedrockData.content?.[0]?.text?.trim() || '';
 
     if (!generatedAssistantText) {
+      console.error(`[Lambda-Bedrock-Error] [${traceId}] Empty text returned from Bedrock:`, bedrockResponseBodyString);
       throw new Error('Inference Exception: Empty text returned from Bedrock.');
     }
 
-    console.log(`[Lambda-Execution] [${traceId}] Bedrock response: "${generatedAssistantText}"`);
+    console.log(`[Lambda-Bedrock-Success] [${traceId}] Assistant: "${generatedAssistantText}"`);
 
     // 5. Polly Speech Synthesis
+    console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice Joanna...`);
     const pollyCommand = new SynthesizeSpeechCommand({
       OutputFormat: 'mp3',
       Text: generatedAssistantText,
@@ -281,12 +311,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const pollyResponse = await pollyClient.send(pollyCommand);
 
     if (!pollyResponse.AudioStream) {
+      console.error(`[Lambda-Polly-Error] [${traceId}] Empty AudioStream from Polly.`);
       throw new Error('Synthesis Exception: Empty Polly audio stream.');
     }
 
     const verifiableSdkStream = pollyResponse.AudioStream as unknown as ExtendedSdkStream;
     const audioUint8Array = await verifiableSdkStream.transformToByteArray();
     const base64AudioData = Buffer.from(audioUint8Array).toString('base64');
+    console.log(`[Lambda-Polly-Success] [${traceId}] Synthesized audio payload (${base64AudioData.length} base64 chars).`);
 
     return {
       statusCode: 200,
@@ -299,7 +331,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error: unknown) {
     const parsedMessage = error instanceof Error ? error.message : 'Unhandled exception in transcript Lambda.';
-    console.error(`[Lambda-Exception] [${traceId}] Failure: ${parsedMessage}`);
+    const errorStack = error instanceof Error ? error.stack : String(error);
+    console.error(`[Lambda-Exception-Unhandled] [${traceId}] Error: ${parsedMessage}\nStack: ${errorStack}`);
 
     return {
       statusCode: 500,

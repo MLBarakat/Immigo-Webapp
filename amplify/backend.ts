@@ -50,6 +50,8 @@ if (transcriptLambdaInstance.role) {
   transcriptLambdaInstance.role.addToPrincipalPolicy(pollyStatement);
   transcriptLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-haiku-4-5');
   transcriptLambdaInstance.addEnvironment('EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0');
+  transcriptLambdaInstance.addEnvironment('SUPABASE_URL', supabaseUrl);
+  transcriptLambdaInstance.addEnvironment('SUPABASE_ANON_KEY', supabaseAnonKey);
 }
 
 if (aggregateLambdaInstance.role) {

@@ -30,9 +30,9 @@ export class ApiError extends Error {
     this.status = status;
     this.data = data;
     this.name = 'ApiError';
-    
+
     Object.setPrototypeOf(this, ApiError.prototype);
-    
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const extendedError = Error as any;
     if (typeof extendedError.captureStackTrace === 'function') {
@@ -69,7 +69,7 @@ export class ApiClient {
 
   private async fetchWithAuth(url: string, options: ApiRequestOptions = {}): Promise<Response> {
     const headersInstance = new Headers();
-    
+
     headersInstance.set('Authorization', `Bearer ${this.token}`);
     headersInstance.set('Content-Type', 'application/json');
 
@@ -86,7 +86,7 @@ export class ApiClient {
     }
 
     const fullUrl = this.buildRequestUrl(url);
-    
+
     logger.debug(`API Request: ${options.method || 'GET'} ${fullUrl}`);
 
     const fetchInit: RequestInit = {
@@ -111,10 +111,10 @@ export class ApiClient {
       } catch {
         errorData = { message: response.statusText };
       }
-      
+
       const errorPayload = errorData as ApiErrorPayload;
       const errorMessage = errorPayload?.error || errorPayload?.message || 'An unknown network API error occurred.';
-      
+
       logger.error(`API Error Response: ${response.status} captured on request to ${fullUrl}`, undefined, {
         status: response.status,
         responseData: errorData,
@@ -133,27 +133,55 @@ export class ApiClient {
   }
 
   async postTranscript(
-    transcript: string, 
+    transcript: string,
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     options: { headers?: Record<string, string> } = {}
   ): Promise<{ responseText: string; audioData: ArrayBuffer }> {
-    const response = await this.fetchWithAuth('/transcript', {
-      method: 'POST',
-      headers: options.headers,
-      body: JSON.stringify({ transcript, conversationWindow, sessionId }),
+    logger.info('[ApiClient] Dispatching postTranscript request:', {
+      transcriptLength: transcript.length,
+      windowTurns: conversationWindow.length,
+      sessionId
     });
+
+    let response: Response;
+    try {
+      response = await this.fetchWithAuth('/transcript', {
+        method: 'POST',
+        headers: options.headers,
+        body: JSON.stringify({ transcript, conversationWindow, sessionId }),
+      });
+    } catch (err) {
+      logger.error('[ApiClient] postTranscript network/CORS exception:', undefined, {
+        error: err instanceof Error ? err.message : String(err)
+      });
+      throw err;
+    }
+
+    logger.info(`[ApiClient] postTranscript HTTP status: ${response.status} ${response.statusText}`);
 
     const data = await response.json();
 
     interface InboundPayloadShape {
       responseText?: unknown;
       audioData?: unknown;
+      error?: string;
     }
 
     const parsedPayload = data as InboundPayloadShape;
 
+    if (!response.ok || parsedPayload.error) {
+      const errMessage = parsedPayload.error || `HTTP ${response.status} ${response.statusText}`;
+      logger.error('[ApiClient] postTranscript error response from server:', undefined, {
+        status: response.status,
+        error: errMessage,
+        payload: data
+      });
+      throw new ApiError(`Server Error (${response.status}): ${errMessage}`, response.status, data);
+    }
+
     if (!parsedPayload || typeof parsedPayload.responseText !== 'string' || typeof parsedPayload.audioData !== 'string') {
+      logger.error('[ApiClient] Structural Exception in postTranscript payload shape:', undefined, { data });
       throw new ApiError('Structural Exception: Invalid response template signature returned from transcript endpoint.', 500, data);
     }
 
@@ -165,11 +193,13 @@ export class ApiClient {
         audioView[i] = audioBytes.charCodeAt(i);
       }
 
+      logger.info('[ApiClient] postTranscript payload parsed and decoded successfully.');
       return {
         responseText: parsedPayload.responseText,
         audioData: audioBuffer,
       };
     } catch (error) {
+      logger.error('[ApiClient] Codec Exception decoding audio stream:', undefined, { error: String(error) });
       throw new ApiError(`Codec Exception: Failed to decode base64 audio stream correctly: ${error instanceof Error ? error.message : String(error)}`, 500, data);
     }
   }
@@ -177,6 +207,7 @@ export class ApiClient {
   async completeSession(sessionId: string): Promise<void> {
     if (!sessionId) return;
     try {
+      logger.info(`[ApiClient] Dispatching completeSession for sessionId: ${sessionId}`);
       const fullUrl = this.buildRequestUrl('/complete-session');
       const headersInstance = new Headers();
       headersInstance.set('Authorization', `Bearer ${this.token}`);
@@ -186,16 +217,15 @@ export class ApiClient {
         headersInstance.set('X-API-Key', API_KEY);
       }
 
-      // Using fetch with keepalive: true so browser delivers request even if tab closes
-      await fetch(fullUrl, {
+      const res = await fetch(fullUrl, {
         method: 'POST',
         headers: headersInstance,
         body: JSON.stringify({ sessionId }),
         keepalive: true,
       });
-      logger.info(`Dispatched session completion triggers for session ${sessionId}`);
+      logger.info(`[ApiClient] completeSession response status: ${res.status}`);
     } catch (error) {
-      logger.error(`Failed to dispatch completeSession for ${sessionId}:`, undefined, {
+      logger.error(`[ApiClient] Failed to dispatch completeSession for ${sessionId}:`, undefined, {
         error: error instanceof Error ? error.message : String(error),
       });
     }
