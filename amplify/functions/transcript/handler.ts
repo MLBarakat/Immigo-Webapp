@@ -6,7 +6,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { createClient } from '@supabase/supabase-js';
 
-const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
+const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-haiku-4-5';
 const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-text-v2:0';
 
