@@ -3,7 +3,7 @@
 // amplify/functions/aggregateSession/handler.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { createClient } from '@supabase/supabase-js';
+import { SupabaseClient, createClient } from '@supabase/supabase-js';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-haiku-4-5';
@@ -11,9 +11,7 @@ const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-t
 
 const bedrockClient = new BedrockRuntimeClient({ region });
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
-const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+let supabaseClient: SupabaseClient | null = null;
 
 interface RequestBody {
   sessionId?: string;
@@ -32,6 +30,22 @@ function getCaseInsensitiveHeader(headers: Record<string, string | undefined>, t
     }
   }
   return undefined;
+}
+
+function getSupabaseClient(): SupabaseClient {
+  if (supabaseClient) {
+    return supabaseClient;
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase runtime configuration is missing. Configure SUPABASE_URL and SUPABASE_ANON_KEY for the Amplify backend environment.');
+  }
+
+  supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+  return supabaseClient;
 }
 
 async function getTitanEmbedding(text: string): Promise<number[] | null> {
@@ -79,7 +93,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const token = authHeader.replace('Bearer ', '').trim();
-    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    const supabase = getSupabaseClient();
+    const { data: userData, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !userData?.user) {
       return {
@@ -122,7 +137,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.log(`[Aggregator-Execution] [${traceId}] Processing session aggregation for session: ${sessionId}, user: ${userId}`);
 
     // 1. Fetch Session Messages
-    const { data: sessionMessages, error: msgError } = await supabaseClient
+    const { data: sessionMessages, error: msgError } = await supabase
       .from('messages')
       .select('role, content, created_at')
       .eq('session_id', sessionId)
@@ -146,7 +161,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const today = new Date().toISOString().split('T')[0];
     let previousReportMarkdown = 'No previous progress report recorded.';
 
-    const { data: latestReport } = await supabaseClient
+    const { data: latestReport } = await supabase
       .from('daily_progress_reports')
       .select('report_markdown')
       .eq('user_id', userId)
@@ -217,7 +232,7 @@ Instructions:
     const embeddingVector = await getTitanEmbedding(reportMarkdown);
 
     // 5. UPSERT into daily_progress_reports (on conflict user_id, date)
-    const { error: upsertError } = await supabaseClient
+    const { error: upsertError } = await supabase
       .from('daily_progress_reports')
       .upsert(
         {

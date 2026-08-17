@@ -4,7 +4,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
-import { createClient } from '@supabase/supabase-js';
+import { SupabaseClient, createClient } from '@supabase/supabase-js';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-haiku-4-5';
@@ -13,9 +13,7 @@ const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-t
 const bedrockClient = new BedrockRuntimeClient({ region });
 const pollyClient = new PollyClient({ region });
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
-const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+let supabaseClient: SupabaseClient | null = null;
 
 interface ConversationTurn {
   role: 'user' | 'assistant';
@@ -65,11 +63,28 @@ function getCaseInsensitiveHeader(headers: Record<string, string | undefined>, t
   return undefined;
 }
 
+function getSupabaseClient(): SupabaseClient {
+  if (supabaseClient) {
+    return supabaseClient;
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase runtime configuration is missing. Configure SUPABASE_URL and SUPABASE_ANON_KEY for the Amplify backend environment.');
+  }
+
+  supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+  return supabaseClient;
+}
+
 async function fetchUserProgressReport(userId: string): Promise<string> {
+  const supabase = getSupabaseClient();
   const today = new Date().toISOString().split('T')[0];
   try {
     console.log(`[Lambda-FetchReport] Querying daily_progress_reports for user=${userId}, date=${today}`);
-    const { data: todayReport, error: todayErr } = await supabaseClient
+    const { data: todayReport, error: todayErr } = await supabase
       .from('daily_progress_reports')
       .select('report_markdown')
       .eq('user_id', userId)
@@ -86,7 +101,7 @@ async function fetchUserProgressReport(userId: string): Promise<string> {
     }
 
     console.log(`[Lambda-FetchReport] Today's report not found. Querying most recent past report...`);
-    const { data: recentReport, error: recentErr } = await supabaseClient
+    const { data: recentReport, error: recentErr } = await supabase
       .from('daily_progress_reports')
       .select('report_markdown')
       .eq('user_id', userId)
@@ -162,7 +177,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const token = authHeader.replace('Bearer ', '').trim();
     console.log(`[Lambda-Auth] [${traceId}] Validating JWT token with Supabase Auth...`);
-    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    const supabase = getSupabaseClient();
+    const { data: userData, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !userData?.user) {
       console.error(`[Lambda-Auth-Error] [${traceId}] Supabase auth validation failed:`, authError?.message);
@@ -226,7 +242,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       if (queryVector) {
         console.log(`[Lambda-RAG] [${traceId}] Querying match_progress_reports RPC...`);
-        const { data: matchedReports, error: rpcError } = await supabaseClient.rpc('match_progress_reports', {
+        const { data: matchedReports, error: rpcError } = await supabase.rpc('match_progress_reports', {
           query_embedding: queryVector,
           match_threshold: 0.3,
           match_count: 3,
