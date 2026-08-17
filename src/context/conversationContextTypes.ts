@@ -21,6 +21,9 @@ export interface ConversationState {
   interimTranscript: string; // Used exclusively as an interim text holder
   currentLanguageCode: string;
   assistantMessageId: string | null;
+  sessionId: string | null;
+  hasMoreHistory: boolean;
+  oldestMessageCursor: string | null;
 }
 
 export type ConversationAction =
@@ -37,7 +40,9 @@ export type ConversationAction =
   | { type: 'SEND_MESSAGE_FAILURE'; payload: { error: string; userMessageId: string; assistantMessageId: string } }
   | { type: 'SEND_MESSAGE_ROLLBACK'; payload: { userMessageId: string; assistantMessageId: string } }
   | { type: 'SET_STATUS'; payload: AppStatus }
-  | { type: 'CLEAR_ERROR' };
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'SET_SESSION_ID'; payload: string | null }
+  | { type: 'LOAD_HISTORICAL_MESSAGES'; payload: { messages: Message[]; hasMore: boolean; oldestCursor: string | null; replace?: boolean } };
 
 export const initialState: ConversationState = {
   conversationHistory: [],
@@ -49,6 +54,9 @@ export const initialState: ConversationState = {
   interimTranscript: '',
   currentLanguageCode: 'en-US',
   assistantMessageId: null,
+  sessionId: null,
+  hasMoreHistory: false,
+  oldestMessageCursor: null,
 };
 
 export const conversationReducer = (state: ConversationState, action: ConversationAction): ConversationState => {
@@ -82,13 +90,26 @@ export const conversationReducer = (state: ConversationState, action: Conversati
       return { ...state, appStatus: action.payload };
 
     case 'CLEAR_CONVERSATION':
-      return { ...state, conversationHistory: [], interimTranscript: '' };
+      return { ...state, conversationHistory: [], interimTranscript: '', oldestMessageCursor: null, hasMoreHistory: false };
 
     case 'TICK_SESSION_TIMER':
       return { ...state, sessionTime: state.isSessionActive ? state.sessionTime + 1 : 0 };
 
     case 'SET_LANGUAGE':
       return { ...state, currentLanguageCode: action.payload };
+
+    case 'SET_SESSION_ID':
+      return { ...state, sessionId: action.payload };
+
+    case 'LOAD_HISTORICAL_MESSAGES': {
+      const { messages: newMessages, hasMore, oldestCursor, replace } = action.payload;
+      return {
+        ...state,
+        conversationHistory: replace ? newMessages : [...newMessages, ...state.conversationHistory],
+        hasMoreHistory: hasMore,
+        oldestMessageCursor: oldestCursor || state.oldestMessageCursor,
+      };
+    }
 
     case 'SEND_MESSAGE_START': {
       const newAssistantMessage: Message = { 

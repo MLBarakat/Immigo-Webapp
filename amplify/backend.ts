@@ -2,6 +2,7 @@ import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { storage } from './storage/resource';
 import { transcriptFunction } from './functions/transcript/resource';
+import { aggregateSessionFunction } from './functions/aggregateSession/resource';
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
 import { LambdaIntegration, RestApi, Cors } from 'aws-cdk-lib/aws-apigateway';
 import { Function as CDKFunction } from 'aws-cdk-lib/aws-lambda';
@@ -13,47 +14,55 @@ import { Duration } from 'aws-cdk-lib';
 const backend = defineBackend({
   auth,
   transcriptFunction,
+  aggregateSessionFunction,
   storage,
 });
 
-// Extract a stable reference to the underlying native L2 Lambda construct
-const lambdaFunctionInstance = backend.transcriptFunction.resources.lambda as CDKFunction;
+// Extract references to native CDK L2 Lambda constructs
+const transcriptLambdaInstance = backend.transcriptFunction.resources.lambda as CDKFunction;
+const aggregateLambdaInstance = backend.aggregateSessionFunction.resources.lambda as CDKFunction;
 
-if (lambdaFunctionInstance.role) {
-  const bedrockStatement = new PolicyStatement({
-    effect: Effect.ALLOW,
-    actions: [
-      'bedrock:InvokeModel',
-      'bedrock:InvokeModelWithResponseStream'
-    ],
-    resources: [
-      'arn:aws:bedrock:*:*:model/amazon.titan-text-express-v1',
-      'arn:aws:bedrock:*:*:model/anthropic.claude-3-haiku-20240307-v1:0',
-      'arn:aws:bedrock:*:*:model/anthropic.claude-3-sonnet-20240229-v1:0'
-    ],
-  });
+const bedrockStatement = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'bedrock:InvokeModel',
+    'bedrock:InvokeModelWithResponseStream'
+  ],
+  resources: [
+    'arn:aws:bedrock:*:*:model/amazon.titan-text-express-v1',
+    'arn:aws:bedrock:*:*:model/amazon.titan-embed-text-v2:0',
+    'arn:aws:bedrock:*:*:model/anthropic.claude-3-haiku-20240307-v1:0',
+    'arn:aws:bedrock:*:*:model/anthropic.claude-3-sonnet-20240229-v1:0'
+  ],
+});
 
-  const pollyStatement = new PolicyStatement({
-    effect: Effect.ALLOW,
-    actions: [
-      'polly:SynthesizeSpeech',
-      'polly:DescribeVoices'
-    ],
-    resources: ['*'],
-  });
+const pollyStatement = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'polly:SynthesizeSpeech',
+    'polly:DescribeVoices'
+  ],
+  resources: ['*'],
+});
 
-  lambdaFunctionInstance.role.addToPrincipalPolicy(bedrockStatement);
-  lambdaFunctionInstance.role.addToPrincipalPolicy(pollyStatement);
-  lambdaFunctionInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-3-haiku-20240307-v1:0');
-} else {
-  throw new Error('Deployment Exception: Unable to locate the execution role for the transcriptFunction stack.');
+if (transcriptLambdaInstance.role) {
+  transcriptLambdaInstance.role.addToPrincipalPolicy(bedrockStatement);
+  transcriptLambdaInstance.role.addToPrincipalPolicy(pollyStatement);
+  transcriptLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-3-haiku-20240307-v1:0');
+  transcriptLambdaInstance.addEnvironment('EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0');
+}
+
+if (aggregateLambdaInstance.role) {
+  aggregateLambdaInstance.role.addToPrincipalPolicy(bedrockStatement);
+  aggregateLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-3-haiku-20240307-v1:0');
+  aggregateLambdaInstance.addEnvironment('EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0');
 }
 
 const apiGatewayCustomStack = backend.createStack('ImmigoApiGatewayStack');
 
 const restApiGateway = new RestApi(apiGatewayCustomStack, 'ImmigoRestApiGateway', {
   restApiName: 'ImmigoVoiceServiceGateway',
-  description: 'Production cloud gateway orchestrating real-time audio transcriptions and Bedrock LLM loops.',
+  description: 'Production cloud gateway orchestrating real-time audio transcriptions, session aggregations, and Bedrock LLM loops.',
   defaultCorsPreflightOptions: {
     allowOrigins: Cors.ALL_ORIGINS,
     allowMethods: Cors.ALL_METHODS,
@@ -63,12 +72,18 @@ const restApiGateway = new RestApi(apiGatewayCustomStack, 'ImmigoRestApiGateway'
 });
 
 const transcriptRouteResource = restApiGateway.root.addResource('transcript');
-const lambdaProxyIntegration = new LambdaIntegration(lambdaFunctionInstance, {
+const transcriptLambdaIntegration = new LambdaIntegration(transcriptLambdaInstance, {
   proxy: true,
   allowTestInvoke: false
 });
+transcriptRouteResource.addMethod('POST', transcriptLambdaIntegration);
 
-transcriptRouteResource.addMethod('POST', lambdaProxyIntegration);
+const completeSessionRouteResource = restApiGateway.root.addResource('complete-session');
+const aggregateLambdaIntegration = new LambdaIntegration(aggregateLambdaInstance, {
+  proxy: true,
+  allowTestInvoke: false
+});
+completeSessionRouteResource.addMethod('POST', aggregateLambdaIntegration);
 
 backend.addOutput({
   custom: {

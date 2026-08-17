@@ -39,8 +39,8 @@ interface ConversationWorkspaceProps {
 }
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
-  const manager = useConversation({ apiClient: apiClientInstance });
   const { user, profile, logout } = useAuth();
+  const manager = useConversation({ apiClient: apiClientInstance, userId: user?.id ?? null });
 
   // UI Modal State Management
   const [showWelcomeModal, setShowWelcomeModal] = useState(true);
@@ -143,6 +143,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
                 messages={manager.conversationHistory}
                 displayUser={displayUser}
                 interimTranscript={manager.interimTranscript}
+                onLoadOlder={manager.loadOlderMessages}
+                hasMore={manager.hasMoreHistory}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-75">

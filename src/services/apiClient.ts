@@ -134,12 +134,14 @@ export class ApiClient {
 
   async postTranscript(
     transcript: string, 
+    conversationWindow: Array<{ role: string; content: string }> = [],
+    sessionId?: string | null,
     options: { headers?: Record<string, string> } = {}
   ): Promise<{ responseText: string; audioData: ArrayBuffer }> {
     const response = await this.fetchWithAuth('/transcript', {
       method: 'POST',
       headers: options.headers,
-      body: JSON.stringify({ transcript }),
+      body: JSON.stringify({ transcript, conversationWindow, sessionId }),
     });
 
     const data = await response.json();
@@ -169,6 +171,33 @@ export class ApiClient {
       };
     } catch (error) {
       throw new ApiError(`Codec Exception: Failed to decode base64 audio stream correctly: ${error instanceof Error ? error.message : String(error)}`, 500, data);
+    }
+  }
+
+  async completeSession(sessionId: string): Promise<void> {
+    if (!sessionId) return;
+    try {
+      const fullUrl = this.buildRequestUrl('/complete-session');
+      const headersInstance = new Headers();
+      headersInstance.set('Authorization', `Bearer ${this.token}`);
+      headersInstance.set('Content-Type', 'application/json');
+
+      if (API_KEY) {
+        headersInstance.set('X-API-Key', API_KEY);
+      }
+
+      // Using fetch with keepalive: true so browser delivers request even if tab closes
+      await fetch(fullUrl, {
+        method: 'POST',
+        headers: headersInstance,
+        body: JSON.stringify({ sessionId }),
+        keepalive: true,
+      });
+      logger.info(`Dispatched session completion triggers for session ${sessionId}`);
+    } catch (error) {
+      logger.error(`Failed to dispatch completeSession for ${sessionId}:`, undefined, {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

@@ -7,21 +7,61 @@ interface ConversationHistoryProps {
   messages: readonly Message[];
   displayUser: DisplayUser;
   interimTranscript: string;
+  onLoadOlder?: () => void;
+  hasMore?: boolean;
 }
 
-export function ConversationHistory({ messages, displayUser, interimTranscript }: ConversationHistoryProps): JSX.Element {
+export function ConversationHistory({
+  messages,
+  displayUser,
+  interimTranscript,
+  onLoadOlder,
+  hasMore = false,
+}: ConversationHistoryProps): JSX.Element {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
+  const isFirstRenderRef = useRef<boolean>(true);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (isFirstRenderRef.current && messages.length > 0) {
+      scrollToBottom();
+      isFirstRenderRef.current = false;
+    } else if (interimTranscript) {
+      scrollToBottom();
+    }
   }, [messages, interimTranscript]);
+
+  useEffect(() => {
+    if (!onLoadOlder || !hasMore || !topSentinelRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          onLoadOlder();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const target = topSentinelRef.current;
+    observer.observe(target);
+
+    return () => {
+      observer.unobserve(target);
+    };
+  }, [onLoadOlder, hasMore]);
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      {/* Top Sentinel for Infinite Scroll Upward */}
+      <div ref={topSentinelRef} className="h-2 w-full flex justify-center items-center py-1">
+        {hasMore && <span className="text-xs text-immigo-gray-400 italic">Loading earlier messages…</span>}
+      </div>
+
       {messages.map((msg) => (
         <div key={msg.id} className={`flex items-start gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
           {msg.role === 'assistant' && (
@@ -43,16 +83,18 @@ export function ConversationHistory({ messages, displayUser, interimTranscript }
           )}
         </div>
       ))}
+
       {interimTranscript && (
-          <div className="flex items-start gap-4 justify-end">
-            <div className="max-w-[70%] p-3 rounded-xl shadow-sm bg-immigo-gray-200 text-deep-navy rounded-br-none opacity-70 italic">
-                <p className="text-sm">{interimTranscript}</p>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-art-blue-600 text-star-white flex items-center justify-center font-bold flex-shrink-0 animate-pulse">
-                {displayUser.initials}
-            </div>
+        <div className="flex items-start gap-4 justify-end">
+          <div className="max-w-[70%] p-3 rounded-xl shadow-sm bg-immigo-gray-200 text-deep-navy rounded-br-none opacity-70 italic">
+            <p className="text-sm">{interimTranscript}</p>
           </div>
+          <div className="w-10 h-10 rounded-full bg-art-blue-600 text-star-white flex items-center justify-center font-bold flex-shrink-0 animate-pulse">
+            {displayUser.initials}
+          </div>
+        </div>
       )}
+
       <div ref={messagesEndRef} />
     </div>
   );

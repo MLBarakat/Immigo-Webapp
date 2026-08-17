@@ -2,15 +2,17 @@ import { useCallback, useRef, useEffect, useContext } from 'react';
 import { ConversationContext } from '../context/conversationContextTypes';
 import { ApiClient, ApiError } from '../services/apiClient';
 import { Message } from '../context/conversationContextTypes';
+import { ChatPersistenceService } from '../services/chatPersistenceService';
 import { useWhisper } from './useWhisper';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
+  userId?: string | null;
 }
 
-export function useConversation({ apiClient }: UseConversationManagerProps) {
+export function useConversation({ apiClient, userId }: UseConversationManagerProps) {
   const context = useContext(ConversationContext);
   if (!context) {
     throw new Error('useConversation must be used within a ConversationProvider');
@@ -22,7 +24,7 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
   // Dual-Track Speculative Merger orchestration hook
   const {
     currentState,
-    displayTranscript, // FIXED: Captures the authoritative display text from useWhisper
+    displayTranscript,
     finalTranscript,
     isModelLoading,
     isVadReady,
@@ -32,24 +34,81 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
     stopRecording
   } = useWhisper();
 
-  // Sync the live interim transcript modifications smoothly to the consumer viewport UI
+  // Sync live interim transcript modifications to viewport UI
   useEffect(() => {
     dispatch({ type: 'SET_INTERIM_TRANSCRIPT', payload: displayTranscript });
   }, [displayTranscript, dispatch]);
+
+  // Load initial chat history on mount or when userId changes
+  useEffect(() => {
+    if (!userId) return;
+
+    let isMounted = true;
+    ChatPersistenceService.loadRecentMessages(userId, 25).then(payload => {
+      if (!isMounted) return;
+      const formattedMessages: Message[] = payload.messages.map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: m.created_at,
+      }));
+      dispatch({
+        type: 'LOAD_HISTORICAL_MESSAGES',
+        payload: {
+          messages: formattedMessages,
+          hasMore: payload.hasMore,
+          oldestCursor: payload.oldestCursor,
+          replace: true
+        }
+      });
+    }).catch(err => {
+      logger.error('Failed to hydrate chat history:', undefined, { error: String(err) });
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, dispatch]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!userId || !conversationState.oldestMessageCursor || !conversationState.hasMoreHistory) return;
+
+    try {
+      const payload = await ChatPersistenceService.loadOlderMessages(
+        userId,
+        conversationState.oldestMessageCursor,
+        25
+      );
+      const formattedMessages: Message[] = payload.messages.map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: m.created_at,
+      }));
+
+      dispatch({
+        type: 'LOAD_HISTORICAL_MESSAGES',
+        payload: {
+          messages: formattedMessages,
+          hasMore: payload.hasMore,
+          oldestCursor: payload.oldestCursor,
+          replace: false
+        }
+      });
+    } catch (err) {
+      logger.error('Failed to load older messages:', undefined, { error: String(err) });
+    }
+  }, [userId, conversationState.oldestMessageCursor, conversationState.hasMoreHistory, dispatch]);
 
   const sendTextMessage = useCallback(async (text: string) => {
     const validatedText = text.replace(/\s+/g, ' ').trim();
     if (!validatedText) return;
 
-    // Securely read the active Trace ID Correlation Token or build an un-allocated fallback
     const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
-
-    // Generate clear unique identifiers cryptographically to satisfy type contracts
     const secureUserMessageId = `user-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const secureAssistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     if (!apiClient) {
-      // FIXED: Fulfills the object mapping type contract to execute an atomic history rollback on error
       dispatch({ 
         type: 'SEND_MESSAGE_FAILURE', 
         payload: { 
@@ -72,8 +131,22 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
     dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage, assistantMessageId: secureAssistantMessageId } });
     dispatch({ type: 'SET_STATUS', payload: 'processing' });
 
+    // Persist User Message to Supabase
+    if (userId && conversationState.sessionId) {
+      void ChatPersistenceService.persistMessage(
+        conversationState.sessionId,
+        userId,
+        'user',
+        validatedText
+      );
+    }
+
+    // Build 6-turn sliding window from recent conversation history
+    const slidingWindow = conversationState.conversationHistory
+      .slice(-6)
+      .map(m => ({ role: m.role, content: m.content }));
+
     try {
-      // Exponential Backoff Retry engine loop to handle transient 5xx proxy timeouts safely
       const maxRetryAttemptsCeiling = 3;
       let currentAttempt = 0;
       let accumulatedLastError: unknown = null;
@@ -83,11 +156,15 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
       while (currentAttempt < maxRetryAttemptsCeiling) {
         try {
           currentAttempt++;
-          // FIXED: Compiles cleanly against the multi-argument postTranscript method signature for distributed tracing
-          const res = await apiClient.postTranscript(validatedText, { headers: { 'x-correlation-trace-id': traceId } });
+          const res = await apiClient.postTranscript(
+            validatedText,
+            slidingWindow,
+            conversationState.sessionId,
+            { headers: { 'x-correlation-trace-id': traceId } }
+          );
           responseText = res.responseText;
           audioData = res.audioData;
-          break; // Break loop on verified successful resolution
+          break;
         } catch (err: unknown) {
           accumulatedLastError = err;
           if (err instanceof ApiError && err.status >= 500 && err.status < 600 && currentAttempt < maxRetryAttemptsCeiling) {
@@ -109,15 +186,22 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
         throw accumulatedLastError || new Error('Structural Exception: Inbound gateway transmission payload properties missing.');
       }
 
-      // Route verified assistant token responses directly to the conversational view ledger
       dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: responseText } });
 
-      // Instantiate media payload audio allocations securely via typed Blob streams
+      // Persist Assistant Message to Supabase
+      if (userId && conversationState.sessionId) {
+        void ChatPersistenceService.persistMessage(
+          conversationState.sessionId,
+          userId,
+          'assistant',
+          responseText
+        );
+      }
+
       const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
       
-      // Engage absolute echo suppression controls: suspend active microphone tracking loops
       stopRecording();
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
 
@@ -134,13 +218,12 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
             assistantMessageId: secureAssistantMessageId
           } 
         });
-        startRecording(); // Safely restart the capture loop if playback is blocked
+        startRecording();
       });
 
       audioPlaybackNode.onended = () => {
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
         URL.revokeObjectURL(audioBlobUrl);
-        // Safely re-engage low-level audio capturing tracks after speech output completes
         if (conversationState.isSessionActive) {
           startRecording();
         }
@@ -149,7 +232,6 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
     } catch (error: unknown) {
       const parsedErrorMessage = error instanceof Error ? error.message : 'Failed to synchronize conversation transactions.';
       
-      // FIXED: Fulfills the object mapping type contract to execute an atomic history rollback on error
       dispatch({ type: 'SET_STATUS', payload: 'error' });
       dispatch({ 
         type: 'SEND_MESSAGE_FAILURE', 
@@ -166,12 +248,12 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
       });
       
       if (conversationState.isSessionActive) {
-        startRecording(); // Recover capture loops gracefully
+        startRecording();
       }
     }
-  }, [apiClient, dispatch, startRecording, stopRecording, conversationState.isSessionActive]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, conversationState.isSessionActive]);
 
-  // FIXED: Word-boundary comparison algorithm replaces character indexing to stop sentence slice drifts
+  // Word-boundary comparison for live audio transcription handoff
   useEffect(() => {
     const historicalString = processedTranscriptRef.current.trim();
     const activeConfirmedString = finalTranscript.trim();
@@ -184,7 +266,6 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
       } else if (activeConfirmedString.startsWith(historicalString)) {
         freshUtteranceChunk = activeConfirmedString.substring(historicalString.length).trim();
       } else {
-        // Fallback strategy to resolve complex out-of-order mid-sentence edits
         const historicalTokens = historicalString.split(' ');
         const activeTokens = activeConfirmedString.split(' ');
         const deltaTokens = activeTokens.slice(historicalTokens.length);
@@ -198,18 +279,33 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
     }
   }, [finalTranscript, sendTextMessage]);
 
-  const initiateSession = useCallback(() => {
+  const initiateSession = useCallback(async () => {
     dispatch({ type: 'START_SESSION' });
     analytics.track('session_started');
     processedTranscriptRef.current = ''; 
-    startRecording();
-  }, [dispatch, startRecording]);
 
-  const terminateSession = useCallback(() => {
+    if (userId) {
+      const newSessionId = await ChatPersistenceService.createSession(userId);
+      dispatch({ type: 'SET_SESSION_ID', payload: newSessionId });
+    }
+
+    startRecording();
+  }, [userId, dispatch, startRecording]);
+
+  const terminateSession = useCallback(async () => {
     stopRecording();
+    const activeSessionId = conversationState.sessionId;
     dispatch({ type: 'END_SESSION' });
+    dispatch({ type: 'SET_SESSION_ID', payload: null });
     analytics.track('session_ended', { duration_seconds: conversationState.sessionTime });
-  }, [dispatch, stopRecording, conversationState.sessionTime]);
+
+    if (activeSessionId) {
+      await ChatPersistenceService.closeSession(activeSessionId);
+      if (apiClient) {
+        void apiClient.completeSession(activeSessionId);
+      }
+    }
+  }, [conversationState.sessionId, conversationState.sessionTime, apiClient, dispatch, stopRecording]);
 
   useEffect(() => {
     if (conversationState.isSessionActive) {
@@ -243,12 +339,11 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
   }, [dispatch]);
 
   const exportTranscriptFile = useCallback(() => {
-    // FIXED: Correctly typed message structures mapping parameters cleanly without loose 'any' strings
     const transcriptText = conversationState.conversationHistory
       .map((msg: Message) => `${msg.role.toUpperCase()}: ${msg.content}`)
       .join('\n\n');
       
-    const textBlob = new Blob([transcriptText], { type: 'text/plain' });
+    const textBlob = new Blob([transcriptText], { type: 'plain' });
     const downloadBlobUrl = URL.createObjectURL(textBlob);
     const hiddenAnchorElement = document.createElement('a');
     
@@ -263,7 +358,7 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
   return {
     ...conversationState,
     currentState,
-    interimTranscript: displayTranscript, // FIXED: Initializer avoids shorthand scope reference warnings
+    interimTranscript: displayTranscript,
     finalTranscript,
     isModelLoading,
     isVadReady,
@@ -272,6 +367,7 @@ export function useConversation({ apiClient }: UseConversationManagerProps) {
     startSession: initiateSession,
     endSession: terminateSession,
     sendTextMessage,
+    loadOlderMessages,
     clearConversation: wipeConversationHistory,
     downloadTranscript: exportTranscriptFile,
     clearError: () => dispatch({ type: 'CLEAR_ERROR' }),
