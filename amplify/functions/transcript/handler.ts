@@ -7,7 +7,7 @@ import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { createClient } from '@supabase/supabase-js';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
-const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0';
+const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-haiku-4-5';
 const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-text-v2:0';
 
 const bedrockClient = new BedrockRuntimeClient({ region });
@@ -123,7 +123,7 @@ async function getTitanEmbedding(text: string): Promise<number[] | null> {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const traceId = getCaseInsensitiveHeader(event.headers || {}, 'x-correlation-trace-id') || `lambda-trace-${Date.now()}`;
-  
+
   const responseHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
@@ -142,10 +142,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         body: JSON.stringify({ error: 'Unauthorized: Missing or invalid Bearer token.' })
       };
     }
-    
+
     const token = authHeader.replace('Bearer ', '').trim();
     const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
-    
+
     if (authError || !userData?.user) {
       return {
         statusCode: 401,

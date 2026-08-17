@@ -5,8 +5,8 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { createClient } from '@supabase/supabase-js';
 
-const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
-const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0';
+const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
+const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-haiku-4-5';
 const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-text-v2:0';
 
 const bedrockClient = new BedrockRuntimeClient({ region });
