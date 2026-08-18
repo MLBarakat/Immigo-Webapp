@@ -20,6 +20,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   const { state: conversationState, dispatch } = context;
   const intervalRef = useRef<number | null>(null);
   const processedTranscriptRef = useRef<string>('');
+  const sessionIdRef = useRef<string | null>(conversationState.sessionId);
 
   // Dual-Track Speculative Merger orchestration hook
   const {
@@ -33,6 +34,10 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     startRecording,
     stopRecording
   } = useWhisper();
+
+  useEffect(() => {
+    sessionIdRef.current = conversationState.sessionId;
+  }, [conversationState.sessionId]);
 
   // Sync live interim transcript modifications to viewport UI
   useEffect(() => {
@@ -127,14 +132,15 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       content: validatedText, 
       timestamp: new Date().toISOString() 
     };
+    const activeSessionId = sessionIdRef.current || conversationState.sessionId;
 
     dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage, assistantMessageId: secureAssistantMessageId } });
     dispatch({ type: 'SET_STATUS', payload: 'processing' });
 
     // Persist User Message to Supabase
-    if (userId && conversationState.sessionId) {
+    if (userId && activeSessionId) {
       void ChatPersistenceService.persistMessage(
-        conversationState.sessionId,
+        activeSessionId,
         userId,
         'user',
         validatedText
@@ -159,7 +165,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
           const res = await apiClient.postTranscript(
             validatedText,
             slidingWindow,
-            conversationState.sessionId,
+            activeSessionId,
             { headers: { 'x-correlation-trace-id': traceId } }
           );
           responseText = res.responseText;
@@ -189,9 +195,9 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: responseText } });
 
       // Persist Assistant Message to Supabase
-      if (userId && conversationState.sessionId) {
+      if (userId && activeSessionId) {
         void ChatPersistenceService.persistMessage(
-          conversationState.sessionId,
+          activeSessionId,
           userId,
           'assistant',
           responseText
@@ -283,9 +289,11 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     dispatch({ type: 'START_SESSION' });
     analytics.track('session_started');
     processedTranscriptRef.current = ''; 
+    sessionIdRef.current = null;
 
     if (userId) {
       const newSessionId = await ChatPersistenceService.createSession(userId);
+      sessionIdRef.current = newSessionId;
       dispatch({ type: 'SET_SESSION_ID', payload: newSessionId });
     }
 
@@ -294,8 +302,9 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
 
   const terminateSession = useCallback(async () => {
     stopRecording();
-    const activeSessionId = conversationState.sessionId;
+    const activeSessionId = sessionIdRef.current || conversationState.sessionId;
     dispatch({ type: 'END_SESSION' });
+    sessionIdRef.current = null;
     dispatch({ type: 'SET_SESSION_ID', payload: null });
     analytics.track('session_ended', { duration_seconds: conversationState.sessionTime });
 

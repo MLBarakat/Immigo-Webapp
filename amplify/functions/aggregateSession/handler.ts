@@ -4,6 +4,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
+import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-haiku-4-5';
@@ -12,6 +13,42 @@ const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-t
 const bedrockClient = new BedrockRuntimeClient({ region });
 
 let supabaseClient: SupabaseClient | null = null;
+
+const LambdaUnsupportedRealtimeTransport: WebSocketLikeConstructor = class {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+
+  readonly CONNECTING = LambdaUnsupportedRealtimeTransport.CONNECTING;
+  readonly OPEN = LambdaUnsupportedRealtimeTransport.OPEN;
+  readonly CLOSING = LambdaUnsupportedRealtimeTransport.CLOSING;
+  readonly CLOSED = LambdaUnsupportedRealtimeTransport.CLOSED;
+  readonly readyState = LambdaUnsupportedRealtimeTransport.CLOSED;
+  readonly url: string;
+  readonly protocol = '';
+  readonly bufferedAmount = 0;
+
+  binaryType?: string;
+  onopen: ((this: unknown, ev: Event) => unknown) | null = null;
+  onmessage: ((this: unknown, ev: MessageEvent) => unknown) | null = null;
+  onclose: ((this: unknown, ev: CloseEvent) => unknown) | null = null;
+  onerror: ((this: unknown, ev: Event) => unknown) | null = null;
+
+  constructor(address: string | URL, _subprotocols?: string | string[]) {
+    this.url = address.toString();
+  }
+
+  close(): void {}
+
+  send(_data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+    throw new Error('Supabase Realtime is not available in the Lambda runtime.');
+  }
+
+  addEventListener(_type: string, _listener: EventListener): void {}
+
+  removeEventListener(_type: string, _listener: EventListener): void {}
+};
 
 interface RequestBody {
   sessionId?: string;
@@ -44,7 +81,16 @@ function getSupabaseClient(): SupabaseClient {
     throw new Error('Supabase runtime configuration is missing. Configure SUPABASE_URL and SUPABASE_ANON_KEY for the Amplify backend environment.');
   }
 
-  supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+  supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+    realtime: {
+      transport: LambdaUnsupportedRealtimeTransport,
+    },
+  });
   return supabaseClient;
 }
 

@@ -224,6 +224,20 @@ export class ApiClient {
         keepalive: true,
       });
       logger.info(`[ApiClient] completeSession response status: ${res.status}`);
+
+      if (!res.ok) {
+        let errorData: unknown;
+        try {
+          errorData = await res.json();
+        } catch {
+          errorData = { message: res.statusText };
+        }
+
+        logger.error(`[ApiClient] completeSession error response from server for ${sessionId}:`, undefined, {
+          status: res.status,
+          responseData: errorData,
+        });
+      }
     } catch (error) {
       logger.error(`[ApiClient] Failed to dispatch completeSession for ${sessionId}:`, undefined, {
         error: error instanceof Error ? error.message : String(error),
