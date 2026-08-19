@@ -7,7 +7,7 @@ import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
-const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-haiku-4-5';
+const modelId = process.env.DEFAULT_MODEL_ID || 'anthropic.claude-haiku-4-5-20251001-v1:0';
 const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-text-v2:0';
 
 const bedrockClient = new BedrockRuntimeClient({ region });
@@ -39,15 +39,15 @@ const LambdaUnsupportedRealtimeTransport: WebSocketLikeConstructor = class {
     this.url = address.toString();
   }
 
-  close(): void {}
+  close(): void { }
 
   send(_data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
     throw new Error('Supabase Realtime is not available in the Lambda runtime.');
   }
 
-  addEventListener(_type: string, _listener: EventListener): void {}
+  addEventListener(_type: string, _listener: EventListener): void { }
 
-  removeEventListener(_type: string, _listener: EventListener): void {}
+  removeEventListener(_type: string, _listener: EventListener): void { }
 };
 
 interface RequestBody {

@@ -17,6 +17,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1113.0",
+    "@aws-sdk/client-polly": "^3.1113.0",
     "@huggingface/transformers": "^3.7.6",
     "@opentelemetry/core": "2.0.0",
     "@ricky0123/vad-web": "^0.0.29",

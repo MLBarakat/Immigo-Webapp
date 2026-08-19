@@ -16,8 +16,8 @@
   "dependencies": {
     "@aws-amplify/backend-cli": "^1.7.0",
     "@aws-sdk/client-apigatewaymanagementapi": "^3.585.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.585.0",
-    "@aws-sdk/client-polly": "^3.540.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1113.0",
+    "@aws-sdk/client-polly": "^3.1113.0",
     "@supabase/supabase-js": "^2.43.4",
     "@types/uuid": "^9.0.8",
     "aws-cdk-lib": "^2.147.1",

@@ -31,7 +31,7 @@ const bedrockStatement = new PolicyStatement({
   resources: [
     'arn:aws:bedrock:*:*:model/amazon.titan-text-express-v1',
     'arn:aws:bedrock:*:*:model/amazon.titan-embed-text-v2:0',
-    'arn:aws:bedrock:*:*:model/anthropic.claude-haiku-4-5',
+    'arn:aws:bedrock:*:*:model/anthropic.claude-haiku-4-5-20251001-v1:0',
     'arn:aws:bedrock:*:*:model/anthropic.claude-3-sonnet-20240229-v1:0'
   ],
 });
@@ -48,13 +48,13 @@ const pollyStatement = new PolicyStatement({
 if (transcriptLambdaInstance.role) {
   transcriptLambdaInstance.role.addToPrincipalPolicy(bedrockStatement);
   transcriptLambdaInstance.role.addToPrincipalPolicy(pollyStatement);
-  transcriptLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-haiku-4-5');
+  transcriptLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-haiku-4-5-20251001-v1:0');
   transcriptLambdaInstance.addEnvironment('EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0');
 }
 
 if (aggregateLambdaInstance.role) {
   aggregateLambdaInstance.role.addToPrincipalPolicy(bedrockStatement);
-  aggregateLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-haiku-4-5');
+  aggregateLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-haiku-4-5-20251001-v1:0');
   aggregateLambdaInstance.addEnvironment('EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0');
 }
 
