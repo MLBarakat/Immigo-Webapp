@@ -225,9 +225,21 @@ export const useWhisper = (): WhisperHook => {
         if (!isRecordingRef.current || !isLeaderRef.current) return;
 
         let interimSequence = '';
+        let committedSequence = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (!event.results[i].isFinal) {
+          const transcript = event.results[i][0]?.transcript || '';
+          if (event.results[i].isFinal) {
+            committedSequence += ` ${transcript}`;
+          } else {
             interimSequence += event.results[i][0].transcript;
+          }
+        }
+
+        const cleanedCommittedText = committedSequence.replace(/\s+/g, ' ').trim();
+        if (cleanedCommittedText) {
+          const currentState = stateRef.current.fsm;
+          if (currentState === 'SPECULATIVE' || currentState === 'VERIFYING') {
+            actionsRef.current.whisperComplete(cleanedCommittedText, 0);
           }
         }
 
@@ -372,6 +384,7 @@ export const useWhisper = (): WhisperHook => {
     if (!vadRef.current) return;
 
     const hasPendingSpeech = speechActiveRef.current || stateRef.current.fsm === 'VERIFYING';
+    const pendingBrowserTranscript = stateRef.current.speculativeText.trim();
     
     isRecordingRef.current = false;
     speechActiveRef.current = false;
@@ -379,7 +392,11 @@ export const useWhisper = (): WhisperHook => {
     try { vadRef.current.pause(); } catch { /* ignore */ }
     try { nativeRecognizerRef.current?.stop(); } catch { /* ignore */ }
     
-    flushActiveSegment('manual');
+    if (pendingBrowserTranscript && (stateRef.current.fsm === 'SPECULATIVE' || stateRef.current.fsm === 'VERIFYING')) {
+      actionsRef.current.whisperComplete(pendingBrowserTranscript, 0);
+    } else {
+      flushActiveSegment('manual');
+    }
     // Keep an in-flight Whisper result eligible for commitment after capture stops.
     if (!hasPendingSpeech) actionsRef.current.endSession();
     logger.info('Authoritative dual-track orchestration loops successfully wound down.');
