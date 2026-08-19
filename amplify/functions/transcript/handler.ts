@@ -22,11 +22,11 @@ const LambdaUnsupportedRealtimeTransport: WebSocketLikeConstructor = class {
   static readonly CLOSING = 2;
   static readonly CLOSED = 3;
 
-  readonly CONNECTING = LambdaUnsupportedRealtimeTransport.CONNECTING;
-  readonly OPEN = LambdaUnsupportedRealtimeTransport.OPEN;
-  readonly CLOSING = LambdaUnsupportedRealtimeTransport.CLOSING;
-  readonly CLOSED = LambdaUnsupportedRealtimeTransport.CLOSED;
-  readonly readyState = LambdaUnsupportedRealtimeTransport.CLOSED;
+  readonly CONNECTING = 0;
+  readonly OPEN = 1;
+  readonly CLOSING = 2;
+  readonly CLOSED = 3;
+  readonly readyState = 3;
   readonly url: string;
   readonly protocol = '';
   readonly bufferedAmount = 0;
@@ -41,15 +41,15 @@ const LambdaUnsupportedRealtimeTransport: WebSocketLikeConstructor = class {
     this.url = address.toString();
   }
 
-  close(): void {}
+  close(): void { }
 
   send(_data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
     throw new Error('Supabase Realtime is not available in the Lambda runtime.');
   }
 
-  addEventListener(_type: string, _listener: EventListener): void {}
+  addEventListener(_type: string, _listener: EventListener): void { }
 
-  removeEventListener(_type: string, _listener: EventListener): void {}
+  removeEventListener(_type: string, _listener: EventListener): void { }
 };
 
 interface ConversationTurn {

@@ -20,11 +20,11 @@ const LambdaUnsupportedRealtimeTransport: WebSocketLikeConstructor = class {
   static readonly CLOSING = 2;
   static readonly CLOSED = 3;
 
-  readonly CONNECTING = LambdaUnsupportedRealtimeTransport.CONNECTING;
-  readonly OPEN = LambdaUnsupportedRealtimeTransport.OPEN;
-  readonly CLOSING = LambdaUnsupportedRealtimeTransport.CLOSING;
-  readonly CLOSED = LambdaUnsupportedRealtimeTransport.CLOSED;
-  readonly readyState = LambdaUnsupportedRealtimeTransport.CLOSED;
+  readonly CONNECTING = 0;
+  readonly OPEN = 1;
+  readonly CLOSING = 2;
+  readonly CLOSED = 3;
+  readonly readyState = 3;
   readonly url: string;
   readonly protocol = '';
   readonly bufferedAmount = 0;
