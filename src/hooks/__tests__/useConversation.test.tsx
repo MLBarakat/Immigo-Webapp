@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { useConversation } from '../useConversation';
 import { ConversationContext } from '../../context/conversationContextTypes';
@@ -163,5 +163,40 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
     // Ensure system recovers tracking loops gracefully even when network states break down
     expect(mockStartRecording).toHaveBeenCalledTimes(1);
+  });
+
+  it('should submit a committed speech transcript to the LLM automatically', async () => {
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Speech response',
+      audioData: new ArrayBuffer(8),
+    });
+    (useWhisper as any).mockReturnValue({
+      currentState: 'LISTENING',
+      displayTranscript: 'What is my status?',
+      finalTranscript: 'What is my status?',
+      isModelLoading: false,
+      isVadReady: true,
+      modelLoadingProgress: 100,
+      isTranscribing: false,
+      startRecording: mockStartRecording,
+      stopRecording: mockStopRecording,
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await waitFor(() => {
+      expect(mockApiClient.postTranscript).toHaveBeenCalledWith(
+        'What is my status?',
+        [],
+        undefined,
+        expect.objectContaining({ headers: expect.any(Object) })
+      );
+    });
   });
 });

@@ -370,6 +370,8 @@ export const useWhisper = (): WhisperHook => {
 
   const stopRecording = useCallback(() => {
     if (!vadRef.current) return;
+
+    const hasPendingSpeech = speechActiveRef.current || stateRef.current.fsm === 'VERIFYING';
     
     isRecordingRef.current = false;
     speechActiveRef.current = false;
@@ -378,7 +380,8 @@ export const useWhisper = (): WhisperHook => {
     try { nativeRecognizerRef.current?.stop(); } catch { /* ignore */ }
     
     flushActiveSegment('manual');
-    actionsRef.current.endSession(); // Seats the global FSM state safely back to 'IDLE'
+    // Keep an in-flight Whisper result eligible for commitment after capture stops.
+    if (!hasPendingSpeech) actionsRef.current.endSession();
     logger.info('Authoritative dual-track orchestration loops successfully wound down.');
   }, [flushActiveSegment]);
 
