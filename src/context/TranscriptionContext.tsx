@@ -54,8 +54,8 @@ export type TranscriptionAction =
 
 const VALID_TRANSITIONS: Record<TranscriptionState, TranscriptionState[]> = {
     IDLE:        ['LISTENING', 'FAILED'],
-    LISTENING:   ['IDLE', 'SPECULATIVE'],
-    SPECULATIVE: ['LISTENING', 'VERIFYING', 'COMMITTED', 'IDLE'],
+    LISTENING:   ['IDLE', 'SPECULATIVE', 'FAILED'],
+    SPECULATIVE: ['LISTENING', 'VERIFYING', 'COMMITTED', 'FAILED', 'IDLE'],
     VERIFYING:   ['COMMITTED', 'FAILED', 'LISTENING', 'IDLE'],  // IDLE added for session teardown mid-inference
     COMMITTED:   ['LISTENING', 'IDLE'],
     FAILED:      ['RECOVERING', 'IDLE'],                        // IDLE added for session teardown during failure

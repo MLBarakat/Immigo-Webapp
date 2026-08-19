@@ -67,7 +67,7 @@ const MODEL_BY_TIER: Record<RuntimeTier, string> = {
   'quantized-tiny': 'Xenova/whisper-tiny',
 };
 
-let activeTier: RuntimeTier = 'webgpu';
+let activeTier: RuntimeTier = 'wasm-simd';
 let transcriberInstance: Transcriber | null = null;
 let activeLoadingPromise: Promise<Transcriber> | null = null;
 let lastTrackedCorrelationId = 'worker-boot';
@@ -161,6 +161,12 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
   env.allowLocalModels = true;
   env.allowRemoteModels = true;
   env.localModelPath = '/models/';
+  // Keep the ONNX WASM runtime on same-origin assets shipped in public/.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const runtimeEnv = env as any;
+  if (runtimeEnv.backends?.onnx?.wasm) {
+    runtimeEnv.backends.onnx.wasm.wasmPaths = '/';
+  }
 
   const useWebGpu = tier === 'webgpu';
   const options: PipelineOptions = {
@@ -254,7 +260,11 @@ async function warmUp(correlationId: string, tier: RuntimeTier): Promise<void> {
 }
 
 async function handleInit(message: WorkerRequestMessage): Promise<void> {
-  const tier = message.payload?.config?.tier ?? (message.payload?.config?.useWebGPU === false ? 'wasm-simd' : 'webgpu');
+  const requestedTier = message.payload?.config?.tier;
+  const webGpuAvailable = typeof navigator !== 'undefined' && 'gpu' in navigator;
+  const tier = requestedTier ?? (
+    message.payload?.config?.useWebGPU === true && webGpuAvailable ? 'webgpu' : 'wasm-simd'
+  );
   try {
     await warmUp(message.correlationId, tier);
     postMessageToMain({ status: 'INIT_COMPLETED', correlationId: message.correlationId, payload: { tier } });
