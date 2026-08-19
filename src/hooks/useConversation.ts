@@ -261,6 +261,13 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
 
   // Word-boundary comparison for live audio transcription handoff
   useEffect(() => {
+    // A new recording starts with an empty committed transcript. Clear the
+    // previous utterance baseline so the next utterance is sent in full.
+    if (!finalTranscript.trim()) {
+      processedTranscriptRef.current = '';
+      return;
+    }
+
     const historicalString = processedTranscriptRef.current.trim();
     const activeConfirmedString = finalTranscript.trim();
 

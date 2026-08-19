@@ -199,4 +199,50 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       );
     });
   });
+
+  it('should submit the next speech utterance after the transcript is cleared', async () => {
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Speech response',
+      audioData: new ArrayBuffer(8),
+    });
+
+    const emptyWhisperState = {
+      currentState: 'LISTENING',
+      displayTranscript: '',
+      finalTranscript: '',
+      isModelLoading: false,
+      isVadReady: true,
+      modelLoadingProgress: 100,
+      isTranscribing: false,
+      startRecording: mockStartRecording,
+      stopRecording: mockStopRecording,
+    };
+    (useWhisper as any).mockReturnValue(emptyWhisperState);
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    const { rerender } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    (useWhisper as any).mockReturnValue({ ...emptyWhisperState, finalTranscript: 'First question' });
+    await act(async () => rerender());
+    await waitFor(() => expect(mockApiClient.postTranscript).toHaveBeenCalledTimes(1));
+
+    (useWhisper as any).mockReturnValue(emptyWhisperState);
+    await act(async () => rerender());
+
+    (useWhisper as any).mockReturnValue({ ...emptyWhisperState, finalTranscript: 'Second question' });
+    await act(async () => rerender());
+    await waitFor(() => expect(mockApiClient.postTranscript).toHaveBeenCalledTimes(2));
+
+    expect(mockApiClient.postTranscript).toHaveBeenLastCalledWith(
+      'Second question',
+      [],
+      undefined,
+      expect.objectContaining({ headers: expect.any(Object) })
+    );
+  });
 });
