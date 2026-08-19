@@ -1,3 +1,5 @@
+import { env, pipeline } from '@huggingface/transformers';
+
 type WorkerAction = 'INIT' | 'TRANSCRIBE' | 'RESET';
 type WorkerStatus = 'INIT_COMPLETED' | 'PROGRESS' | 'COMPLETED' | 'ERROR' | 'UPDATE';
 type RuntimeTier = 'webgpu' | 'wasm-simd' | 'quantized-tiny';
@@ -156,16 +158,9 @@ function queryVramTelemetry(): { vramUsageBytes: number; fragmentation: number }
  * Configures the windowed Anti-Aliasing parameters natively.
  */
 async function createTranscriber(correlationId: string, tier: RuntimeTier): Promise<Transcriber> {
-  // Enforce explicit package loading parameters from pinned CDN endpoints
-  const module = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@3.0.0-alpha.12');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const transformers = module as any;
-
-  if (transformers.env) {
-    transformers.env.allowLocalModels = true;
-    transformers.env.allowRemoteModels = true;
-    transformers.env.localModelPath = '/models/';
-  }
+  env.allowLocalModels = true;
+  env.allowRemoteModels = true;
+  env.localModelPath = '/models/';
 
   const useWebGpu = tier === 'webgpu';
   const options: PipelineOptions = {
@@ -180,7 +175,7 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
     },
   };
 
-  const pipeline = await transformers.pipeline('automatic-speech-recognition', MODEL_BY_TIER[tier], options);
+  const transcriber = await pipeline('automatic-speech-recognition', MODEL_BY_TIER[tier], options);
   
   // Connect explicit hardware context-loss observers if WebGPU target is elected
   if (useWebGpu && typeof navigator !== 'undefined' && 'gpu' in navigator) {
@@ -205,7 +200,7 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
     }
   }
 
-  return pipeline;
+  return transcriber as Transcriber;
 }
 
 /**

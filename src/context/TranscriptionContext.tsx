@@ -53,7 +53,7 @@ export type TranscriptionAction =
 // ─── Strict FSM Transition Matrix ─────────────────────────────────────────────
 
 const VALID_TRANSITIONS: Record<TranscriptionState, TranscriptionState[]> = {
-    IDLE:        ['LISTENING'],
+    IDLE:        ['LISTENING', 'FAILED'],
     LISTENING:   ['IDLE', 'SPECULATIVE'],
     SPECULATIVE: ['LISTENING', 'VERIFYING', 'COMMITTED', 'IDLE'],
     VERIFYING:   ['COMMITTED', 'FAILED', 'LISTENING', 'IDLE'],  // IDLE added for session teardown mid-inference

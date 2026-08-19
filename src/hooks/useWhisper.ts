@@ -182,7 +182,7 @@ export const useWhisper = (): WhisperHook => {
         break;
       }
       case 'ERROR':
-        logger.error('Background worker thread exception caught in orchestration hook:', undefined, { error: payload.error });
+        logger.error('Background worker thread exception caught in orchestration hook.', { error: payload.error });
         actionsRef.current.inferenceFailed(payload.error || 'Unknown web worker inference crash exception.');
         break;
     }
