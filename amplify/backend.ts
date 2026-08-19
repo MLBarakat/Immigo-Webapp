@@ -22,6 +22,7 @@ const backend = defineBackend({
 const transcriptLambdaInstance = backend.transcriptFunction.resources.lambda as CDKFunction;
 const aggregateLambdaInstance = backend.aggregateSessionFunction.resources.lambda as CDKFunction;
 
+// Corrected IAM Policy for Bedrock Model Invocation
 const bedrockStatement = new PolicyStatement({
   effect: Effect.ALLOW,
   actions: [
@@ -29,10 +30,9 @@ const bedrockStatement = new PolicyStatement({
     'bedrock:InvokeModelWithResponseStream'
   ],
   resources: [
-    'arn:aws:bedrock:*:*:model/amazon.titan-text-express-v1',
-    'arn:aws:bedrock:*:*:model/amazon.titan-embed-text-v2:0',
-    'arn:aws:bedrock:*:*:model/anthropic.claude-haiku-4-5-20251001-v1:0',
-    'arn:aws:bedrock:*:*:model/anthropic.claude-3-sonnet-20240229-v1:0'
+    'arn:aws:bedrock:*::foundation-model/*',
+    'arn:aws:bedrock:*:*:inference-profile/*',
+    'arn:aws:bedrock:*:*:provisioned-model/*'
   ],
 });
 
@@ -87,7 +87,7 @@ completeSessionRouteResource.addMethod('POST', aggregateLambdaIntegration);
 
 backend.addOutput({
   custom: {
-    apiBaseUrl: restApiGateway.url,
+    apiBaseUrl: restApiGateway.url
   },
 });
 
