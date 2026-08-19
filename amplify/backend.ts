@@ -48,13 +48,13 @@ const pollyStatement = new PolicyStatement({
 if (transcriptLambdaInstance.role) {
   transcriptLambdaInstance.role.addToPrincipalPolicy(bedrockStatement);
   transcriptLambdaInstance.role.addToPrincipalPolicy(pollyStatement);
-  transcriptLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-haiku-4-5-20251001-v1:0');
+  transcriptLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'us.anthropic.claude-haiku-4-5-20251001-v1:0');
   transcriptLambdaInstance.addEnvironment('EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0');
 }
 
 if (aggregateLambdaInstance.role) {
   aggregateLambdaInstance.role.addToPrincipalPolicy(bedrockStatement);
-  aggregateLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'anthropic.claude-haiku-4-5-20251001-v1:0');
+  aggregateLambdaInstance.addEnvironment('DEFAULT_MODEL_ID', 'us.anthropic.claude-haiku-4-5-20251001-v1:0');
   aggregateLambdaInstance.addEnvironment('EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0');
 }
 
