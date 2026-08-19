@@ -118,7 +118,7 @@ CORS_ORIGIN=http://localhost:5173
 
 ### Audio Settings
 - **Speech Recognition**: Continuous listening with interim results
-- **Voice Synthesis**: Neural voice (Joanna) via AWS Polly
+- **Voice Synthesis**: Standard voice (Joanna) via AWS Polly
 - **Audio Format**: MP3 encoding for optimal streaming
 
 ## Performance Optimization

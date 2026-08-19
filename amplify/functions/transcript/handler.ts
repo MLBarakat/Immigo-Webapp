@@ -367,7 +367,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       OutputFormat: 'mp3',
       Text: generatedAssistantText,
       VoiceId: 'Joanna',
-      Engine: 'neural'
+      Engine: 'standard'
     });
 
     const pollyResponse = await pollyClient.send(pollyCommand);
