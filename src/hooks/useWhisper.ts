@@ -3,6 +3,7 @@ import { logger } from '../logger';
 import { MicVAD } from '@ricky0123/vad-web';
 import { useTranscription, TranscriptionState } from '../context/TranscriptionContext';
 import { reconcileTranscripts } from '../utils/diffReconciliation';
+import { createMicrophoneStream } from '../utils/audioUtils';
 
 export interface WhisperHook {
   currentState: TranscriptionState;
@@ -54,6 +55,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
   const workerRef = useRef<Worker | null>(null);
   const vadRef = useRef<MicVAD | null>(null);
+  const microphoneStreamRef = useRef<MediaStream | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nativeRecognizerRef = useRef<any>(null);
 
@@ -294,6 +296,24 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       baseAssetPath: '/',
       onnxWASMBasePath: '/',
       model: 'legacy',
+      // Use browser hardware echo cancellation so Polly playback is suppressed
+      // before it reaches the VAD and interruption recognizer.
+      getStream: async () => {
+        const stream = await createMicrophoneStream({
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        });
+        microphoneStreamRef.current = stream;
+        return stream;
+      },
+      pauseStream: async (stream) => {
+        stream.getAudioTracks().forEach((track) => { track.enabled = false; });
+      },
+      resumeStream: async (stream) => {
+        stream.getAudioTracks().forEach((track) => { track.enabled = true; });
+        return stream;
+      },
       positiveSpeechThreshold: 0.7,
       negativeSpeechThreshold: 0.65,
       preSpeechPadMs: 500,  // FIXED: Converted from frame indexes to millisecond bounds
@@ -392,6 +412,8 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       }
       
       try { vadRef.current?.destroy(); } catch { /* ignore */ }
+      microphoneStreamRef.current?.getTracks().forEach((track) => track.stop());
+      microphoneStreamRef.current = null;
       try { nativeRecognizerRef.current?.abort(); } catch { /* ignore */ }
       
       if (workerRef.current) {
