@@ -43,7 +43,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       state: {
         conversationHistory: [],
         appStatus: 'idle',
-        isSessionActive: true,
+        isSessionActive: false,
         sessionTime: 42,
         errorMessage: null,
       },
@@ -85,7 +85,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     vi.clearAllMocks();
   });
 
-  it('should enforce the echo suppression lifecycle accurately during standard transcript transactions', async () => {
+  it('should keep text-mode responses silent', async () => {
     const syntheticBuffer = new ArrayBuffer(8);
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Welcome to the Immigo interaction matrix layer.',
@@ -106,26 +106,14 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     });
 
     // 2. FIXED: Assert absolute execution alignment matching echo suppression gates
-    expect(mockStopRecording).toHaveBeenCalledTimes(1);
-    expect(mockDispatch).toHaveBeenCalledWith({
-      type: 'SET_STATUS',
-      payload: 'speaking',
-    });
-    
-    expect(mockAudioInstance.play).toHaveBeenCalledTimes(1);
-
-    // Simulate standard audio element playback termination hooks natively
-    await act(async () => {
-      if (mockAudioInstance.onended) {
-        mockAudioInstance.onended();
-      }
-    });
-
+    expect(mockStopRecording).not.toHaveBeenCalled();
+    expect(mockAudioInstance.play).not.toHaveBeenCalled();
     expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
-    expect(mockStartRecording).toHaveBeenCalledTimes(1); // Mute gate successfully unlocked
   });
 
   it('should dispatch an atomic rollback object payload structure upon catching cloud proxy failures', async () => {
+    mockContextValue.state.isSessionActive = true;
+
     // Inject a severe 500 internal gateway exception into the networking execution track
     const networkChaosException = new ApiError(
       'Cloud Proxy Execution Failure (Gateway Timeout Packet dropped)', 

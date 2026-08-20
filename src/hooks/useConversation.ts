@@ -19,6 +19,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   }
   const { state: conversationState, dispatch } = context;
   const intervalRef = useRef<number | null>(null);
+  const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
   const processedTranscriptRef = useRef<string>('');
   const sessionIdRef = useRef<string | null>(conversationState.sessionId);
 
@@ -32,8 +33,18 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     modelLoadingProgress,
     isTranscribing,
     startRecording,
-    stopRecording
-  } = useWhisper();
+    stopRecording,
+    clearTranscript
+  } = useWhisper({
+    onSpeechStart: () => {
+      const activePlayback = audioPlaybackRef.current;
+      if (!activePlayback) return;
+      activePlayback.pause();
+      activePlayback.currentTime = 0;
+      audioPlaybackRef.current = null;
+      dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+    }
+  });
 
   useEffect(() => {
     sessionIdRef.current = conversationState.sessionId;
@@ -136,6 +147,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
 
     dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage, assistantMessageId: secureAssistantMessageId } });
     dispatch({ type: 'SET_STATUS', payload: 'processing' });
+    clearTranscript?.();
 
     // Persist User Message to Supabase
     if (userId && activeSessionId) {
@@ -204,12 +216,17 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
         );
       }
 
+      if (!conversationState.isSessionActive) {
+        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        return;
+      }
+
       const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
-      
-      stopRecording();
+      audioPlaybackRef.current = audioPlaybackNode;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
+      startRecording();
 
       audioPlaybackNode.play().catch((error: unknown) => {
         logger.error('Audio node hardware playback initialization failure exceptions handled:', undefined, { 
@@ -224,15 +241,14 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
             assistantMessageId: secureAssistantMessageId
           } 
         });
+        audioPlaybackRef.current = null;
         startRecording();
       });
 
       audioPlaybackNode.onended = () => {
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        audioPlaybackRef.current = null;
         URL.revokeObjectURL(audioBlobUrl);
-        if (conversationState.isSessionActive) {
-          startRecording();
-        }
       };
 
     } catch (error: unknown) {
@@ -257,7 +273,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
         startRecording();
       }
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, conversationState.isSessionActive]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, clearTranscript, conversationState.isSessionActive]);
 
   // Word-boundary comparison for live audio transcription handoff
   useEffect(() => {

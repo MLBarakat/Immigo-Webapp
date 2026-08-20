@@ -14,6 +14,11 @@ export interface WhisperHook {
   isTranscribing: boolean;
   startRecording: () => void;
   stopRecording: () => void;
+  clearTranscript: () => void;
+}
+
+interface WhisperOptions {
+  readonly onSpeechStart?: () => void;
 }
 
 const LEADER_CHANNEL_NAME = 'immigo-transcription-leader';
@@ -38,7 +43,7 @@ export function buildCloudSocketStartMessage(correlationId: string, language = '
   };
 }
 
-export const useWhisper = (): WhisperHook => {
+export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook => {
   // Connect directly to the authoritative global state context to prevent split-brain states
   const { state, actions } = useTranscription();
   
@@ -67,11 +72,13 @@ export const useWhisper = (): WhisperHook => {
   // State Tracking Mirror reference to feed async event listeners without triggering re-binding loops
   const stateRef = useRef(state);
   const actionsRef = useRef(actions);
+  const onSpeechStartRef = useRef(onSpeechStart);
   
   useEffect(() => {
     stateRef.current = state;
     actionsRef.current = actions;
-  }, [state, actions]);
+    onSpeechStartRef.current = onSpeechStart;
+  }, [state, actions, onSpeechStart]);
 
   // Centrally isolated operational threshold feature flags
   const remoteFeatureFlags = useRef({
@@ -296,6 +303,7 @@ export const useWhisper = (): WhisperHook => {
         if (!isRecordingRef.current || !isLeaderRef.current) return;
         activeTraceIdRef.current = generateLocalTraceId();
         speechActiveRef.current = true;
+        onSpeechStartRef.current?.();
         segmentSampleCountRef.current = 0;
         segmentEnergySumRef.current = 0;
         segmentSpeechProbabilitySumRef.current = 0;
@@ -450,6 +458,7 @@ export const useWhisper = (): WhisperHook => {
     modelLoadingProgress: loadingProgressPercent,
     isTranscribing: state.fsm === 'VERIFYING',
     startRecording, // FIXED: Successfully returned functions back into the object literal instance
-    stopRecording  // FIXED: Successfully returned functions back into the object literal instance
+    stopRecording, // FIXED: Successfully returned functions back into the object literal instance
+    clearTranscript: () => actionsRef.current.clearTranscript()
   };
 };
