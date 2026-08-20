@@ -53,6 +53,10 @@ export const useWhisper = (): WhisperHook => {
   const nativeRecognizerRef = useRef<any>(null);
 
   const audioFrameAccumulatorRef = useRef<Float32Array[]>([]);
+  const segmentSampleCountRef = useRef(0);
+  const segmentEnergySumRef = useRef(0);
+  const segmentSpeechProbabilitySumRef = useRef(0);
+  const segmentFrameCountRef = useRef(0);
   const activeTraceIdRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
   const speechActiveRef = useRef<boolean>(false);
@@ -127,6 +131,18 @@ export const useWhisper = (): WhisperHook => {
     }
   }, [compileAudioPayload]);
 
+  const hasSpeechQuality = useCallback(() => {
+    const sampleCount = segmentSampleCountRef.current;
+    if (sampleCount < remoteFeatureFlags.current.emptyHandoffSamplesMin) return false;
+
+    const rms = Math.sqrt(segmentEnergySumRef.current / sampleCount);
+    const averageSpeechProbability = segmentFrameCountRef.current > 0
+      ? segmentSpeechProbabilitySumRef.current / segmentFrameCountRef.current
+      : 0;
+
+    return rms >= 0.008 && averageSpeechProbability >= 0.7;
+  }, []);
+
   const handleWorkerMessage = useCallback((event: MessageEvent) => {
     const data = event.data || {};
     // Worker wraps all results inside a `payload` object and uses `correlationId` (not `traceId`).
@@ -170,6 +186,12 @@ export const useWhisper = (): WhisperHook => {
           const latencyMs: number = payload.latencyMs || 0;
           logger.info(`Truth ledger validation completed. Latency: ${latencyMs}ms`, { correlationId });
 
+          if (!hasSpeechQuality()) {
+            logger.info('Speech quality gate rejected a low-confidence audio segment before chat submission.');
+            actionsRef.current.whisperCancel();
+            break;
+          }
+
           // Integrate index-anchored token diff reconciliation rules
           const reconciliation = reconcileTranscripts(
             stateRef.current.speculativeText,
@@ -186,7 +208,7 @@ export const useWhisper = (): WhisperHook => {
         actionsRef.current.inferenceFailed(payload.error || 'Unknown web worker inference crash exception.');
         break;
     }
-  }, []);
+  }, [hasSpeechQuality]);
 
   useEffect(() => {
     tabIdRef.current = `tab_id_${performance.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -274,6 +296,10 @@ export const useWhisper = (): WhisperHook => {
         if (!isRecordingRef.current || !isLeaderRef.current) return;
         activeTraceIdRef.current = generateLocalTraceId();
         speechActiveRef.current = true;
+        segmentSampleCountRef.current = 0;
+        segmentEnergySumRef.current = 0;
+        segmentSpeechProbabilitySumRef.current = 0;
+        segmentFrameCountRef.current = 0;
         
         actionsRef.current.speechOnset(activeTraceIdRef.current); // Advance authoritative FSM to 'SPECULATIVE'
         try { nativeRecognizerRef.current.start(); } catch { /* Shield duplicate invoke exceptions */ }
@@ -288,9 +314,16 @@ export const useWhisper = (): WhisperHook => {
         actionsRef.current.whisperCancel();
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onFrameProcessed: (_probabilities: any, frame: Float32Array) => {
+      onFrameProcessed: (probabilities: any, frame: Float32Array) => {
         if (!isRecordingRef.current || !speechActiveRef.current || !isLeaderRef.current) return;
         audioFrameAccumulatorRef.current.push(frame);
+
+        let frameEnergy = 0;
+        for (let i = 0; i < frame.length; i++) frameEnergy += frame[i] * frame[i];
+        segmentSampleCountRef.current += frame.length;
+        segmentEnergySumRef.current += frameEnergy;
+        segmentSpeechProbabilitySumRef.current += Number(probabilities?.isSpeech || 0);
+        segmentFrameCountRef.current += 1;
 
         const currentSamplesCount = audioFrameAccumulatorRef.current.reduce((acc, f) => acc + f.length, 0);
         const liveSeconds = currentSamplesCount / 16000;
@@ -393,14 +426,20 @@ export const useWhisper = (): WhisperHook => {
     try { nativeRecognizerRef.current?.stop(); } catch { /* ignore */ }
     
     if (pendingBrowserTranscript && (stateRef.current.fsm === 'SPECULATIVE' || stateRef.current.fsm === 'VERIFYING')) {
-      actionsRef.current.whisperComplete(pendingBrowserTranscript, 0);
+      if (hasSpeechQuality()) {
+        actionsRef.current.whisperComplete(pendingBrowserTranscript, 0);
+      } else {
+        logger.info('Speech quality gate rejected browser transcript before chat submission.');
+        audioFrameAccumulatorRef.current = [];
+        actionsRef.current.whisperCancel();
+      }
     } else {
       flushActiveSegment('manual');
     }
     // Keep an in-flight Whisper result eligible for commitment after capture stops.
     if (!hasPendingSpeech) actionsRef.current.endSession();
     logger.info('Authoritative dual-track orchestration loops successfully wound down.');
-  }, [flushActiveSegment]);
+  }, [flushActiveSegment, hasSpeechQuality]);
 
   return {
     currentState: state.fsm,
