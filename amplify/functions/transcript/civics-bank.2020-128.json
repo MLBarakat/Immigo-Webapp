@@ -1,0 +1,1941 @@
+{
+  "edition": "2020-128",
+  "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+  "effectiveNote": "Basis of the 2025 civics test (effective 2025-10-20). Applies to N-400 filed on/after 2025-10-20. Pre-cutoff filers take the 2008/100 test (see PMF-02).",
+  "builtAt": "2026-08-23T09:15:50.885Z",
+  "items": [
+    {
+      "id": "q-001",
+      "number": 1,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is the form of government of the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Republic",
+        "Constitution-based federal republic",
+        "Representative democracy"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-002",
+      "number": 2,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "What is the supreme law of the land?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(U.S.) Constitution"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-003",
+      "number": 3,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one thing the U.S. Constitution does.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Forms the government",
+        "Defines powers of government",
+        "Defines the parts of government",
+        "Protects the rights of the people"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-004",
+      "number": 4,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The U.S. Constitution starts with the words \"We the People.\" What does \"We the People\" mean?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Self-government",
+        "Popular sovereignty",
+        "Consent of the governed",
+        "People should govern themselves",
+        "(Example of) social contract"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-005",
+      "number": 5,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How are changes made to the U.S. Constitution?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Amendments",
+        "The amendment process"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-006",
+      "number": 6,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What does the Bill of Rights protect?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(The basic) rights of Americans",
+        "(The basic) rights of people living in the United States"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-007",
+      "number": 7,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "How many amendments does the U.S. Constitution have?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Twenty-seven (27)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-008",
+      "number": 8,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why is the Declaration of Independence important?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "It says America is free from British control.",
+        "It says all people are created equal.",
+        "It identifies inherent rights.",
+        "It identifies individual freedoms."
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-009",
+      "number": 9,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What founding document said the American colonies were free from Britain?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Declaration of Independence"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-010",
+      "number": 10,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name two important ideas from the Declaration of Independence and the U.S. Constitution.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Equality",
+        "Liberty",
+        "Social contract",
+        "Natural rights",
+        "Limited government",
+        "Self-government"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-011",
+      "number": 11,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The words \"Life, Liberty, and the pursuit of Happiness\" are in what founding document?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Declaration of Independence"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-012",
+      "number": 12,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "What is the economic system of the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Capitalism",
+        "Free market economy"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-013",
+      "number": 13,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is the rule of law?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Everyone must follow the law.",
+        "Leaders must obey the law.",
+        "Government must obey the law.",
+        "No one is above the law."
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-014",
+      "number": 14,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Many documents influenced the U.S. Constitution. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Declaration of Independence",
+        "Articles of Confederation",
+        "Federalist Papers",
+        "Anti-Federalist Papers",
+        "Virginia Declaration of Rights",
+        "Fundamental Orders of Connecticut",
+        "Mayflower Compact",
+        "Iroquois Great Law of Peace"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-015",
+      "number": 15,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "There are three branches of government. Why?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "So one part does not become too powerful",
+        "Checks and balances",
+        "Separation of powers"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-016",
+      "number": 16,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name the three branches of government.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Legislative, executive, and judicial",
+        "Congress, president, and the courts"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-017",
+      "number": 17,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The President of the United States is in charge of which branch of government?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Executive branch"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-018",
+      "number": 18,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What part of the federal government writes laws?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(U.S.) Congress",
+        "(U.S. or national) legislature",
+        "Legislative branch"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-019",
+      "number": 19,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What are the two parts of the U.S. Congress?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Senate and House (of Representatives)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-020",
+      "number": 20,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "Name one power of the U.S. Congress.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Writes laws",
+        "Declares war",
+        "Makes the federal budget"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-021",
+      "number": 21,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How many U.S. senators are there?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "One hundred (100)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-022",
+      "number": 22,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How long is a term for a U.S. senator?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Six (6) years"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-023",
+      "number": 23,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who is one of your state's U.S. senators now?",
+      "kind": "dynamic",
+      "acceptableAnswers": [],
+      "jurisdictionDependent": true,
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-024",
+      "number": 24,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How many voting members are in the House of Representatives?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Four hundred thirty-five (435)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-025",
+      "number": 25,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How long is a term for a member of the House of Representatives?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Two (2) years"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-026",
+      "number": 26,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why do U.S. representatives serve shorter terms than U.S. senators?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "To more closely follow public opinion"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-027",
+      "number": 27,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How many senators does each state have?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Two (2)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-028",
+      "number": 28,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why does each state have two senators?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Equal representation (for small states)",
+        "The Great Compromise (Connecticut Compromise)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-029",
+      "number": 29,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name your U.S. representative.",
+      "kind": "dynamic",
+      "acceptableAnswers": [],
+      "jurisdictionDependent": true,
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-030",
+      "number": 30,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "What is the name of the Speaker of the House of Representatives now?",
+      "kind": "dynamic",
+      "acceptableAnswers": [],
+      "jurisdictionDependent": false,
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-031",
+      "number": 31,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who does a U.S. senator represent?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Citizens of their state",
+        "People of their state"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-032",
+      "number": 32,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who elects U.S. senators?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Citizens from their state"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-033",
+      "number": 33,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who does a member of the House of Representatives represent?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Citizens in their (congressional) district",
+        "Citizens in their district",
+        "People from their (congressional) district",
+        "People in their district"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-034",
+      "number": 34,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who elects members of the House of Representatives?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Citizens from their (congressional) district"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-035",
+      "number": 35,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Some states have more representatives than other states. Why?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Because of) the state's population",
+        "(Because) they have more people",
+        "(Because) some states have more people"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-036",
+      "number": 36,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "The President of the United States is elected for how many years?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Four (4) years"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-037",
+      "number": 37,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The President of the United States can serve only two terms. Why?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Because of) the 22nd Amendment",
+        "To keep the president from becoming too powerful"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-038",
+      "number": 38,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "What is the name of the President of the United States now?",
+      "kind": "dynamic",
+      "acceptableAnswers": [],
+      "jurisdictionDependent": false,
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-039",
+      "number": 39,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is the name of the Vice President of the United States now?",
+      "kind": "dynamic",
+      "acceptableAnswers": [],
+      "jurisdictionDependent": false,
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-040",
+      "number": 40,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "If the president can no longer serve, who becomes president?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The Vice President (of the United States)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-041",
+      "number": 41,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one power of the president.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Signs bills into law",
+        "Vetoes bills",
+        "Enforces laws",
+        "Commander in Chief (of the military)",
+        "Chief diplomat"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-042",
+      "number": 42,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who is Commander in Chief of the U.S. military?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The President (of the United States)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-043",
+      "number": 43,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who signs bills to become laws?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The President (of the United States)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-044",
+      "number": 44,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "Who vetoes bills?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The President (of the United States)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-045",
+      "number": 45,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who appoints federal judges?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The President (of the United States)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-046",
+      "number": 46,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The executive branch has many parts. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "President (of the United States)",
+        "Cabinet",
+        "Federal departments and agencies"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-047",
+      "number": 47,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What does the President's Cabinet do?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Advises the President (of the United States)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-048",
+      "number": 48,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What are two Cabinet-level positions?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Attorney General",
+        "Secretary of Agriculture",
+        "Secretary of Commerce",
+        "Secretary of Defense",
+        "Secretary of Education",
+        "Secretary of Energy",
+        "Secretary of Health and Human Services",
+        "Secretary of Homeland Security",
+        "Secretary of Housing and Urban Development",
+        "Secretary of the Interior",
+        "Secretary of Labor",
+        "Secretary of State",
+        "Secretary of Transportation",
+        "Secretary of the Treasury",
+        "Secretary of Veterans Affairs",
+        "Vice President (of the United States)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-049",
+      "number": 49,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why is the Electoral College important?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "It decides who is elected president.",
+        "It provides a compromise between the popular election of the president and congressional selection."
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-050",
+      "number": 50,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is one part of the judicial branch?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Supreme Court",
+        "Federal Courts"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-051",
+      "number": 51,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What does the judicial branch do?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Reviews laws",
+        "Explains laws",
+        "Resolves disputes (disagreements) about the law",
+        "Decides if a law goes against the (U.S.) Constitution"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-052",
+      "number": 52,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "What is the highest court in the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Supreme Court"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-053",
+      "number": 53,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How many seats are on the Supreme Court?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Nine (9)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-054",
+      "number": 54,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How many Supreme Court justices are usually needed to decide a case?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Five (5)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-055",
+      "number": 55,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How long do Supreme Court justices serve?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(For) life",
+        "Lifetime appointment",
+        "(Until) retirement"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-056",
+      "number": 56,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Supreme Court justices serve for life. Why?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "To be independent (of politics)",
+        "To limit outside (political) influence"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-057",
+      "number": 57,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who is the Chief Justice of the United States now?",
+      "kind": "dynamic",
+      "acceptableAnswers": [],
+      "jurisdictionDependent": false,
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-058",
+      "number": 58,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one power that is only for the federal government.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Print paper money",
+        "Mint coins",
+        "Declare war",
+        "Create an army",
+        "Make treaties",
+        "Set foreign policy"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-059",
+      "number": 59,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one power that is only for the states.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Provide schooling and education",
+        "Provide protection (police)",
+        "Provide safety (fire departments)",
+        "Give a driver's license",
+        "Approve zoning and land use"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-060",
+      "number": 60,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is the purpose of the 10th Amendment?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(It states that the) powers not given to the federal government belong to the states or to the people."
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-061",
+      "number": 61,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "Who is the governor of your state now?",
+      "kind": "dynamic",
+      "acceptableAnswers": [],
+      "jurisdictionDependent": true,
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-062",
+      "number": 62,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is the capital of your state?",
+      "kind": "dynamic",
+      "acceptableAnswers": [],
+      "jurisdictionDependent": true,
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-063",
+      "number": 63,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "There are four amendments to the U.S. Constitution about who can vote. Describe one of them.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Citizens eighteen (18) and older (can vote).",
+        "You don't have to pay (a poll tax) to vote.",
+        "Any citizen can vote.",
+        "A male citizen of any race (can vote)."
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-064",
+      "number": 64,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who can vote in federal elections, run for federal office, and serve on a jury in the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Citizens",
+        "Citizens of the United States",
+        "U.S. citizens"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-065",
+      "number": 65,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What are three rights of everyone living in the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Freedom of expression",
+        "Freedom of speech",
+        "Freedom of assembly",
+        "Freedom to petition the government",
+        "Freedom of religion",
+        "The right to bear arms"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-066",
+      "number": 66,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "What do we show loyalty to when we say the Pledge of Allegiance?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The United States",
+        "The flag"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-067",
+      "number": 67,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name two promises that new citizens make in the Oath of Allegiance.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Give up loyalty to other countries",
+        "Defend the (U.S.) Constitution",
+        "Obey the laws of the United States",
+        "Serve in the military (if needed)",
+        "Serve (help, do important work for) the nation (if needed)",
+        "Be loyal to the United States"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-068",
+      "number": 68,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "How can people become United States citizens?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Naturalize",
+        "Derive citizenship",
+        "Be born in the United States"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-069",
+      "number": 69,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What are two examples of civic participation in the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Vote",
+        "Run for office",
+        "Join a political party",
+        "Help with a campaign",
+        "Join a civic group",
+        "Join a community group",
+        "Give an elected official your opinion (on an issue)",
+        "Contact elected officials",
+        "Support or oppose an issue or policy",
+        "Write to a newspaper"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-070",
+      "number": 70,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is one way Americans can serve their country?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Vote",
+        "Pay taxes",
+        "Obey the law",
+        "Serve in the military",
+        "Run for office",
+        "Work for local, state, or federal government"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-071",
+      "number": 71,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why is it important to pay federal taxes?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Required by law",
+        "All people pay to fund the federal government",
+        "Required by the (U.S.) Constitution (16th Amendment)",
+        "Civic duty"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-072",
+      "number": 72,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "It is important for all men age 18 through 25 to register for the Selective Service. Name one reason why.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Required by law",
+        "Civic duty",
+        "Makes the draft fair, if needed"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-073",
+      "number": 73,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The colonists came to America for many reasons. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Freedom",
+        "Political liberty",
+        "Religious freedom",
+        "Economic opportunity",
+        "Escape persecution"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-074",
+      "number": 74,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "Who lived in America before the Europeans arrived?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "American Indians",
+        "Native Americans"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-075",
+      "number": 75,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What group of people was taken and sold as slaves?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Africans",
+        "People from Africa"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-076",
+      "number": 76,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What war did the Americans fight to win independence from Britain?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "American Revolution",
+        "The (American) Revolutionary War",
+        "War for (American) Independence"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-077",
+      "number": 77,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one reason why the Americans declared independence from Britain.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "High taxes",
+        "Taxation without representation",
+        "British soldiers stayed in Americans' houses (boarding, quartering)",
+        "They did not have self-government",
+        "Boston Massacre",
+        "Boston Tea Party (Tea Act)",
+        "Stamp Act",
+        "Sugar Act",
+        "Townshend Acts",
+        "Intolerable (Coercive) Acts"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-078",
+      "number": 78,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "Who wrote the Declaration of Independence?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Thomas) Jefferson"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-079",
+      "number": 79,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "When was the Declaration of Independence adopted?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "July 4, 1776"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-080",
+      "number": 80,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The American Revolution had many important events. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Battle of) Bunker Hill",
+        "Declaration of Independence",
+        "Washington Crossing the Delaware (Battle of Trenton)",
+        "(Battle of) Saratoga",
+        "Valley Forge (Encampment)",
+        "(Battle of) Yorktown (British surrender at Yorktown)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-081",
+      "number": 81,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "There were 13 original states. Name five.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "New Hampshire",
+        "Massachusetts",
+        "Rhode Island",
+        "Connecticut",
+        "New York",
+        "New Jersey",
+        "Pennsylvania",
+        "Delaware",
+        "Maryland",
+        "Virginia",
+        "North Carolina",
+        "South Carolina",
+        "Georgia"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-082",
+      "number": 82,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What founding document was written in 1787?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(U.S.) Constitution"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-083",
+      "number": 83,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The Federalist Papers supported the passage of the U.S. Constitution. Name one of the writers.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(James) Madison",
+        "(Alexander) Hamilton",
+        "(John) Jay",
+        "Publius"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-084",
+      "number": 84,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why were the Federalist Papers important?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "They helped people understand the (U.S.) Constitution.",
+        "They supported passing the (U.S.) Constitution."
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-085",
+      "number": 85,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Benjamin Franklin is famous for many things. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Founded the first free public libraries",
+        "First Postmaster General of the United States",
+        "Helped write the Declaration of Independence",
+        "Inventor",
+        "U.S. diplomat"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-086",
+      "number": 86,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "George Washington is famous for many things. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "\"Father of Our Country\"",
+        "First president of the United States",
+        "General of the Continental Army",
+        "President of the Constitutional Convention"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-087",
+      "number": 87,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Thomas Jefferson is famous for many things. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Writer of the Declaration of Independence",
+        "Third president of the United States",
+        "Doubled the size of the United States (Louisiana Purchase)",
+        "First Secretary of State",
+        "Founded the University of Virginia",
+        "Writer of the Virginia Statute on Religious Freedom"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-088",
+      "number": 88,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "James Madison is famous for many things. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "\"Father of the Constitution\"",
+        "Fourth president of the United States",
+        "President during the War of 1812",
+        "One of the writers of the Federalist Papers"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-089",
+      "number": 89,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Alexander Hamilton is famous for many things. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "First Secretary of the Treasury",
+        "One of the writers of the Federalist Papers",
+        "Helped establish the First Bank of the United States",
+        "Aide to General George Washington",
+        "Member of the Continental Congress"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-090",
+      "number": 90,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What territory did the United States buy from France in 1803?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Louisiana Territory",
+        "Louisiana"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-091",
+      "number": 91,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one war fought by the United States in the 1800s.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "War of 1812",
+        "Mexican-American War",
+        "Civil War",
+        "Spanish-American War"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-092",
+      "number": 92,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name the U.S. war between the North and the South.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The Civil War"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-093",
+      "number": 93,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The Civil War had many important events. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Battle of) Fort Sumter",
+        "Emancipation Proclamation",
+        "(Battle of) Vicksburg",
+        "(Battle of) Gettysburg",
+        "Sherman's March",
+        "(Surrender at) Appomattox",
+        "(Battle of) Antietam/Sharpsburg",
+        "Lincoln was assassinated."
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-094",
+      "number": 94,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "Abraham Lincoln is famous for many things. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Freed the slaves (Emancipation Proclamation)",
+        "Saved (or preserved) the Union",
+        "Led the United States during the Civil War",
+        "16th president of the United States",
+        "Delivered the Gettysburg Address"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-095",
+      "number": 95,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What did the Emancipation Proclamation do?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Freed the slaves",
+        "Freed slaves in the Confederacy",
+        "Freed slaves in the Confederate states",
+        "Freed slaves in most Southern states"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-096",
+      "number": 96,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What U.S. war ended slavery?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The Civil War"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-097",
+      "number": 97,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What amendment gives citizenship to all persons born in the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "14th Amendment"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-098",
+      "number": 98,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "When did all men get the right to vote?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "After the Civil War",
+        "During Reconstruction",
+        "(With the) 15th Amendment",
+        "1870"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-099",
+      "number": 99,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one leader of the women's rights movement in the 1800s.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Susan B. Anthony",
+        "Elizabeth Cady Stanton",
+        "Sojourner Truth",
+        "Harriet Tubman",
+        "Lucretia Mott",
+        "Lucy Stone"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-100",
+      "number": 100,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one war fought by the United States in the 1900s.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "World War I",
+        "World War II",
+        "Korean War",
+        "Vietnam War",
+        "(Persian) Gulf War"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-101",
+      "number": 101,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why did the United States enter World War I?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Because Germany attacked U.S. (civilian) ships",
+        "To support the Allied Powers (England, France, Italy, and Russia)",
+        "To oppose the Central Powers (Germany, Austria-Hungary, the Ottoman Empire, and Bulgaria)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-102",
+      "number": 102,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "When did all women get the right to vote?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "1920",
+        "After World War I",
+        "(With the) 19th Amendment"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-103",
+      "number": 103,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What was the Great Depression?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Longest economic recession in modern history"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-104",
+      "number": 104,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "When did the Great Depression start?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The Great Crash (1929)",
+        "Stock market crash of 1929"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-105",
+      "number": 105,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who was president during the Great Depression and World War II?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Franklin) Roosevelt"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-106",
+      "number": 106,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why did the United States enter World War II?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Bombing of) Pearl Harbor",
+        "Japanese attacked Pearl Harbor",
+        "To support the Allied Powers (England, France, and Russia)",
+        "To oppose the Axis Powers (Germany, Italy, and Japan)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-107",
+      "number": 107,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Dwight Eisenhower is famous for many things. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "General during World War II",
+        "President at the end of (during) the Korean War",
+        "34th president of the United States",
+        "Signed the Federal-Aid Highway Act of 1956 (Created the Interstate System)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-108",
+      "number": 108,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Who was the United States' main rival during the Cold War?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Soviet Union",
+        "USSR",
+        "Russia"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-109",
+      "number": 109,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "During the Cold War, what was one main concern of the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Communism",
+        "Nuclear war"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-110",
+      "number": 110,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why did the United States enter the Korean War?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "To stop the spread of communism"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-111",
+      "number": 111,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why did the United States enter the Vietnam War?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "To stop the spread of communism"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-112",
+      "number": 112,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What did the civil rights movement do?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Fought to end racial discrimination"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-113",
+      "number": 113,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "Martin Luther King, Jr. is famous for many things. Name one.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Fought for civil rights",
+        "Worked for equality for all Americans",
+        "Worked to ensure that people would \"not be judged by the color of their skin, but by the content of their character\""
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-114",
+      "number": 114,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why did the United States enter the Persian Gulf War?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "To force the Iraqi military from Kuwait"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-115",
+      "number": 115,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "What major event happened on September 11, 2001 in the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Terrorists attacked the United States",
+        "Terrorists took over two planes and crashed them into the World Trade Center in New York City",
+        "Terrorists took over a plane and crashed into the Pentagon in Arlington, Virginia",
+        "Terrorists took over a plane originally aimed at Washington, D.C., and crashed in a field in Pennsylvania"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-116",
+      "number": 116,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one U.S. military conflict after the September 11, 2001 attacks.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Global) War on Terror",
+        "War in Afghanistan",
+        "War in Iraq"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-117",
+      "number": 117,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one American Indian tribe in the United States.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Apache",
+        "Blackfeet",
+        "Cayuga",
+        "Cherokee",
+        "Cheyenne",
+        "Chippewa",
+        "Choctaw",
+        "Creek",
+        "Crow",
+        "Hopi",
+        "Huron",
+        "Inupiat",
+        "Lakota",
+        "Mohawk",
+        "Mohegan",
+        "Navajo",
+        "Oneida",
+        "Onondaga",
+        "Pueblo",
+        "Seminole",
+        "Seneca",
+        "Shawnee",
+        "Sioux",
+        "Teton",
+        "Tuscarora"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-118",
+      "number": 118,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Name one example of an American innovation.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Light bulb",
+        "Automobile (cars, internal combustion engine)",
+        "Skyscrapers",
+        "Airplane",
+        "Assembly line",
+        "Landing on the moon",
+        "Integrated circuit (IC)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-119",
+      "number": 119,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is the capital of the United States?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Washington, D.C."
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-120",
+      "number": 120,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Where is the Statue of Liberty?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "New York (Harbor)",
+        "Liberty Island",
+        "New Jersey",
+        "near New York City",
+        "on the Hudson (River)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-121",
+      "number": 121,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "Why does the flag have 13 stripes?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Because there were) 13 original colonies",
+        "(Because the stripes) represent the original colonies"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-122",
+      "number": 122,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "Why does the flag have 50 stars?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "(Because there is) one star for each state",
+        "(Because) each star represents a state",
+        "(Because there are) 50 states"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-123",
+      "number": 123,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is the name of the national anthem?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "The Star-Spangled Banner"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-124",
+      "number": 124,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "The Nation's first motto was \"E Pluribus Unum.\" What does that mean?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "Out of many, one",
+        "We all become one"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-125",
+      "number": 125,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is Independence Day?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "A holiday to celebrate U.S. independence (from Britain)",
+        "The country's birthday"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-126",
+      "number": 126,
+      "edition": "2020-128",
+      "asterisk": true,
+      "question": "Name three national U.S. holidays.",
+      "kind": "static",
+      "acceptableAnswers": [
+        "New Year's Day",
+        "Martin Luther King, Jr. Day",
+        "Presidents Day (Washington's Birthday)",
+        "Memorial Day",
+        "Independence Day",
+        "Labor Day",
+        "Columbus Day",
+        "Veterans Day",
+        "Thanksgiving Day",
+        "Christmas Day"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-127",
+      "number": 127,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is Memorial Day?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "A holiday to honor soldiers who died in military service"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    },
+    {
+      "id": "q-128",
+      "number": 128,
+      "edition": "2020-128",
+      "asterisk": false,
+      "question": "What is Veterans Day?",
+      "kind": "static",
+      "acceptableAnswers": [
+        "A holiday to honor people in the (U.S.) military",
+        "A holiday to honor people who have served (in the U.S. military)"
+      ],
+      "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+      "sourceVersion": "M-1778TXT-02-21"
+    }
+  ]
+}

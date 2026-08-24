@@ -1,18 +1,23 @@
-/// <reference types="node" />
-
-// amplify/functions/transcript/handler.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
+import { getItem, selectNextQuestion } from './turn/bank';
+import { TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
+import { resolveTurn } from './turn/turn-policy';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const modelId = process.env.DEFAULT_MODEL_ID || 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-text-v2:0';
 
+// Clients must be created BEFORE anything that uses them (const is not hoisted).
 const bedrockClient = new BedrockRuntimeClient({ region });
 const pollyClient = new PollyClient({ region });
+
+// One shared model transport, reused by the interpreter and the assist path.
+const modelComplete = bedrockComplete(bedrockClient, modelId);
+const turnInterpreter = new TurnInterpreterAdapter(modelComplete);
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -61,22 +66,20 @@ interface RequestBody {
   transcript?: string;
   conversationWindow?: ConversationTurn[];
   sessionId?: string;
-}
-
-interface BedrockResponseShape {
-  content?: Array<{ type: 'text'; text: string }>;
+  currentItemId?: string;
 }
 
 interface ExtendedSdkStream {
   transformToByteArray(): Promise<Uint8Array>;
 }
 
-const USCIS_SYSTEM_PROMPT = `You are a professional, encouraging, and clear USCIS Officer conducting an N-400 Naturalization Civics and History Oral Examination.
-Your goals:
-1. Evaluate the applicant's oral English comprehension and knowledge of American Civics, History, and Government.
-2. Ask clear, direct N-400 civics examination questions (from the official 100 questions pool).
-3. Provide concise, constructive feedback when answers are incorrect or incomplete.
-4. Keep responses brief, conversational, and direct (max 2-3 sentences per turn) so the user can respond naturally by voice.`;
+// Grounded assistant prompt for progress ("how am I doing?") questions.
+const ASSIST_SYSTEM_PROMPT = [
+  'You are a warm, encouraging civics tutor.',
+  'Answer the user\'s question about their own study progress using ONLY the progress report content provided.',
+  'If the reports do not contain the answer, say you do not have that detail yet.',
+  'Do not give legal or immigration advice. Keep it brief and friendly (2-3 sentences).',
+].join('\n');
 
 const RAG_INTENT_KEYWORDS = [
   'how have i improved', 'my score', 'my progress', 'last week',
@@ -196,6 +199,48 @@ async function getTitanEmbedding(text: string): Promise<number[] | null> {
   }
 }
 
+/**
+ * Grounded progress answer for "how am I doing?" style questions.
+ * Retrieves the user's report context (vector match, with a baseline fallback)
+ * and answers ONLY from it.
+ */
+async function answerProgressQuery(userId: string, question: string, traceId: string): Promise<string> {
+  const supabase = getSupabaseClient();
+  let ragContext = '';
+
+  const queryVector = await getTitanEmbedding(question);
+  if (queryVector) {
+    console.log(`[Lambda-RAG] [${traceId}] Querying match_progress_reports RPC...`);
+    const { data: matchedReports, error: rpcError } = await supabase.rpc('match_progress_reports', {
+      query_embedding: queryVector,
+      match_threshold: 0.3,
+      match_count: 3,
+      p_user_id: userId
+    });
+
+    if (rpcError) {
+      console.error(`[Lambda-RAG] RPC Error: ${rpcError.message}`);
+    } else if (matchedReports && matchedReports.length > 0) {
+      console.log(`[Lambda-RAG] Found ${matchedReports.length} matching progress report sections.`);
+      ragContext = matchedReports
+        .map((r: { date: string; report_markdown: string }) => `[Report Date: ${r.date}]\n${r.report_markdown}`)
+        .join('\n\n');
+    } else {
+      console.log(`[Lambda-RAG] No matching reports above similarity threshold.`);
+    }
+  }
+
+  if (!ragContext) {
+    ragContext = await fetchUserProgressReport(userId);
+  }
+
+  const text = await modelComplete({
+    system: ASSIST_SYSTEM_PROMPT,
+    user: `Progress report(s):\n${ragContext}\n\nUser question: ${question}`,
+  });
+  return text || "Let's keep practicing your civics questions. Ready for the next one?";
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const traceId = getCaseInsensitiveHeader(event.headers || {}, 'x-correlation-trace-id') || `lambda-trace-${Date.now()}`;
 
@@ -262,7 +307,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const rawTranscript = parsedBody.transcript || '';
     const cleanedTranscript = rawTranscript.replace(/\s+/g, ' ').trim();
-    const conversationWindow = parsedBody.conversationWindow || [];
 
     if (!cleanedTranscript) {
       console.log(`[Lambda-Execution] [${traceId}] Empty transcript received. Returning 200 empty payload.`);
@@ -273,95 +317,74 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     }
 
-    console.log(`[Lambda-Execution] [${traceId}] User: "${cleanedTranscript}", Window turns: ${conversationWindow.length}`);
+    console.log(`[Lambda-Execution] [${traceId}] User: "${cleanedTranscript}", currentItemId: ${parsedBody.currentItemId ?? '(none)'}`);
 
-    // 2. Fetch Progress Report
-    const progressReportText = await fetchUserProgressReport(userId);
-    const fullSystemPrompt = `${USCIS_SYSTEM_PROMPT}\n\nCandidate Active Performance Summary:\n${progressReportText}`;
+    // 2. Route the turn.
+    let generatedAssistantText = '';
+    let verdict: 'correct' | 'incorrect' | 'partial' | null = null;
+    let nextItemId: string;
+    let nextQuestionText: string;
 
-    // 3. Build Messages Array with Sliding Window & RAG path
-    const bedrockMessages: Array<{ role: 'user' | 'assistant'; content: Array<{ type: 'text'; text: string }> }> = [];
+    const askedItem = getItem(parsedBody.currentItemId);
 
     if (isRagQuery(cleanedTranscript)) {
-      console.log(`[Lambda-RAG] [${traceId}] RAG intent detected for query: "${cleanedTranscript}"`);
-      const queryVector = await getTitanEmbedding(cleanedTranscript);
+      // ---- ASSIST / progress path (grounded in the user's own reports) ----
+      console.log(`[Lambda-RAG] [${traceId}] Progress intent detected.`);
+      generatedAssistantText = await answerProgressQuery(userId, cleanedTranscript, traceId);
+      // Do NOT advance the civics question; keep the user's place.
+      const stay = askedItem ?? selectNextQuestion();
+      nextItemId = stay.id;
+      nextQuestionText = stay.question;
 
-      if (queryVector) {
-        console.log(`[Lambda-RAG] [${traceId}] Querying match_progress_reports RPC...`);
-        const { data: matchedReports, error: rpcError } = await supabase.rpc('match_progress_reports', {
-          query_embedding: queryVector,
-          match_threshold: 0.3,
-          match_count: 3,
-          p_user_id: userId
-        });
+    } else if (!askedItem) {
+      // ---- START / no active question -> ask the first one, do not grade ----
+      console.log(`[Lambda-Start] [${traceId}] No active question; presenting the first question.`);
+      const first = selectNextQuestion();
+      generatedAssistantText = `Let's begin. ${first.question}`;
+      nextItemId = first.id;
+      nextQuestionText = first.question;
 
-        if (rpcError) {
-          console.error(`[Lambda-RAG] RPC Error: ${rpcError.message}`);
-        } else if (matchedReports && matchedReports.length > 0) {
-          console.log(`[Lambda-RAG] Found ${matchedReports.length} matching progress report sections.`);
-          const ragContext = matchedReports
-            .map((r: { date: string; report_markdown: string }) => `[Report Date: ${r.date}]\n${r.report_markdown}`)
-            .join('\n\n');
+    } else {
+      // ---- GRADING path (grounded: server owns the asked item) ----
+      const interp = await turnInterpreter.interpret(
+        { askedItem, preferredLanguage: undefined /* wire from profile later */ },
+        cleanedTranscript
+      );
 
-          bedrockMessages.push({
-            role: 'user',
-            content: [{ type: 'text', text: `Historical performance reports:\n${ragContext}` }]
-          });
-          bedrockMessages.push({
-            role: 'assistant',
-            content: [{ type: 'text', text: 'Understood. I have reviewed your historical performance reports. How can I help you regarding your progress?' }]
-          });
-        } else {
-          console.log(`[Lambda-RAG] No matching reports above similarity threshold.`);
-        }
+      // CODE decides the outcome; the AI only proposed it.
+      const outcome = resolveTurn(interp, { askedItem });
+      verdict = outcome.committedVerdict;
+
+      if (outcome.flags.includes('manipulation_detected')) {
+        console.warn(`[Lambda-Security] [${traceId}] manipulation attempt contained`);
       }
-    } else if (conversationWindow.length > 0) {
-      const slicedWindow = conversationWindow.slice(-6);
-      console.log(`[Lambda-Window] [${traceId}] Slicing 6-turn conversation window (using ${slicedWindow.length} turns)`);
-      for (const turn of slicedWindow) {
-        bedrockMessages.push({
-          role: turn.role === 'assistant' ? 'assistant' : 'user',
-          content: [{ type: 'text', text: turn.content }]
-        });
+
+      // Persist score only on a committed grade.
+      if (outcome.scoreChanged && outcome.committedVerdict && parsedBody.sessionId) {
+        // TODO(persistence): write the graded turn to your store, e.g.:
+        //   await supabase.from('messages').insert({
+        //     session_id: parsedBody.sessionId, user_id: userId,
+        //     item_id: askedItem.id, verdict: outcome.committedVerdict,
+        //     transcript: cleanedTranscript,
+        //   });
+        console.log(`[Lambda-Grade] [${traceId}] item=${askedItem.id} verdict=${outcome.committedVerdict} (persist TODO)`);
       }
+
+      generatedAssistantText = outcome.useModelReply
+        ? (interp?.reply || outcome.safeReply)
+        : outcome.safeReply;
+
+      // Advance to the next question (avoid immediately repeating the one just asked).
+      const next = selectNextQuestion([askedItem.id]);
+      nextItemId = next.id;
+      nextQuestionText = next.question;
     }
-
-    bedrockMessages.push({
-      role: 'user',
-      content: [{ type: 'text', text: cleanedTranscript }]
-    });
-
-    // 4. Call Bedrock
-    console.log(`[Lambda-Bedrock] [${traceId}] Invoking Bedrock modelId="${modelId}" with ${bedrockMessages.length} message turns...`);
-
-    const bedrockRequestPayload = {
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 300,
-      temperature: 0.5,
-      system: fullSystemPrompt,
-      messages: bedrockMessages
-    };
-
-    const bedrockCommand = new InvokeModelCommand({
-      modelId,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify(bedrockRequestPayload)
-    });
-
-    const bedrockResponse = await bedrockClient.send(bedrockCommand);
-    const bedrockResponseBodyString = Buffer.from(bedrockResponse.body).toString('utf-8');
-    const parsedBedrockData = JSON.parse(bedrockResponseBodyString) as BedrockResponseShape;
-    const generatedAssistantText = parsedBedrockData.content?.[0]?.text?.trim() || '';
 
     if (!generatedAssistantText) {
-      console.error(`[Lambda-Bedrock-Error] [${traceId}] Empty text returned from Bedrock:`, bedrockResponseBodyString);
-      throw new Error('Inference Exception: Empty text returned from Bedrock.');
+      generatedAssistantText = "Let's keep going.";
     }
 
-    console.log(`[Lambda-Bedrock-Success] [${traceId}] Assistant: "${generatedAssistantText}"`);
-
-    // 5. Polly Speech Synthesis
+    // 3. Polly Speech Synthesis
     console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice Joanna...`);
     const pollyCommand = new SynthesizeSpeechCommand({
       OutputFormat: 'mp3',
@@ -387,7 +410,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       headers: responseHeaders,
       body: JSON.stringify({
         responseText: generatedAssistantText,
-        audioData: base64AudioData
+        audioData: base64AudioData,
+        verdict,
+        nextItemId,
+        nextQuestion: nextQuestionText
       })
     };
 
