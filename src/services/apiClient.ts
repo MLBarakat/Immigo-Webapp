@@ -136,8 +136,15 @@ export class ApiClient {
     transcript: string,
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
+    currentItemId?: string | null,
     options: { headers?: Record<string, string> } = {}
-  ): Promise<{ responseText: string; audioData: ArrayBuffer }> {
+  ): Promise<{
+    responseText: string;
+    audioData: ArrayBuffer;
+    verdict: 'correct' | 'incorrect' | 'partial' | null;
+    nextItemId: string | null;
+    nextQuestion: string | null;
+  }> {
     logger.info('[ApiClient] Dispatching postTranscript request:', {
       transcriptLength: transcript.length,
       windowTurns: conversationWindow.length,
@@ -149,7 +156,7 @@ export class ApiClient {
       response = await this.fetchWithAuth('/transcript', {
         method: 'POST',
         headers: options.headers,
-        body: JSON.stringify({ transcript, conversationWindow, sessionId }),
+        body: JSON.stringify({ transcript, conversationWindow, sessionId, currentItemId }),
       });
     } catch (err) {
       logger.error('[ApiClient] postTranscript network/CORS exception:', undefined, {
@@ -165,6 +172,9 @@ export class ApiClient {
     interface InboundPayloadShape {
       responseText?: unknown;
       audioData?: unknown;
+      verdict?: unknown;
+      nextItemId?: unknown;
+      nextQuestion?: unknown;
       error?: string;
     }
 
@@ -193,10 +203,21 @@ export class ApiClient {
         audioView[i] = audioBytes.charCodeAt(i);
       }
 
+      const rawVerdict = parsedPayload.verdict;
+      const verdict =
+        rawVerdict === 'correct' || rawVerdict === 'incorrect' || rawVerdict === 'partial'
+          ? rawVerdict
+          : null;
+      const nextItemId = typeof parsedPayload.nextItemId === 'string' ? parsedPayload.nextItemId : null;
+      const nextQuestion = typeof parsedPayload.nextQuestion === 'string' ? parsedPayload.nextQuestion : null;
+
       logger.info('[ApiClient] postTranscript payload parsed and decoded successfully.');
       return {
         responseText: parsedPayload.responseText,
         audioData: audioBuffer,
+        verdict,
+        nextItemId,
+        nextQuestion,
       };
     } catch (error) {
       logger.error('[ApiClient] Codec Exception decoding audio stream:', undefined, { error: String(error) });

@@ -241,6 +241,54 @@ async function answerProgressQuery(userId: string, question: string, traceId: st
   return text || "Let's keep practicing your civics questions. Ready for the next one?";
 }
 
+/**
+ * Build a Supabase client authorized AS THE USER (their JWT), so RLS resolves
+ * auth.uid() to this user. Used for writing the graded turn under RLS.
+ */
+function getUserScopedSupabase(token: string): SupabaseClient {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase runtime configuration is missing.');
+  }
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
+    realtime: { transport: LambdaUnsupportedRealtimeTransport },
+  });
+}
+
+/**
+ * Persist a server-graded answer (server-authoritative: the client cannot fake
+ * the verdict). RLS scopes the row to the authenticated user. Failures are
+ * logged but never break the turn.
+ */
+async function persistGradedAnswer(
+  token: string,
+  userId: string,
+  sessionId: string | null,
+  itemId: string,
+  verdict: 'correct' | 'incorrect' | 'partial',
+  traceId: string
+): Promise<void> {
+  try {
+    const db = getUserScopedSupabase(token);
+    const { error } = await db.from('graded_answers').insert({
+      user_id: userId,
+      session_id: sessionId,
+      item_id: itemId,
+      verdict,
+    });
+    if (error) {
+      console.warn(`[Lambda-Grade] [${traceId}] persist error: ${error.message}`);
+    } else {
+      console.log(`[Lambda-Grade] [${traceId}] persisted item=${itemId} verdict=${verdict}`);
+    }
+  } catch (err) {
+    console.error(`[Lambda-Grade] [${traceId}] persist exception:`, err);
+  }
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const traceId = getCaseInsensitiveHeader(event.headers || {}, 'x-correlation-trace-id') || `lambda-trace-${Date.now()}`;
 
@@ -359,18 +407,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         console.warn(`[Lambda-Security] [${traceId}] manipulation attempt contained`);
       }
 
-      // Persist score only on a committed grade.
-      if (outcome.scoreChanged && outcome.committedVerdict && parsedBody.sessionId) {
-        // TODO(persistence): write the graded turn to your store, e.g.:
-        //   await supabase.from('messages').insert({
-        //     session_id: parsedBody.sessionId, user_id: userId,
-        //     item_id: askedItem.id, verdict: outcome.committedVerdict,
-        //     transcript: cleanedTranscript,
-        //   });
-        console.log(`[Lambda-Grade] [${traceId}] item=${askedItem.id} verdict=${outcome.committedVerdict} (persist TODO)`);
+      // Persist the graded turn (server-authoritative, RLS-scoped as the user).
+      if (outcome.scoreChanged && outcome.committedVerdict) {
+        await persistGradedAnswer(
+          token,
+          userId,
+          parsedBody.sessionId ?? null,
+          askedItem.id,
+          outcome.committedVerdict,
+          traceId
+        );
       }
 
-      generatedAssistantText = outcome.useModelReply
+      const feedback = outcome.useModelReply
         ? (interp?.reply || outcome.safeReply)
         : outcome.safeReply;
 
@@ -378,6 +427,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const next = selectNextQuestion([askedItem.id]);
       nextItemId = next.id;
       nextQuestionText = next.question;
+
+      // Speak the feedback AND the next question so the voice loop keeps flowing.
+      generatedAssistantText = `${feedback} Next question: ${next.question}`;
     }
 
     if (!generatedAssistantText) {

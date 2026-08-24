@@ -5,6 +5,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
+import bank from '../transcript/civics-bank.2020-128.json';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const modelId = process.env.DEFAULT_MODEL_ID || 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
@@ -13,6 +14,9 @@ const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-t
 const bedrockClient = new BedrockRuntimeClient({ region });
 
 let supabaseClient: SupabaseClient | null = null;
+
+const bankItems = (bank as { items: Array<{ id: string; question: string }> }).items;
+const bankById = new Map(bankItems.map((i) => [i.id, i]));
 
 const LambdaUnsupportedRealtimeTransport: WebSocketLikeConstructor = class {
   static readonly CONNECTING = 0;
@@ -219,6 +223,44 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       previousReportMarkdown = latestReport.report_markdown;
     }
 
+    // 2b. Fetch authoritative per-answer verdicts for this session (grounded scoring).
+    const { data: gradedRows, error: gradedErr } = await supabase
+      .from('graded_answers')
+      .select('item_id, verdict')
+      .eq('session_id', sessionId)
+      .eq('user_id', userId);
+
+    if (gradedErr) {
+      console.warn(`[Aggregator-Grade] [${traceId}] graded_answers query error: ${gradedErr.message}`);
+    }
+
+    const graded = (gradedRows ?? []) as Array<{ item_id: string; verdict: string }>;
+    const answered = graded.length;
+    const correct = graded.filter((g) => g.verdict === 'correct').length;
+    const partial = graded.filter((g) => g.verdict === 'partial').length;
+    const incorrect = graded.filter((g) => g.verdict === 'incorrect').length;
+    const accuracyPct = answered > 0 ? Math.round((correct / answered) * 100) : 0;
+
+    const missed = graded
+      .filter((g) => g.verdict !== 'correct')
+      .map((g) => `  * (${g.item_id}) ${bankById.get(g.item_id)?.question ?? g.item_id}`);
+
+    const scoreFacts = answered > 0
+      ? [
+          'AUTHORITATIVE GRADING FACTS (computed from recorded verdicts — do NOT alter):',
+          `- Questions graded this session: ${answered}`,
+          `- Correct: ${correct}`,
+          `- Partial: ${partial}`,
+          `- Incorrect: ${incorrect}`,
+          `- Accuracy: ${accuracyPct}% (correct / graded)`,
+          missed.length
+            ? `- Missed or partial questions:\n${missed.join('\n')}`
+            : '- No missed questions this session.',
+        ].join('\n')
+      : 'AUTHORITATIVE GRADING FACTS: No civics questions were graded this session (e.g., the user only asked progress/assist questions). Do not report new numeric scores; inherit the previous report and note that no questions were practiced.';
+
+    console.log(`[Aggregator-Grade] [${traceId}] answered=${answered} correct=${correct} partial=${partial} incorrect=${incorrect} accuracy=${accuracyPct}%`);
+
     // 3. Build Bedrock Evaluation Prompt
     const evaluationSystemPrompt = `You are an expert USCIS N-400 Naturalization Exam Evaluator.
 Your task is to analyze the candidate's oral interview session transcript and generate/update their Daily Progress Report in Markdown format.
@@ -229,6 +271,7 @@ USCIS N-400 Examination Categories:
 3. Integrated Civics (Geography, Symbols, Holidays)
 
 Instructions:
+- The "AUTHORITATIVE GRADING FACTS" block (computed from recorded per-answer verdicts) is the source of truth for this session's accuracy, counts, and which questions were missed. Report those numbers and the missed-question list EXACTLY; never override them with your own judgment of the transcript.
 - Evaluate the candidate's performance in practiced categories during this session.
 - For categories NOT practiced in this session, inherit the previous scores and feedback from the Previous Progress Report.
 - Output a clean, structured Markdown report including:
@@ -249,7 +292,7 @@ Instructions:
           content: [
             {
               type: 'text',
-              text: `Previous Progress Report:\n${previousReportMarkdown}\n\nCurrent Session Transcript:\n${sessionTranscript}\n\nPlease generate the updated Living Daily Progress Report for date ${today}.`
+              text: `Previous Progress Report:\n${previousReportMarkdown}\n\n${scoreFacts}\n\nCurrent Session Transcript (for qualitative context only):\n${sessionTranscript}\n\nPlease generate the updated Living Daily Progress Report for date ${today}. Report the authoritative accuracy and counts EXACTLY as given, and list the missed questions exactly. Do not invent numbers that contradict the authoritative facts.`
             }
           ]
         }

@@ -90,6 +90,9 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Welcome to the Immigo interaction matrix layer.',
       audioData: syntheticBuffer,
+      verdict: null,
+      nextItemId: null,
+      nextQuestion: null,
     });
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -157,6 +160,9 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
       audioData: new ArrayBuffer(8),
+      verdict: null,
+      nextItemId: null,
+      nextQuestion: null,
     });
     (useWhisper as any).mockReturnValue({
       currentState: 'LISTENING',
@@ -183,6 +189,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         'What is my status?',
         [],
         undefined,
+        null,
         expect.objectContaining({ headers: expect.any(Object) })
       );
     });
@@ -192,6 +199,9 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
       audioData: new ArrayBuffer(8),
+      verdict: null,
+      nextItemId: 'q-001',
+      nextQuestion: 'Practice question',
     });
 
     const emptyWhisperState = {
@@ -230,6 +240,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       'Second question',
       [],
       undefined,
+      'q-001',
       expect.objectContaining({ headers: expect.any(Object) })
     );
   });

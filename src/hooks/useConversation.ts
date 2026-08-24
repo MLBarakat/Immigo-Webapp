@@ -22,6 +22,9 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
   const processedTranscriptRef = useRef<string>('');
   const sessionIdRef = useRef<string | null>(conversationState.sessionId);
+  // Tracks which bank question the server last asked, so the next answer is
+  // graded against the correct item (server-owned grounded grading).
+  const currentItemIdRef = useRef<string | null>(null);
 
   // Dual-Track Speculative Merger orchestration hook
   const {
@@ -170,6 +173,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       let accumulatedLastError: unknown = null;
       let responseText: string | null = null;
       let audioData: ArrayBuffer | null = null;
+      let nextItemId: string | null = null;
 
       while (currentAttempt < maxRetryAttemptsCeiling) {
         try {
@@ -178,10 +182,12 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
             validatedText,
             slidingWindow,
             activeSessionId,
+            currentItemIdRef.current,
             { headers: { 'x-correlation-trace-id': traceId } }
           );
           responseText = res.responseText;
           audioData = res.audioData;
+          nextItemId = res.nextItemId;
           break;
         } catch (err: unknown) {
           accumulatedLastError = err;
@@ -203,6 +209,9 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       if (!responseText || !audioData) {
         throw accumulatedLastError || new Error('Structural Exception: Inbound gateway transmission payload properties missing.');
       }
+
+      // Remember the question the server just asked; the NEXT answer is graded against it.
+      currentItemIdRef.current = nextItemId;
 
       dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: responseText } });
 
@@ -313,6 +322,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     analytics.track('session_started');
     processedTranscriptRef.current = ''; 
     sessionIdRef.current = null;
+    currentItemIdRef.current = null;
 
     if (userId) {
       const newSessionId = await ChatPersistenceService.createSession(userId);
@@ -328,6 +338,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     const activeSessionId = sessionIdRef.current || conversationState.sessionId;
     dispatch({ type: 'END_SESSION' });
     sessionIdRef.current = null;
+    currentItemIdRef.current = null;
     dispatch({ type: 'SET_SESSION_ID', payload: null });
     analytics.track('session_ended', { duration_seconds: conversationState.sessionTime });
 
