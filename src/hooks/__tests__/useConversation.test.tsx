@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mocked } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { useConversation } from '../useConversation';
@@ -30,7 +30,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   let mockDispatch: any;
   let mockStartRecording: any;
   let mockStopRecording: any;
-  let mockApiClient: vi.Mocked<ApiClient>;
+  let mockApiClient: Mocked<ApiClient>;
   let mockAudioInstance: any;
   let mockContextValue: any;
 
@@ -65,7 +65,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     // Construct a type-safe mock API Client instance mirror
     mockApiClient = {
       postTranscript: vi.fn(),
-    } as unknown as vi.Mocked<ApiClient>;
+    } as unknown as Mocked<ApiClient>;
 
     // 1. FIXED: Inject a resilient, runtime mock for the global HTMLAudioElement tracking fixture
     mockAudioInstance = {
