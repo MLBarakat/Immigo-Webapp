@@ -79,12 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     analytics.track('user_login', { method: 'email' });
   };
 
-  const signUp = async ({ email, password, fullName, language }: SignUpPayload): Promise<void> => {
+  const signUp = async ({ email, password, fullName, language, termsAcceptedAt, termsVersion, privacyVersion }: SignUpPayload): Promise<void> => {
     if (!supabase) throw new Error("Supabase client not initialized.");
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, language } },
+      options: { data: { full_name: fullName, language, terms_accepted_at: termsAcceptedAt, terms_version: termsVersion, privacy_version: privacyVersion } },
     });
     if (error) throw error;
     analytics.track('user_signup', { method: 'email', language });

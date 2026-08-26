@@ -3,6 +3,7 @@ import { auth } from './auth/resource';
 import { storage } from './storage/resource';
 import { transcriptFunction } from './functions/transcript/resource';
 import { aggregateSessionFunction } from './functions/aggregateSession/resource';
+import { deleteAccountFunction } from './functions/deleteAccount/resource';
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
 import { LambdaIntegration, RestApi, Cors } from 'aws-cdk-lib/aws-apigateway';
 import { Function as CDKFunction } from 'aws-cdk-lib/aws-lambda';
@@ -15,12 +16,14 @@ const backend = defineBackend({
   auth,
   transcriptFunction,
   aggregateSessionFunction,
+  deleteAccountFunction,
   storage,
 });
 
 // Extract references to native CDK L2 Lambda constructs
 const transcriptLambdaInstance = backend.transcriptFunction.resources.lambda as CDKFunction;
 const aggregateLambdaInstance = backend.aggregateSessionFunction.resources.lambda as CDKFunction;
+const deleteAccountLambdaInstance = backend.deleteAccountFunction.resources.lambda as CDKFunction;
 
 // Corrected IAM Policy for Bedrock Model Invocation
 const bedrockStatement = new PolicyStatement({
@@ -58,6 +61,10 @@ if (aggregateLambdaInstance.role) {
   aggregateLambdaInstance.addEnvironment('EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0');
 }
 
+if (deleteAccountLambdaInstance.role) {
+  deleteAccountLambdaInstance.addEnvironment('SUPABASE_SERVICE_ROLE_KEY', process.env.SUPABASE_SERVICE_ROLE_KEY || '');
+}
+
 const apiGatewayCustomStack = backend.createStack('ImmigoApiGatewayStack');
 
 const restApiGateway = new RestApi(apiGatewayCustomStack, 'ImmigoRestApiGateway', {
@@ -84,6 +91,13 @@ const aggregateLambdaIntegration = new LambdaIntegration(aggregateLambdaInstance
   allowTestInvoke: false
 });
 completeSessionRouteResource.addMethod('POST', aggregateLambdaIntegration);
+
+const deleteAccountRouteResource = restApiGateway.root.addResource('delete-account');
+const deleteAccountLambdaIntegration = new LambdaIntegration(deleteAccountLambdaInstance, {
+  proxy: true,
+  allowTestInvoke: false
+});
+deleteAccountRouteResource.addMethod('POST', deleteAccountLambdaIntegration);
 
 backend.addOutput({
   custom: {

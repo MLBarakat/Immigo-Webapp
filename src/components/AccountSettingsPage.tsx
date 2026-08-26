@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ApiClient } from '../services/apiClient';
 import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -11,7 +12,27 @@ type SettingsView = 'profile' | 'security' | 'connections' | 'delete';
 
 export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettingsPageProps): JSX.Element => {
   const [activeView, setActiveView] = useState<SettingsView>('profile');
-  const { user, profile } = useAuth();
+  const { user, profile, session, logout } = useAuth();
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteAccount = async () => {
+    if (!session?.access_token) {
+      setDeleteError('You must be signed in to delete your account.');
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const client = new ApiClient(session.access_token);
+      await client.deleteAccount();
+      await logout();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Account deletion failed. Please contact support.');
+      setDeleting(false);
+    }
+  };
 
   // Dynamically map authenticated credentials out of the live session layer
   const userEmail = user?.email || '';
@@ -91,8 +112,38 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-art-red-700">Delete Account</h2>
-            <p className="text-immigo-gray-600">Permanently delete your ImmiGo account and all associated data. This action cannot be undone.</p>
-            <button className="px-4 py-2 bg-art-red-600 text-white rounded-md font-semibold hover:bg-art-red-700">Delete Account</button>
+            <p className="text-immigo-gray-600">Permanently delete your ImmiGo account and all associated data (sessions, practice results, and progress). This action cannot be undone.</p>
+            {deleteError && (
+              <div className="text-art-red-700 text-sm p-3 bg-art-red-50 rounded-lg">{deleteError}</div>
+            )}
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="px-4 py-2 bg-art-red-600 text-white rounded-md font-semibold hover:bg-art-red-700"
+              >
+                Delete Account
+              </button>
+            ) : (
+              <div className="space-y-3 p-4 border border-art-red-200 rounded-lg bg-art-red-50">
+                <p className="text-sm font-semibold text-art-red-700">Are you absolutely sure? This permanently deletes your account and all associated data.</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleting}
+                    className="px-4 py-2 bg-art-red-600 text-white rounded-md font-semibold hover:bg-art-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {deleting ? 'Deleting…' : 'Yes, permanently delete'}
+                  </button>
+                  <button
+                    onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
+                    disabled={deleting}
+                    className="px-4 py-2 bg-immigo-gray-100 text-immigo-gray-700 rounded-md font-semibold hover:bg-immigo-gray-200 disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
       default:

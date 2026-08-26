@@ -1,7 +1,9 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { AppStatus } from '../context/conversationContextTypes';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
 import { logger } from '../logger';
+import { MicConsentModal } from './MicConsentModal';
+import { hasMicConsent, setMicConsent } from '../utils/micConsent';
 
 interface VoiceHubProps {
   readonly status: AppStatus;
@@ -21,6 +23,7 @@ export function VoiceHub({
   
   // Track user interaction patterns to block adversarial click spamming
   const lastInteractionTimestampRef = useRef<number>(0);
+  const [showMicConsent, setShowMicConsent] = useState(false);
   const DEBOUNCE_DELAY_MS = 800; // Rigid interaction safety threshold window
 
   const handleButtonClick = useCallback(() => {
@@ -44,10 +47,22 @@ export function VoiceHub({
       logger.info('VoiceHub: manual user intervention captured. Discontinuing speech session recording.');
       onEndSession();
     } else {
+      // One-time microphone/voice disclosure before the first recording (E2 consent).
+      if (!hasMicConsent()) {
+        setShowMicConsent(true);
+        return;
+      }
       logger.info('VoiceHub: manual user intervention captured. Launching speech session recording.');
       onStartSession();
     }
   }, [isSessionActive, status, onStartSession, onEndSession]);
+
+  const handleMicConsentAccept = useCallback(() => {
+    setMicConsent();
+    setShowMicConsent(false);
+    logger.info('VoiceHub: microphone consent acknowledged. Launching speech session recording.');
+    onStartSession();
+  }, [onStartSession]);
 
   const formatTime = (seconds: number): string => {
     const absoluteSeconds = Math.max(0, Math.floor(seconds));
@@ -71,6 +86,10 @@ export function VoiceHub({
   const isProcessingActive = status === 'processing';
 
   return (
+    <>
+      {showMicConsent && (
+        <MicConsentModal onAccept={handleMicConsentAccept} onCancel={() => setShowMicConsent(false)} />
+      )}
     <div className="flex flex-col items-center justify-center pl-2" role="region" aria-label="Voice Interaction Hub">
       <button 
         onClick={handleButtonClick} 
@@ -100,5 +119,6 @@ export function VoiceHub({
         </p>
       </div>
     </div>
+    </>
   );
 }

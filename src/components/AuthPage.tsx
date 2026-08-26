@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import ImmigoLogo from '../assets/immigo_logo.svg';
 import { TermsModal } from './TermsModal';
+import { PrivacyModal } from './PrivacyModal';
+import { TERMS_VERSION } from '../legal/terms-content';
+import { PRIVACY_VERSION } from '../legal/privacy-content';
 import { User, Mail, KeyRound, Globe, AlertCircle } from 'lucide-react';
 import { SUPPORTED_LANGUAGES } from '../constants';
 import { Language } from '../types/language';
@@ -17,13 +20,14 @@ export function AuthPage(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
   const { login, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isLogin && !agreedToTerms) {
-      setError("You must agree to the Terms and Conditions to sign up.");
+      setError("You must confirm you are 18+ and agree to the Terms of Service and Privacy Policy to sign up.");
       return;
     }
     setLoading(true);
@@ -32,7 +36,15 @@ export function AuthPage(): JSX.Element {
       if (isLogin) {
         await login(email, password);
       } else {
-        await signUp({ email, password, fullName, language });
+        await signUp({
+          email,
+          password,
+          fullName,
+          language,
+          termsAcceptedAt: new Date().toISOString(),
+          termsVersion: TERMS_VERSION,
+          privacyVersion: PRIVACY_VERSION,
+        });
         setSignUpSuccess(true);
       }
     } catch (err: unknown) {
@@ -76,6 +88,7 @@ export function AuthPage(): JSX.Element {
   return (
     <>
       {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
+      {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}
       <div className="min-h-dvh w-full bg-immigo-gray-50 flex items-center justify-center p-4 lg:p-6">
         <div className="w-full max-w-md bg-star-white p-8 lg:p-10 rounded-2xl shadow-xl border border-immigo-gray-200">
           <header className="text-center mb-8">
@@ -124,7 +137,7 @@ export function AuthPage(): JSX.Element {
                   <label className="flex items-start space-x-3 cursor-pointer">
                     <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-1 h-4 w-4 rounded border-gray-300 text-art-blue-600 focus:ring-art-blue-500" />
                     <span className="text-sm text-immigo-gray-700">
-                      I agree to the <button type="button" onClick={() => setShowTerms(true)} className="font-semibold text-art-blue-600 hover:underline focus:outline-none">Terms and Conditions</button>.
+                      I am 18 or older and a U.S. resident, and I agree to the <button type="button" onClick={() => setShowTerms(true)} className="font-semibold text-art-blue-600 hover:underline focus:outline-none">Terms of Service</button> and <button type="button" onClick={() => setShowPrivacy(true)} className="font-semibold text-art-blue-600 hover:underline focus:outline-none">Privacy Policy</button>.
                     </span>
                   </label>
                 </div>

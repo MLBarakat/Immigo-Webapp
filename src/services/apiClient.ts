@@ -126,6 +126,12 @@ export class ApiClient {
     return response;
   }
 
+  async deleteAccount(): Promise<void> {
+    // Server validates the caller's JWT and deletes ONLY that user; cascade
+    // removes all associated data. Returns 200 on success.
+    await this.fetchWithAuth('/delete-account', { method: 'POST' });
+  }
+
   async getHistory(): Promise<Message[]> {
     const response = await this.fetchWithAuth('/history');
     const data = await response.json();

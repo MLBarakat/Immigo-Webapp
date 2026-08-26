@@ -7,6 +7,10 @@ export interface SignUpPayload {
   password: string;
   fullName: string;
   language: string;
+  /** Consent audit trail (recorded in Supabase user_metadata). */
+  termsAcceptedAt?: string;
+  termsVersion?: string;
+  privacyVersion?: string;
 }
 
 export interface AuthContextType {
