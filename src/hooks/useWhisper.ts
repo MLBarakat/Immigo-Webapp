@@ -237,20 +237,41 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
     // Initialize accelerated machine learning background worker.
     // Worker expects action: 'INIT' (uppercase) with a correlationId field.
-    // Feature-detect WebGPU on the main thread and opt in when available; the
-    // worker independently re-verifies WebGPU support before honoring this flag
-    // ('gpu' in navigator, checked again inside the worker's own global scope),
-    // and falls back to the WASM tier (which has its own further fallback) if
-    // WebGPU isn't actually usable — so this is safe to request optimistically.
+    //
+    // IMPORTANT: only request the WebGPU tier if we can ACTUALLY obtain a
+    // working GPU adapter — not merely if the API exists. `'gpu' in navigator`
+    // can be true in environments that expose the API surface but cannot
+    // deliver a real backend (disabled flags, software rendering, locked-down
+    // sandboxes), which previously surfaced as
+    // "Worker initialization failed: ... [webgpu] backend not found." — and
+    // because ONNX Runtime Web's backend registration can share state across
+    // attempts in the same page, a failed WebGPU attempt risked destabilizing
+    // the WASM fallback too, not just failing to add speed. Probing for a real
+    // adapter first means we simply never attempt WebGPU unless it will work.
     const initCorrelationId = `init-${Date.now()}`;
-    const supportsWebGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
     workerRef.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
     workerRef.current.addEventListener('message', handleWorkerMessage);
-    workerRef.current.postMessage({
-      action: 'INIT',
-      correlationId: initCorrelationId,
-      payload: { config: { useWebGPU: supportsWebGpu } },
-    });
+
+    (async () => {
+      let supportsWebGpu = false;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const gpu = (navigator as any).gpu;
+        if (gpu && typeof gpu.requestAdapter === 'function') {
+          const adapter = await gpu.requestAdapter();
+          supportsWebGpu = adapter != null;
+        }
+      } catch (probeError) {
+        logger.warn('WebGPU adapter probe failed; falling back to WASM tier.', { error: String(probeError) });
+        supportsWebGpu = false;
+      }
+
+      workerRef.current?.postMessage({
+        action: 'INIT',
+        correlationId: initCorrelationId,
+        payload: { config: { useWebGPU: supportsWebGpu } },
+      });
+    })();
 
     // Initialize native browser Web Speech API (Optimistic UI Track)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

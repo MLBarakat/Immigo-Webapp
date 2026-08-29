@@ -277,7 +277,10 @@ async function handleInit(message: WorkerRequestMessage): Promise<void> {
       postMessageToMain({
         status: 'ERROR',
         correlationId: message.correlationId,
-        payload: { error: `Worker initialization failed: ${normalizeError(fallbackError || error)}`, tier: fallbackTier },
+        payload: {
+          error: `Worker initialization failed on both tiers. Primary (${tier}): ${normalizeError(error)} | Fallback (${fallbackTier}): ${normalizeError(fallbackError)}`,
+          tier: fallbackTier,
+        },
       });
     }
   }
