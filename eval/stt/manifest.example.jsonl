@@ -1,0 +1,4 @@
+{"audioPath": "clips/spanish_q021_01.wav", "accent": "Spanish", "reference": "one hundred", "itemId": "q-021", "hypothesis": "one hundred"}
+{"audioPath": "clips/mandarin_q021_01.wav", "accent": "Mandarin", "reference": "one hundred", "itemId": "q-021", "hypothesis": "one hundred"}
+{"audioPath": "clips/vietnamese_q021_01.wav", "accent": "Vietnamese", "reference": "one hundred", "itemId": "q-021", "hypothesis": "want hundert"}
+{"audioPath": "clips/arabic_generic_01.wav", "accent": "Arabic", "reference": "we the people of the united states", "hypothesis": "we the people of the united states"}

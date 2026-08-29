@@ -237,10 +237,20 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
     // Initialize accelerated machine learning background worker.
     // Worker expects action: 'INIT' (uppercase) with a correlationId field.
+    // Feature-detect WebGPU on the main thread and opt in when available; the
+    // worker independently re-verifies WebGPU support before honoring this flag
+    // ('gpu' in navigator, checked again inside the worker's own global scope),
+    // and falls back to the WASM tier (which has its own further fallback) if
+    // WebGPU isn't actually usable — so this is safe to request optimistically.
     const initCorrelationId = `init-${Date.now()}`;
+    const supportsWebGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
     workerRef.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
     workerRef.current.addEventListener('message', handleWorkerMessage);
-    workerRef.current.postMessage({ action: 'INIT', correlationId: initCorrelationId, payload: { config: {} } });
+    workerRef.current.postMessage({
+      action: 'INIT',
+      correlationId: initCorrelationId,
+      payload: { config: { useWebGPU: supportsWebGpu } },
+    });
 
     // Initialize native browser Web Speech API (Optimistic UI Track)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

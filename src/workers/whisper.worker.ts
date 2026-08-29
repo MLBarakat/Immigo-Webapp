@@ -62,8 +62,8 @@ type Transcriber = (audio: Float32Array, options: Record<string, unknown>) => Pr
 
 const SAMPLE_RATE = 16_000;
 const MODEL_BY_TIER: Record<RuntimeTier, string> = {
-  webgpu: 'Xenova/whisper-base',
-  'wasm-simd': 'Xenova/whisper-tiny',
+  webgpu: 'Xenova/whisper-small',
+  'wasm-simd': 'Xenova/whisper-base',
   'quantized-tiny': 'Xenova/whisper-tiny',
 };
 
