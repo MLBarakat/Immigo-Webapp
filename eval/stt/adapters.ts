@@ -48,7 +48,7 @@ export class XenovaWhisperAdapter implements SttAdapter {
   private transcriber: ((audio: Float32Array, opts: Record<string, unknown>) => Promise<{ text?: string }>) | null = null;
 
   constructor(
-    private readonly modelId = 'Xenova/whisper-tiny',
+    private readonly modelId = 'Xenova/whisper-small',
     /** ONNX execution provider for Node: 'cpu' (portable) or 'dml' (Windows GPU). */
     private readonly device: 'cpu' | 'dml' = 'cpu'
   ) {

@@ -25,6 +25,11 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   // Tracks which bank question the server last asked, so the next answer is
   // graded against the correct item (server-owned grounded grading).
   const currentItemIdRef = useRef<string | null>(null);
+  // True while Polly audio is actively playing — used to mute the VAD so the
+  // microphone does not pick up the speaker output and loop it back as input.
+  const isPollyPlayingRef = useRef<boolean>(false);
+  // Timer handle for the post-playback AEC settle window (clears on unmount).
+  const pollyMuteGateTimerRef = useRef<number | null>(null);
 
   // Dual-Track Speculative Merger orchestration hook
   const {
@@ -40,6 +45,11 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     clearTranscript
   } = useWhisper({
     onSpeechStart: () => {
+      // If Polly is still inside the AEC mute-gate window, the VAD detected
+      // Polly's own speaker output — suppress the callback entirely so we
+      // don't interrupt or loop back the assistant's own voice.
+      if (isPollyPlayingRef.current) return;
+
       const activePlayback = audioPlaybackRef.current;
       if (!activePlayback) return;
       activePlayback.pause();
@@ -235,13 +245,22 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       const audioPlaybackNode = new Audio(audioBlobUrl);
       audioPlaybackRef.current = audioPlaybackNode;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
-      startRecording();
+
+      // Raise the Polly mute gate BEFORE playback starts so that any AEC
+      // bleed-through during the first frames is suppressed.
+      isPollyPlayingRef.current = true;
+      if (pollyMuteGateTimerRef.current !== null) {
+        window.clearTimeout(pollyMuteGateTimerRef.current);
+        pollyMuteGateTimerRef.current = null;
+      }
 
       audioPlaybackNode.play().catch((error: unknown) => {
         logger.error('Audio node hardware playback initialization failure exceptions handled:', undefined, { 
           errorMessage: error instanceof Error ? error.message : String(error),
           traceId
         });
+        // Lower the mute gate immediately if playback failed.
+        isPollyPlayingRef.current = false;
         dispatch({ 
           type: 'SEND_MESSAGE_FAILURE', 
           payload: { 
@@ -258,6 +277,15 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
         audioPlaybackRef.current = null;
         URL.revokeObjectURL(audioBlobUrl);
+
+        // Keep the mute gate active for a short debounce period after playback
+        // ends so residual AEC / speaker-bleed frames are discarded before we
+        // open the microphone for real user input.
+        pollyMuteGateTimerRef.current = window.setTimeout(() => {
+          isPollyPlayingRef.current = false;
+          pollyMuteGateTimerRef.current = null;
+          startRecording();
+        }, 300); // 300 ms AEC settle window
       };
 
     } catch (error: unknown) {
@@ -373,6 +401,9 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   useEffect(() => {
     return () => {
       stopRecordingRef.current();
+      if (pollyMuteGateTimerRef.current !== null) {
+        window.clearTimeout(pollyMuteGateTimerRef.current);
+      }
     };
   }, []);
 
