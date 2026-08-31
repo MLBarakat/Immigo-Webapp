@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ApiClient } from '../services/apiClient';
 import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import amplifyOutputs from '../../amplify_outputs.json';
 
 interface AccountSettingsPageProps {
   onNavigateBack: () => void;
@@ -25,7 +26,9 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
     setDeleting(true);
     setDeleteError(null);
     try {
-      const client = new ApiClient(session.access_token);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dynamicGatewayUrl = (amplifyOutputs as any)?.custom?.apiBaseUrl;
+      const client = new ApiClient(session.access_token, dynamicGatewayUrl);
       await client.deleteAccount();
       await logout();
     } catch (err) {

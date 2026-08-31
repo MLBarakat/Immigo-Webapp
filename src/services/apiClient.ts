@@ -3,7 +3,7 @@ import { Message } from '../context/conversationContextTypes';
 import { UserSettings } from '../types/settings';
 import { logger } from '../logger';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (amplifyOutputs as { custom?: { apiBaseUrl?: string; API_URL?: string } }).custom?.apiBaseUrl || '';
+const API_BASE_URL = (amplifyOutputs as { custom?: { apiBaseUrl?: string; API_URL?: string } }).custom?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || '';
 const API_KEY = import.meta.env.VITE_API_KEY;
 
 export interface FeedbackResponse {
