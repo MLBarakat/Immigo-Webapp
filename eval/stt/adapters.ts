@@ -76,7 +76,21 @@ export class XenovaWhisperAdapter implements SttAdapter {
   async transcribe(audioPath: string): Promise<string> {
     const audio = await decodeWavTo16kMonoFloat32(audioPath);
     const asr = await this.getTranscriber();
-    const out = await asr(audio, { language: 'en', task: 'transcribe' });
+    // Mirror production decode params (TEC-01 #2) so eval numbers reflect the app.
+    // Set IMMIGO_STT_TUNING=off to A/B against the untuned baseline.
+    const tuned = process.env.IMMIGO_STT_TUNING !== 'off';
+    const opts = tuned
+      ? {
+          language: 'en',
+          task: 'transcribe',
+          temperature: [0, 0.2, 0.4] as number[],
+          compression_ratio_threshold: 2.4,
+          logprob_threshold: -1.0,
+          no_speech_threshold: 0.6,
+          condition_on_previous_text: false,
+        }
+      : { language: 'en', task: 'transcribe' };
+    const out = await asr(audio, opts);
     return (out.text ?? '').trim();
   }
 }

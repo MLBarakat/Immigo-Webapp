@@ -4,6 +4,7 @@ import { MicVAD } from '@ricky0123/vad-web';
 import { useTranscription, TranscriptionState } from '../context/TranscriptionContext';
 import { reconcileTranscripts } from '../utils/diffReconciliation';
 import { createMicrophoneStream } from '../utils/audioUtils';
+import { conditionAudio } from '../utils/audioConditioning';
 
 export interface WhisperHook {
   currentState: TranscriptionState;
@@ -113,8 +114,13 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       return;
     }
 
-    const compiledBuffer = compileAudioPayload(audioFrameAccumulatorRef.current);
+    const rawBuffer = compileAudioPayload(audioFrameAccumulatorRef.current);
     audioFrameAccumulatorRef.current = []; // Instantly clear chunks allocation pool to free headroom
+
+    // TEC-01 (6): on-device audio conditioning — high-pass (~80Hz) to drop room
+    // rumble/hum, and trailing-silence trim to reduce end-of-clip hallucination.
+    // Pure Float32 in/out; the worker still receives a 16kHz mono buffer.
+    const compiledBuffer = conditionAudio(rawBuffer);
 
     const sampleLength = compiledBuffer.length;
     const minSamplesLimit = remoteFeatureFlags.current.emptyHandoffSamplesMin;

@@ -61,6 +61,23 @@ interface TranscriberResult {
 type Transcriber = (audio: Float32Array, options: Record<string, unknown>) => Promise<TranscriberResult>;
 
 const SAMPLE_RATE = 16_000;
+// TEC-01 (2): decoding parameters tuned to suppress the repetition/hallucination
+// failure mode seen on hard/accented audio, without changing the model.
+//   - temperature 0 with a fallback schedule: deterministic first pass, then
+//     retries at higher temperature only if the decoder trips a threshold below.
+//   - compression_ratio_threshold: rejects/rescues degenerate repeated output
+//     ("the the the ...", "thank you for watching") — the classic hallucination.
+//   - logprob_threshold: treats very low-confidence output as failed (triggers
+//     the temperature fallback) rather than emitting garbage.
+//   - no_speech_threshold: suppresses transcription of near-silent segments.
+const DECODE_TUNING = {
+  temperature: [0, 0.2, 0.4] as number[],
+  compression_ratio_threshold: 2.4,
+  logprob_threshold: -1.0,
+  no_speech_threshold: 0.6,
+  condition_on_previous_text: false,
+};
+
 const MODEL_BY_TIER: Record<RuntimeTier, string> = {
   webgpu: 'Xenova/whisper-small',
   'wasm-simd': 'Xenova/whisper-base',
@@ -255,6 +272,7 @@ async function warmUp(correlationId: string, tier: RuntimeTier): Promise<void> {
     stride_length_s: 1,
     language: 'en',
     task: 'transcribe',
+    ...DECODE_TUNING,
   });
   disposeDeep(result);
 }
@@ -321,6 +339,7 @@ async function handleTranscribe(message: WorkerRequestMessage): Promise<void> {
       stride_length_s: 1,
       language: message.payload?.config?.language,
       task: message.payload?.config?.task ?? 'transcribe',
+      ...DECODE_TUNING,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       callback_function: (beams: any[]) => {
         const primaryBeam = beams && beams[0];
