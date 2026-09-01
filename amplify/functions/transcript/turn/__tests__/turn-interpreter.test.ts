@@ -100,3 +100,46 @@ describe('TurnInterpreterAdapter.interpret', () => {
     expect(await adapter.interpret({ askedItem: q21 }, 'x')).toBeNull();
   });
 });
+
+describe('buildGreetingPrompt and TurnInterpreterAdapter.generateGreeting', () => {
+  it('generates a greeting using the transport', async () => {
+    const complete: ModelComplete = vi.fn(async () =>
+      'Welcome back! Today let us practice government questions. How many U.S. senators are there?'
+    );
+    const adapter = new TurnInterpreterAdapter(complete);
+    const greeting = await adapter.generateGreeting({
+      userUtterance: 'hello',
+      isFirstSessionToday: true,
+      progressReportMarkdown: 'Accuracy: 80%',
+      firstQuestion: q21,
+    });
+    expect(complete).toHaveBeenCalledOnce();
+    expect(greeting).toContain('How many U.S. senators are there?');
+  });
+
+  it('falls back to safe default greeting when transport throws', async () => {
+    const complete: ModelComplete = vi.fn(async () => {
+      throw new Error('network error');
+    });
+    const adapter = new TurnInterpreterAdapter(complete);
+    const greeting = await adapter.generateGreeting({
+      userUtterance: 'hi',
+      isFirstSessionToday: false,
+      firstQuestion: q21,
+    });
+    expect(greeting).toContain('How many U.S. senators are there?');
+  });
+});
+
+describe('buildProgressQueryPrompt and TurnInterpreterAdapter.answerProgressQuery', () => {
+  it('answers progress query using the transport', async () => {
+    const complete: ModelComplete = vi.fn(async () =>
+      'You are doing great, with 85% overall civics accuracy!'
+    );
+    const adapter = new TurnInterpreterAdapter(complete);
+    const reply = await adapter.answerProgressQuery('Score: 85%', 'how am I doing?');
+    expect(complete).toHaveBeenCalledOnce();
+    expect(reply).toBe('You are doing great, with 85% overall civics accuracy!');
+  });
+});
+
