@@ -4,6 +4,7 @@ import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 import { getItem, selectNextQuestion } from './turn/bank';
+import type { CivicsItem } from './turn/types';
 import { TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn } from './turn/turn-policy';
 
