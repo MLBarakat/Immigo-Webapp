@@ -73,14 +73,6 @@ interface ExtendedSdkStream {
   transformToByteArray(): Promise<Uint8Array>;
 }
 
-// Grounded assistant prompt for progress ("how am I doing?") questions.
-const ASSIST_SYSTEM_PROMPT = [
-  'You are a warm, encouraging civics tutor.',
-  'Answer the user\'s question about their own study progress using ONLY the progress report content provided.',
-  'If the reports do not contain the answer, say you do not have that detail yet.',
-  'Do not give legal or immigration advice. Keep it brief and friendly (2-3 sentences).',
-].join('\n');
-
 const RAG_INTENT_KEYWORDS = [
   'how have i improved', 'my score', 'my progress', 'last week',
   'last month', 'how am i doing', 'my history', 'my weaknesses',
@@ -152,7 +144,7 @@ async function fetchUserProgressReport(userId: string): Promise<string> {
     console.log(`[Lambda-FetchReport] Today's report not found. Querying most recent past report...`);
     const { data: recentReport, error: recentErr } = await supabase
       .from('daily_progress_reports')
-      .select('report_markdown')
+      .select('report_markdown, date')
       .eq('user_id', userId)
       .order('date', { ascending: false })
       .limit(1)
@@ -163,7 +155,7 @@ async function fetchUserProgressReport(userId: string): Promise<string> {
     }
 
     if (recentReport?.report_markdown) {
-      console.log(`[Lambda-FetchReport] Successfully fetched past report (${recentReport.report_markdown.length} chars)`);
+      console.log(`[Lambda-FetchReport] Successfully fetched past report from ${recentReport.date} (${recentReport.report_markdown.length} chars)`);
       return recentReport.report_markdown;
     }
   } catch (err) {
@@ -172,6 +164,55 @@ async function fetchUserProgressReport(userId: string): Promise<string> {
 
   console.log('[Lambda-FetchReport] No prior report found. Using baseline prompt.');
   return 'No prior progress history available. Begin baseline assessment across American Government, American History, and Integrated Civics.';
+}
+
+async function isFirstSessionOfDay(userId: string, currentSessionId?: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  try {
+    let query = supabase
+      .from('sessions')
+      .select('id, started_at', { count: 'exact', head: false })
+      .eq('user_id', userId)
+      .gte('started_at', todayStart.toISOString())
+      .order('started_at', { ascending: true });
+
+    if (currentSessionId) {
+      query = query.neq('id', currentSessionId);
+    }
+
+    const { count, error } = await query;
+    if (error) {
+      console.warn('[Lambda-SessionCheck] Error checking daily sessions:', error.message);
+      return true;
+    }
+
+    return (count ?? 0) === 0;
+  } catch (err) {
+    console.error('[Lambda-SessionCheck] Exception checking daily sessions:', err);
+    return true;
+  }
+}
+
+async function generateSessionGreeting(
+  userId: string,
+  userUtterance: string,
+  firstQuestion: CivicsItem,
+  currentSessionId?: string
+): Promise<string> {
+  const isFirstToday = await isFirstSessionOfDay(userId, currentSessionId);
+  const rawReport = await fetchUserProgressReport(userId);
+
+  console.log(`[Lambda-Greeting] isFirstSessionToday=${isFirstToday}, hasReport=${Boolean(rawReport)}`);
+
+  return turnInterpreter.generateGreeting({
+    userUtterance,
+    isFirstSessionToday: isFirstToday,
+    progressReportMarkdown: rawReport,
+    firstQuestion,
+  });
 }
 
 async function getTitanEmbedding(text: string): Promise<number[] | null> {
@@ -234,11 +275,7 @@ async function answerProgressQuery(userId: string, question: string, traceId: st
     ragContext = await fetchUserProgressReport(userId);
   }
 
-  const text = await modelComplete({
-    system: ASSIST_SYSTEM_PROMPT,
-    user: `Progress report(s):\n${ragContext}\n\nUser question: ${question}`,
-  });
-  return text || "Let's keep practicing your civics questions. Ready for the next one?";
+  return turnInterpreter.answerProgressQuery(ragContext, question);
 }
 
 /**
@@ -385,10 +422,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       nextQuestionText = stay.question;
 
     } else if (!askedItem) {
-      // ---- START / no active question -> ask the first one, do not grade ----
-      console.log(`[Lambda-Start] [${traceId}] No active question; presenting the first question.`);
+      // ---- START / no active question -> greet with progress report & goals, ask first question ----
+      console.log(`[Lambda-Start] [${traceId}] No active question; generating personalized session greeting.`);
       const first = selectNextQuestion();
-      generatedAssistantText = `Let's begin. ${first.question}`;
+      generatedAssistantText = await generateSessionGreeting(
+        userId,
+        cleanedTranscript,
+        first,
+        parsedBody.sessionId
+      );
       nextItemId = first.id;
       nextQuestionText = first.question;
 

@@ -3,7 +3,7 @@
 // The output is a CLAIM; turn-policy.ts enforces the consequences in code.
 
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import type { Intent, ProposedGrade, TurnContext, TurnInterpretation } from './types';
+import type { Intent, ProposedGrade, TurnContext, TurnInterpretation, SessionStartContext } from './types';
 
 const INTENTS: readonly Intent[] = [
   'answer', 'explain', 'assist', 'affirmation', 'smalltalk', 'off_topic', 'manipulation', 'unclear',
@@ -58,6 +58,51 @@ export function buildTurnPrompt(ctx: TurnContext, utterance: string): { system: 
   return { system, user };
 }
 
+export function buildGreetingPrompt(ctx: SessionStartContext): { system: string; user: string } {
+  const lang = ctx.preferredLanguage ? ` Speak in the user's preferred language: ${ctx.preferredLanguage}.` : '';
+  const hasValidReport = Boolean(ctx.progressReportMarkdown && !ctx.progressReportMarkdown.startsWith('No prior progress history available'));
+
+  const system = [
+    'You are Joanna, a warm, encouraging, and professional US Civics naturalization test voice tutor.',
+    'You are greeting the student at the beginning of their practice session.',
+    'IMPORTANT FOR SPOKEN TEXT-TO-SPEECH AUDIO:',
+    '- Keep your response concise, friendly, and natural (3 to 4 sentences total) so it sounds smooth when spoken aloud.',
+    '- Do NOT use markdown formatting, asterisks, bullet points, headers, or quotes.' + lang,
+    '',
+    'Content Instructions:',
+    '1. Start with a warm greeting.',
+    '2. If this is their first session of the day and a past progress report is available:',
+    '   - Briefly summarize their overall progress or accuracy in 1 natural sentence.',
+    '   - Suggest 1-2 specific goals or focus areas for today\'s session based on weak spots or review topics mentioned in the report.',
+    '3. If no prior progress report exists (new student):',
+    '   - Welcome them warmly to civics practice and explain that today you will assess their baseline knowledge across American Government, History, and Civics.',
+    '4. If they already had a session earlier today (not the first session of the day):',
+    '   - Welcome them back warmly for another round of practice.',
+    `5. Conclude smoothly by presenting the first question exactly: "${ctx.firstQuestion.question}"`
+  ].join('\n');
+
+  const user = [
+    `User initial words: "${ctx.userUtterance}"`,
+    `Is first session of the day: ${ctx.isFirstSessionToday}`,
+    `Latest Progress Report on file:\n${hasValidReport ? ctx.progressReportMarkdown : 'No previous progress report found (new learner).'}\n`,
+    `First Question to ask at the end:\n"${ctx.firstQuestion.question}"`
+  ].join('\n\n');
+
+  return { system, user };
+}
+
+export function buildProgressQueryPrompt(ragContext: string, question: string): { system: string; user: string } {
+  const system = [
+    'You are a warm, encouraging civics tutor.',
+    'Answer the user\'s question about their own study progress using ONLY the progress report content provided.',
+    'If the reports do not contain the answer, say you do not have that detail yet.',
+    'Do not give legal or immigration advice. Keep it brief and friendly (2-3 sentences).',
+  ].join('\n');
+
+  const user = `Progress report(s):\n${ragContext}\n\nUser question: ${question}`;
+  return { system, user };
+}
+
 export class TurnInterpreterAdapter {
   constructor(private readonly complete: ModelComplete) {}
 
@@ -69,6 +114,33 @@ export class TurnInterpreterAdapter {
       return null;
     }
     return parseInterpretation(raw);
+  }
+
+  async generateGreeting(ctx: SessionStartContext): Promise<string> {
+    const hasValidReport = Boolean(ctx.progressReportMarkdown && !ctx.progressReportMarkdown.startsWith('No prior progress history available'));
+    try {
+      const raw = await this.complete(buildGreetingPrompt(ctx));
+      if (raw && raw.trim()) {
+        return raw.trim();
+      }
+    } catch {
+      // fallback below
+    }
+
+    if (hasValidReport && ctx.isFirstSessionToday) {
+      return `Welcome back! Based on your recent progress report, let's focus on strengthening your civics knowledge today. Let's start with your first question: ${ctx.firstQuestion.question}`;
+    }
+    return `Welcome! Let's get started with today's civics practice. First question: ${ctx.firstQuestion.question}`;
+  }
+
+  async answerProgressQuery(ragContext: string, question: string): Promise<string> {
+    try {
+      const text = await this.complete(buildProgressQueryPrompt(ragContext, question));
+      if (text && text.trim()) return text.trim();
+    } catch {
+      // fallback below
+    }
+    return "Let's keep practicing your civics questions. Ready for the next one?";
   }
 }
 

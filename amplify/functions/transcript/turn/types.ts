@@ -34,4 +34,13 @@ export interface TurnContext {
   userFirstName?: string;
 }
 
+export interface SessionStartContext {
+  userUtterance: string;
+  isFirstSessionToday: boolean;
+  progressReportMarkdown?: string | null;
+  firstQuestion: CivicsItem;
+  preferredLanguage?: string;
+  userFirstName?: string;
+}
+
 // ReplyKind and TurnOutcome are defined in turn-policy.ts.
