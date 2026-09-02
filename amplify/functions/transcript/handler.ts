@@ -371,6 +371,43 @@ async function persistGradedAnswer(
   }
 }
 
+/**
+ * Recently-asked item ids for THIS session, read from graded_answers (RLS-
+ * scoped to the caller via their own JWT — same pattern as persistGradedAnswer).
+ * Fed into selectNextQuestion's exclusion list so a short session doesn't
+ * coincidentally re-ask a question from a few turns earlier. Every item that
+ * gets advanced past is guaranteed to have a graded_answers row (persisted
+ * right before advancing), so this is a complete record of what's already
+ * been asked in the session — not just the single most recent item.
+ * Read failures degrade gracefully to an empty list (falls back to the old
+ * single-item exclusion) rather than breaking the turn.
+ */
+async function getRecentSessionItemIds(
+  token: string,
+  sessionId: string | null | undefined,
+  traceId: string,
+  limit = 20
+): Promise<string[]> {
+  if (!sessionId) return [];
+  try {
+    const db = getUserScopedSupabase(token);
+    const { data, error } = await db
+      .from('graded_answers')
+      .select('item_id')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn(`[Lambda-Grade] [${traceId}] recent-items query error: ${error.message}`);
+      return [];
+    }
+    return (data ?? []).map((row) => row.item_id as string);
+  } catch (err) {
+    console.error(`[Lambda-Grade] [${traceId}] recent-items query exception:`, err);
+    return [];
+  }
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const traceId = getCaseInsensitiveHeader(event.headers || {}, 'x-correlation-trace-id') || `lambda-trace-${Date.now()}`;
 
@@ -560,8 +597,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           ? (interp?.reply || outcome.safeReply)
           : outcome.safeReply;
 
-        // Advance to the next question (avoid immediately repeating the one just asked).
-        const next = selectNextQuestion([askedItem.id]);
+        // Advance to the next question, avoiding not just the one just asked
+        // but everything asked so far this session (up to a bound) — the
+        // persist above already wrote askedItem.id, so it's included here too.
+        const recentItemIds = await getRecentSessionItemIds(token, parsedBody.sessionId, traceId);
+        const excludeIds = recentItemIds.length > 0 ? recentItemIds : [askedItem.id];
+        const next = selectNextQuestion(excludeIds);
         nextItemId = next.id;
         nextQuestionText = next.question;
 
