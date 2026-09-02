@@ -25,6 +25,26 @@ function containsDigit(s: string): boolean {
   return /\d/.test(s);
 }
 
+// Spelled-out number words. Digits alone ("27") aren't the only numeric form —
+// civics answers are often spoken as words ("twenty seven"), which contain no
+// digit characters at all. Without this, adjacent numbers (e.g. "twenty seven"
+// vs "twenty five") could slip past the strict-numeric guard, since sharing
+// most words gives deceptively high word-level similarity despite being a
+// completely different number.
+const NUMBER_WORDS = new Set([
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+  'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety',
+  'hundred', 'thousand', 'million', 'billion',
+  'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth',
+]);
+
+/** True if the (already normalized) text contains a digit OR a spelled-out number word. */
+function isNumericLike(normalizedText: string): boolean {
+  if (containsDigit(normalizedText)) return true;
+  return normalizedText.split(' ').some((w) => NUMBER_WORDS.has(w));
+}
+
 /**
  * Minimal Double-Metaphone-style phonetic key. Not the full algorithm, but a
  * deterministic, dependency-free reduction that collapses common accent-driven
@@ -110,8 +130,9 @@ export function answerInBank(candidate: string | null, acceptable: string[]): bo
     // 1) Exact / substring (original behavior, always allowed).
     if (c === a || c.includes(a) || a.includes(c)) return true;
 
-    // STRICT GUARD: numeric / date / year answers are exact-only. Do NOT fuzzy.
-    if (containsDigit(a) || containsDigit(c)) continue;
+    // STRICT GUARD: numeric / date / year answers (digits OR spelled-out
+    // number words) are exact-only. Do NOT fuzzy.
+    if (isNumericLike(a) || isNumericLike(c)) continue;
 
     const aWords = a.split(' ').filter(Boolean);
 
@@ -134,5 +155,68 @@ export function answerInBank(candidate: string | null, acceptable: string[]): bo
     if (anchoredMatch(cWords, aWords, editWordMatch)) return true;
   }
 
+  return false;
+}
+
+/** Per-word similarity ratio in [0,1]; 1 = identical, 0 = completely different. */
+function wordSimilarity(w1: string, w2: string): number {
+  if (!w1 || !w2) return 0;
+  const d = editDistance(w1, w2);
+  return 1 - d / Math.max(w1.length, w2.length);
+}
+
+// Thresholds for near-miss classification (solution 9 targeting). Both must
+// hold for a candidate window to count as "near":
+//   - AVG_THRESHOLD: overall similarity across the answer's words is high.
+//   - MIN_FLOOR: NO single word is a near-total mismatch. This specifically
+//     guards against multi-word answers that share a template but differ in
+//     the one word that actually matters — e.g. "freedom of the press" vs
+//     "freedom of religion" — which would otherwise score deceptively high on
+//     average alone (two of three words identical) despite naming a genuinely
+//     different, wrong answer.
+const NEAR_MISS_AVG_THRESHOLD = 0.55;
+const NEAR_MISS_MIN_FLOOR = 0.3;
+
+/**
+ * True if `candidate` is CLOSE to (but did not pass) an acceptable answer —
+ * i.e. plausibly the same answer distorted by accent/STT, not a different
+ * answer. Used to decide whether a mismatch is worth a confirmation re-ask
+ * (near-miss) or should be committed as incorrect immediately (far-miss).
+ *
+ * Deliberately conservative and SAFETY-GUARDED:
+ *   - Numbers / dates / years are NEVER treated as near-miss (matches the
+ *     strict-numeric rule in answerInBank) — re-asking about digits is both
+ *     lower-value (Whisper handles digits well) and riskier (adjacent numbers
+ *     are semantically unrelated, not accent variants).
+ *   - Only meaningful for candidates NOT already accepted by answerInBank;
+ *     callers should check answerInBank first.
+ */
+export function isNearMiss(candidate: string | null, acceptable: string[]): boolean {
+  if (!candidate) return false;
+  const c = normalize(candidate);
+  if (!c) return false;
+  if (isNumericLike(c)) return false; // never near-miss on numeric input (digits or number words)
+
+  const cWords = c.split(' ').filter(Boolean);
+  if (cWords.length === 0) return false;
+
+  for (const rawAnswer of acceptable) {
+    if (isNumericLike(normalize(rawAnswer))) continue; // never near-miss against numeric/date answers
+    const a = normalize(rawAnswer);
+    if (!a) continue;
+    const aWords = a.split(' ').filter(Boolean);
+    if (aWords.length === 0 || cWords.length < aWords.length) continue;
+
+    // Best-scoring aligned window of the transcript against this answer.
+    let bestAvg = -1;
+    let bestMin = -1;
+    for (let start = 0; start + aWords.length <= cWords.length; start++) {
+      const sims = aWords.map((aw, i) => wordSimilarity(cWords[start + i], aw));
+      const avg = sims.reduce((x, y) => x + y, 0) / sims.length;
+      const min = Math.min(...sims);
+      if (avg > bestAvg) { bestAvg = avg; bestMin = min; }
+    }
+    if (bestAvg >= NEAR_MISS_AVG_THRESHOLD && bestMin >= NEAR_MISS_MIN_FLOOR) return true;
+  }
   return false;
 }

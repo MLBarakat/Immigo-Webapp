@@ -68,6 +68,7 @@ interface RequestBody {
   conversationWindow?: ConversationTurn[];
   sessionId?: string;
   currentItemId?: string;
+  confirmationRetry?: boolean;
 }
 
 interface ExtendedSdkStream {
@@ -408,6 +409,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // 2. Route the turn.
     let generatedAssistantText = '';
     let verdict: 'correct' | 'incorrect' | 'partial' | null = null;
+    let needsConfirmation = false;
     let nextItemId: string;
     let nextQuestionText: string;
 
@@ -442,37 +444,57 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         cleanedTranscript
       );
 
-      // CODE decides the outcome; the AI only proposed it.
-      const outcome = resolveTurn(interp, { askedItem });
+      // CODE decides the outcome; the AI only proposed it. `rawTranscript` here
+      // is deliberately `cleanedTranscript` (this turn's actual words), passed
+      // explicitly (NOT via `{ rawTranscript }` shorthand) so it can never be
+      // confused with the outer, uncleaned `rawTranscript` variable above.
+      const outcome = resolveTurn(interp, {
+        askedItem,
+        isConfirmationRetry: parsedBody.confirmationRetry === true,
+        rawTranscript: cleanedTranscript,
+      });
       verdict = outcome.committedVerdict;
 
       if (outcome.flags.includes('manipulation_detected')) {
         console.warn(`[Lambda-Security] [${traceId}] manipulation attempt contained`);
       }
 
-      // Persist the graded turn (server-authoritative, RLS-scoped as the user).
-      if (outcome.scoreChanged && outcome.committedVerdict) {
-        await persistGradedAnswer(
-          token,
-          userId,
-          parsedBody.sessionId ?? null,
-          askedItem.id,
-          outcome.committedVerdict,
-          traceId
-        );
+      if (outcome.replyKind === 'needs_confirmation') {
+        // Solution 9: don't commit a grade or advance — re-ask the SAME question
+        // once so an accent-garbled (or otherwise ambiguous) answer isn't
+        // silently marked wrong. Targeted via near-miss vs far-miss in
+        // resolveTurn, so confidently-wrong answers skip this and commit
+        // immediately below.
+        needsConfirmation = true;
+        generatedAssistantText = outcome.safeReply;
+        nextItemId = askedItem.id;            // stay on the same question
+        nextQuestionText = askedItem.question;
+        console.log(`[Lambda-Grade] [${traceId}] needs_confirmation on item=${askedItem.id} (re-ask, no grade)`);
+      } else {
+        // Persist the graded turn (server-authoritative, RLS-scoped as the user).
+        if (outcome.scoreChanged && outcome.committedVerdict) {
+          await persistGradedAnswer(
+            token,
+            userId,
+            parsedBody.sessionId ?? null,
+            askedItem.id,
+            outcome.committedVerdict,
+            traceId
+          );
+        }
+
+        const feedback = outcome.useModelReply
+          ? (interp?.reply || outcome.safeReply)
+          : outcome.safeReply;
+
+        // Advance to the next question (avoid immediately repeating the one just asked).
+        const next = selectNextQuestion([askedItem.id]);
+        nextItemId = next.id;
+        nextQuestionText = next.question;
+
+        // Speak the feedback AND the next question so the voice loop keeps flowing.
+        generatedAssistantText = `${feedback} Next question: ${next.question}`;
       }
-
-      const feedback = outcome.useModelReply
-        ? (interp?.reply || outcome.safeReply)
-        : outcome.safeReply;
-
-      // Advance to the next question (avoid immediately repeating the one just asked).
-      const next = selectNextQuestion([askedItem.id]);
-      nextItemId = next.id;
-      nextQuestionText = next.question;
-
-      // Speak the feedback AND the next question so the voice loop keeps flowing.
-      generatedAssistantText = `${feedback} Next question: ${next.question}`;
     }
 
     if (!generatedAssistantText) {
@@ -507,6 +529,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         responseText: generatedAssistantText,
         audioData: base64AudioData,
         verdict,
+        needsConfirmation,
         nextItemId,
         nextQuestion: nextQuestionText
       })

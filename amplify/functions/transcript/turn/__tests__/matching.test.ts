@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { answerInBank, normalize, phoneticKey } from '../matching';
+import { answerInBank, normalize, phoneticKey, isNearMiss } from '../matching';
 
 describe('normalize (unchanged behavior)', () => {
   it('lowercases, strips punctuation and filler', () => {
@@ -87,5 +87,45 @@ describe('phoneticKey — sanity', () => {
   it('collapses v/w and vowel variants but keeps distinct words distinct', () => {
     expect(phoneticKey('wilson')).toBe(phoneticKey('vilson'));
     expect(phoneticKey('washington')).not.toBe(phoneticKey('jefferson'));
+  });
+});
+
+
+describe('isNearMiss — targets confirm-on-mismatch accurately (solution 9 redesign)', () => {
+  it('recognizes accent-garbled names as near-miss (worth confirming)', () => {
+    expect(isNearMiss('abrahem linkin', ['Abraham Lincoln'])).toBe(true);
+    expect(isNearMiss('constitushion', ['Constitution'])).toBe(true);
+    expect(isNearMiss('i think its washington', ['Washington'])).toBe(true);
+  });
+
+  it('rejects genuinely different names as far-miss (should NOT confirm, commit immediately)', () => {
+    expect(isNearMiss('jefferson', ['Washington'])).toBe(false);
+    expect(isNearMiss('obama', ['Washington'])).toBe(false);
+    expect(isNearMiss('the senate', ['the president'])).toBe(false);
+  });
+
+  it('SHARED-TEMPLATE TRAP: rejects a different First Amendment right despite shared words', () => {
+    // "freedom of the press" vs "freedom of religion" share 2/3 words after
+    // normalization, which would fool a naive average-similarity check. The
+    // per-word floor must catch that "press" and "religion" are unrelated.
+    expect(isNearMiss('freedom of the press', ['freedom of religion'])).toBe(false);
+    expect(isNearMiss('freedom of speech', ['freedom of assembly'])).toBe(false);
+  });
+
+  it('NEVER near-misses on numbers/dates, even when textually close', () => {
+    // "99" vs "92": edit distance 1 of 2 chars would score ~0.5 similarity —
+    // still must be false, because numeric answers never use near-miss logic.
+    expect(isNearMiss('99', ['92'])).toBe(false);
+    expect(isNearMiss('1786', ['1776'])).toBe(false);
+    expect(isNearMiss('twenty seven', ['twenty five'])).toBe(false);
+  });
+
+  it('returns false for null/empty candidate', () => {
+    expect(isNearMiss(null, ['Washington'])).toBe(false);
+    expect(isNearMiss('', ['Washington'])).toBe(false);
+  });
+
+  it('returns false when the candidate is shorter than the answer', () => {
+    expect(isNearMiss('george', ['George Washington'])).toBe(false);
   });
 });
