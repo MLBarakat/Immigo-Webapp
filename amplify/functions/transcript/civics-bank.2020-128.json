@@ -423,8 +423,11 @@
       "edition": "2020-128",
       "asterisk": true,
       "question": "What is the name of the Speaker of the House of Representatives now?",
-      "kind": "dynamic",
-      "acceptableAnswers": [],
+      "kind": "static",
+      "acceptableAnswers": ["Mike Johnson",
+        "M. Johnson",
+        "Johnson"
+      ],
       "jurisdictionDependent": false,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
       "sourceVersion": "M-1778TXT-02-21"
@@ -533,8 +536,11 @@
       "edition": "2020-128",
       "asterisk": true,
       "question": "What is the name of the President of the United States now?",
-      "kind": "dynamic",
-      "acceptableAnswers": [],
+      "kind": "static",
+      "acceptableAnswers": ["Donald Trump",
+        "D. Trump",
+        "Trump"
+      ],
       "jurisdictionDependent": false,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
       "sourceVersion": "M-1778TXT-02-21"
@@ -545,8 +551,10 @@
       "edition": "2020-128",
       "asterisk": false,
       "question": "What is the name of the Vice President of the United States now?",
-      "kind": "dynamic",
-      "acceptableAnswers": [],
+      "kind": "static",
+      "acceptableAnswers": ["JD. Vance",
+        "J. Vance",
+        "Vance"],
       "jurisdictionDependent": false,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
       "sourceVersion": "M-1778TXT-02-21"
@@ -807,8 +815,12 @@
       "edition": "2020-128",
       "asterisk": false,
       "question": "Who is the Chief Justice of the United States now?",
-      "kind": "dynamic",
-      "acceptableAnswers": [],
+      "kind": "static",
+      "acceptableAnswers": ["John Roberts",
+        "John G. Roberts",
+        "J. Roberts",
+        "Roberts"
+      ],
       "jurisdictionDependent": false,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
       "sourceVersion": "M-1778TXT-02-21"

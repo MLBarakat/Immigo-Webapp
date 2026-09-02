@@ -25,6 +25,11 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   // Tracks which bank question the server last asked, so the next answer is
   // graded against the correct item (server-owned grounded grading).
   const currentItemIdRef = useRef<string | null>(null);
+  // One-shot flag: set when the server asks the user to confirm/repeat an
+  // answer or complete a multi-part one (turn-policy's needs_confirmation).
+  // While set (and matching the current item), the next answer is sent as a
+  // confirmation retry so the server commits the honest final verdict.
+  const awaitingConfirmationRef = useRef<string | null>(null);
   // True while Polly audio is actively playing — used to mute the VAD so the
   // microphone does not pick up the speaker output and loop it back as input.
   const isPollyPlayingRef = useRef<boolean>(false);
@@ -184,6 +189,12 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       let responseText: string | null = null;
       let audioData: ArrayBuffer | null = null;
       let nextItemId: string | null = null;
+      let needsConfirmation = false;
+
+      // If we're mid-confirmation/mid-multi-part-answer on THIS item, tell the
+      // server this is the follow-up turn so it commits a final verdict.
+      const isConfirmationRetry = awaitingConfirmationRef.current !== null
+        && awaitingConfirmationRef.current === currentItemIdRef.current;
 
       while (currentAttempt < maxRetryAttemptsCeiling) {
         try {
@@ -193,11 +204,13 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
             slidingWindow,
             activeSessionId,
             currentItemIdRef.current,
+            isConfirmationRetry,
             { headers: { 'x-correlation-trace-id': traceId } }
           );
           responseText = res.responseText;
           audioData = res.audioData;
           nextItemId = res.nextItemId;
+          needsConfirmation = res.needsConfirmation;
           break;
         } catch (err: unknown) {
           accumulatedLastError = err;
@@ -222,6 +235,11 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
 
       // Remember the question the server just asked; the NEXT answer is graded against it.
       currentItemIdRef.current = nextItemId;
+
+      // Confirmation state machine (one-shot):
+      //  - server asked to confirm/complete -> arm the retry flag for this item
+      //  - otherwise                        -> clear it (the round is over)
+      awaitingConfirmationRef.current = needsConfirmation ? nextItemId : null;
 
       dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: responseText } });
 
@@ -348,18 +366,102 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   const initiateSession = useCallback(async () => {
     dispatch({ type: 'START_SESSION' });
     analytics.track('session_started');
-    processedTranscriptRef.current = ''; 
+    processedTranscriptRef.current = '';
     sessionIdRef.current = null;
     currentItemIdRef.current = null;
+    awaitingConfirmationRef.current = null;
 
+    let newSessionId: string | null = null;
     if (userId) {
-      const newSessionId = await ChatPersistenceService.createSession(userId);
+      newSessionId = await ChatPersistenceService.createSession(userId);
       sessionIdRef.current = newSessionId;
       dispatch({ type: 'SET_SESSION_ID', payload: newSessionId });
     }
 
-    startRecording();
-  }, [userId, dispatch, startRecording]);
+    // Item 6: proactively fetch the personalized greeting BEFORE recording
+    // begins, instead of waiting for a (often garbled) first utterance to
+    // implicitly trigger it. This also means currentItemIdRef is set from a
+    // real server response before the mic ever opens for real user input —
+    // the first answer is graded against the right question from the start.
+    if (!apiClient) {
+      startRecording();
+      return;
+    }
+
+    const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const secureUserMessageId = `user-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const secureAssistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    try {
+      const res = await apiClient.postSessionStart(newSessionId, {
+        headers: { 'x-correlation-trace-id': traceId },
+      });
+
+      currentItemIdRef.current = res.nextItemId;
+      awaitingConfirmationRef.current = res.needsConfirmation ? res.nextItemId : null;
+
+      // No real user utterance preceded this — an empty-content placeholder
+      // keeps the existing SEND_MESSAGE_START contract (which always pairs a
+      // user + assistant message) without inventing new reducer actions.
+      const placeholderUserMessage: Message = {
+        id: secureUserMessageId,
+        role: 'user',
+        content: '',
+        timestamp: new Date().toISOString(),
+      };
+      dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage: placeholderUserMessage, assistantMessageId: secureAssistantMessageId } });
+      dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: res.responseText } });
+
+      if (userId && newSessionId) {
+        void ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', res.responseText);
+      }
+
+      // Same playback + AEC mute-gate + resume-recording sequencing as every
+      // other assistant response, so the mic doesn't open until the greeting
+      // audio has fully finished (plus the settle window).
+      const audioBlob = new Blob([res.audioData], { type: 'audio/mpeg' });
+      const audioBlobUrl = URL.createObjectURL(audioBlob);
+      const audioPlaybackNode = new Audio(audioBlobUrl);
+      audioPlaybackRef.current = audioPlaybackNode;
+      dispatch({ type: 'SET_STATUS', payload: 'speaking' });
+
+      isPollyPlayingRef.current = true;
+      if (pollyMuteGateTimerRef.current !== null) {
+        window.clearTimeout(pollyMuteGateTimerRef.current);
+        pollyMuteGateTimerRef.current = null;
+      }
+
+      audioPlaybackNode.play().catch((error: unknown) => {
+        logger.error('Greeting audio playback initialization failure:', undefined, {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          traceId,
+        });
+        isPollyPlayingRef.current = false;
+        audioPlaybackRef.current = null;
+        startRecording();
+      });
+
+      audioPlaybackNode.onended = () => {
+        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        audioPlaybackRef.current = null;
+        URL.revokeObjectURL(audioBlobUrl);
+        pollyMuteGateTimerRef.current = window.setTimeout(() => {
+          isPollyPlayingRef.current = false;
+          pollyMuteGateTimerRef.current = null;
+          startRecording();
+        }, 300);
+      };
+    } catch (error: unknown) {
+      // Resilience: if the proactive greeting call fails for any reason, fall
+      // back to the old behavior (start listening; the server's implicit
+      // greeting-on-first-utterance path still covers this as a safety net).
+      logger.error('Proactive session-start greeting failed; falling back to listen-first.', undefined, {
+        error: error instanceof Error ? error.message : String(error),
+        traceId,
+      });
+      startRecording();
+    }
+  }, [userId, dispatch, startRecording, apiClient]);
 
   const terminateSession = useCallback(async () => {
     stopRecording();
@@ -367,6 +469,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     dispatch({ type: 'END_SESSION' });
     sessionIdRef.current = null;
     currentItemIdRef.current = null;
+    awaitingConfirmationRef.current = null;
     dispatch({ type: 'SET_SESSION_ID', payload: null });
     analytics.track('session_ended', { duration_seconds: conversationState.sessionTime });
 

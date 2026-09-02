@@ -69,6 +69,13 @@ interface RequestBody {
   sessionId?: string;
   currentItemId?: string;
   confirmationRetry?: boolean;
+  /**
+   * True for a proactive, client-initiated session-start call (item 6): fired
+   * automatically the moment a session begins, before any user speech, so the
+   * greeting can speak first instead of waiting for a garbled first utterance
+   * to trigger it implicitly.
+   */
+  sessionStart?: boolean;
 }
 
 interface ExtendedSdkStream {
@@ -198,6 +205,40 @@ async function isFirstSessionOfDay(userId: string, currentSessionId?: string): P
   }
 }
 
+async function getDaysSinceLastSession(userId: string, currentSessionId?: string): Promise<number | null> {
+  const supabase = getSupabaseClient();
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  try {
+    let query = supabase
+      .from('sessions')
+      .select('id, started_at')
+      .eq('user_id', userId)
+      .lt('started_at', todayStart.toISOString())
+      .order('started_at', { ascending: false })
+      .limit(1);
+
+    if (currentSessionId) {
+      query = query.neq('id', currentSessionId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('[Lambda-SessionCheck] Error checking last session date:', error.message);
+      return null;
+    }
+    if (!data || data.length === 0) return null; // no prior session -> new learner
+
+    const lastStartDay = new Date(data[0].started_at as string);
+    lastStartDay.setUTCHours(0, 0, 0, 0);
+    return Math.round((todayStart.getTime() - lastStartDay.getTime()) / (1000 * 60 * 60 * 24));
+  } catch (err) {
+    console.error('[Lambda-SessionCheck] Exception checking last session date:', err);
+    return null;
+  }
+}
+
 async function generateSessionGreeting(
   userId: string,
   userUtterance: string,
@@ -205,13 +246,15 @@ async function generateSessionGreeting(
   currentSessionId?: string
 ): Promise<string> {
   const isFirstToday = await isFirstSessionOfDay(userId, currentSessionId);
+  const daysSinceLastSession = await getDaysSinceLastSession(userId, currentSessionId);
   const rawReport = await fetchUserProgressReport(userId);
 
-  console.log(`[Lambda-Greeting] isFirstSessionToday=${isFirstToday}, hasReport=${Boolean(rawReport)}`);
+  console.log(`[Lambda-Greeting] isFirstSessionToday=${isFirstToday}, daysSinceLastSession=${daysSinceLastSession}, hasReport=${Boolean(rawReport)}`);
 
   return turnInterpreter.generateGreeting({
     userUtterance,
     isFirstSessionToday: isFirstToday,
+    daysSinceLastSession,
     progressReportMarkdown: rawReport,
     firstQuestion,
   });
@@ -395,7 +438,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const rawTranscript = parsedBody.transcript || '';
     const cleanedTranscript = rawTranscript.replace(/\s+/g, ' ').trim();
 
-    if (!cleanedTranscript) {
+    // A proactive session-start call (item 6) legitimately has no transcript —
+    // only the empty-guard for a REAL turn with nothing to process should fire.
+    if (!cleanedTranscript && parsedBody.sessionStart !== true) {
       console.log(`[Lambda-Execution] [${traceId}] Empty transcript received. Returning 200 empty payload.`);
       return {
         statusCode: 200,
@@ -415,7 +460,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const askedItem = getItem(parsedBody.currentItemId);
 
-    if (isRagQuery(cleanedTranscript)) {
+    if (parsedBody.sessionStart === true) {
+      // ---- EXPLICIT session start (item 6): fires proactively on session
+      // begin, before any real user speech, so the greeting speaks first. ----
+      console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; generating personalized session greeting.`);
+      const first = selectNextQuestion();
+      generatedAssistantText = await generateSessionGreeting(
+        userId,
+        cleanedTranscript, // usually empty for a real sessionStart call
+        first,
+        parsedBody.sessionId
+      );
+      nextItemId = first.id;
+      nextQuestionText = first.question;
+
+    } else if (cleanedTranscript && isRagQuery(cleanedTranscript)) {
       // ---- ASSIST / progress path (grounded in the user's own reports) ----
       console.log(`[Lambda-RAG] [${traceId}] Progress intent detected.`);
       generatedAssistantText = await answerProgressQuery(userId, cleanedTranscript, traceId);
@@ -425,8 +484,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       nextQuestionText = stay.question;
 
     } else if (!askedItem) {
-      // ---- START / no active question -> greet with progress report & goals, ask first question ----
-      console.log(`[Lambda-Start] [${traceId}] No active question; generating personalized session greeting.`);
+      // ---- Legacy/fallback START path: no active question and no explicit
+      // sessionStart flag (e.g. an older client). Same greeting logic, kept
+      // as a safety net so the app still works even if the client never
+      // calls sessionStart. ----
+      console.log(`[Lambda-Start] [${traceId}] No active question (implicit); generating personalized session greeting.`);
       const first = selectNextQuestion();
       generatedAssistantText = await generateSessionGreeting(
         userId,
@@ -459,17 +521,28 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         console.warn(`[Lambda-Security] [${traceId}] manipulation attempt contained`);
       }
 
-      if (outcome.replyKind === 'needs_confirmation') {
-        // Solution 9: don't commit a grade or advance — re-ask the SAME question
-        // once so an accent-garbled (or otherwise ambiguous) answer isn't
-        // silently marked wrong. Targeted via near-miss vs far-miss in
-        // resolveTurn, so confidently-wrong answers skip this and commit
-        // immediately below.
-        needsConfirmation = true;
-        generatedAssistantText = outcome.safeReply;
+      // THE FIX: advance to a new question ONLY when a FINAL grade was
+      // actually committed. Every non-advancing outcome — clarify, teach,
+      // assist, affirm, redirect, repeat, hint, or an in-progress near-miss/
+      // multi-part follow-up — stays on the SAME question. Previously this
+      // branched on `replyKind === 'needs_confirmation'` specifically, which
+      // meant EVERY other non-grading reply (e.g. "I'm not sure what you
+      // mean" -> unclear) still bulldozed forward into an unrelated question.
+      if (!outcome.advanceQuestion) {
+        // `needsConfirmation` is the CLIENT-facing retry flag: only near-miss
+        // confirmation and in-progress multi-part answers need the client to
+        // remember to send confirmationRetry=true next turn (turn-policy sets
+        // replyKind='needs_confirmation' for exactly those two cases). Other
+        // stay reasons (explain/assist/manipulation/off_topic/unclear/repeat/
+        // hint) don't need any retry bookkeeping — the next turn is simply a
+        // fresh attempt at the same still-current question.
+        needsConfirmation = outcome.replyKind === 'needs_confirmation';
+        generatedAssistantText = outcome.useModelReply
+          ? (interp?.reply || outcome.safeReply)
+          : outcome.safeReply;
         nextItemId = askedItem.id;            // stay on the same question
         nextQuestionText = askedItem.question;
-        console.log(`[Lambda-Grade] [${traceId}] needs_confirmation on item=${askedItem.id} (re-ask, no grade)`);
+        console.log(`[Lambda-Grade] [${traceId}] not advancing (intent=${outcome.effectiveIntent}, replyKind=${outcome.replyKind}, needsConfirmation=${needsConfirmation})`);
       } else {
         // Persist the graded turn (server-authoritative, RLS-scoped as the user).
         if (outcome.scoreChanged && outcome.committedVerdict) {

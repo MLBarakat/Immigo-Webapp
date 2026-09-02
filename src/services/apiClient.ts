@@ -138,40 +138,35 @@ export class ApiClient {
     return data.history as Message[];
   }
 
-  async postTranscript(
-    transcript: string,
-    conversationWindow: Array<{ role: string; content: string }> = [],
-    sessionId?: string | null,
-    currentItemId?: string | null,
+  /** Shared request/response handling for /transcript, used by both a normal
+   * turn (postTranscript) and the proactive session-start call
+   * (postSessionStart) — same response shape, different request body. */
+  private async sendTranscriptRequest(
+    body: Record<string, unknown>,
     options: { headers?: Record<string, string> } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
     verdict: 'correct' | 'incorrect' | 'partial' | null;
+    needsConfirmation: boolean;
     nextItemId: string | null;
     nextQuestion: string | null;
   }> {
-    logger.info('[ApiClient] Dispatching postTranscript request:', {
-      transcriptLength: transcript.length,
-      windowTurns: conversationWindow.length,
-      sessionId
-    });
-
     let response: Response;
     try {
       response = await this.fetchWithAuth('/transcript', {
         method: 'POST',
         headers: options.headers,
-        body: JSON.stringify({ transcript, conversationWindow, sessionId, currentItemId }),
+        body: JSON.stringify(body),
       });
     } catch (err) {
-      logger.error('[ApiClient] postTranscript network/CORS exception:', undefined, {
+      logger.error('[ApiClient] transcript endpoint network/CORS exception:', undefined, {
         error: err instanceof Error ? err.message : String(err)
       });
       throw err;
     }
 
-    logger.info(`[ApiClient] postTranscript HTTP status: ${response.status} ${response.statusText}`);
+    logger.info(`[ApiClient] transcript endpoint HTTP status: ${response.status} ${response.statusText}`);
 
     const data = await response.json();
 
@@ -179,6 +174,7 @@ export class ApiClient {
       responseText?: unknown;
       audioData?: unknown;
       verdict?: unknown;
+      needsConfirmation?: unknown;
       nextItemId?: unknown;
       nextQuestion?: unknown;
       error?: string;
@@ -188,7 +184,7 @@ export class ApiClient {
 
     if (!response.ok || parsedPayload.error) {
       const errMessage = parsedPayload.error || `HTTP ${response.status} ${response.statusText}`;
-      logger.error('[ApiClient] postTranscript error response from server:', undefined, {
+      logger.error('[ApiClient] transcript endpoint error response from server:', undefined, {
         status: response.status,
         error: errMessage,
         payload: data
@@ -197,7 +193,7 @@ export class ApiClient {
     }
 
     if (!parsedPayload || typeof parsedPayload.responseText !== 'string' || typeof parsedPayload.audioData !== 'string') {
-      logger.error('[ApiClient] Structural Exception in postTranscript payload shape:', undefined, { data });
+      logger.error('[ApiClient] Structural Exception in transcript endpoint payload shape:', undefined, { data });
       throw new ApiError('Structural Exception: Invalid response template signature returned from transcript endpoint.', 500, data);
     }
 
@@ -214,14 +210,16 @@ export class ApiClient {
         rawVerdict === 'correct' || rawVerdict === 'incorrect' || rawVerdict === 'partial'
           ? rawVerdict
           : null;
+      const needsConfirmation = parsedPayload.needsConfirmation === true;
       const nextItemId = typeof parsedPayload.nextItemId === 'string' ? parsedPayload.nextItemId : null;
       const nextQuestion = typeof parsedPayload.nextQuestion === 'string' ? parsedPayload.nextQuestion : null;
 
-      logger.info('[ApiClient] postTranscript payload parsed and decoded successfully.');
+      logger.info('[ApiClient] transcript endpoint payload parsed and decoded successfully.');
       return {
         responseText: parsedPayload.responseText,
         audioData: audioBuffer,
         verdict,
+        needsConfirmation,
         nextItemId,
         nextQuestion,
       };
@@ -229,6 +227,53 @@ export class ApiClient {
       logger.error('[ApiClient] Codec Exception decoding audio stream:', undefined, { error: String(error) });
       throw new ApiError(`Codec Exception: Failed to decode base64 audio stream correctly: ${error instanceof Error ? error.message : String(error)}`, 500, data);
     }
+  }
+
+  async postTranscript(
+    transcript: string,
+    conversationWindow: Array<{ role: string; content: string }> = [],
+    sessionId?: string | null,
+    currentItemId?: string | null,
+    confirmationRetry?: boolean,
+    options: { headers?: Record<string, string> } = {}
+  ): Promise<{
+    responseText: string;
+    audioData: ArrayBuffer;
+    verdict: 'correct' | 'incorrect' | 'partial' | null;
+    needsConfirmation: boolean;
+    nextItemId: string | null;
+    nextQuestion: string | null;
+  }> {
+    logger.info('[ApiClient] Dispatching postTranscript request:', {
+      transcriptLength: transcript.length,
+      windowTurns: conversationWindow.length,
+      sessionId
+    });
+    return this.sendTranscriptRequest(
+      { transcript, conversationWindow, sessionId, currentItemId, confirmationRetry },
+      options
+    );
+  }
+
+  /**
+   * Proactive session-start call (item 6): fired automatically the moment a
+   * session begins, BEFORE any user speech, so the personalized greeting
+   * speaks first instead of waiting for a garbled first utterance to trigger
+   * it implicitly. No transcript required.
+   */
+  async postSessionStart(
+    sessionId?: string | null,
+    options: { headers?: Record<string, string> } = {}
+  ): Promise<{
+    responseText: string;
+    audioData: ArrayBuffer;
+    verdict: 'correct' | 'incorrect' | 'partial' | null;
+    needsConfirmation: boolean;
+    nextItemId: string | null;
+    nextQuestion: string | null;
+  }> {
+    logger.info('[ApiClient] Dispatching postSessionStart request:', { sessionId });
+    return this.sendTranscriptRequest({ sessionStart: true, sessionId }, options);
   }
 
   async completeSession(sessionId: string): Promise<void> {

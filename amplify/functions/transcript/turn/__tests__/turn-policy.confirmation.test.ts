@@ -134,13 +134,25 @@ describe('unaffected paths (regression guards)', () => {
     expect(out.flags).toEqual([]);
   });
 
-  it('partial still commits directly, never re-asked', () => {
-    const out = resolveTurn(
+  it('partial now gives ONE follow-up turn (multi-part answers) instead of committing immediately', () => {
+    const first = resolveTurn(
       interp({ grade: { verdict: 'partial', matchedAnswer: null } }),
       { askedItem: nameItem, rawTranscript: 'jefferson' }
     );
-    expect(out.committedVerdict).toBe('partial');
-    expect(out.replyKind).toBe('grade_feedback');
+    // Does NOT commit yet, and does NOT advance — the user gets a chance to
+    // complete the multi-part answer without losing their place.
+    expect(first.committedVerdict).toBeNull();
+    expect(first.advanceQuestion).toBe(false);
+    expect(first.useModelReply).toBe(true); // trust the model's "can you name one more?" text
+
+    // On the retry, whatever we have is committed as final (bounded to one
+    // extra turn, mirroring near-miss confirmation).
+    const retry = resolveTurn(
+      interp({ grade: { verdict: 'partial', matchedAnswer: null } }),
+      { askedItem: nameItem, rawTranscript: 'jefferson', isConfirmationRetry: true }
+    );
+    expect(retry.committedVerdict).toBe('partial');
+    expect(retry.advanceQuestion).toBe(true);
   });
 
   it('manipulation is still never obeyed, unaffected by the redesign', () => {

@@ -13,7 +13,8 @@ export interface CivicsItem {
 
 export type Intent =
   | 'answer' | 'explain' | 'assist' | 'affirmation'
-  | 'smalltalk' | 'off_topic' | 'manipulation' | 'unclear';
+  | 'smalltalk' | 'off_topic' | 'manipulation' | 'unclear'
+  | 'repeat' | 'hint';
 
 export interface ProposedGrade {
   verdict: 'correct' | 'incorrect' | 'partial';
@@ -37,6 +38,8 @@ export interface TurnContext {
 export interface SessionStartContext {
   userUtterance: string;
   isFirstSessionToday: boolean;
+  /** Days since the user's most recent PRIOR session (before today); null = no prior session (new learner). */
+  daysSinceLastSession?: number | null;
   progressReportMarkdown?: string | null;
   firstQuestion: CivicsItem;
   preferredLanguage?: string;

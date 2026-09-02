@@ -38,13 +38,24 @@ describe('TurnPolicy.resolveTurn — grading guarantees', () => {
     expect(out.flags).toContain('off_bank_override');
   });
 
-  it('honors incorrect / partial verdicts as-is', () => {
+  it('incorrect defers to confirm-on-mismatch; partial gives ONE follow-up turn (e.g. multi-part answers)', () => {
+    // q21 is a NUMERIC answer, so near-miss never applies to it (numbers stay
+    // strict) — with no rawTranscript at all there's no basis for anything but
+    // the safe default: commit immediately. (See turn-policy.flow.test.ts for
+    // the near-miss -> needs_confirmation path on a non-numeric item.)
     expect(
       resolveTurn(interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }), { askedItem: q21 })
         .committedVerdict
     ).toBe('incorrect');
+
+    // partial (e.g. "name two things", only one given) does NOT commit on the
+    // first attempt -> waits for completion, does not advance. On the retry
+    // it commits as final.
+    const firstPartial = resolveTurn(interp({ grade: { verdict: 'partial', matchedAnswer: null } }), { askedItem: q21 });
+    expect(firstPartial.committedVerdict).toBeNull();
+    expect(firstPartial.advanceQuestion).toBe(false);
     expect(
-      resolveTurn(interp({ grade: { verdict: 'partial', matchedAnswer: null } }), { askedItem: q21 })
+      resolveTurn(interp({ grade: { verdict: 'partial', matchedAnswer: null } }), { askedItem: q21, isConfirmationRetry: true })
         .committedVerdict
     ).toBe('partial');
   });
