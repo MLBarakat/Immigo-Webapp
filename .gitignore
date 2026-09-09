@@ -147,8 +147,8 @@ amplifyconfiguration*
 # Lock files
 yarn.lock
 .github/copilot-instructions.md
-/.gemini
 REMEDIATION_PLAN.md
 REMEDIATION_AUDIT.md
 /ImmiGO-SpecKit
 /eval/stt/clips
+/.agents
