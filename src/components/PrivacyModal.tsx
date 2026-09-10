@@ -1,21 +1,32 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { privacyContent } from '../legal/privacy-content';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface PrivacyModalProps {
   onClose: () => void;
 }
 
 export const PrivacyModal: React.FC<PrivacyModalProps> = ({ onClose }) => {
+  const modalRef = useFocusTrap(true);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
-      <div className="bg-star-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col transform transition-all duration-300 scale-95 animate-scale-in">
+      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="privacy-title" className="bg-star-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col transform transition-all duration-300 scale-95 animate-scale-in outline-none">
         <header className="flex items-center justify-between p-6 border-b border-immigo-gray-200 flex-shrink-0">
           <div>
-            <h2 className="text-2xl font-bold text-deep-navy font-display">Privacy Policy</h2>
+            <h2 id="privacy-title" className="text-2xl font-bold text-deep-navy font-display">Privacy Policy</h2>
             <p className="text-sm text-immigo-gray-600">Last updated: {privacyContent.effectiveDate}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
+          <button onClick={onClose} aria-label="Close privacy policy" className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
             <X className="w-6 h-6 text-immigo-gray-600" />
           </button>
         </header>

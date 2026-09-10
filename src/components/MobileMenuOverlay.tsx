@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { X, Settings, LogOut, Trash2, Download } from 'lucide-react';
 import { DisplayUser } from '../types/user'; // Import the new type
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface MobileMenuOverlayProps {
   isOpen: boolean;
@@ -29,14 +30,13 @@ export const MobileMenuOverlay: React.FC<MobileMenuOverlayProps> = ({
 };
 
 function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user }: MobileMenuOverlayProps): JSX.Element {
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const modalRef = useFocusTrap(true);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
-    closeButtonRef.current?.focus();
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
@@ -47,10 +47,10 @@ function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden" role="presentation" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title" className="absolute inset-y-0 left-0 w-4/5 max-w-sm bg-immigo-gray-50 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title" className="absolute inset-y-0 left-0 w-4/5 max-w-sm bg-immigo-gray-50 shadow-2xl flex flex-col outline-none" onClick={e => e.stopPropagation()}>
         <header className="flex items-center justify-between p-4 border-b border-immigo-gray-200">
           <h2 id="mobile-menu-title" className="text-xl font-bold text-deep-navy font-display">Menu</h2>
-          <button ref={closeButtonRef} onClick={onClose} aria-label="Close menu" className="p-2 text-immigo-gray-600 rounded-full hover:bg-immigo-gray-200">
+          <button onClick={onClose} aria-label="Close menu" className="p-2 text-immigo-gray-600 rounded-full hover:bg-immigo-gray-200">
             <X className="w-6 h-6" />
           </button>
         </header>

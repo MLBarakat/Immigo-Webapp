@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { X } from 'lucide-react';
 import type { UserSettings, ThemeOption } from '../types/settings';
 
@@ -17,12 +17,14 @@ interface ApplicationSettingsModalProps {
   isDesktop: boolean;
 }
 
-const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; }> = ({ checked, onChange }) => (
-  <button role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; ariaLabel: string }> = ({ checked, onChange, ariaLabel }) => (
+  <button role="switch" aria-checked={checked} aria-label={ariaLabel} onClick={() => onChange(!checked)}
     className={`w-12 h-6 rounded-full p-1 flex items-center transition-colors ${checked ? 'bg-art-blue-600 justify-end' : 'bg-immigo-gray-300 justify-start'}`}>
     <div className="w-4 h-4 bg-white rounded-full shadow-md" />
   </button>
 );
+
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 const THEME_OPTIONS: { value: ThemeOption; label: string }[] = [ { value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, ];
 
@@ -31,7 +33,7 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
   const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const modalRef = useFocusTrap(isOpen);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (isOpen) { setDraft({ ...defaults, ...settings }); } }, [isOpen, settings, defaults]); // Added defaults to dependency array
@@ -42,7 +44,6 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
-    closeButtonRef.current?.focus();
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
@@ -67,10 +68,10 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
 
   return (
     <div className={`fixed inset-0 bg-black bg-opacity-60 flex ${isDesktop ? 'items-center justify-center' : 'items-start'} z-50 p-4`}>
-      <div role="dialog" aria-modal="true" aria-labelledby="application-settings-title" className={`bg-star-white rounded-2xl shadow-2xl w-full ${isDesktop ? 'max-w-2xl' : 'max-h-full h-full'} flex flex-col ${isDesktop ? 'max-h-[85vh] overflow-hidden' : ''}`}>
+      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="application-settings-title" className={`bg-star-white rounded-2xl shadow-2xl w-full ${isDesktop ? 'max-w-2xl' : 'max-h-full h-full'} flex flex-col ${isDesktop ? 'max-h-[85vh] overflow-hidden' : ''} outline-none`}>
         <header className="flex items-center justify-between p-6 border-b border-immigo-gray-200">
           <h2 id="application-settings-title" className="text-2xl font-bold text-deep-navy font-display">Application Settings</h2>
-          <button ref={closeButtonRef} onClick={onClose} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
+          <button onClick={onClose} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
             <X className="w-6 h-6 text-immigo-gray-600" />
           </button>
         </header>
@@ -98,7 +99,7 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
           <hr className="border-immigo-gray-200" />
 
           <SettingRow title="Live Feedback" description="Get real-time tips during your conversation.">
-            <Toggle checked={!!draft.live_feedback_enabled} onChange={(v: boolean) => handleDraftChange('live_feedback_enabled', v)} />
+            <Toggle ariaLabel="Toggle Live Feedback" checked={!!draft.live_feedback_enabled} onChange={(v: boolean) => handleDraftChange('live_feedback_enabled', v)} />
           </SettingRow>
 
           <hr className="border-immigo-gray-200" />

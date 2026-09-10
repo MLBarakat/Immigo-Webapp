@@ -3,6 +3,7 @@ import { ApiClient } from '../services/apiClient';
 import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import amplifyOutputs from '../../amplify_outputs.json';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface AccountSettingsPageProps {
   onNavigateBack: () => void;
@@ -13,6 +14,7 @@ type SettingsView = 'profile' | 'security' | 'connections' | 'delete';
 
 export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettingsPageProps): JSX.Element => {
   const [activeView, setActiveView] = useState<SettingsView>('profile');
+  const modalRef = useFocusTrap(true);
   const { user, profile, session, logout, updateProfile, updatePassword } = useAuth();
   const [fullName, setFullName] = useState(() => profile?.full_name || (user?.user_metadata?.full_name as string) || '');
   const [profileSaving, setProfileSaving] = useState(false);
@@ -227,7 +229,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
 
   return (
     <div className={containerClasses}>
-      <div role="dialog" aria-modal="true" aria-labelledby="account-settings-title" className={contentClasses}>
+      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="account-settings-title" className={`${contentClasses} outline-none`}>
         <header className={headerClasses}>
           {!isDesktop && (
             <button onClick={onNavigateBack} className="p-2 rounded-full hover:bg-immigo-gray-100 text-immigo-gray-600">

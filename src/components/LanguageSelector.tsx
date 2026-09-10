@@ -46,6 +46,7 @@ export function LanguageSelector({
         type="button"
         aria-haspopup="menu"
         aria-expanded={isOpen}
+        aria-label="Select Language"
         onClick={() => setIsOpen(prev => !prev)}
         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-deep-navy bg-immigo-gray-100 hover:bg-immigo-gray-200"
       >
