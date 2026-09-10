@@ -25,7 +25,7 @@ export const MobileMenuOverlay: React.FC<MobileMenuOverlayProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  return <MobileMenuContent {...{ onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user }} />;
+  return <MobileMenuContent {...{ isOpen, onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user }} />;
 };
 
 function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user }: MobileMenuOverlayProps): JSX.Element {
