@@ -20,6 +20,8 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   const { state: conversationState, dispatch } = context;
   const intervalRef = useRef<number | null>(null);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
+  const audioPlaybackUrlRef = useRef<string | null>(null);
+  const audioPlaybackGenerationRef = useRef(0);
   const processedTranscriptRef = useRef<string>('');
   const sessionIdRef = useRef<string | null>(conversationState.sessionId);
   // Tracks which bank question the server last asked, so the next answer is
@@ -35,6 +37,31 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   const isPollyPlayingRef = useRef<boolean>(false);
   // Timer handle for the post-playback AEC settle window (clears on unmount).
   const pollyMuteGateTimerRef = useRef<number | null>(null);
+
+  const clearAudioPlayback = useCallback(() => {
+    audioPlaybackGenerationRef.current += 1;
+
+    if (pollyMuteGateTimerRef.current !== null) {
+      window.clearTimeout(pollyMuteGateTimerRef.current);
+      pollyMuteGateTimerRef.current = null;
+    }
+
+    const audioPlayback = audioPlaybackRef.current;
+    if (audioPlayback) {
+      audioPlayback.onended = null;
+      audioPlayback.onerror = null;
+      audioPlayback.pause();
+      audioPlayback.currentTime = 0;
+    }
+    audioPlaybackRef.current = null;
+
+    if (audioPlaybackUrlRef.current) {
+      URL.revokeObjectURL(audioPlaybackUrlRef.current);
+      audioPlaybackUrlRef.current = null;
+    }
+
+    isPollyPlayingRef.current = false;
+  }, []);
 
   // Dual-Track Speculative Merger orchestration hook
   const {
@@ -57,9 +84,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
 
       const activePlayback = audioPlaybackRef.current;
       if (!activePlayback) return;
-      activePlayback.pause();
-      activePlayback.currentTime = 0;
-      audioPlaybackRef.current = null;
+      clearAudioPlayback();
       dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
     }
   });
@@ -261,7 +286,9 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
+      const playbackGeneration = ++audioPlaybackGenerationRef.current;
       audioPlaybackRef.current = audioPlaybackNode;
+      audioPlaybackUrlRef.current = audioBlobUrl;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
 
       // Raise the Polly mute gate BEFORE playback starts so that any AEC
@@ -273,12 +300,13 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       }
 
       audioPlaybackNode.play().catch((error: unknown) => {
+        if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         logger.error('Audio node hardware playback initialization failure exceptions handled:', undefined, { 
           errorMessage: error instanceof Error ? error.message : String(error),
           traceId
         });
         // Lower the mute gate immediately if playback failed.
-        isPollyPlayingRef.current = false;
+        clearAudioPlayback();
         dispatch({ 
           type: 'SEND_MESSAGE_FAILURE', 
           payload: { 
@@ -287,14 +315,13 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
             assistantMessageId: secureAssistantMessageId
           } 
         });
-        audioPlaybackRef.current = null;
         startRecording();
       });
 
       audioPlaybackNode.onended = () => {
+        if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
-        audioPlaybackRef.current = null;
-        URL.revokeObjectURL(audioBlobUrl);
+        clearAudioPlayback();
 
         // Keep the mute gate active for a short debounce period after playback
         // ends so residual AEC / speaker-bleed frames are discarded before we
@@ -328,7 +355,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
         startRecording();
       }
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, clearTranscript, conversationState.isSessionActive]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive]);
 
   // Word-boundary comparison for live audio transcription handoff
   useEffect(() => {
@@ -422,7 +449,9 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       const audioBlob = new Blob([res.audioData], { type: 'audio/mpeg' });
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
+      const playbackGeneration = ++audioPlaybackGenerationRef.current;
       audioPlaybackRef.current = audioPlaybackNode;
+      audioPlaybackUrlRef.current = audioBlobUrl;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
 
       isPollyPlayingRef.current = true;
@@ -432,19 +461,19 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       }
 
       audioPlaybackNode.play().catch((error: unknown) => {
+        if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         logger.error('Greeting audio playback initialization failure:', undefined, {
           errorMessage: error instanceof Error ? error.message : String(error),
           traceId,
         });
-        isPollyPlayingRef.current = false;
-        audioPlaybackRef.current = null;
+        clearAudioPlayback();
         startRecording();
       });
 
       audioPlaybackNode.onended = () => {
+        if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
-        audioPlaybackRef.current = null;
-        URL.revokeObjectURL(audioBlobUrl);
+        clearAudioPlayback();
         pollyMuteGateTimerRef.current = window.setTimeout(() => {
           isPollyPlayingRef.current = false;
           pollyMuteGateTimerRef.current = null;
@@ -461,9 +490,10 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       });
       startRecording();
     }
-  }, [userId, dispatch, startRecording, apiClient]);
+  }, [userId, dispatch, startRecording, apiClient, clearAudioPlayback]);
 
   const terminateSession = useCallback(async () => {
+    clearAudioPlayback();
     stopRecording();
     const activeSessionId = sessionIdRef.current || conversationState.sessionId;
     dispatch({ type: 'END_SESSION' });
@@ -476,10 +506,15 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     if (activeSessionId) {
       await ChatPersistenceService.closeSession(activeSessionId);
       if (apiClient) {
-        void apiClient.completeSession(activeSessionId);
+        void apiClient.completeSession(activeSessionId).catch((error: unknown) => {
+          logger.error('Session progress report request failed.', undefined, {
+            sessionId: activeSessionId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
       }
     }
-  }, [conversationState.sessionId, conversationState.sessionTime, apiClient, dispatch, stopRecording]);
+  }, [conversationState.sessionId, conversationState.sessionTime, apiClient, dispatch, stopRecording, clearAudioPlayback]);
 
   useEffect(() => {
     if (conversationState.isSessionActive) {
@@ -503,12 +538,10 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
 
   useEffect(() => {
     return () => {
+      clearAudioPlayback();
       stopRecordingRef.current();
-      if (pollyMuteGateTimerRef.current !== null) {
-        window.clearTimeout(pollyMuteGateTimerRef.current);
-      }
     };
-  }, []);
+  }, [clearAudioPlayback]);
 
   const wipeConversationHistory = useCallback(() => {
     dispatch({ type: 'CLEAR_CONVERSATION' });

@@ -70,10 +70,6 @@ export function phoneticKey(word: string): string {
   return s;
 }
 
-function phoneticPhrase(text: string): string {
-  return normalize(text).split(' ').filter(Boolean).map(phoneticKey).join(' ');
-}
-
 /** Levenshtein distance (character-level). */
 function editDistance(a: string, b: string): number {
   const m = a.length, n = b.length;

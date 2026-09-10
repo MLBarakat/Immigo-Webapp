@@ -1,15 +1,8 @@
 import amplifyOutputs from '../../amplify_outputs.json';
-import { Message } from '../context/conversationContextTypes';
-import { UserSettings } from '../types/settings';
 import { logger } from '../logger';
 
 const API_BASE_URL = (amplifyOutputs as { custom?: { apiBaseUrl?: string; API_URL?: string } }).custom?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || '';
 const API_KEY = import.meta.env.VITE_API_KEY;
-
-export interface FeedbackResponse {
-  summary: string;
-  suggestions: string[];
-}
 
 export interface ApiRequestOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
@@ -127,15 +120,11 @@ export class ApiClient {
   }
 
   async deleteAccount(): Promise<void> {
-    // Server validates the caller's JWT and deletes ONLY that user; cascade
-    // removes all associated data. Returns 200 on success.
-    await this.fetchWithAuth('/delete-account', { method: 'POST' });
-  }
-
-  async getHistory(): Promise<Message[]> {
-    const response = await this.fetchWithAuth('/history');
-    const data = await response.json();
-    return data.history as Message[];
+    const response = await this.fetchWithAuth('/delete-account', { method: 'POST' });
+    const data: unknown = await response.json();
+    if (!isRecord(data) || data.deleted !== true) {
+      throw new ApiError('Structural Exception: Invalid account deletion response.', 500, data);
+    }
   }
 
   /** Shared request/response handling for /transcript, used by both a normal
@@ -309,32 +298,21 @@ export class ApiClient {
           status: res.status,
           responseData: errorData,
         });
+        throw new ApiError('Session completion failed.', res.status, errorData);
+      }
+      const data: unknown = await res.json();
+      if (!isRecord(data) || data.success !== true || typeof data.date !== 'string') {
+        throw new ApiError('Structural Exception: Invalid session completion response.', 500, data);
       }
     } catch (error) {
       logger.error(`[ApiClient] Failed to dispatch completeSession for ${sessionId}:`, undefined, {
         error: error instanceof Error ? error.message : String(error),
       });
+      throw error;
     }
   }
+}
 
-  async getAnalysis(conversationHistory: readonly Message[]): Promise<FeedbackResponse> {
-    const response = await this.fetchWithAuth('/analyze', {
-      method: 'POST',
-      body: JSON.stringify({ conversationHistory }),
-    });
-    return response.json() as Promise<FeedbackResponse>;
-  }
-
-  async getSettings(): Promise<Partial<UserSettings>> {
-    const response = await this.fetchWithAuth('/settings');
-    return response.json() as Promise<Partial<UserSettings>>;
-  }
-
-  async updateSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
-    const response = await this.fetchWithAuth('/settings', {
-      method: 'PUT',
-      body: JSON.stringify(settings),
-    });
-    return response.json() as Promise<UserSettings>;
-  }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

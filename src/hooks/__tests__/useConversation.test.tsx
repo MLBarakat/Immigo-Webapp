@@ -70,7 +70,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     // 1. FIXED: Inject a resilient, runtime mock for the global HTMLAudioElement tracking fixture
     mockAudioInstance = {
       play: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      currentTime: 0,
       onended: null as (() => void) | null,
+      onerror: null,
     };
     
     vi.stubGlobal('Audio', vi.fn().mockImplementation(() => mockAudioInstance));
@@ -243,5 +246,61 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       'q-001',
       expect.objectContaining({ headers: expect.any(Object) })
     );
+  });
+
+  it('cleans up active playback when the session ends', async () => {
+    mockContextValue.state.isSessionActive = true;
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Speech response',
+      audioData: new ArrayBuffer(8),
+      verdict: null,
+      nextItemId: null,
+      nextQuestion: null,
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+    await act(async () => {
+      await result.current.sendTextMessage('Start playback cleanup test.');
+    });
+
+    await act(async () => {
+      await result.current.endSession();
+    });
+
+    expect(mockAudioInstance.pause).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-stream-url');
+    expect(mockAudioInstance.onended).toBeNull();
+  });
+
+  it('revokes the audio URL when playback is rejected', async () => {
+    mockContextValue.state.isSessionActive = true;
+    mockAudioInstance.play.mockRejectedValueOnce(new Error('autoplay blocked'));
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Speech response',
+      audioData: new ArrayBuffer(8),
+      verdict: null,
+      nextItemId: null,
+      nextQuestion: null,
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+    await act(async () => {
+      await result.current.sendTextMessage('Start rejected playback test.');
+    });
+
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-stream-url'));
+    expect(mockAudioInstance.pause).toHaveBeenCalledTimes(1);
   });
 });

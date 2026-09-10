@@ -13,3 +13,13 @@ export interface UserSettings {
   progress_report_frequency: ProgressReportFrequency;
   font_size?: FontSize;
 }
+
+export const DEFAULT_USER_SETTINGS: UserSettings = {
+  theme: 'system',
+  ai_voice_id: 'Joanna',
+  live_feedback_enabled: true,
+  mic_mode: 'voice_activity',
+  barge_in: 'balanced',
+  progress_report_frequency: 'after_session',
+  font_size: 'default',
+};

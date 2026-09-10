@@ -45,19 +45,19 @@ export function Header({
           currentFontSize={userSettings.font_size || 'default'}
           onFontSizeChange={(size) => onSettingChange('font_size', size)}
         />
-        <button onClick={onOpenAppSettings} className="p-2 rounded-full hover:bg-immigo-gray-100">
+        <button onClick={onOpenAppSettings} aria-label="Open application settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
           <Settings className="w-6 h-6 text-immigo-gray-600" />
         </button>
-        <button onClick={onOpenAccountSettings} className="w-9 h-9 bg-art-blue-600 text-star-white rounded-full flex items-center justify-center font-bold">
+        <button onClick={onOpenAccountSettings} aria-label="Open account settings" className="w-9 h-9 bg-art-blue-600 text-star-white rounded-full flex items-center justify-center font-bold">
           {displayUser.initials}
         </button>
-        <button onClick={onSignOut} className="p-2 rounded-full hover:bg-immigo-gray-100">
+        <button onClick={onSignOut} aria-label="Sign out" className="p-2 rounded-full hover:bg-immigo-gray-100">
           <LogOut className="w-6 h-6 text-art-red-600" />
         </button>
       </nav>
 
       <div className="md:hidden">
-        <button onClick={onToggleMobileMenu} className="p-2 rounded-full hover:bg-immigo-gray-100">
+        <button onClick={onToggleMobileMenu} aria-label="Open menu" className="p-2 rounded-full hover:bg-immigo-gray-100">
           <Menu className="w-6 h-6 text-immigo-gray-600" />
         </button>
       </div>

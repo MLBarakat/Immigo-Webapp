@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { logger } from './logger';
+import { ErrorBoundary } from './ErrorBoundary';
 
 // --- Global Error Handling ---
 // This acts as a last-resort catch-all for errors not caught by other means.
@@ -28,6 +29,8 @@ window.addEventListener('unhandledrejection', (event) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>
 );

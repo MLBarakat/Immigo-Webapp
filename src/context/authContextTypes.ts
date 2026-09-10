@@ -1,6 +1,7 @@
 import { createContext } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { UserProfile } from '../types/profile';
+import { UserSettings } from '../types/settings';
 
 export interface SignUpPayload {
   email: string;
@@ -18,9 +19,15 @@ export interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  initializationError: string | null;
+  retryInitialization: () => void;
+  userSettings: UserSettings;
   login: (email: string, password: string) => Promise<void>;
   signUp: (payload: SignUpPayload) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (fullName: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
+  updateUserSettings: (settings: Partial<UserSettings>) => Promise<void>;
   updateUserLanguage: (newLanguageCode: string) => Promise<void>;
 }
 

@@ -24,6 +24,7 @@ import { MobileMenuOverlay } from './components/MobileMenuOverlay';
 import { DisplayUser } from './types/user';
 import { UserSettings } from './types/settings';
 import { logger } from './logger';
+import useMediaQuery from './hooks/useMediaQuery';
 
 try {
   if (amplifyOutputs) {
@@ -39,7 +40,8 @@ interface ConversationWorkspaceProps {
 }
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, logout, userSettings, updateUserSettings } = useAuth();
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const manager = useConversation({ apiClient: apiClientInstance, userId: user?.id ?? null });
 
   // UI Modal State Management
@@ -48,15 +50,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // Settings Management
-  const [userSettings, setUserSettings] = useState<Partial<UserSettings>>({
-    theme: 'system',
-    live_feedback_enabled: true,
-    mic_mode: 'voice_activity',
-    barge_in: 'balanced',
-    progress_report_frequency: 'after_session',
-    font_size: 'default'
-  });
   const [currentLanguageCode, setCurrentLanguageCode] = useState('en');
 
   const displayUser: DisplayUser = {
@@ -65,7 +58,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   const handleSettingChange = (key: keyof UserSettings, value: unknown) => {
-    setUserSettings(prev => ({ ...prev, [key]: value }));
+    void updateUserSettings({ [key]: value } as Partial<UserSettings>);
   };
 
   return (
@@ -79,12 +72,11 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         <ApplicationSettingsModal
           isOpen={showAppSettings}
           settings={userSettings}
-          onSettingChange={handleSettingChange}
           pollyVoices={[]}
-          isDesktop={typeof window !== 'undefined' ? window.innerWidth >= 768 : true}
+          isDesktop={isDesktop}
           onClose={() => setShowAppSettings(false)}
           onSave={async (newSettings) => {
-            setUserSettings({ ...userSettings, ...newSettings });
+            await updateUserSettings(newSettings);
             setShowAppSettings(false);
           }}
         />
@@ -93,7 +85,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       {showAccountSettings && (
         <AccountSettingsPage
           onNavigateBack={() => setShowAccountSettings(false)}
-          isDesktop={typeof window !== 'undefined' ? window.innerWidth >= 768 : true}
+          isDesktop={isDesktop}
         />
       )}
 
@@ -206,25 +198,44 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 }
 
 function AppContent() {
-  const { session, loading } = useAuth();
+  const { session, loading, initializationError, retryInitialization } = useAuth();
+  const accessToken = session?.access_token;
 
   const apiClientInstance = useMemo(() => {
-    if (!session?.access_token) return null;
+    if (!accessToken) return null;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dynamicGatewayUrl = (amplifyOutputs as any)?.custom?.apiBaseUrl;
-      return new ApiClient(session.access_token, dynamicGatewayUrl);
+      return new ApiClient(accessToken, dynamicGatewayUrl);
     } catch (error) {
       logger.error('Client layer initialization crash exception', undefined, { error: String(error) });
       return null;
     }
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   if (loading) {
     return (
       <div className="h-screen w-full bg-deep-navy flex flex-col items-center justify-center text-star-white p-6" role="alert" aria-busy="true">
         <div className="w-10 h-10 border-4 border-art-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
         <h2 className="text-base font-bold tracking-wide">Securing Processing Environment…</h2>
+      </div>
+    );
+  }
+
+  if (initializationError) {
+    return (
+      <div className="h-screen w-full bg-immigo-gray-50 flex items-center justify-center p-6" role="alert">
+        <div className="w-full max-w-md rounded-xl border border-immigo-gray-200 bg-star-white p-8 text-center shadow-md">
+          <h2 className="text-xl font-bold text-deep-navy">Authentication unavailable</h2>
+          <p className="mt-3 text-sm text-immigo-gray-600">{initializationError}</p>
+          <button
+            type="button"
+            onClick={retryInitialization}
+            className="mt-6 rounded-lg bg-art-blue-600 px-4 py-2 font-semibold text-star-white hover:bg-art-blue-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ApiClient } from '../services/apiClient';
 import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -13,10 +13,25 @@ type SettingsView = 'profile' | 'security' | 'connections' | 'delete';
 
 export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettingsPageProps): JSX.Element => {
   const [activeView, setActiveView] = useState<SettingsView>('profile');
-  const { user, profile, session, logout } = useAuth();
+  const { user, profile, session, logout, updateProfile, updatePassword } = useAuth();
+  const [fullName, setFullName] = useState(() => profile?.full_name || (user?.user_metadata?.full_name as string) || '');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onNavigateBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onNavigateBack]);
 
   const handleDeleteAccount = async () => {
     if (!session?.access_token) {
@@ -41,6 +56,44 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
   const userEmail = user?.email || '';
   const userFullName = profile?.full_name || (user?.user_metadata?.full_name as string) || '';
 
+  const handleProfileSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setProfileSaving(true);
+    setProfileMessage(null);
+    try {
+      await updateProfile(fullName.trim() || userFullName);
+      setProfileMessage('Profile saved.');
+    } catch (err) {
+      setProfileMessage(err instanceof Error ? err.message : 'Profile could not be saved.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordMessage(null);
+    if (newPassword.length < 8) {
+      setPasswordMessage('Password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage('Passwords do not match.');
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await updatePassword(newPassword);
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordMessage('Password updated.');
+    } catch (err) {
+      setPasswordMessage(err instanceof Error ? err.message : 'Password could not be updated.');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const renderContent = () => {
     switch (activeView) {
       case 'profile':
@@ -48,13 +101,14 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-deep-navy">My Profile</h2>
             <p className="text-immigo-gray-600">Manage your personal information</p>
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+            <form className="space-y-4" onSubmit={handleProfileSubmit}>
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-immigo-gray-700">Full Name</label>
                 <input
                   type="text"
                   id="name"
-                  defaultValue={userFullName}
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
                   className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500"
                 />
               </div>
@@ -63,12 +117,15 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
                 <input
                   type="email"
                   id="email"
-                  defaultValue={userEmail}
+                  value={userEmail}
                   disabled
                   className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm bg-immigo-gray-100 cursor-not-allowed"
                 />
               </div>
-              <button type="submit" className="px-4 py-2 bg-art-blue-600 text-white rounded-md font-semibold hover:bg-art-blue-700">Save Profile</button>
+              {profileMessage && <p className="text-sm text-immigo-gray-600" role="status">{profileMessage}</p>}
+              <button type="submit" disabled={profileSaving} className="px-4 py-2 bg-art-blue-600 text-white rounded-md font-semibold hover:bg-art-blue-700 disabled:opacity-60">
+                {profileSaving ? 'Saving...' : 'Save Profile'}
+              </button>
             </form>
           </div>
         );
@@ -77,20 +134,19 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-deep-navy">Security & Login</h2>
             <p className="text-immigo-gray-600">Manage your password and security settings</p>
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-              <div>
-                <label htmlFor="current-password" className="block text-sm font-medium text-immigo-gray-700">Current Password</label>
-                <input type="password" id="current-password" autoComplete="current-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
-              </div>
+            <form className="space-y-4" onSubmit={handlePasswordSubmit}>
               <div>
                 <label htmlFor="new-password" className="block text-sm font-medium text-immigo-gray-700">New Password</label>
-                <input type="password" id="new-password" autoComplete="new-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                <input type="password" id="new-password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
               </div>
               <div>
                 <label htmlFor="confirm-password" className="block text-sm font-medium text-immigo-gray-700">Confirm New Password</label>
-                <input type="password" id="confirm-password" autoComplete="new-password" className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                <input type="password" id="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
               </div>
-              <button type="submit" className="px-4 py-2 bg-art-blue-600 text-white rounded-md font-semibold hover:bg-art-blue-700">Update Password</button>
+              {passwordMessage && <p className="text-sm text-immigo-gray-600" role="status">{passwordMessage}</p>}
+              <button type="submit" disabled={passwordSaving} className="px-4 py-2 bg-art-blue-600 text-white rounded-md font-semibold hover:bg-art-blue-700 disabled:opacity-60">
+                {passwordSaving ? 'Updating...' : 'Update Password'}
+              </button>
             </form>
           </div>
         );
@@ -98,15 +154,15 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-deep-navy">Social Connections</h2>
-            <p className="text-immigo-gray-600">Connect your ImmiGo account with other services</p>
+            <p className="text-immigo-gray-600">Social sign-in providers are not enabled for this account.</p>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 border border-immigo-gray-200 rounded-md">
                 <span>Google Account</span>
-                <button className="px-3 py-1 text-sm bg-art-blue-100 text-art-blue-700 rounded-md hover:bg-art-blue-200">Connected</button>
+                <span className="text-sm text-immigo-gray-500">Unavailable</span>
               </div>
               <div className="flex items-center justify-between p-4 border border-immigo-gray-200 rounded-md">
                 <span>Facebook</span>
-                <button className="px-3 py-1 text-sm bg-immigo-gray-100 text-immigo-gray-700 rounded-md hover:bg-immigo-gray-200">Connect</button>
+                <span className="text-sm text-immigo-gray-500">Unavailable</span>
               </div>
             </div>
           </div>
@@ -171,14 +227,14 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
 
   return (
     <div className={containerClasses}>
-      <div className={contentClasses}>
+      <div role="dialog" aria-modal="true" aria-labelledby="account-settings-title" className={contentClasses}>
         <header className={headerClasses}>
           {!isDesktop && (
             <button onClick={onNavigateBack} className="p-2 rounded-full hover:bg-immigo-gray-100 text-immigo-gray-600">
               <ArrowLeft className="w-6 h-6" />
             </button>
           )}
-          <h1 className={`font-bold text-deep-navy ${isDesktop ? 'text-2xl font-display' : 'text-xl ml-4 font-display'}`}>Account Settings</h1>
+          <h1 id="account-settings-title" className={`font-bold text-deep-navy ${isDesktop ? 'text-2xl font-display' : 'text-xl ml-4 font-display'}`}>Account Settings</h1>
           {isDesktop && (
             <button onClick={onNavigateBack} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
               <X className="w-6 h-6 text-immigo-gray-600" />

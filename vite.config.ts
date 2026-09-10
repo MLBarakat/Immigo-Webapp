@@ -50,7 +50,19 @@ export default defineConfig({
   // Isolates Vitest from Playwright E2E suites to prevent pipeline crashes
   test: {
     environment: 'jsdom',
-    exclude: ['node_modules', 'dist', 'tests/e2e/**/*'],
+    setupFiles: ['./tests/setup.ts'],
+    include: [
+      'src/**/*.{test,spec}.{ts,tsx}',
+      'tests/**/*.{test,spec}.{ts,tsx}',
+      'amplify/functions/**/__tests__/**/*.{test,spec}.ts',
+    ],
+    exclude: [
+      'node_modules',
+      '**/node_modules/**',
+      'amplify/**/node_modules/**',
+      'dist',
+      'tests/e2e/**/*',
+    ],
   },
 
   build: {

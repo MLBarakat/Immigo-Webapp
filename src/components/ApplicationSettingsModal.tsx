@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { X } from 'lucide-react';
 import type { UserSettings, ThemeOption } from '../types/settings';
 
 interface Voice {
@@ -13,7 +13,6 @@ interface ApplicationSettingsModalProps {
   onClose: () => void;
   settings: Partial<UserSettings>;
   onSave: (settings: UserSettings) => Promise<void>;
-  onSettingChange: (key: keyof UserSettings, value: UserSettings[keyof UserSettings]) => void;
   pollyVoices: Voice[];
   isDesktop: boolean;
 }
@@ -27,20 +26,29 @@ const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; }> = 
 
 const THEME_OPTIONS: { value: ThemeOption; label: string }[] = [ { value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, ];
 
-export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, onSettingChange, pollyVoices = [], isDesktop }) => {
+export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, pollyVoices = [], isDesktop }) => {
   const defaults = useMemo((): UserSettings => ({ theme: 'system', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default' }), [pollyVoices]);
   const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (isOpen) { setDraft({ ...defaults, ...settings }); } }, [isOpen, settings, defaults]); // Added defaults to dependency array
 
-  // Propagate changes from internal draft state to the parent's onSettingChange
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    closeButtonRef.current?.focus();
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleDraftChange = useCallback((key: keyof UserSettings, value: UserSettings[keyof UserSettings]) => {
     setDraft(prev => ({ ...prev, [key]: value }));
-    onSettingChange(key, value); // Also inform the parent component immediately
-  }, [onSettingChange]);
+  }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -59,10 +67,10 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
 
   return (
     <div className={`fixed inset-0 bg-black bg-opacity-60 flex ${isDesktop ? 'items-center justify-center' : 'items-start'} z-50 p-4`}>
-      <div className={`bg-star-white rounded-2xl shadow-2xl w-full ${isDesktop ? 'max-w-2xl' : 'max-h-full h-full'} flex flex-col ${isDesktop ? 'max-h-[85vh] overflow-hidden' : ''}`}>
+      <div role="dialog" aria-modal="true" aria-labelledby="application-settings-title" className={`bg-star-white rounded-2xl shadow-2xl w-full ${isDesktop ? 'max-w-2xl' : 'max-h-full h-full'} flex flex-col ${isDesktop ? 'max-h-[85vh] overflow-hidden' : ''}`}>
         <header className="flex items-center justify-between p-6 border-b border-immigo-gray-200">
-          <h2 className="text-2xl font-bold text-deep-navy font-display">Application Settings</h2>
-          <button onClick={onClose} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
+          <h2 id="application-settings-title" className="text-2xl font-bold text-deep-navy font-display">Application Settings</h2>
+          <button ref={closeButtonRef} onClick={onClose} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
             <X className="w-6 h-6 text-immigo-gray-600" />
           </button>
         </header>
@@ -127,9 +135,7 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
           <hr className="border-immigo-gray-200" />
 
           <SettingRow title="Manage Subscription" description="View your current plan and explore premium features.">
-            <button className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-art-blue-600 hover:bg-art-blue-50 rounded-lg">
-                View Plans <ExternalLink className="w-4 h-4" />
-            </button>
+            <span className="text-sm text-immigo-gray-500">Unavailable</span>
           </SettingRow>
         </main>
 

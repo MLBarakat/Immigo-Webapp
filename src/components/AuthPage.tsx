@@ -145,7 +145,7 @@ export function AuthPage(): JSX.Element {
             )}
 
             {error && (
-              <div className="flex items-center text-art-red-600 text-sm p-3 bg-art-red-50 rounded-lg">
+              <div role="alert" className="flex items-center text-art-red-600 text-sm p-3 bg-art-red-50 rounded-lg">
                 <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
                 <span>{error}</span>
               </div>

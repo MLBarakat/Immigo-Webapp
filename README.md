@@ -80,7 +80,7 @@ The frontend loads the API URL from the generated `amplify_outputs.json` file. `
    npm run dev
    ```
 
-5. Open the URL printed by Vite, normally `http://localhost:5173`.
+5. Open the URL printed by Vite, normally `http://localhost:3000`.
 
 For a local Amplify backend, use the Amplify environment workflow for the target branch and regenerate `amplify_outputs.json` before running the frontend.
 
