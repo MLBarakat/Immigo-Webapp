@@ -176,11 +176,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const sessionId = parsedBody.sessionId;
-    if (!sessionId) {
+    if (!sessionId || typeof sessionId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(sessionId)) {
       return {
         statusCode: 400,
         headers: responseHeaders,
-        body: JSON.stringify({ error: 'sessionId is required.' })
+        body: JSON.stringify({ error: 'Payload Exception: Invalid or malformed sessionId.' })
       };
     }
 

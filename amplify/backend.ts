@@ -70,6 +70,10 @@ const apiGatewayCustomStack = backend.createStack('ImmigoApiGatewayStack');
 const restApiGateway = new RestApi(apiGatewayCustomStack, 'ImmigoRestApiGateway', {
   restApiName: 'ImmigoVoiceServiceGateway',
   description: 'Production cloud gateway orchestrating real-time audio transcriptions, session aggregations, and Bedrock LLM loops.',
+  deployOptions: {
+    throttlingRateLimit: 25,
+    throttlingBurstLimit: 50,
+  },
   defaultCorsPreflightOptions: {
     allowOrigins: Cors.ALL_ORIGINS,
     allowMethods: Cors.ALL_METHODS,

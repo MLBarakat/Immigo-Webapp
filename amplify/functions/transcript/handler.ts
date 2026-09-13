@@ -475,6 +475,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const rawTranscript = parsedBody.transcript || '';
     const cleanedTranscript = rawTranscript.replace(/\s+/g, ' ').trim();
 
+    // Denial-of-wallet & token bloat guard (SEC-01): reject oversized transcripts
+    if (cleanedTranscript.length > 1000) {
+      console.warn(`[Lambda-Payload-Warning] [${traceId}] Transcript exceeded character limit: ${cleanedTranscript.length} chars.`);
+      return {
+        statusCode: 400,
+        headers: responseHeaders,
+        body: JSON.stringify({ error: 'Payload Exception: Transcript exceeds maximum allowed length of 1,000 characters.' })
+      };
+    }
+
     // A proactive session-start call (item 6) legitimately has no transcript —
     // only the empty-guard for a REAL turn with nothing to process should fire.
     if (!cleanedTranscript && parsedBody.sessionStart !== true) {
