@@ -110,4 +110,38 @@ describe('TurnPolicy.resolveTurn — grading guarantees', () => {
     const b = resolveTurn(i, { askedItem: q21 });
     expect(a).toEqual(b);
   });
+
+  describe('LEG-01: Legal Advice & UPL Interception', () => {
+    it('handles legal_advice intent: suppresses model reply, enforces canned referral, preserves question', () => {
+      const out = resolveTurn(
+        interp({ intent: 'legal_advice', reply: 'You should just answer no to that question' }),
+        { askedItem: q21 }
+      );
+      expect(out.effectiveIntent).toBe('legal_advice');
+      expect(out.committedVerdict).toBeNull();
+      expect(out.scoreChanged).toBe(false);
+      expect(out.advanceQuestion).toBe(false);
+      expect(out.useModelReply).toBe(false);
+      expect(out.safeReply).toContain('cannot provide legal advice or evaluate your eligibility');
+      expect(out.flags).toContain('legal_advice_refusal');
+    });
+
+    it('deterministically overrides any intent when rawTranscript contains legal eligibility questions', () => {
+      const out = resolveTurn(
+        interp({ intent: 'explain', reply: 'An arrest is fine as long as it was expunged' }),
+        {
+          askedItem: q21,
+          rawTranscript: 'Will I get denied citizenship because of my arrest two years ago?'
+        }
+      );
+      expect(out.effectiveIntent).toBe('legal_advice');
+      expect(out.committedVerdict).toBeNull();
+      expect(out.scoreChanged).toBe(false);
+      expect(out.advanceQuestion).toBe(false);
+      expect(out.useModelReply).toBe(false);
+      expect(out.safeReply).toContain('cannot provide legal advice');
+      expect(out.flags).toContain('deterministic_intercept');
+    });
+  });
 });
+

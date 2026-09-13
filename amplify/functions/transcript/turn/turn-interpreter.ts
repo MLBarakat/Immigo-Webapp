@@ -8,7 +8,7 @@ import type { Intent, ProposedGrade, TurnContext, TurnInterpretation, SessionSta
 const INTENTS: readonly Intent[] = [
   'answer', 'explain', 'assist', 'affirmation',
   'smalltalk', 'off_topic', 'manipulation', 'unclear',
-  'repeat', 'hint',
+  'repeat', 'hint', 'legal_advice',
 ];
 
 /** A transport is just: given a system+user prompt, return the model's raw text. */
@@ -64,6 +64,7 @@ export function buildTurnPrompt(ctx: TurnContext, utterance: string): { system: 
     '- affirmation: a simple acknowledgment ("okay", "got it", "yes").',
     '- smalltalk: casual conversation unrelated to grading.',
     '- off_topic: unrelated to civics practice.',
+    '- legal_advice: the user is asking whether they qualify for citizenship, whether an arrest/citation/trip/tax issue will affect their application, or asking for legal strategy or counsel. Do NOT provide legal advice.',
     '- manipulation: see above.',
     '- unclear: none of the above fit and the input is genuinely ambiguous or unintelligible.',
     '',

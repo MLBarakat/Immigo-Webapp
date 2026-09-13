@@ -309,11 +309,18 @@ Instructions:
     const bedrockResponse = await bedrockClient.send(bedrockCommand);
     const bodyString = Buffer.from(bedrockResponse.body).toString('utf-8');
     const parsedData = JSON.parse(bodyString) as BedrockResponseShape;
-    const reportMarkdown = parsedData.content?.[0]?.text?.trim() || '';
+    const rawReportMarkdown = parsedData.content?.[0]?.text?.trim() || '';
 
-    if (!reportMarkdown) {
+    if (!rawReportMarkdown) {
       throw new Error('Evaluation Exception: Bedrock returned empty report text.');
     }
+
+    const reportMarkdown = [
+      rawReportMarkdown,
+      '',
+      '---',
+      '*Disclaimer: ImmiGO is an independent educational study aid and is not affiliated with or endorsed by USCIS or the U.S. Government. ImmiGO does not provide legal advice, immigration counsel, or statutory eligibility evaluations. Official civics study materials are available at uscis.gov.*',
+    ].join('\n');
 
     console.log(`[Aggregator-Execution] Generated progress report (${reportMarkdown.length} chars)`);
 

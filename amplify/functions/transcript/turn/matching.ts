@@ -216,3 +216,27 @@ export function isNearMiss(candidate: string | null, acceptable: string[]): bool
   }
   return false;
 }
+
+const LEGAL_ADVICE_PATTERNS = [
+  /\b(will|can|could|might)\s+(i|they|uscis|the\s+officer)\s+(get\s+)?(den(?:y|ied)|reject(?:ed)?|fail(?:ed)?|approve(?:d)?)\b/i,
+  /\b(am\s+i|can\s+i|eligible\s+to|qualify\s+for)\s+(eligible|qualify|apply|naturaliz(?:e|ation)|citizenship)\b/i,
+  /\b(do\s+i\s+have\s+to|should\s+i|must\s+i)\s+(report|disclose|mention|tell|say)\b.*\b(arrest|citation|ticket|record|conviction|crime|misdemeanor|felony|dui|dwi|court)\b/i,
+  /\b(my\s+arrest|my\s+record|my\s+citation|my\s+ticket|my\s+dui|my\s+conviction)\b.*\b(affect|hurt|disqualify|deny|reject)\b/i,
+  /\b(continuous\s+residence|physical\s+presence|break\s+residence)\b/i,
+  /\b(out(?:side)?\s+of\s+(?:the\s+)?(?:country|us|united\s+states))\b.*\b(month|year|trip|travel)\b/i,
+  /\b(owe|owed|unpaid|failed\s+to\s+pay|didn't\s+pay|never\s+paid)\s+(taxes|tax|child\s+support)\b/i,
+  /\b(should\s+i|can\s+i)\s+(lie|hide|not\s+say|omit)\b/i,
+  /\b(do\s+they\s+know|will\s+they\s+find\s+out)\b/i,
+  /\b(legal\s+advice|legal\s+help|lawyer|attorney)\b/i,
+];
+
+/**
+ * Deterministic detection for inquiries requesting legal eligibility, statutory
+ * advice, or analysis of personal history (arrests, trips, taxes, GMC).
+ */
+export function isLegalAdviceQuery(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return LEGAL_ADVICE_PATTERNS.some((p) => p.test(trimmed));
+}

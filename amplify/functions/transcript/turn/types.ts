@@ -14,7 +14,7 @@ export interface CivicsItem {
 export type Intent =
   | 'answer' | 'explain' | 'assist' | 'affirmation'
   | 'smalltalk' | 'off_topic' | 'manipulation' | 'unclear'
-  | 'repeat' | 'hint';
+  | 'repeat' | 'hint' | 'legal_advice';
 
 export interface ProposedGrade {
   verdict: 'correct' | 'incorrect' | 'partial';

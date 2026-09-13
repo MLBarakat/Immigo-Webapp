@@ -1,3 +1,5 @@
+import { legalEntityConfig } from './terms-content';
+
 export const privacyContent = {
   effectiveDate: 'August 26, 2026',
   sections: [
@@ -31,7 +33,7 @@ export const privacyContent = {
     },
     {
       title: '8. Your privacy rights (U.S. / California CCPA-CPRA)',
-      content: `Depending on your state, you may have the right to know what we collect, access it, correct it, delete it, and not be discriminated against for exercising these rights. Because we do not sell or "share" personal information for cross-context behavioral advertising, there is nothing to opt out of in that respect. To exercise rights, contact us at [PRIVACY EMAIL]. You can delete your account and associated data at any time in the app (Account Settings), which triggers deletion across our systems.`,
+      content: `Depending on your state, you may have the right to know what we collect, access it, correct it, delete it, and not be discriminated against for exercising these rights. Because we do not sell or "share" personal information for cross-context behavioral advertising, there is nothing to opt out of in that respect. To exercise rights, contact us at ${legalEntityConfig.privacyEmail}. You can delete your account and associated data at any time in the app (Account Settings), which triggers deletion across our systems.`,
     },
     {
       title: '9. Children',
@@ -47,7 +49,7 @@ export const privacyContent = {
     },
     {
       title: '12. Contact',
-      content: `[COMPANY LEGAL NAME], [ADDRESS], [PRIVACY EMAIL]`,
+      content: `${legalEntityConfig.companyName}, ${legalEntityConfig.companyAddress}, ${legalEntityConfig.privacyEmail}`,
     },
   ],
 };

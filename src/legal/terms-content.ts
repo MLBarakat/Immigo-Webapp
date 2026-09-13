@@ -1,3 +1,12 @@
+export const legalEntityConfig = {
+  companyName: (import.meta.env.VITE_COMPANY_LEGAL_NAME as string | undefined) || 'ImmiGO Technologies Inc.',
+  companyAddress: (import.meta.env.VITE_COMPANY_ADDRESS as string | undefined) || 'San Francisco, CA, United States',
+  governingState: (import.meta.env.VITE_GOVERNING_STATE as string | undefined) || 'Delaware',
+  supportEmail: (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) || 'support@immigo.app',
+  privacyEmail: (import.meta.env.VITE_PRIVACY_EMAIL as string | undefined) || 'privacy@immigo.app',
+  eoirDirectoryUrl: 'https://www.justice.gov/eoir/find-legal-representation',
+};
+
 export const termsContent = {
   effectiveDate: 'August 26, 2026',
   sections: [
@@ -11,7 +20,7 @@ export const termsContent = {
     },
     {
       title: '3. Not legal advice; no guarantee of results',
-      content: `ImmiGO does not provide legal advice or immigration advice, and does not guarantee that you will pass your civics test, interview, or naturalization application. Content is for practice only. For legal questions about your immigration matter, consult a licensed attorney or an accredited representative. Official test content and current answers should be verified at uscis.gov.`,
+      content: `ImmiGO does not provide legal advice or immigration advice, and does not guarantee that you will pass your civics test, interview, or naturalization application. Content is for practice only. For legal questions about your immigration matter or eligibility, consult a licensed attorney or a DOJ-accredited representative (refer to the official EOIR directory at ${legalEntityConfig.eoirDirectoryUrl}). Official test content and current answers should be verified at uscis.gov.`,
     },
     {
       title: '4. AI-generated content',
@@ -47,7 +56,7 @@ export const termsContent = {
     },
     {
       title: '12. Governing law',
-      content: `These Terms are governed by the laws of the State of [STATE], without regard to conflict-of-laws rules.`,
+      content: `These Terms are governed by the laws of the State of ${legalEntityConfig.governingState}, without regard to conflict-of-laws rules.`,
     },
     {
       title: '13. Termination',
@@ -59,7 +68,7 @@ export const termsContent = {
     },
     {
       title: '15. Contact',
-      content: `[COMPANY LEGAL NAME], [ADDRESS], [SUPPORT EMAIL]`,
+      content: `${legalEntityConfig.companyName}, ${legalEntityConfig.companyAddress}, ${legalEntityConfig.supportEmail}`,
     },
   ],
 };

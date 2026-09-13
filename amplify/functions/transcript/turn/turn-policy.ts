@@ -15,7 +15,7 @@
  *     feel like a conversation instead of a quiz that bulldozes forward.
  */
 import type { CivicsItem } from './types';
-import { answerInBank, isNearMiss } from './matching';
+import { answerInBank, isNearMiss, isLegalAdviceQuery } from './matching';
 import type { Intent, TurnInterpretation } from './types';
 
 export type ReplyKind =
@@ -47,6 +47,7 @@ const SAFE = {
   safeFail: "Sorry, something went wrong on my side. Let's try that again.",
   offTopic: "That's outside what I can help with here, but I'm happy to keep practicing civics with you.",
   confirm: "I want to make sure I heard you correctly. Could you say your answer once more?",
+  legalAdvice: "I can only help you practice civics questions and English speaking. I cannot provide legal advice or evaluate your eligibility for naturalization. Please consult a licensed immigration attorney or a DOJ-accredited representative.",
 };
 
 export interface ResolveOptions {
@@ -70,6 +71,13 @@ export interface ResolveOptions {
 }
 
 export function resolveTurn(interp: TurnInterpretation | null, opts: ResolveOptions): TurnOutcome {
+  // Deterministic legal advice interceptor (LEG-01):
+  // If the user's spoken words are requesting legal eligibility advice or counsel,
+  // we refuse immediately with a canned referral and suppress any LLM generation.
+  if (isLegalAdviceQuery(opts.rawTranscript)) {
+    return outcome('legal_advice', null, false, false, 'redirect', SAFE.legalAdvice, false, ['legal_advice_refusal', 'deterministic_intercept']);
+  }
+
   // Unusable model output -> safe-fail, never a score change, never advance.
   if (!interp) {
     return outcome('safe_fail', null, false, false, 'safe_fail', SAFE.safeFail, false, ['parse_failure']);
@@ -78,6 +86,9 @@ export function resolveTurn(interp: TurnInterpretation | null, opts: ResolveOpti
   switch (interp.intent) {
     case 'answer':
       return resolveAnswer(interp, opts);
+
+    case 'legal_advice':
+      return outcome('legal_advice', null, false, false, 'redirect', SAFE.legalAdvice, false, ['legal_advice_refusal']);
 
     case 'manipulation':
       // Never obey. Canned reply so no injected text is surfaced. Stay put.
