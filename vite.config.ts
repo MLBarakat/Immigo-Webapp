@@ -55,6 +55,7 @@ export default defineConfig({
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}',
       'amplify/functions/**/__tests__/**/*.{test,spec}.ts',
+      'eval/**/__tests__/**/*.{test,spec}.ts',
     ],
     exclude: [
       'node_modules',
