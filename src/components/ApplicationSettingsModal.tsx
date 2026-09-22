@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { X } from 'lucide-react';
 import type { UserSettings, ThemeOption } from '../types/settings';
+import { FONT_SIZES, FONT_SIZE_LABELS, normalizeFontSize } from '../utils/fontSize';
 
 interface Voice {
   id: string;
@@ -85,6 +86,31 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
                   {opt.label}
                 </button>
               ))}
+            </div>
+          </SettingRow>
+
+          <hr className="border-immigo-gray-200" />
+
+          <SettingRow title="Text Size" description="Adjust application-wide font scale (5 levels).">
+            <div role="radiogroup" aria-label="Font Size" className="flex items-center gap-1 p-1 bg-immigo-gray-200 rounded-lg">
+              {FONT_SIZES.map(size => {
+                const isActive = normalizeFontSize(draft.font_size) === size;
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    role="radio"
+                    aria-checked={isActive}
+                    onClick={() => handleDraftChange('font_size', size)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold uppercase transition-colors ${
+                      isActive ? 'bg-star-white shadow text-deep-navy font-bold' : 'text-immigo-gray-700 hover:bg-immigo-gray-300'
+                    }`}
+                    title={size.replace('-', ' ')}
+                  >
+                    {FONT_SIZE_LABELS[size]}
+                  </button>
+                );
+              })}
             </div>
           </SettingRow>
 

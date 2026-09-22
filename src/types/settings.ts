@@ -2,7 +2,17 @@ export type ThemeOption = 'system' | 'light' | 'dark';
 export type MicMode = 'voice_activity' | 'push_to_talk';
 export type BargeIn = 'relaxed' | 'balanced' | 'aggressive';
 export type ProgressReportFrequency = 'after_session' | 'daily' | 'weekly' | 'monthly';
-export type FontSize = 'small' | 'default' | 'large';
+export type FontSize =
+  | 'extra-small'
+  | 'small'
+  | 'default'
+  | 'large'
+  | 'extra-large'
+  | 'xs'
+  | 'sm'
+  | 'md'
+  | 'lg'
+  | 'xl';
 
 export interface UserSettings {
   theme: ThemeOption;

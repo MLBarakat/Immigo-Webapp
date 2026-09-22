@@ -3,6 +3,7 @@ import { Session, User, SupabaseClient, AuthChangeEvent } from '@supabase/supaba
 import { getSupabaseClient } from '../supabaseClient';
 import { UserProfile } from '../types/profile';
 import { DEFAULT_USER_SETTINGS, UserSettings } from '../types/settings';
+import { applyFontSize, getStoredFontSize } from '../utils/fontSize';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
 import { AuthContext, SignUpPayload } from './authContextTypes';
@@ -14,9 +15,16 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [initializationError, setInitializationError] = useState<string | null>(null);
-  const [userSettings, setUserSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
+  const [userSettings, setUserSettings] = useState<UserSettings>(() => ({
+    ...DEFAULT_USER_SETTINGS,
+    font_size: getStoredFontSize(),
+  }));
   const [initializationAttempt, setInitializationAttempt] = useState(0);
   const sessionLoadGenerationRef = useRef(0);
+
+  useEffect(() => {
+    applyFontSize(userSettings.font_size);
+  }, [userSettings.font_size]);
 
   useEffect(() => {
     let cancelled = false;
@@ -178,6 +186,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const updateUserSettings = useCallback(async (settings: Partial<UserSettings>): Promise<void> => {
     if (!user || !supabase) throw new Error('User not authenticated or Supabase client not initialized.');
     const nextSettings = { ...userSettings, ...settings };
+    if (settings.font_size) {
+      applyFontSize(settings.font_size);
+    }
     const { data, error } = await supabase.auth.updateUser({
       data: { settings: nextSettings },
     });

@@ -8,6 +8,23 @@ body {
   @apply bg-immigo-gray-50 text-deep-navy font-sans antialiased;
 }
 
+/* Accessible Font Sizing Scale (5 levels) */
+html[data-font-size="extra-small"] {
+  font-size: 80%;
+}
+html[data-font-size="small"] {
+  font-size: 90%;
+}
+html[data-font-size="default"] {
+  font-size: 100%;
+}
+html[data-font-size="large"] {
+  font-size: 112.5%;
+}
+html[data-font-size="extra-large"] {
+  font-size: 125%;
+}
+
 #root {
   display: flex;
   flex-direction: column;

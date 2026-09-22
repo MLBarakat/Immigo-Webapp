@@ -22,7 +22,8 @@ import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { MobileMenuOverlay } from './components/MobileMenuOverlay';
 
 import { DisplayUser } from './types/user';
-import { UserSettings } from './types/settings';
+import { UserSettings, FontSize } from './types/settings';
+import { applyFontSize } from './utils/fontSize';
 import { logger } from './logger';
 import useMediaQuery from './hooks/useMediaQuery';
 
@@ -58,6 +59,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   const handleSettingChange = (key: keyof UserSettings, value: unknown) => {
+    if (key === 'font_size') {
+      applyFontSize(value as FontSize);
+    }
     void updateUserSettings({ [key]: value } as Partial<UserSettings>);
   };
 
