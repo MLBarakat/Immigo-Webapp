@@ -123,7 +123,23 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     };
     initializeSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, newSession: Session | null) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, newSession: Session | null) => {
+      if (event === 'USER_UPDATED') {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        if (newSession?.user?.user_metadata?.settings) {
+          setUserSettings(prev => ({
+            ...prev,
+            ...(newSession.user.user_metadata.settings as Partial<UserSettings>),
+          }));
+        }
+        return;
+      }
+      if (event === 'TOKEN_REFRESHED') {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        return;
+      }
       void loadSessionAndProfile(newSession);
     });
 
@@ -189,11 +205,15 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     if (settings.font_size) {
       applyFontSize(settings.font_size);
     }
+    setUserSettings(nextSettings);
     const { data, error } = await supabase.auth.updateUser({
       data: { settings: nextSettings },
     });
-    if (error) throw error;
-    setUserSettings(nextSettings);
+    if (error) {
+      setUserSettings(userSettings);
+      if (userSettings.font_size) applyFontSize(userSettings.font_size);
+      throw error;
+    }
     if (data.user) setUser(data.user);
   }, [supabase, user, userSettings]);
 

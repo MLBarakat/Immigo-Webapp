@@ -22,6 +22,7 @@ export interface UserSettings {
   barge_in: BargeIn;
   progress_report_frequency: ProgressReportFrequency;
   font_size?: FontSize;
+  has_seen_welcome?: boolean;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -32,4 +33,5 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   barge_in: 'balanced',
   progress_report_frequency: 'after_session',
   font_size: 'default',
+  has_seen_welcome: false,
 };

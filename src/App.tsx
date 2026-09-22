@@ -46,7 +46,31 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const manager = useConversation({ apiClient: apiClientInstance, userId: user?.id ?? null });
 
   // UI Modal State Management
-  const [showWelcomeModal, setShowWelcomeModal] = useState(true);
+  const hasSeenWelcome = Boolean(
+    userSettings.has_seen_welcome ||
+    (user?.id && (() => {
+      try {
+        return localStorage.getItem(`immigo_welcome_seen_${user.id}`) === 'true';
+      } catch {
+        return false;
+      }
+    })())
+  );
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const showWelcomeModal = !hasSeenWelcome && !welcomeDismissed;
+
+  const handleCloseWelcome = () => {
+    setWelcomeDismissed(true);
+    if (user?.id) {
+      try {
+        localStorage.setItem(`immigo_welcome_seen_${user.id}`, 'true');
+      } catch {
+        // Ignore localStorage error in restricted environments
+      }
+    }
+    void updateUserSettings({ has_seen_welcome: true });
+  };
+
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -70,7 +94,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     <div className="flex flex-col h-screen w-full bg-immigo-gray-50 text-deep-navy font-sans antialiased overflow-hidden">
 
       {/* Absolute Positioning Overlays */}
-      {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={() => setShowWelcomeModal(false)} />}
+      {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} />}
 
       {showAppSettings && (
         <ApplicationSettingsModal

@@ -36,7 +36,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose })
                 <Hand className="w-6 h-6 text-art-blue-600" />
                 <h2 className="text-xl font-bold text-deep-navy font-display">Welcome, {userName}!</h2>
             </div>
-            <button onClick={onClose} className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
+            <button onClick={onClose} aria-label="Close welcome message" className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
                 <X className="w-5 h-5 text-immigo-gray-600" />
             </button>
         </header>
