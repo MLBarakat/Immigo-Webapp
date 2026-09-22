@@ -71,10 +71,16 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       setSession(currentSession);
       setUser(currentUser);
       setProfile(null);
-      setUserSettings({
+
+      // Merge settings: Supabase user_metadata takes priority over defaults.
+      // For font_size, fall back to localStorage only if Supabase has no value.
+      const remoteSettings = (currentUser?.user_metadata?.settings as Partial<UserSettings> | undefined) ?? {};
+      const mergedSettings: UserSettings = {
         ...DEFAULT_USER_SETTINGS,
-        ...((currentUser?.user_metadata?.settings as Partial<UserSettings> | undefined) ?? {}),
-      });
+        ...remoteSettings,
+        font_size: remoteSettings.font_size ?? getStoredFontSize(),
+      };
+      setUserSettings(mergedSettings);
       setLoading(true);
 
       if (!currentUser) {
@@ -127,6 +133,8 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       if (event === 'USER_UPDATED') {
         setSession(newSession);
         setUser(newSession?.user ?? null);
+        // Merge incoming settings rather than wholesale replacing, so in-flight
+        // optimistic updates (e.g. font_size) are not clobbered.
         if (newSession?.user?.user_metadata?.settings) {
           setUserSettings(prev => ({
             ...prev,
