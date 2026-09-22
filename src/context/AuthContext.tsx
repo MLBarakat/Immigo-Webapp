@@ -7,6 +7,7 @@ import { applyFontSize, getStoredFontSize } from '../utils/fontSize';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
 import { AuthContext, SignUpPayload } from './authContextTypes';
+import { UserSettingsService } from '../services/userSettingsService';
 
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
@@ -91,19 +92,33 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       }
 
       try {
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', currentUser.id)
-          .single();
+        // Fetch profile and user_settings in parallel to minimise latency.
+        const [profileResult, dbSettings] = await Promise.all([
+          supabase.from('profiles').select('*').eq('id', currentUser.id).single(),
+          UserSettingsService.fetchSettings(supabase, currentUser.id),
+        ]);
 
         if (cancelled || generation !== sessionLoadGenerationRef.current) return;
 
-        if (profileError) {
+        if (profileResult.error) {
           setProfile(null);
-          logger.error('Error fetching user profile.', { error: profileError.message, userId: currentUser.id });
+          logger.error('Error fetching user profile.', { error: profileResult.error.message, userId: currentUser.id });
         } else {
-          setProfile(profileData);
+          setProfile(profileResult.data);
+        }
+
+        if (dbSettings) {
+          // DB row exists → use it as the highest-priority source.
+          setUserSettings(prev => ({
+            ...prev,
+            ...dbSettings,
+            // Always prefer the DB font_size; fall back to localStorage only if DB has none.
+            font_size: dbSettings.font_size ?? prev.font_size,
+          }));
+        } else {
+          // No row yet → upsert defaults so the record exists for next time.
+          logger.info('No user_settings row found; creating defaults.', { userId: currentUser.id });
+          void UserSettingsService.upsertSettings(supabase, currentUser.id, mergedSettings);
         }
       } catch (err) {
         if (cancelled || generation !== sessionLoadGenerationRef.current) return;
@@ -166,12 +181,20 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
 
   const signUp = useCallback(async ({ email, password, fullName, language, termsAcceptedAt, termsVersion, privacyVersion }: SignUpPayload): Promise<void> => {
     if (!supabase) throw new Error("Supabase client not initialized.");
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName, language, terms_accepted_at: termsAcceptedAt, terms_version: termsVersion, privacy_version: privacyVersion } },
     });
     if (error) throw error;
+
+    // Create the user_settings row immediately with defaults so it exists
+    // before the user ever logs in. Fire-and-forget; auth flow is not blocked.
+    if (signUpData.user) {
+      void UserSettingsService.createDefaultSettings(supabase, signUpData.user.id);
+      logger.info('Default user_settings row created after sign-up.', { userId: signUpData.user.id });
+    }
+
     analytics.track('user_signup', { method: 'email', language });
   }, [supabase]);
 
@@ -213,14 +236,30 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     if (settings.font_size) {
       applyFontSize(settings.font_size);
     }
+    // Optimistic update — revert on any failure below.
     setUserSettings(nextSettings);
+
+    // Write to the dedicated user_settings table (primary store).
+    const tableOk = await UserSettingsService.upsertSettings(supabase, user.id, nextSettings);
+    if (!tableOk) {
+      // Log but don't throw — fall through to user_metadata as a secondary write.
+      logger.warn('user_settings upsert failed; falling back to user_metadata only.', { userId: user.id });
+    }
+
+    // Also keep user_metadata in sync as a secondary / cache layer.
     const { data, error } = await supabase.auth.updateUser({
       data: { settings: nextSettings },
     });
     if (error) {
-      setUserSettings(userSettings);
-      if (userSettings.font_size) applyFontSize(userSettings.font_size);
-      throw error;
+      // Roll back optimistic update if both writes failed.
+      if (!tableOk) {
+        setUserSettings(userSettings);
+        if (userSettings.font_size) applyFontSize(userSettings.font_size);
+        throw error;
+      }
+      // Table write succeeded, so log the metadata failure but keep the new state.
+      logger.warn('user_metadata settings sync failed (table write succeeded).', { userId: user.id, error: error.message });
+      return;
     }
     if (data.user) setUser(data.user);
   }, [supabase, user, userSettings]);
