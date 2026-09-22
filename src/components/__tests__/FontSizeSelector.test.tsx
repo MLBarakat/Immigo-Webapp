@@ -7,12 +7,13 @@ afterEach(() => {
 });
 
 describe('FontSizeSelector Component', () => {
-  it('renders decrease and increase controls with the current size label', () => {
+  it('renders decrease and increase controls without text badge between them', () => {
     render(<FontSizeSelector currentFontSize="default" onFontSizeChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /decrease font size/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /increase font size/i })).toBeDefined();
-    expect(screen.getByText('M')).toBeDefined();
+    expect(screen.queryByText('M')).toBeNull();
+    expect(screen.queryByText('default')).toBeNull();
   });
 
   it('calls onFontSizeChange with larger size when A+ is clicked', () => {
@@ -43,7 +44,6 @@ describe('FontSizeSelector Component', () => {
 
     expect(decreaseBtn.disabled).toBe(true);
     expect(increaseBtn.disabled).toBe(false);
-    expect(screen.getByText('XS')).toBeDefined();
   });
 
   it('disables increase button when at the largest size (level 5: extra-large)', () => {
@@ -54,7 +54,6 @@ describe('FontSizeSelector Component', () => {
 
     expect(decreaseBtn.disabled).toBe(false);
     expect(increaseBtn.disabled).toBe(true);
-    expect(screen.getByText('XL')).toBeDefined();
   });
 
   it('steps through all 5 levels correctly', () => {
@@ -67,21 +66,18 @@ describe('FontSizeSelector Component', () => {
     // Level 2: small -> Level 3: default
     const change2 = vi.fn();
     rerender(<FontSizeSelector currentFontSize="small" onFontSizeChange={change2} />);
-    expect(screen.getByText('S')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: /increase font size/i }));
     expect(change2).toHaveBeenCalledWith('default');
 
     // Level 3: default -> Level 4: large
     const change3 = vi.fn();
     rerender(<FontSizeSelector currentFontSize="default" onFontSizeChange={change3} />);
-    expect(screen.getByText('M')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: /increase font size/i }));
     expect(change3).toHaveBeenCalledWith('large');
 
     // Level 4: large -> Level 5: extra-large
     const change4 = vi.fn();
     rerender(<FontSizeSelector currentFontSize="large" onFontSizeChange={change4} />);
-    expect(screen.getByText('L')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: /increase font size/i }));
     expect(change4).toHaveBeenCalledWith('extra-large');
   });

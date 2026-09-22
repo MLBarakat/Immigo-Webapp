@@ -2,7 +2,6 @@ import React from 'react';
 import { FontSize } from '../types/settings';
 import {
   FONT_SIZES,
-  FONT_SIZE_LABELS,
   normalizeFontSize,
 } from '../utils/fontSize';
 
@@ -40,14 +39,6 @@ export const FontSizeSelector: React.FC<FontSizeSelectorProps> = ({ currentFontS
       >
         A-
       </button>
-      <span
-        className="px-1.5 text-xs font-semibold text-deep-navy dark:text-star-white min-w-[1.75rem] text-center select-none"
-        aria-live="polite"
-        aria-atomic="true"
-        title={`Current font size: ${FONT_SIZE_LABELS[normalized] || 'M'}`}
-      >
-        {FONT_SIZE_LABELS[normalized] || 'M'}
-      </span>
       <button
         type="button"
         onClick={increaseFontSize}
