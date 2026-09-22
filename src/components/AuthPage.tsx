@@ -6,6 +6,7 @@ import { PrivacyModal } from './PrivacyModal';
 import { TERMS_VERSION } from '../legal/terms-content';
 import { PRIVACY_VERSION } from '../legal/privacy-content';
 import { User, Mail, KeyRound, Globe, AlertCircle } from 'lucide-react';
+import { PasswordStrengthChecker, isPasswordValid } from './PasswordStrengthChecker';
 import { SUPPORTED_LANGUAGES } from '../constants';
 import { Language } from '../types/language';
 import { ImmiGOLabel } from './ImmiGOLabel';
@@ -28,6 +29,10 @@ export function AuthPage(): JSX.Element {
     e.preventDefault();
     if (!isLogin && !agreedToTerms) {
       setError("You must confirm you are 18+ and agree to the Terms of Service and Privacy Policy to sign up.");
+      return;
+    }
+    if (!isLogin && !isPasswordValid(password)) {
+      setError('Please ensure your password meets all the requirements shown below.');
       return;
     }
     setLoading(true);
@@ -117,10 +122,22 @@ export function AuthPage(): JSX.Element {
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" aria-hidden="true" />
               <input id="email" type="email" autoComplete="username" placeholder="Email Address" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow" required />
             </div>
-            <div className="relative">
-              <label htmlFor="password" className="sr-only">Password</label>
-              <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" aria-hidden="true" />
-              <input id="password" type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow" required />
+            <div>
+              <div className="relative">
+                <label htmlFor="password" className="sr-only">Password</label>
+                <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" aria-hidden="true" />
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow"
+                  required
+                />
+              </div>
+              {!isLogin && <PasswordStrengthChecker password={password} />}
             </div>
             {!isLogin && (
               <>
