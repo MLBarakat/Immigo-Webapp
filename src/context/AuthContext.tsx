@@ -105,6 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
           logger.error('Error fetching user profile.', { error: profileResult.error.message, userId: currentUser.id });
         } else {
           setProfile(profileResult.data);
+          if (!remoteSettings.language && profileResult.data?.language) {
+            mergedSettings.language = profileResult.data.language;
+          }
         }
 
         if (dbSettings) {
@@ -118,6 +121,11 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         } else {
           // No row yet → upsert defaults so the record exists for next time.
           logger.info('No user_settings row found; creating defaults.', { userId: currentUser.id });
+          setUserSettings(prev => ({
+            ...prev,
+            ...mergedSettings,
+            font_size: mergedSettings.font_size ?? prev.font_size,
+          }));
           void UserSettingsService.upsertSettings(supabase, currentUser.id, mergedSettings);
         }
       } catch (err) {
@@ -191,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     // Create the user_settings row immediately with defaults so it exists
     // before the user ever logs in. Fire-and-forget; auth flow is not blocked.
     if (signUpData.user) {
-      void UserSettingsService.createDefaultSettings(supabase, signUpData.user.id);
+      void UserSettingsService.createDefaultSettings(supabase, signUpData.user.id, { language });
       logger.info('Default user_settings row created after sign-up.', { userId: signUpData.user.id });
     }
 
@@ -267,6 +275,15 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const updateUserLanguage = useCallback(async (newLanguageCode: string): Promise<void> => {
     if (!user || !supabase) throw new Error("User not authenticated or Supabase client not initialized.");
 
+    const previousSettings = userSettings;
+    const nextSettings: UserSettings = { ...userSettings, language: newLanguageCode };
+    setUserSettings(nextSettings);
+
+    const tableOk = await UserSettingsService.upsertSettings(supabase, user.id, nextSettings);
+    if (!tableOk) {
+      logger.warn('user_settings language update failed; attempting profile/user_metadata sync.', { userId: user.id });
+    }
+
     const { error } = await supabase
       .from('profiles')
       .update({ language: newLanguageCode })
@@ -274,10 +291,28 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
 
     if (error) {
       logger.error('Failed to update user language in profile.', { error: error.message, userId: user.id });
-      throw error;
+      if (!tableOk) {
+        setUserSettings(previousSettings);
+        throw error;
+      }
+    } else {
+      setProfile((prevProfile: UserProfile | null) => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
     }
-    setProfile((prevProfile: UserProfile | null) => prevProfile ? { ...prevProfile, language: newLanguageCode } : null);
-  }, [user, supabase]);
+
+    const { data, error: metadataError } = await supabase.auth.updateUser({
+      data: { settings: nextSettings },
+    });
+
+    if (metadataError) {
+      if (!tableOk && error) {
+        setUserSettings(previousSettings);
+        throw metadataError;
+      }
+      logger.warn('user_metadata language sync failed.', { userId: user.id, error: metadataError.message });
+      return;
+    }
+    if (data.user) setUser(data.user);
+  }, [supabase, user, userSettings]);
 
   const value = useMemo(() => ({
     session,

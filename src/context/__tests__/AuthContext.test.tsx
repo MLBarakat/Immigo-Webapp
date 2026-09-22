@@ -152,4 +152,67 @@ describe('AuthProvider', () => {
       data: { settings: expect.objectContaining({ font_size: 'large' }) },
     });
   });
+
+  it('persists language changes to user_settings, profile, metadata, and context cache', async () => {
+    const session = createSession('user-a');
+    const supabase = createSupabaseMock(session);
+    const profile = { id: 'user-a', full_name: 'User A', language: 'en-US', created_at: '', updated_at: '' };
+    const settingsRow = {
+      user_id: 'user-a',
+      language: 'en-US',
+      theme: 'system',
+      ai_voice_id: 'Joanna',
+      live_feedback_enabled: true,
+      mic_mode: 'voice_activity',
+      barge_in: 'balanced',
+      progress_report_frequency: 'after_session',
+      font_size: 'default',
+      has_seen_welcome: false,
+      updated_at: '',
+    };
+    const userSettingsUpsert = vi.fn().mockResolvedValue({ error: null });
+    const profileUpdate = vi.fn(() => profileQuery);
+    const profileEqAfterUpdate = vi.fn().mockResolvedValue({ error: null });
+    const profileQuery = {
+      select: () => profileQuery,
+      eq: vi.fn((_column: string, _value: string) => profileQuery),
+      single: vi.fn().mockResolvedValue({ data: profile, error: null }),
+      update: profileUpdate,
+    };
+    profileQuery.eq.mockImplementation(() => profileQuery);
+    profileUpdate.mockImplementation(() => ({ eq: profileEqAfterUpdate }));
+
+    const userSettingsQuery = {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: vi.fn().mockResolvedValue({ data: settingsRow, error: null }),
+        }),
+      }),
+      upsert: userSettingsUpsert,
+    };
+
+    supabase.client.from.mockImplementation((table: string) => (
+      table === 'user_settings' ? userSettingsQuery : profileQuery
+    ));
+    supabase.client.auth.updateUser = vi.fn().mockResolvedValue({ data: { user: session.user }, error: null });
+    getSupabaseClientMock.mockResolvedValue(supabase.client);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.user?.id).toBe('user-a'));
+    await waitFor(() => expect(result.current.userSettings.language).toBe('en-US'));
+
+    await act(async () => {
+      await result.current.updateUserLanguage('es-ES');
+    });
+
+    expect(result.current.userSettings.language).toBe('es-ES');
+    expect(userSettingsUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 'user-a', language: 'es-ES' }),
+      { onConflict: 'user_id' },
+    );
+    expect(profileUpdate).toHaveBeenCalledWith({ language: 'es-ES' });
+    expect(supabase.client.auth.updateUser).toHaveBeenCalledWith({
+      data: { settings: expect.objectContaining({ language: 'es-ES' }) },
+    });
+  });
 });

@@ -30,7 +30,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 const THEME_OPTIONS: { value: ThemeOption; label: string }[] = [ { value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, ];
 
 export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, pollyVoices = [], isDesktop }) => {
-  const defaults = useMemo((): UserSettings => ({ theme: 'system', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default' }), [pollyVoices]);
+  const defaults = useMemo((): UserSettings => ({ language: 'en-US', theme: 'system', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default', has_seen_welcome: false }), [pollyVoices]);
   const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -41,7 +41,7 @@ interface ConversationWorkspaceProps {
 }
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
-  const { user, profile, logout, userSettings, updateUserSettings } = useAuth();
+  const { user, profile, logout, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const manager = useConversation({ apiClient: apiClientInstance, userId: user?.id ?? null });
 
@@ -75,7 +75,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  const [currentLanguageCode, setCurrentLanguageCode] = useState('en');
+  const currentLanguageCode = userSettings.language || profile?.language || 'en-US';
 
   const displayUser: DisplayUser = {
     name: profile?.full_name || user?.email || 'User',
@@ -138,7 +138,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         onToggleMobileMenu={() => setShowMobileMenu(true)}
         onSettingChange={handleSettingChange}
         currentLanguageCode={currentLanguageCode}
-        onLanguageChange={setCurrentLanguageCode}
+        onLanguageChange={(languageCode) => { void updateUserLanguage(languageCode); }}
       />
 
       {/* FIXED: min-h-0 prevents children from breaking out of the strict flex bounds */}

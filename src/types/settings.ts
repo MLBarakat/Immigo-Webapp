@@ -15,6 +15,7 @@ export type FontSize =
   | 'xl';
 
 export interface UserSettings {
+  language: string;
   theme: ThemeOption;
   ai_voice_id?: string;
   live_feedback_enabled: boolean;
@@ -26,6 +27,7 @@ export interface UserSettings {
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
+  language: 'en-US',
   theme: 'system',
   ai_voice_id: 'Joanna',
   live_feedback_enabled: true,

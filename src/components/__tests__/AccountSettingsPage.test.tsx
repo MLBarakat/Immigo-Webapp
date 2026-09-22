@@ -13,6 +13,7 @@ const baseAuth: AuthContextType = {
   initializationError: null,
   retryInitialization: vi.fn(),
   userSettings: {
+    language: 'en-US',
     theme: 'system',
     ai_voice_id: 'Joanna',
     live_feedback_enabled: true,

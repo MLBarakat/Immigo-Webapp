@@ -8,6 +8,7 @@ import { logger } from '../logger';
  */
 export interface UserSettingsRow {
   user_id: string;
+  language: string;
   theme: string;
   ai_voice_id: string | null;
   live_feedback_enabled: boolean;
@@ -22,6 +23,7 @@ export interface UserSettingsRow {
 /** Maps a DB row to the application `UserSettings` shape. */
 function rowToSettings(row: UserSettingsRow): Partial<UserSettings> {
   return {
+    language: row.language ?? DEFAULT_USER_SETTINGS.language,
     theme: row.theme as UserSettings['theme'],
     ai_voice_id: row.ai_voice_id ?? undefined,
     live_feedback_enabled: row.live_feedback_enabled,
@@ -37,6 +39,7 @@ function rowToSettings(row: UserSettingsRow): Partial<UserSettings> {
 function settingsToRow(userId: string, settings: UserSettings): Omit<UserSettingsRow, 'updated_at'> {
   return {
     user_id: userId,
+    language: settings.language,
     theme: settings.theme,
     ai_voice_id: settings.ai_voice_id ?? null,
     live_feedback_enabled: settings.live_feedback_enabled,
