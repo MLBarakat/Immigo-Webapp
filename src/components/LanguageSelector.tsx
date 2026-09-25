@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { SUPPORTED_LANGUAGES } from "../constants";
 
@@ -12,6 +13,7 @@ export function LanguageSelector({
   currentLanguageCode,
   onLanguageChange,
 }: LanguageSelectorProps): JSX.Element {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -46,7 +48,7 @@ export function LanguageSelector({
         type="button"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        aria-label="Select Language"
+        aria-label={t('language.select')}
         onClick={() => setIsOpen(prev => !prev)}
         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-deep-navy bg-immigo-gray-100 hover:bg-immigo-gray-200"
       >

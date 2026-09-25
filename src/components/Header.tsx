@@ -1,5 +1,6 @@
 import ImmigoLogo from '../assets/immigo_logo.svg';
 import { Settings, LogOut, Menu } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { DisplayUser } from '../types/user';
 import { LanguageSelector } from './LanguageSelector';
 import { FontSizeSelector } from './FontSizeSelector';
@@ -29,6 +30,8 @@ export function Header({
   currentLanguageCode,
   onLanguageChange,
 }: HeaderProps): JSX.Element {
+  const { t } = useTranslation();
+
   return (
     <header className="flex items-center justify-between p-4 bg-star-white shadow-sm border-b-2 border-immigo-gray-300">
       <div className="flex items-center gap-1">
@@ -45,19 +48,19 @@ export function Header({
           currentFontSize={userSettings.font_size || 'default'}
           onFontSizeChange={(size) => onSettingChange('font_size', size)}
         />
-        <button onClick={onOpenAppSettings} aria-label="Open application settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
+        <button onClick={onOpenAppSettings} aria-label={t('header.openSettings')} className="p-2 rounded-full hover:bg-immigo-gray-100">
           <Settings className="w-6 h-6 text-immigo-gray-600" />
         </button>
-        <button onClick={onOpenAccountSettings} aria-label="Open account settings" className="w-9 h-9 bg-art-blue-600 text-star-white rounded-full flex items-center justify-center font-bold">
+        <button onClick={onOpenAccountSettings} aria-label={t('header.openAccount')} className="w-9 h-9 bg-art-blue-600 text-star-white rounded-full flex items-center justify-center font-bold">
           {displayUser.initials}
         </button>
-        <button onClick={onSignOut} aria-label="Sign out" className="p-2 rounded-full hover:bg-immigo-gray-100">
+        <button onClick={onSignOut} aria-label={t('header.signOut')} className="p-2 rounded-full hover:bg-immigo-gray-100">
           <LogOut className="w-6 h-6 text-art-red-600" />
         </button>
       </nav>
 
       <div className="md:hidden">
-        <button onClick={onToggleMobileMenu} aria-label="Open menu" className="p-2 rounded-full hover:bg-immigo-gray-100">
+        <button onClick={onToggleMobileMenu} aria-label={t('header.openMenu')} className="p-2 rounded-full hover:bg-immigo-gray-100">
           <Menu className="w-6 h-6 text-immigo-gray-600" />
         </button>
       </div>

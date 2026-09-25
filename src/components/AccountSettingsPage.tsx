@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ApiClient } from '../services/apiClient';
 import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -13,6 +14,7 @@ interface AccountSettingsPageProps {
 type SettingsView = 'profile' | 'security' | 'connections' | 'delete';
 
 export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettingsPageProps): JSX.Element => {
+  const { t } = useTranslation();
   const [activeView, setActiveView] = useState<SettingsView>('profile');
   const modalRef = useFocusTrap(true);
   const { user, profile, session, logout, updateProfile, updatePassword } = useAuth();
@@ -37,7 +39,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
 
   const handleDeleteAccount = async () => {
     if (!session?.access_token) {
-      setDeleteError('You must be signed in to delete your account.');
+      setDeleteError(t('account.delete.mustSignIn'));
       return;
     }
     setDeleting(true);
@@ -49,7 +51,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
       await client.deleteAccount();
       await logout();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Account deletion failed. Please contact support.');
+      setDeleteError(err instanceof Error ? err.message : t('account.delete.failed'));
       setDeleting(false);
     }
   };
@@ -60,13 +62,18 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
 
   const handleProfileSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const nextName = fullName.trim() || userFullName;
+    if (!nextName.trim()) {
+      setProfileMessage(t('account.profile.fullNameRequired'));
+      return;
+    }
     setProfileSaving(true);
     setProfileMessage(null);
     try {
-      await updateProfile(fullName.trim() || userFullName);
-      setProfileMessage('Profile saved.');
+      await updateProfile(nextName);
+      setProfileMessage(t('account.profile.saved'));
     } catch (err) {
-      setProfileMessage(err instanceof Error ? err.message : 'Profile could not be saved.');
+      setProfileMessage(err instanceof Error ? err.message : t('account.profile.saveFailed'));
     } finally {
       setProfileSaving(false);
     }
@@ -76,11 +83,11 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
     event.preventDefault();
     setPasswordMessage(null);
     if (newPassword.length < 8) {
-      setPasswordMessage('Password must be at least 8 characters.');
+      setPasswordMessage(t('account.security.minLength'));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordMessage('Passwords do not match.');
+      setPasswordMessage(t('account.security.mismatch'));
       return;
     }
     setPasswordSaving(true);
@@ -88,9 +95,9 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
       await updatePassword(newPassword);
       setNewPassword('');
       setConfirmPassword('');
-      setPasswordMessage('Password updated.');
+      setPasswordMessage(t('account.security.updated'));
     } catch (err) {
-      setPasswordMessage(err instanceof Error ? err.message : 'Password could not be updated.');
+      setPasswordMessage(err instanceof Error ? err.message : t('account.security.updateFailed'));
     } finally {
       setPasswordSaving(false);
     }
@@ -101,11 +108,11 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
       case 'profile':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-deep-navy">My Profile</h2>
-            <p className="text-immigo-gray-600">Manage your personal information</p>
+            <h2 className="text-2xl font-bold text-deep-navy">{t('account.profile.title')}</h2>
+            <p className="text-immigo-gray-600">{t('account.profile.description')}</p>
             <form className="space-y-4" onSubmit={handleProfileSubmit}>
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-immigo-gray-700">Full Name</label>
+                <label htmlFor="name" className="block text-sm font-medium text-immigo-gray-700">{t('account.profile.fullName')}</label>
                 <input
                   type="text"
                   id="name"
@@ -115,7 +122,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
                 />
               </div>
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-immigo-gray-700">Email</label>
+                <label htmlFor="email" className="block text-sm font-medium text-immigo-gray-700">{t('account.profile.email')}</label>
                 <input
                   type="email"
                   id="email"
@@ -126,7 +133,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
               </div>
               {profileMessage && <p className="text-sm text-immigo-gray-600" role="status">{profileMessage}</p>}
               <button type="submit" disabled={profileSaving} className="px-4 py-2 bg-art-blue-600 text-white rounded-md font-semibold hover:bg-art-blue-700 disabled:opacity-60">
-                {profileSaving ? 'Saving...' : 'Save Profile'}
+                {profileSaving ? t('account.profile.saving') : t('account.profile.save')}
               </button>
             </form>
           </div>
@@ -134,20 +141,20 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
       case 'security':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-deep-navy">Security & Login</h2>
-            <p className="text-immigo-gray-600">Manage your password and security settings</p>
+            <h2 className="text-2xl font-bold text-deep-navy">{t('account.security.title')}</h2>
+            <p className="text-immigo-gray-600">{t('account.security.description')}</p>
             <form className="space-y-4" onSubmit={handlePasswordSubmit}>
               <div>
-                <label htmlFor="new-password" className="block text-sm font-medium text-immigo-gray-700">New Password</label>
+                <label htmlFor="new-password" className="block text-sm font-medium text-immigo-gray-700">{t('account.security.newPassword')}</label>
                 <input type="password" id="new-password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
               </div>
               <div>
-                <label htmlFor="confirm-password" className="block text-sm font-medium text-immigo-gray-700">Confirm New Password</label>
+                <label htmlFor="confirm-password" className="block text-sm font-medium text-immigo-gray-700">{t('account.security.confirmPassword')}</label>
                 <input type="password" id="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
               </div>
               {passwordMessage && <p className="text-sm text-immigo-gray-600" role="status">{passwordMessage}</p>}
               <button type="submit" disabled={passwordSaving} className="px-4 py-2 bg-art-blue-600 text-white rounded-md font-semibold hover:bg-art-blue-700 disabled:opacity-60">
-                {passwordSaving ? 'Updating...' : 'Update Password'}
+                {passwordSaving ? t('account.security.updating') : t('account.security.update')}
               </button>
             </form>
           </div>
@@ -155,16 +162,16 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
       case 'connections':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-deep-navy">Social Connections</h2>
-            <p className="text-immigo-gray-600">Social sign-in providers are not enabled for this account.</p>
+            <h2 className="text-2xl font-bold text-deep-navy">{t('account.connections.title')}</h2>
+            <p className="text-immigo-gray-600">{t('account.connections.description')}</p>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 border border-immigo-gray-200 rounded-md">
-                <span>Google Account</span>
-                <span className="text-sm text-immigo-gray-500">Unavailable</span>
+                <span>{t('account.connections.google')}</span>
+                <span className="text-sm text-immigo-gray-500">{t('account.connections.unavailable')}</span>
               </div>
               <div className="flex items-center justify-between p-4 border border-immigo-gray-200 rounded-md">
-                <span>Facebook</span>
-                <span className="text-sm text-immigo-gray-500">Unavailable</span>
+                <span>{t('account.connections.facebook')}</span>
+                <span className="text-sm text-immigo-gray-500">{t('account.connections.unavailable')}</span>
               </div>
             </div>
           </div>
@@ -172,8 +179,8 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
       case 'delete':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-art-red-700">Delete Account</h2>
-            <p className="text-immigo-gray-600">Permanently delete your ImmiGo account and all associated data (sessions, practice results, and progress). This action cannot be undone.</p>
+            <h2 className="text-2xl font-bold text-art-red-700">{t('account.delete.title')}</h2>
+            <p className="text-immigo-gray-600">{t('account.delete.description')}</p>
             {deleteError && (
               <div className="text-art-red-700 text-sm p-3 bg-art-red-50 rounded-lg">{deleteError}</div>
             )}
@@ -182,25 +189,25 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
                 onClick={() => setConfirmDelete(true)}
                 className="px-4 py-2 bg-art-red-600 text-white rounded-md font-semibold hover:bg-art-red-700"
               >
-                Delete Account
+                {t('account.delete.button')}
               </button>
             ) : (
               <div className="space-y-3 p-4 border border-art-red-200 rounded-lg bg-art-red-50">
-                <p className="text-sm font-semibold text-art-red-700">Are you absolutely sure? This permanently deletes your account and all associated data.</p>
+                <p className="text-sm font-semibold text-art-red-700">{t('account.delete.confirm')}</p>
                 <div className="flex gap-3">
                   <button
                     onClick={handleDeleteAccount}
                     disabled={deleting}
                     className="px-4 py-2 bg-art-red-600 text-white rounded-md font-semibold hover:bg-art-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {deleting ? 'Deleting…' : 'Yes, permanently delete'}
+                    {deleting ? t('account.delete.deleting') : t('account.delete.yes')}
                   </button>
                   <button
                     onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
                     disabled={deleting}
                     className="px-4 py-2 bg-immigo-gray-100 text-immigo-gray-700 rounded-md font-semibold hover:bg-immigo-gray-200 disabled:opacity-60"
                   >
-                    Cancel
+                    {t('account.delete.cancel')}
                   </button>
                 </div>
               </div>
@@ -232,13 +239,13 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
       <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="account-settings-title" className={`${contentClasses} outline-none`}>
         <header className={headerClasses}>
           {!isDesktop && (
-            <button onClick={onNavigateBack} className="p-2 rounded-full hover:bg-immigo-gray-100 text-immigo-gray-600">
-              <ArrowLeft className="w-6 h-6" />
+            <button onClick={onNavigateBack} aria-label={t('account.close')} className="p-2 rounded-full hover:bg-immigo-gray-100 text-immigo-gray-600">
+              <ArrowLeft className="w-6 h-6 rtl:rotate-180" />
             </button>
           )}
-          <h1 id="account-settings-title" className={`font-bold text-deep-navy ${isDesktop ? 'text-2xl font-display' : 'text-xl ml-4 font-display'}`}>Account Settings</h1>
+          <h1 id="account-settings-title" className={`font-bold text-deep-navy ${isDesktop ? 'text-2xl font-display' : 'text-xl ml-4 font-display'}`}>{t('account.title')}</h1>
           {isDesktop && (
-            <button onClick={onNavigateBack} aria-label="Close settings" className="p-2 rounded-full hover:bg-immigo-gray-100">
+            <button onClick={onNavigateBack} aria-label={t('account.close')} className="p-2 rounded-full hover:bg-immigo-gray-100">
               <X className="w-6 h-6 text-immigo-gray-600" />
             </button>
           )}
@@ -247,10 +254,10 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
           <div className="lg:grid lg:grid-cols-12 gap-8">
             <nav className="lg:col-span-3">
               <ul className="space-y-1">
-                <li><button type="button" onClick={() => setActiveView('profile')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'profile' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><User className="w-5 h-5 mr-3" /> My Profile</button></li>
-                <li><button type="button" onClick={() => setActiveView('security')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'security' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Lock className="w-5 h-5 mr-3" /> Security & Login</button></li>
-                <li><button type="button" onClick={() => setActiveView('connections')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'connections' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Share2 className="w-5 h-5 mr-3" /> Social Connections</button></li>
-                <li><button type="button" onClick={() => setActiveView('delete')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold text-art-red-700 ${activeView === 'delete' ? 'bg-art-red-50' : 'hover:bg-art-red-50'}`}><AlertTriangle className="w-5 h-5 mr-3" /> Delete My Account</button></li>
+                <li><button type="button" onClick={() => setActiveView('profile')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'profile' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><User className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0" /> {t('account.profile.tab')}</button></li>
+                <li><button type="button" onClick={() => setActiveView('security')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'security' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Lock className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0" /> {t('account.security.tab')}</button></li>
+                <li><button type="button" onClick={() => setActiveView('connections')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'connections' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Share2 className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0" /> {t('account.connections.tab')}</button></li>
+                <li><button type="button" onClick={() => setActiveView('delete')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold text-art-red-700 ${activeView === 'delete' ? 'bg-art-red-50' : 'hover:bg-art-red-50'}`}><AlertTriangle className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0" /> {t('account.delete.tab')}</button></li>
               </ul>
             </nav>
             <main className="lg:col-span-9 mt-6 lg:mt-0">

@@ -59,6 +59,31 @@
     "clearConversation": "Borrar conversación",
     "downloadScript": "Descargar guion"
   },
+  "auth": {
+    "accountCreated": {
+      "title": "¡Cuenta creada!",
+      "message": "Hemos enviado un enlace de verificación a {{email}}. Revisa tu bandeja de entrada y haz clic en el enlace de activación para comenzar tu recorrido.",
+      "backToLogin": "Volver a la pantalla de inicio de sesión"
+    },
+    "loginTitle": "Bienvenido de nuevo",
+    "loginSubtitle": "Inicia sesión para continuar tu recorrido.",
+    "signupTitle": "Crea tu cuenta",
+    "signupSubtitle": "Comienza con tu coach de IA personal.",
+    "fullName": "Nombre completo",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "primaryLanguage": "Idioma principal",
+    "termsAgreement": "Tengo 18 años o más y resido en EE. UU., y acepto los <tos>Términos de servicio</tos> y la <privacy>Política de privacidad</privacy>.",
+    "errorMustAgree": "Debes confirmar que tienes 18 años o más y aceptar los Términos de servicio y la Política de privacidad para registrarte.",
+    "errorPasswordRequirements": "Asegúrate de que tu contraseña cumpla con todos los requisitos mostrados a continuación.",
+    "errorUnexpected": "Ocurrió un error inesperado.",
+    "processing": "Procesando...",
+    "login": "Iniciar sesión",
+    "signUp": "Registrarse",
+    "createAccount": "Crear cuenta",
+    "noAccount": "¿No tienes una cuenta?",
+    "haveAccount": "¿Ya tienes una cuenta?"
+  },
   "footer": {
     "disclaimer": "ImmiGO es una herramienta educativa independiente no afiliada con USCIS ni con el Gobierno de EE. UU. No es asesoría legal.",
     "terms": "Términos",
@@ -84,7 +109,9 @@
     "application": "Aplicación",
     "settings": "Configuración",
     "tools": "Herramientas",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "clearConversation": "Borrar conversación",
+    "downloadTranscript": "Descargar transcripción"
   },
   "settings": {
     "title": "Configuración de la aplicación",
@@ -95,7 +122,7 @@
     "saveFailed": "No se pudo guardar",
     "appearance": { "title": "Apariencia", "description": "Elige cómo se ve ImmiGo." },
     "theme": { "system": "Sistema", "light": "Claro", "dark": "Oscuro" },
-    "font": { "title": "Tamaño del texto", "description": "Ajusta la escala de texto de toda la aplicación (5 niveles)." },
+    "font": { "title": "Tamaño del texto", "description": "Ajusta la escala de texto de toda la aplicación (5 niveles).", "extraSmall": "Muy pequeño", "small": "Pequeño", "medium": "Mediano", "large": "Grande", "extraLarge": "Muy grande" },
     "voice": { "title": "Voz de IA", "description": "Selecciona la voz de tu compañero de conversación de IA." },
     "feedback": { "title": "Retroalimentación en vivo", "description": "Recibe consejos en tiempo real durante la conversación.", "toggle": "Activar o desactivar retroalimentación en vivo" },
     "mic": { "title": "Modo de micrófono", "description": "Elige tu estilo de habla.", "voiceActivity": "Actividad de voz", "pushToTalk": "Pulsar para hablar" },

@@ -82,7 +82,9 @@
     "application": "التطبيق",
     "settings": "الإعدادات",
     "tools": "الأدوات",
-    "logout": "تسجيل الخروج"
+    "logout": "تسجيل الخروج",
+    "clearConversation": "مسح المحادثة",
+    "downloadTranscript": "تنزيل النص"
   },
   "settings": {
     "title": "إعدادات التطبيق",
@@ -93,7 +95,7 @@
     "saveFailed": "فشل الحفظ",
     "appearance": { "title": "المظهر", "description": "اختر مظهر ImmiGo." },
     "theme": { "system": "النظام", "light": "فاتح", "dark": "داكن" },
-    "font": { "title": "حجم النص", "description": "اضبط حجم النص في التطبيق بالكامل (5 مستويات)." },
+    "font": { "title": "حجم النص", "description": "اضبط حجم النص في التطبيق بالكامل (5 مستويات).", "extraSmall": "صغير جدا", "small": "صغير", "medium": "متوسط", "large": "كبير", "extraLarge": "كبير جدا" },
     "voice": { "title": "صوت الذكاء الاصطناعي", "description": "اختر صوت شريك المحادثة بالذكاء الاصطناعي." },
     "feedback": { "title": "ملاحظات مباشرة", "description": "احصل على نصائح فورية أثناء المحادثة.", "toggle": "تبديل الملاحظات المباشرة" },
     "mic": { "title": "وضع الميكروفون", "description": "اختر أسلوب التحدث.", "voiceActivity": "نشاط صوتي", "pushToTalk": "اضغط للتحدث" },

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Hand, Mic, MessageSquare, Zap, ArrowRight, X } from 'lucide-react';
 
 interface WelcomeModalProps {
@@ -6,27 +7,14 @@ interface WelcomeModalProps {
   onClose: () => void;
 }
 
-const steps = [
-  {
-    icon: Mic,
-    title: "Start Your Session",
-    description: "Press the large animated button to start a practice session. The AI will greet you and wait for you to speak.",
-  },
-  {
-    icon: MessageSquare,
-    title: "Speak Naturally",
-    description: "When the AI is listening, just speak as you would in a normal conversation. Your words will be transcribed in real-time.",
-  },
-  {
-    icon: Zap,
-    title: "Pro Tip: Interrupt Anytime!",
-    description: "This is just like a real conversation. You can interrupt the AI at any point by simply starting to speak.",
-  },
-];
+const STEP_KEYS = ['start', 'speak', 'interrupt'] as const;
+const STEP_ICONS = [Mic, MessageSquare, Zap];
 
 export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose }) => {
+  const { t } = useTranslation();
   const [step, setStep] = useState(0);
-  const StepIcon = steps[step].icon;
+  const StepIcon = STEP_ICONS[step];
+  const stepKey = STEP_KEYS[step];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
@@ -34,9 +22,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose })
         <header className="flex items-center justify-between p-4 border-b border-immigo-gray-200">
             <div className="flex items-center gap-3">
                 <Hand className="w-6 h-6 text-art-blue-600" />
-                <h2 className="text-xl font-bold text-deep-navy font-display">Welcome, {userName}!</h2>
+                <h2 className="text-xl font-bold text-deep-navy font-display">{t('welcome.title', { name: userName })}</h2>
             </div>
-            <button onClick={onClose} aria-label="Close welcome message" className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
+            <button onClick={onClose} aria-label={t('welcome.close')} className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
                 <X className="w-5 h-5 text-immigo-gray-600" />
             </button>
         </header>
@@ -45,34 +33,34 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose })
             <div className="w-16 h-16 bg-art-blue-100 text-art-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <StepIcon className="w-8 h-8" />
             </div>
-            <h3 className="text-2xl font-bold text-deep-navy mb-2">{steps[step].title}</h3>
-            <p className="text-immigo-gray-600 min-h-[72px]">{steps[step].description}</p>
+            <h3 className="text-2xl font-bold text-deep-navy mb-2">{t(`welcome.steps.${stepKey}.title`)}</h3>
+            <p className="text-immigo-gray-600 min-h-[72px]">{t(`welcome.steps.${stepKey}.description`)}</p>
         </main>
 
         <footer className="p-6 bg-immigo-gray-50 rounded-b-2xl flex items-center justify-between">
             <div className="flex gap-2">
-                {steps.map((_, index) => (
+                {STEP_KEYS.map((key, index) => (
                     <button
-                        key={index}
+                        key={key}
                         onClick={() => setStep(index)}
                         className={`w-2 h-2 rounded-full ${index === step ? 'bg-art-blue-600' : 'bg-immigo-gray-300 hover:bg-immigo-gray-400'}`}
-                        aria-label={`Go to step ${index + 1}`}
+                        aria-label={t('welcome.goToStep', { step: index + 1 })}
                     />
                 ))}
             </div>
-            {step < steps.length - 1 ? (
+            {step < STEP_KEYS.length - 1 ? (
                 <button
                     onClick={() => setStep(s => s + 1)}
                     className="flex items-center gap-2 px-5 py-2 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-art-blue-500 transition-transform transform hover:scale-105"
                 >
-                    Next <ArrowRight className="w-5 h-5" />
+                    {t('welcome.next')} <ArrowRight className="w-5 h-5 rtl:rotate-180" />
                 </button>
             ) : (
                 <button
                     onClick={onClose}
                     className="px-5 py-2 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-art-blue-500 transition-transform transform hover:scale-105"
                 >
-                    Let's Get Started
+                    {t('welcome.start')}
                 </button>
             )}
         </footer>

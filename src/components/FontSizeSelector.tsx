@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { FontSize } from '../types/settings';
 import {
   FONT_SIZES,
@@ -11,6 +12,7 @@ interface FontSizeSelectorProps {
 }
 
 export const FontSizeSelector: React.FC<FontSizeSelectorProps> = ({ currentFontSize, onFontSizeChange }) => {
+  const { t } = useTranslation();
   const normalized = normalizeFontSize(currentFontSize);
   const currentIndex = FONT_SIZES.indexOf(normalized);
   const activeIndex = currentIndex === -1 ? FONT_SIZES.indexOf('default') : currentIndex;
@@ -34,8 +36,8 @@ export const FontSizeSelector: React.FC<FontSizeSelectorProps> = ({ currentFontS
         onClick={decreaseFontSize}
         disabled={activeIndex === 0}
         className="p-1.5 rounded-md hover:bg-immigo-gray-200 dark:hover:bg-gray-600 text-immigo-gray-600 dark:text-immigo-gray-300 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors"
-        aria-label="Decrease font size"
-        title="Decrease font size"
+        aria-label={t('fontSize.decrease')}
+        title={t('fontSize.decrease')}
       >
         A-
       </button>
@@ -44,8 +46,8 @@ export const FontSizeSelector: React.FC<FontSizeSelectorProps> = ({ currentFontS
         onClick={increaseFontSize}
         disabled={activeIndex === FONT_SIZES.length - 1}
         className="p-1.5 rounded-md hover:bg-immigo-gray-200 dark:hover:bg-gray-600 text-immigo-gray-600 dark:text-immigo-gray-300 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors"
-        aria-label="Increase font size"
-        title="Increase font size"
+        aria-label={t('fontSize.increase')}
+        title={t('fontSize.increase')}
       >
         A+
       </button>

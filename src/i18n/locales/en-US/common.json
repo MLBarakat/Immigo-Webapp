@@ -59,6 +59,31 @@
     "clearConversation": "Clear Conversation",
     "downloadScript": "Download Script"
   },
+  "auth": {
+    "accountCreated": {
+      "title": "Account Created!",
+      "message": "We've sent a verification link to {{email}}. Please check your email inbox and click the activation link to finish starting your journey.",
+      "backToLogin": "Back to Login Screen"
+    },
+    "loginTitle": "Welcome Back",
+    "loginSubtitle": "Sign in to continue your journey.",
+    "signupTitle": "Create Your Account",
+    "signupSubtitle": "Get started with your personal AI coach.",
+    "fullName": "Full Name",
+    "email": "Email Address",
+    "password": "Password",
+    "primaryLanguage": "Primary Language",
+    "termsAgreement": "I am 18 or older and a U.S. resident, and I agree to the <tos>Terms of Service</tos> and <privacy>Privacy Policy</privacy>.",
+    "errorMustAgree": "You must confirm you are 18+ and agree to the Terms of Service and Privacy Policy to sign up.",
+    "errorPasswordRequirements": "Please ensure your password meets all the requirements shown below.",
+    "errorUnexpected": "An unexpected error occurred.",
+    "processing": "Processing...",
+    "login": "Login",
+    "signUp": "Sign Up",
+    "createAccount": "Create Account",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?"
+  },
   "footer": {
     "disclaimer": "ImmiGO is an independent educational tool not affiliated with USCIS or the U.S. Government. Not legal advice.",
     "terms": "Terms",
@@ -84,7 +109,9 @@
     "application": "Application",
     "settings": "Settings",
     "tools": "Tools",
-    "logout": "Logout"
+    "logout": "Logout",
+    "clearConversation": "Clear Conversation",
+    "downloadTranscript": "Download Transcript"
   },
   "settings": {
     "title": "Application Settings",
@@ -104,7 +131,12 @@
     },
     "font": {
       "title": "Text Size",
-      "description": "Adjust application-wide font scale (5 levels)."
+      "description": "Adjust application-wide font scale (5 levels).",
+      "extraSmall": "Extra Small",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "extraLarge": "Extra Large"
     },
     "voice": {
       "title": "AI Voice",

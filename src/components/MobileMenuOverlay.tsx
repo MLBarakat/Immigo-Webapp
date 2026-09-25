@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Settings, LogOut, Trash2, Download } from 'lucide-react';
 import { DisplayUser } from '../types/user'; // Import the new type
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -30,6 +31,7 @@ export const MobileMenuOverlay: React.FC<MobileMenuOverlayProps> = ({
 };
 
 function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user }: MobileMenuOverlayProps): JSX.Element {
+  const { t } = useTranslation();
   const modalRef = useFocusTrap(true);
 
   useEffect(() => {
@@ -49,15 +51,15 @@ function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, 
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden" role="presentation" onClick={onClose}>
       <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title" className="absolute inset-y-0 left-0 w-4/5 max-w-sm bg-immigo-gray-50 shadow-2xl flex flex-col outline-none" onClick={e => e.stopPropagation()}>
         <header className="flex items-center justify-between p-4 border-b border-immigo-gray-200">
-          <h2 id="mobile-menu-title" className="text-xl font-bold text-deep-navy font-display">Menu</h2>
-          <button onClick={onClose} aria-label="Close menu" className="p-2 text-immigo-gray-600 rounded-full hover:bg-immigo-gray-200">
+          <h2 id="mobile-menu-title" className="text-xl font-bold text-deep-navy font-display">{t('menu.title')}</h2>
+          <button onClick={onClose} aria-label={t('menu.close')} className="p-2 text-immigo-gray-600 rounded-full hover:bg-immigo-gray-200">
             <X className="w-6 h-6" />
           </button>
         </header>
 
         <nav className="flex-1 p-4 space-y-4">
           <div>
-            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">Account</h3>
+            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">{t('menu.account')}</h3>
             <button onClick={() => handleAction(onOpenAccountSettings)} className="w-full flex items-center p-3 mt-1 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
               <div className="flex items-center justify-center w-10 h-10 rounded-full bg-art-blue-100 text-art-blue-700 font-bold">
                 {user.initials}
@@ -67,23 +69,23 @@ function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, 
           </div>
 
           <div>
-            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">Application</h3>
+            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">{t('menu.application')}</h3>
             <button onClick={() => handleAction(onOpenAppSettings)} className="w-full flex items-center p-3 mt-1 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
               <Settings className="w-6 h-6 text-immigo-gray-700" />
-              <span className="font-semibold text-deep-navy">Settings</span>
+              <span className="font-semibold text-deep-navy">{t('menu.settings')}</span>
             </button>
           </div>
 
           <div>
-            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">Tools</h3>
+            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">{t('menu.tools')}</h3>
             <div className="mt-1">
               <button onClick={() => handleAction(onClearConversation)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
                 <Trash2 className="w-6 h-6 text-immigo-gray-700" />
-                <span className="font-semibold text-deep-navy">Clear Conversation</span>
+                <span className="font-semibold text-deep-navy">{t('menu.clearConversation')}</span>
               </button>
               <button onClick={() => handleAction(onDownloadTranscript)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
                 <Download className="w-6 h-6 text-immigo-gray-700" />
-                <span className="font-semibold text-deep-navy">Download Transcript</span>
+                <span className="font-semibold text-deep-navy">{t('menu.downloadTranscript')}</span>
               </button>
             </div>
           </div>
@@ -92,7 +94,7 @@ function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, 
         <footer className="p-4 border-t border-immigo-gray-200">
           <button onClick={() => handleAction(onSignOut)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
             <LogOut className="w-6 h-6 text-art-red-600" />
-            <span className="font-semibold text-art-red-600">Logout</span>
+            <span className="font-semibold text-art-red-600">{t('menu.logout')}</span>
           </button>
         </footer>
       </div>
