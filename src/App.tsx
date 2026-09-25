@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Amplify } from 'aws-amplify';
+import { useTranslation } from 'react-i18next';
 import amplifyOutputs from '../amplify_outputs.json';
 
 import { TranscriptionProvider } from './context/TranscriptionContext';
@@ -26,6 +27,7 @@ import { UserSettings, FontSize } from './types/settings';
 import { applyFontSize } from './utils/fontSize';
 import { logger } from './logger';
 import useMediaQuery from './hooks/useMediaQuery';
+import i18n, { normalizeAppLanguage } from './i18n';
 
 try {
   if (amplifyOutputs) {
@@ -42,6 +44,7 @@ interface ConversationWorkspaceProps {
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
   const { user, profile, logout, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
+  const { t } = useTranslation();
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const manager = useConversation({ apiClient: apiClientInstance, userId: user?.id ?? null });
 
@@ -75,7 +78,15 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  const currentLanguageCode = userSettings.language || profile?.language || 'en-US';
+  const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
+
+  useEffect(() => {
+    if (i18n.language !== currentLanguageCode) {
+      void i18n.changeLanguage(currentLanguageCode);
+    }
+    document.documentElement.lang = currentLanguageCode;
+    document.documentElement.dir = i18n.dir(currentLanguageCode);
+  }, [currentLanguageCode]);
 
   const displayUser: DisplayUser = {
     name: profile?.full_name || user?.email || 'User',
@@ -151,8 +162,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 
           {manager.errorMessage && (
             <div className="p-4 mb-4 bg-art-red-50 border-l-4 border-art-red-600 rounded text-sm text-art-red-800 flex justify-between items-center shrink-0" role="alert">
-              <p className="font-medium">System Intercept Exception: {manager.errorMessage}</p>
-              <button onClick={manager.clearError} className="text-xs underline hover:text-art-red-900 cursor-pointer">Acknowledge</button>
+              <p className="font-medium">{t('app.systemError', { message: manager.errorMessage })}</p>
+              <button onClick={manager.clearError} className="text-xs underline hover:text-art-red-900 cursor-pointer">{t('app.acknowledge')}</button>
             </div>
           )}
 
@@ -168,8 +179,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-75">
-                <p className="text-sm text-immigo-gray-500 italic">No conversational messages logged in active workspace buffer.</p>
-                <p className="text-xs text-immigo-gray-400 mt-2">Tap the microphone control interface to begin training.</p>
+                <p className="text-sm text-immigo-gray-500 italic">{t('app.noMessages')}</p>
+                <p className="text-xs text-immigo-gray-400 mt-2">{t('app.startTraining')}</p>
               </div>
             )}
           </div>
@@ -199,14 +210,14 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               disabled={manager.conversationHistory.length === 0}
               className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium transition-colors border border-immigo-gray-200 text-immigo-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <span className="mr-2 text-lg">🗑️</span> Clear Conversation
+              <span className="mr-2 text-lg">🗑️</span> {t('app.clearConversation')}
             </button>
             <button
               onClick={manager.downloadTranscript}
               disabled={manager.conversationHistory.length === 0}
               className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium transition-colors border border-immigo-gray-200 text-immigo-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <span className="mr-2 text-lg">⬇️</span> Download Script
+              <span className="mr-2 text-lg">⬇️</span> {t('app.downloadScript')}
             </button>
           </div>
 
@@ -227,6 +238,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 
 function AppContent() {
   const { session, loading, initializationError, retryInitialization } = useAuth();
+  const { t } = useTranslation();
   const accessToken = session?.access_token;
 
   const apiClientInstance = useMemo(() => {
@@ -245,7 +257,7 @@ function AppContent() {
     return (
       <div className="h-screen w-full bg-deep-navy flex flex-col items-center justify-center text-star-white p-6" role="alert" aria-busy="true">
         <div className="w-10 h-10 border-4 border-art-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <h2 className="text-base font-bold tracking-wide">Securing Processing Environment…</h2>
+        <h2 className="text-base font-bold tracking-wide">{t('app.loading')}</h2>
       </div>
     );
   }
@@ -254,14 +266,14 @@ function AppContent() {
     return (
       <div className="h-screen w-full bg-immigo-gray-50 flex items-center justify-center p-6" role="alert">
         <div className="w-full max-w-md rounded-xl border border-immigo-gray-200 bg-star-white p-8 text-center shadow-md">
-          <h2 className="text-xl font-bold text-deep-navy">Authentication unavailable</h2>
+          <h2 className="text-xl font-bold text-deep-navy">{t('app.authUnavailable')}</h2>
           <p className="mt-3 text-sm text-immigo-gray-600">{initializationError}</p>
           <button
             type="button"
             onClick={retryInitialization}
             className="mt-6 rounded-lg bg-art-blue-600 px-4 py-2 font-semibold text-star-white hover:bg-art-blue-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
           >
-            Try again
+            {t('app.tryAgain')}
           </button>
         </div>
       </div>

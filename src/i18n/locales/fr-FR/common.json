@@ -1,0 +1,116 @@
+{
+  "account": {
+    "title": "Paramètres du compte",
+    "profile": {
+      "tab": "Mon profil",
+      "title": "Mon profil",
+      "description": "Gérez vos informations personnelles",
+      "fullName": "Nom complet",
+      "email": "E-mail",
+      "save": "Enregistrer le profil",
+      "saving": "Enregistrement...",
+      "saved": "Profil enregistré.",
+      "saveFailed": "Le profil n'a pas pu être enregistré.",
+      "fullNameRequired": "Le nom complet est obligatoire."
+    },
+    "security": {
+      "tab": "Sécurité et connexion",
+      "title": "Sécurité et connexion",
+      "description": "Gérez votre mot de passe et les paramètres de sécurité",
+      "newPassword": "Nouveau mot de passe",
+      "confirmPassword": "Confirmer le nouveau mot de passe",
+      "update": "Mettre à jour le mot de passe",
+      "updating": "Mise à jour...",
+      "updated": "Mot de passe mis à jour.",
+      "updateFailed": "Le mot de passe n'a pas pu être mis à jour.",
+      "minLength": "Le mot de passe doit contenir au moins 8 caractères.",
+      "mismatch": "Les mots de passe ne correspondent pas."
+    },
+    "connections": {
+      "tab": "Connexions sociales",
+      "title": "Connexions sociales",
+      "description": "Les fournisseurs de connexion sociale ne sont pas activés pour ce compte.",
+      "google": "Compte Google",
+      "facebook": "Facebook",
+      "unavailable": "Indisponible"
+    },
+    "delete": {
+      "tab": "Supprimer mon compte",
+      "title": "Supprimer le compte",
+      "description": "Supprimez définitivement votre compte ImmiGo et toutes les données associées (sessions, résultats d'entraînement et progression). Cette action est irréversible.",
+      "button": "Supprimer le compte",
+      "confirm": "Êtes-vous absolument sûr ? Cela supprimera définitivement votre compte et toutes les données associées.",
+      "yes": "Oui, supprimer définitivement",
+      "deleting": "Suppression...",
+      "cancel": "Annuler",
+      "mustSignIn": "Vous devez être connecté pour supprimer votre compte.",
+      "failed": "La suppression du compte a échoué. Veuillez contacter l'assistance."
+    },
+    "close": "Fermer les paramètres"
+  },
+  "app": {
+    "loading": "Sécurisation de l'environnement de traitement...",
+    "authUnavailable": "Authentification indisponible",
+    "tryAgain": "Réessayer",
+    "noMessages": "Aucun message de conversation enregistré dans l'espace de travail actif.",
+    "startTraining": "Appuyez sur le contrôle du microphone pour commencer l'entraînement.",
+    "systemError": "Exception d'interception système : {{message}}",
+    "acknowledge": "Confirmer",
+    "clearConversation": "Effacer la conversation",
+    "downloadScript": "Télécharger le script"
+  },
+  "footer": {
+    "disclaimer": "ImmiGO est un outil éducatif indépendant non affilié à l'USCIS ni au gouvernement des États-Unis. Ce n'est pas un avis juridique.",
+    "terms": "Conditions",
+    "privacy": "Confidentialité"
+  },
+  "fontSize": {
+    "decrease": "Réduire la taille du texte",
+    "increase": "Augmenter la taille du texte"
+  },
+  "header": {
+    "openSettings": "Ouvrir les paramètres de l'application",
+    "openAccount": "Ouvrir les paramètres du compte",
+    "signOut": "Se déconnecter",
+    "openMenu": "Ouvrir le menu"
+  },
+  "language": { "select": "Sélectionner la langue" },
+  "menu": {
+    "title": "Menu",
+    "close": "Fermer le menu",
+    "account": "Compte",
+    "application": "Application",
+    "settings": "Paramètres",
+    "tools": "Outils",
+    "logout": "Déconnexion"
+  },
+  "settings": {
+    "title": "Paramètres de l'application",
+    "close": "Fermer les paramètres",
+    "save": "Enregistrer les modifications",
+    "saving": "Enregistrement...",
+    "cancel": "Annuler",
+    "saveFailed": "Échec de l'enregistrement",
+    "appearance": { "title": "Apparence", "description": "Choisissez l'apparence d'ImmiGo." },
+    "theme": { "system": "Système", "light": "Clair", "dark": "Sombre" },
+    "font": { "title": "Taille du texte", "description": "Ajustez l'échelle du texte dans toute l'application (5 niveaux)." },
+    "voice": { "title": "Voix IA", "description": "Sélectionnez la voix de votre partenaire de conversation IA." },
+    "feedback": { "title": "Retour en direct", "description": "Recevez des conseils en temps réel pendant votre conversation.", "toggle": "Activer ou désactiver le retour en direct" },
+    "mic": { "title": "Mode microphone", "description": "Choisissez votre façon de parler.", "voiceActivity": "Activité vocale", "pushToTalk": "Appuyer pour parler" },
+    "bargeIn": { "title": "Style d'interruption", "description": "Ajustez la facilité avec laquelle vous pouvez interrompre l'IA.", "relaxed": "Détendu", "balanced": "Équilibré", "aggressive": "Agressif" },
+    "progress": { "title": "Rapports de progression", "description": "Personnalisez vos résumés de progression générés par l'IA.", "afterSession": "Après chaque session", "daily": "Quotidien", "weekly": "Hebdomadaire", "monthly": "Mensuel" },
+    "subscription": { "title": "Gérer l'abonnement", "description": "Consultez votre forfait actuel et explorez les fonctionnalités premium.", "unavailable": "Indisponible" }
+  },
+  "welcome": {
+    "title": "Bienvenue, {{name}} !",
+    "close": "Fermer le message de bienvenue",
+    "goToStep": "Aller à l'étape {{step}}",
+    "next": "Suivant",
+    "start": "Commencer",
+    "steps": {
+      "start": { "title": "Démarrez votre session", "description": "Appuyez sur le grand bouton animé pour commencer une session d'entraînement. L'IA vous saluera et attendra que vous parliez." },
+      "speak": { "title": "Parlez naturellement", "description": "Lorsque l'IA écoute, parlez comme dans une conversation normale. Vos mots seront transcrits en temps réel." },
+      "interrupt": { "title": "Astuce : interrompez à tout moment", "description": "C'est comme une vraie conversation. Vous pouvez interrompre l'IA à tout moment en commençant simplement à parler." }
+    }
+  }
+}

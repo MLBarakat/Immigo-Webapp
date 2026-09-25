@@ -1,0 +1,166 @@
+{
+  "account": {
+    "title": "Account Settings",
+    "profile": {
+      "tab": "My Profile",
+      "title": "My Profile",
+      "description": "Manage your personal information",
+      "fullName": "Full Name",
+      "email": "Email",
+      "save": "Save Profile",
+      "saving": "Saving...",
+      "saved": "Profile saved.",
+      "saveFailed": "Profile could not be saved.",
+      "fullNameRequired": "Full name is required."
+    },
+    "security": {
+      "tab": "Security & Login",
+      "title": "Security & Login",
+      "description": "Manage your password and security settings",
+      "newPassword": "New Password",
+      "confirmPassword": "Confirm New Password",
+      "update": "Update Password",
+      "updating": "Updating...",
+      "updated": "Password updated.",
+      "updateFailed": "Password could not be updated.",
+      "minLength": "Password must be at least 8 characters.",
+      "mismatch": "Passwords do not match."
+    },
+    "connections": {
+      "tab": "Social Connections",
+      "title": "Social Connections",
+      "description": "Social sign-in providers are not enabled for this account.",
+      "google": "Google Account",
+      "facebook": "Facebook",
+      "unavailable": "Unavailable"
+    },
+    "delete": {
+      "tab": "Delete My Account",
+      "title": "Delete Account",
+      "description": "Permanently delete your ImmiGo account and all associated data (sessions, practice results, and progress). This action cannot be undone.",
+      "button": "Delete Account",
+      "confirm": "Are you absolutely sure? This permanently deletes your account and all associated data.",
+      "yes": "Yes, permanently delete",
+      "deleting": "Deleting...",
+      "cancel": "Cancel",
+      "mustSignIn": "You must be signed in to delete your account.",
+      "failed": "Account deletion failed. Please contact support."
+    },
+    "close": "Close settings"
+  },
+  "app": {
+    "loading": "Securing Processing Environment...",
+    "authUnavailable": "Authentication unavailable",
+    "tryAgain": "Try again",
+    "noMessages": "No conversational messages logged in active workspace buffer.",
+    "startTraining": "Tap the microphone control interface to begin training.",
+    "systemError": "System Intercept Exception: {{message}}",
+    "acknowledge": "Acknowledge",
+    "clearConversation": "Clear Conversation",
+    "downloadScript": "Download Script"
+  },
+  "footer": {
+    "disclaimer": "ImmiGO is an independent educational tool not affiliated with USCIS or the U.S. Government. Not legal advice.",
+    "terms": "Terms",
+    "privacy": "Privacy"
+  },
+  "fontSize": {
+    "decrease": "Decrease font size",
+    "increase": "Increase font size"
+  },
+  "header": {
+    "openSettings": "Open application settings",
+    "openAccount": "Open account settings",
+    "signOut": "Sign out",
+    "openMenu": "Open menu"
+  },
+  "language": {
+    "select": "Select Language"
+  },
+  "menu": {
+    "title": "Menu",
+    "close": "Close menu",
+    "account": "Account",
+    "application": "Application",
+    "settings": "Settings",
+    "tools": "Tools",
+    "logout": "Logout"
+  },
+  "settings": {
+    "title": "Application Settings",
+    "close": "Close settings",
+    "save": "Save Changes",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "saveFailed": "Save failed",
+    "appearance": {
+      "title": "Appearance",
+      "description": "Choose how ImmiGo looks."
+    },
+    "theme": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "font": {
+      "title": "Text Size",
+      "description": "Adjust application-wide font scale (5 levels)."
+    },
+    "voice": {
+      "title": "AI Voice",
+      "description": "Select the voice for your AI conversation partner."
+    },
+    "feedback": {
+      "title": "Live Feedback",
+      "description": "Get real-time tips during your conversation.",
+      "toggle": "Toggle Live Feedback"
+    },
+    "mic": {
+      "title": "Microphone Mode",
+      "description": "Choose your speaking style.",
+      "voiceActivity": "Voice Activity",
+      "pushToTalk": "Push-to-Talk"
+    },
+    "bargeIn": {
+      "title": "Interruption Style",
+      "description": "Adjust how easily you can speak over the AI.",
+      "relaxed": "Relaxed",
+      "balanced": "Balanced",
+      "aggressive": "Aggressive"
+    },
+    "progress": {
+      "title": "Progress Reports",
+      "description": "Customize your AI-generated progress summaries.",
+      "afterSession": "After Each Session",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly"
+    },
+    "subscription": {
+      "title": "Manage Subscription",
+      "description": "View your current plan and explore premium features.",
+      "unavailable": "Unavailable"
+    }
+  },
+  "welcome": {
+    "title": "Welcome, {{name}}!",
+    "close": "Close welcome message",
+    "goToStep": "Go to step {{step}}",
+    "next": "Next",
+    "start": "Let's Get Started",
+    "steps": {
+      "start": {
+        "title": "Start Your Session",
+        "description": "Press the large animated button to start a practice session. The AI will greet you and wait for you to speak."
+      },
+      "speak": {
+        "title": "Speak Naturally",
+        "description": "When the AI is listening, just speak as you would in a normal conversation. Your words will be transcribed in real-time."
+      },
+      "interrupt": {
+        "title": "Pro Tip: Interrupt Anytime!",
+        "description": "This is just like a real conversation. You can interrupt the AI at any point by simply starting to speak."
+      }
+    }
+  }
+}
