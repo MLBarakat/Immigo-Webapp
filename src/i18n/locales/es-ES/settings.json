@@ -1,0 +1,61 @@
+{
+  "title": "Configuración de la aplicación",
+  "close": "Cerrar configuración",
+  "save": "Guardar cambios",
+  "saving": "Guardando...",
+  "cancel": "Cancelar",
+  "saveFailed": "No se pudo guardar",
+  "appearance": {
+    "title": "Apariencia",
+    "description": "Elige cómo se ve ImmiGo."
+  },
+  "theme": {
+    "system": "Sistema",
+    "light": "Claro",
+    "dark": "Oscuro"
+  },
+  "font": {
+    "title": "Tamaño del texto",
+    "description": "Ajusta la escala de texto de toda la aplicación (5 niveles).",
+    "extraSmall": "Muy pequeño",
+    "small": "Pequeño",
+    "medium": "Mediano",
+    "large": "Grande",
+    "extraLarge": "Muy grande"
+  },
+  "voice": {
+    "title": "Voz de IA",
+    "description": "Selecciona la voz de tu compañero de conversación de IA."
+  },
+  "feedback": {
+    "title": "Retroalimentación en vivo",
+    "description": "Recibe consejos en tiempo real durante la conversación.",
+    "toggle": "Activar o desactivar retroalimentación en vivo"
+  },
+  "mic": {
+    "title": "Modo de micrófono",
+    "description": "Elige tu estilo de habla.",
+    "voiceActivity": "Actividad de voz",
+    "pushToTalk": "Pulsar para hablar"
+  },
+  "bargeIn": {
+    "title": "Estilo de interrupción",
+    "description": "Ajusta qué tan fácilmente puedes interrumpir a la IA.",
+    "relaxed": "Relajado",
+    "balanced": "Equilibrado",
+    "aggressive": "Agresivo"
+  },
+  "progress": {
+    "title": "Informes de progreso",
+    "description": "Personaliza tus resúmenes de progreso generados por IA.",
+    "afterSession": "Después de cada sesión",
+    "daily": "Diario",
+    "weekly": "Semanal",
+    "monthly": "Mensual"
+  },
+  "subscription": {
+    "title": "Administrar suscripción",
+    "description": "Consulta tu plan actual y explora funciones premium.",
+    "unavailable": "No disponible"
+  }
+}

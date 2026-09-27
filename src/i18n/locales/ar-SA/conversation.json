@@ -1,0 +1,8 @@
+{
+  "noMessages": "لا توجد رسائل محادثة مسجلة في مساحة العمل النشطة.",
+  "startTraining": "اضغط على أداة الميكروفون لبدء التدريب.",
+  "systemError": "استثناء اعتراض النظام: {{message}}",
+  "acknowledge": "تأكيد",
+  "clearConversation": "مسح المحادثة",
+  "downloadScript": "تنزيل النص"
+}

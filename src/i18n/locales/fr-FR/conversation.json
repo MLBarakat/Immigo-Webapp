@@ -1,0 +1,8 @@
+{
+  "noMessages": "Aucun message de conversation enregistré dans l'espace de travail actif.",
+  "startTraining": "Appuyez sur le contrôle du microphone pour commencer l'entraînement.",
+  "systemError": "Exception d'interception système : {{message}}",
+  "acknowledge": "Confirmer",
+  "clearConversation": "Effacer la conversation",
+  "downloadScript": "Télécharger le script"
+}

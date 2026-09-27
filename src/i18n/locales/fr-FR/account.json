@@ -1,0 +1,49 @@
+{
+  "title": "Paramètres du compte",
+  "close": "Fermer les paramètres",
+  "profile": {
+    "tab": "Mon profil",
+    "title": "Mon profil",
+    "description": "Gérez vos informations personnelles",
+    "fullName": "Nom complet",
+    "email": "E-mail",
+    "save": "Enregistrer le profil",
+    "saving": "Enregistrement...",
+    "saved": "Profil enregistré.",
+    "saveFailed": "Le profil n'a pas pu être enregistré.",
+    "fullNameRequired": "Le nom complet est obligatoire."
+  },
+  "security": {
+    "tab": "Sécurité et connexion",
+    "title": "Sécurité et connexion",
+    "description": "Gérez votre mot de passe et les paramètres de sécurité",
+    "newPassword": "Nouveau mot de passe",
+    "confirmPassword": "Confirmer le nouveau mot de passe",
+    "update": "Mettre à jour le mot de passe",
+    "updating": "Mise à jour...",
+    "updated": "Mot de passe mis à jour.",
+    "updateFailed": "Le mot de passe n'a pas pu être mis à jour.",
+    "minLength": "Le mot de passe doit contenir au moins 8 caractères.",
+    "mismatch": "Les mots de passe ne correspondent pas."
+  },
+  "connections": {
+    "tab": "Connexions sociales",
+    "title": "Connexions sociales",
+    "description": "Les fournisseurs de connexion sociale ne sont pas activés pour ce compte.",
+    "google": "Compte Google",
+    "facebook": "Facebook",
+    "unavailable": "Indisponible"
+  },
+  "delete": {
+    "tab": "Supprimer mon compte",
+    "title": "Supprimer le compte",
+    "description": "Supprimez définitivement votre compte ImmiGo et toutes les données associées (sessions, résultats d'entraînement et progression). Cette action est irréversible.",
+    "button": "Supprimer le compte",
+    "confirm": "Êtes-vous absolument sûr ? Cela supprimera définitivement votre compte et toutes les données associées.",
+    "yes": "Oui, supprimer définitivement",
+    "deleting": "Suppression...",
+    "cancel": "Annuler",
+    "mustSignIn": "Vous devez être connecté pour supprimer votre compte.",
+    "failed": "La suppression du compte a échoué. Veuillez contacter l'assistance."
+  }
+}

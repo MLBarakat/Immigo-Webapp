@@ -1,0 +1,61 @@
+{
+  "title": "Application Settings",
+  "close": "Close settings",
+  "save": "Save Changes",
+  "saving": "Saving...",
+  "cancel": "Cancel",
+  "saveFailed": "Save failed",
+  "appearance": {
+    "title": "Appearance",
+    "description": "Choose how ImmiGo looks."
+  },
+  "theme": {
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "font": {
+    "title": "Text Size",
+    "description": "Adjust application-wide font scale (5 levels).",
+    "extraSmall": "Extra Small",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "extraLarge": "Extra Large"
+  },
+  "voice": {
+    "title": "AI Voice",
+    "description": "Select the voice for your AI conversation partner."
+  },
+  "feedback": {
+    "title": "Live Feedback",
+    "description": "Get real-time tips during your conversation.",
+    "toggle": "Toggle Live Feedback"
+  },
+  "mic": {
+    "title": "Microphone Mode",
+    "description": "Choose your speaking style.",
+    "voiceActivity": "Voice Activity",
+    "pushToTalk": "Push-to-Talk"
+  },
+  "bargeIn": {
+    "title": "Interruption Style",
+    "description": "Adjust how easily you can speak over the AI.",
+    "relaxed": "Relaxed",
+    "balanced": "Balanced",
+    "aggressive": "Aggressive"
+  },
+  "progress": {
+    "title": "Progress Reports",
+    "description": "Customize your AI-generated progress summaries.",
+    "afterSession": "After Each Session",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly"
+  },
+  "subscription": {
+    "title": "Manage Subscription",
+    "description": "View your current plan and explore premium features.",
+    "unavailable": "Unavailable"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "noMessages": "No hay mensajes conversacionales registrados en el espacio de trabajo activo.",
+  "startTraining": "Toca el control del micrófono para comenzar a practicar.",
+  "systemError": "Excepción de interceptación del sistema: {{message}}",
+  "acknowledge": "Confirmar",
+  "clearConversation": "Borrar conversación",
+  "downloadScript": "Descargar guion"
+}

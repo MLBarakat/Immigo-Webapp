@@ -1,0 +1,49 @@
+{
+  "title": "Account Settings",
+  "close": "Close settings",
+  "profile": {
+    "tab": "My Profile",
+    "title": "My Profile",
+    "description": "Manage your personal information",
+    "fullName": "Full Name",
+    "email": "Email",
+    "save": "Save Profile",
+    "saving": "Saving...",
+    "saved": "Profile saved.",
+    "saveFailed": "Profile could not be saved.",
+    "fullNameRequired": "Full name is required."
+  },
+  "security": {
+    "tab": "Security & Login",
+    "title": "Security & Login",
+    "description": "Manage your password and security settings",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "update": "Update Password",
+    "updating": "Updating...",
+    "updated": "Password updated.",
+    "updateFailed": "Password could not be updated.",
+    "minLength": "Password must be at least 8 characters.",
+    "mismatch": "Passwords do not match."
+  },
+  "connections": {
+    "tab": "Social Connections",
+    "title": "Social Connections",
+    "description": "Social sign-in providers are not enabled for this account.",
+    "google": "Google Account",
+    "facebook": "Facebook",
+    "unavailable": "Unavailable"
+  },
+  "delete": {
+    "tab": "Delete My Account",
+    "title": "Delete Account",
+    "description": "Permanently delete your ImmiGo account and all associated data (sessions, practice results, and progress). This action cannot be undone.",
+    "button": "Delete Account",
+    "confirm": "Are you absolutely sure? This permanently deletes your account and all associated data.",
+    "yes": "Yes, permanently delete",
+    "deleting": "Deleting...",
+    "cancel": "Cancel",
+    "mustSignIn": "You must be signed in to delete your account.",
+    "failed": "Account deletion failed. Please contact support."
+  }
+}

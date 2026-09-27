@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Amplify } from 'aws-amplify';
 import { useTranslation } from 'react-i18next';
 import amplifyOutputs from '../amplify_outputs.json';
@@ -27,7 +27,8 @@ import { UserSettings, FontSize } from './types/settings';
 import { applyFontSize } from './utils/fontSize';
 import { logger } from './logger';
 import useMediaQuery from './hooks/useMediaQuery';
-import i18n, { normalizeAppLanguage } from './i18n';
+import { normalizeAppLanguage } from './i18n';
+import { I18nProvider } from './i18n/I18nProvider';
 
 try {
   if (amplifyOutputs) {
@@ -44,7 +45,7 @@ interface ConversationWorkspaceProps {
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
   const { user, profile, logout, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation(['conversation', 'common']);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const manager = useConversation({ apiClient: apiClientInstance, userId: user?.id ?? null });
 
@@ -79,14 +80,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
-
-  useEffect(() => {
-    if (i18n.language !== currentLanguageCode) {
-      void i18n.changeLanguage(currentLanguageCode);
-    }
-    document.documentElement.lang = currentLanguageCode;
-    document.documentElement.dir = i18n.dir(currentLanguageCode);
-  }, [currentLanguageCode]);
 
   const displayUser: DisplayUser = {
     name: profile?.full_name || user?.email || 'User',
@@ -294,7 +287,9 @@ function AppContent() {
 export default function App(): JSX.Element {
   return (
     <AuthProvider>
-      <AppContent />
+      <I18nProvider>
+        <AppContent />
+      </I18nProvider>
     </AuthProvider>
   );
 }

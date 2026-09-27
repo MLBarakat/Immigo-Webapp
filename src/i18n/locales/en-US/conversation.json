@@ -1,0 +1,8 @@
+{
+  "noMessages": "No conversational messages logged in active workspace buffer.",
+  "startTraining": "Tap the microphone control interface to begin training.",
+  "systemError": "System Intercept Exception: {{message}}",
+  "acknowledge": "Acknowledge",
+  "clearConversation": "Clear Conversation",
+  "downloadScript": "Download Script"
+}

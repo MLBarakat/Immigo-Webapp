@@ -1,0 +1,49 @@
+{
+  "title": "Configuración de la cuenta",
+  "close": "Cerrar configuración",
+  "profile": {
+    "tab": "Mi perfil",
+    "title": "Mi perfil",
+    "description": "Administra tu información personal",
+    "fullName": "Nombre completo",
+    "email": "Correo electrónico",
+    "save": "Guardar perfil",
+    "saving": "Guardando...",
+    "saved": "Perfil guardado.",
+    "saveFailed": "No se pudo guardar el perfil.",
+    "fullNameRequired": "El nombre completo es obligatorio."
+  },
+  "security": {
+    "tab": "Seguridad e inicio de sesión",
+    "title": "Seguridad e inicio de sesión",
+    "description": "Administra tu contraseña y la configuración de seguridad",
+    "newPassword": "Nueva contraseña",
+    "confirmPassword": "Confirmar nueva contraseña",
+    "update": "Actualizar contraseña",
+    "updating": "Actualizando...",
+    "updated": "Contraseña actualizada.",
+    "updateFailed": "No se pudo actualizar la contraseña.",
+    "minLength": "La contraseña debe tener al menos 8 caracteres.",
+    "mismatch": "Las contraseñas no coinciden."
+  },
+  "connections": {
+    "tab": "Conexiones sociales",
+    "title": "Conexiones sociales",
+    "description": "Los proveedores de inicio de sesión social no están habilitados para esta cuenta.",
+    "google": "Cuenta de Google",
+    "facebook": "Facebook",
+    "unavailable": "No disponible"
+  },
+  "delete": {
+    "tab": "Eliminar mi cuenta",
+    "title": "Eliminar cuenta",
+    "description": "Elimina de forma permanente tu cuenta de ImmiGo y todos los datos asociados (sesiones, resultados de práctica y progreso). Esta acción no se puede deshacer.",
+    "button": "Eliminar cuenta",
+    "confirm": "¿Estás totalmente seguro? Esto eliminará de forma permanente tu cuenta y todos los datos asociados.",
+    "yes": "Sí, eliminar de forma permanente",
+    "deleting": "Eliminando...",
+    "cancel": "Cancelar",
+    "mustSignIn": "Debes iniciar sesión para eliminar tu cuenta.",
+    "failed": "Error al eliminar la cuenta. Comunícate con soporte."
+  }
+}
