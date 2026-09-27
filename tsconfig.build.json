@@ -8,6 +8,21 @@
     "declarationDir": "./dist/types",
     "outDir": "./dist"
   },
-  "include": ["src", "amplify_outputs.json"],
-  "exclude": ["node_modules", "dist", "dist-node", "src/**/__tests__/**", "**/*.spec.ts", "**/*.spec.tsx", "**/*.test.ts", "**/*.test.tsx"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.d.ts",
+    "src/**/*.json",
+    "amplify_outputs.json"
+  ],
+  "exclude": [
+    "node_modules", 
+    "dist", 
+    "dist-node", 
+    "src/**/__tests__/**", 
+    "**/*.spec.ts", 
+    "**/*.spec.tsx", 
+    "**/*.test.ts", 
+    "**/*.test.tsx"
+  ]
 }
