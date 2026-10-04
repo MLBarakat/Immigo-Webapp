@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiClient, ApiError } from './apiClient';
+import { ApiClient, ApiError } from '../apiClient';
 
 const loggerMock = vi.hoisted(() => ({
   debug: vi.fn(),
