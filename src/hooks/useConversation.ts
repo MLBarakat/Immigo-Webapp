@@ -19,6 +19,11 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   }
   const { state: conversationState, dispatch } = context;
   const intervalRef = useRef<number | null>(null);
+  // Guards the on-screen welcome banner fetch to exactly once per app load —
+  // it is independent of starting/ending a practice session (no audio, no
+  // recording side effects), so it must not re-fire on every render or on
+  // every session start/end.
+  const hasFetchedWelcomeBannerRef = useRef(false);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
   const audioPlaybackUrlRef = useRef<string | null>(null);
   const audioPlaybackGenerationRef = useRef(0);
@@ -535,6 +540,37 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   useEffect(() => {
     stopRecordingRef.current = stopRecording;
   }, [stopRecording]);
+
+  // On-screen welcome banner (TEXT ONLY, never spoken): fetched once when the
+  // app loads, independent of tapping "Start Session". Displayed as a plain
+  // chat message — no audio, no mute-gate, no recording side effects at all.
+  useEffect(() => {
+    if (!apiClient || !userId || hasFetchedWelcomeBannerRef.current) return;
+    hasFetchedWelcomeBannerRef.current = true;
+
+    void (async () => {
+      try {
+        const { message } = await apiClient.fetchWelcomeBanner();
+        const userMessageId = `user-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const assistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        dispatch({
+          type: 'SEND_MESSAGE_START',
+          payload: {
+            userMessage: { id: userMessageId, role: 'user', content: '', timestamp: new Date().toISOString() },
+            assistantMessageId,
+          },
+        });
+        dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: message } });
+        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+      } catch (error: unknown) {
+        // Non-fatal: the welcome banner is a nice-to-have, not required to
+        // start practicing. Log and move on; no user-facing error needed.
+        logger.error('Welcome banner fetch failed (non-fatal).', undefined, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
+  }, [apiClient, userId, dispatch]);
 
   useEffect(() => {
     return () => {

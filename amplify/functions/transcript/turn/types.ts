@@ -46,4 +46,26 @@ export interface SessionStartContext {
   userFirstName?: string;
 }
 
+/**
+ * Context for the on-screen (TEXT ONLY, never spoken) welcome banner shown
+ * when the app loads — independent of starting a practice session. Exactly
+ * two cases: a brand-new user (zero graded answers, ever) gets a generic
+ * welcome + purpose + encouragement; a returning user (any subsequent visit,
+ * same day or not) gets a summary of their lifetime achievement + a
+ * suggested focus for this session + encouragement.
+ */
+export interface WelcomeBannerContext {
+  isNewUser: boolean;
+  /** Lifetime totals across all sessions, not just one session. Ignored when isNewUser. */
+  lifetimeStats?: {
+    answered: number;
+    correct: number;
+    accuracyPct: number;
+    /** Question TEXT (not ids) for a few recently-missed items, to suggest a focus area. */
+    recentlyMissedQuestions: string[];
+  };
+  userFirstName?: string;
+  preferredLanguage?: string;
+}
+
 // ReplyKind and TurnOutcome are defined in turn-policy.ts.

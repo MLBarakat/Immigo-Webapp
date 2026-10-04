@@ -11,6 +11,15 @@ export interface Message {
   timestamp: string;
 }
 
+export interface LiveSessionStats {
+  answered: number;
+  correct: number;
+  incorrect: number;
+  partial: number;
+  accuracyPct: number;
+  missedItemIds: string[];
+}
+
 export interface ConversationState {
   conversationHistory: readonly Message[];
   appStatus: AppStatus;
@@ -24,6 +33,9 @@ export interface ConversationState {
   sessionId: string | null;
   hasMoreHistory: boolean;
   oldestMessageCursor: string | null;
+  /** Free, real-time stats computed from graded_answers — not the expensive
+   * LLM-generated narrative report. Null until the first answer this session. */
+  liveStats: LiveSessionStats | null;
 }
 
 export type ConversationAction =
@@ -42,7 +54,8 @@ export type ConversationAction =
   | { type: 'SET_STATUS'; payload: AppStatus }
   | { type: 'CLEAR_ERROR' }
   | { type: 'SET_SESSION_ID'; payload: string | null }
-  | { type: 'LOAD_HISTORICAL_MESSAGES'; payload: { messages: Message[]; hasMore: boolean; oldestCursor: string | null; replace?: boolean } };
+  | { type: 'LOAD_HISTORICAL_MESSAGES'; payload: { messages: Message[]; hasMore: boolean; oldestCursor: string | null; replace?: boolean } }
+  | { type: 'SET_LIVE_STATS'; payload: LiveSessionStats | null };
 
 export const initialState: ConversationState = {
   conversationHistory: [],
@@ -57,6 +70,7 @@ export const initialState: ConversationState = {
   sessionId: null,
   hasMoreHistory: false,
   oldestMessageCursor: null,
+  liveStats: null,
 };
 
 export const conversationReducer = (state: ConversationState, action: ConversationAction): ConversationState => {
@@ -68,7 +82,8 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         sessionTime: 0, 
         appStatus: 'listening', 
         errorMessage: null, 
-        interimTranscript: '' 
+        interimTranscript: '',
+        liveStats: null
       };
 
     case 'END_SESSION':
@@ -77,8 +92,12 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         isSessionActive: false, 
         appStatus: 'idle', 
         sessionTime: 0, 
-        interimTranscript: '' 
+        interimTranscript: '',
+        liveStats: null
       };
+
+    case 'SET_LIVE_STATS':
+      return { ...state, liveStats: action.payload };
 
     case 'SET_TRANSCRIPT':
       return { ...state, transcript: action.payload, appStatus: 'listening' };

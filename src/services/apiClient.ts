@@ -265,6 +265,27 @@ export class ApiClient {
     return this.sendTranscriptRequest({ sessionStart: true, sessionId }, options);
   }
 
+  /**
+   * On-screen (TEXT ONLY, never spoken) welcome banner, fetched when the app
+   * loads — independent of starting a practice session. No audio at all, so
+   * this is a dedicated, simpler method rather than sendTranscriptRequest
+   * (which requires an audioData string and would incorrectly throw here).
+   */
+  async fetchWelcomeBanner(options: { headers?: Record<string, string> } = {}): Promise<{ message: string; isNewUser: boolean }> {
+    logger.info('[ApiClient] Dispatching fetchWelcomeBanner request.');
+    const response = await this.fetchWithAuth('/transcript', {
+      method: 'POST',
+      headers: options.headers,
+      body: JSON.stringify({ welcomeBanner: true }),
+    });
+
+    const data: unknown = await response.json();
+    if (!isRecord(data) || typeof data.responseText !== 'string' || typeof data.isNewUser !== 'boolean') {
+      throw new ApiError('Structural Exception: Invalid welcome banner response.', 500, data);
+    }
+    return { message: data.responseText, isNewUser: data.isNewUser };
+  }
+
   async completeSession(sessionId: string): Promise<void> {
     if (!sessionId) return;
     try {

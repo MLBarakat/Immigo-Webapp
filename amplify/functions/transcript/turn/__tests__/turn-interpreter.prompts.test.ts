@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { describe, it, expect } from 'vitest';
-import { buildTurnPrompt, buildGreetingPrompt, parseInterpretation } from '../turn-interpreter';
-import type { CivicsItem } from '../types';
+import { describe, it, expect, vi } from 'vitest';
+import { buildTurnPrompt, buildGreetingPrompt, parseInterpretation, TurnInterpreterAdapter, type ModelComplete } from '../turn-interpreter';
+import type { CivicsItem, SessionStartContext } from '../types';
 
 const cabinet: CivicsItem = {
   id: 'q-cabinet',
@@ -53,6 +53,92 @@ describe('buildTurnPrompt — content gap fixes are actually present', () => {
     expect(system).toContain('markdown');
     expect(system).toContain('parenthetical math');
     expect(system).toMatch(/2-3 spoken sentences/);
+  });
+});
+
+describe('buildGreetingPrompt — BRAND NEW USER (reported: "no greeting at all")', () => {
+  const q: CivicsItem = { id: 'q1', question: 'Why is it important to pay federal taxes?', kind: 'static', acceptableAnswers: ['required by law'] };
+
+  // Exact shape the handler constructs for a freshly-created account: empty
+  // utterance (proactive sessionStart, nothing said yet), first session ever,
+  // no prior session, no progress report (fetchUserProgressReport's baseline
+  // string, or null/undefined if that call itself failed).
+  const brandNewUserCtx: SessionStartContext = {
+    userUtterance: '',
+    isFirstSessionToday: true,
+    daysSinceLastSession: null,
+    progressReportMarkdown: 'No prior progress history available. Begin baseline assessment across American Government, American History, and Integrated Civics.',
+    firstQuestion: q,
+  };
+
+  it('does NOT throw and produces a well-formed prompt for a brand new user', () => {
+    expect(() => buildGreetingPrompt(brandNewUserCtx)).not.toThrow();
+    const { system, user } = buildGreetingPrompt(brandNewUserCtx);
+    expect(system.length).toBeGreaterThan(0);
+    expect(user).toContain('no prior session (new learner)');
+    expect(system).toContain(q.question);
+  });
+
+  it('also does not throw when progressReportMarkdown is null/undefined (e.g. the report fetch itself failed)', () => {
+    const ctxWithNullReport: SessionStartContext = { ...brandNewUserCtx, progressReportMarkdown: null };
+    expect(() => buildGreetingPrompt(ctxWithNullReport)).not.toThrow();
+    const ctxWithUndefinedReport: SessionStartContext = { ...brandNewUserCtx, progressReportMarkdown: undefined };
+    expect(() => buildGreetingPrompt(ctxWithUndefinedReport)).not.toThrow();
+  });
+
+  it('selects the new-student case (case 4), not a returning-user framing', () => {
+    const { system } = buildGreetingPrompt(brandNewUserCtx);
+    expect(system.toLowerCase()).toContain('new student');
+  });
+
+  it('handles an empty userUtterance (proactive sessionStart call, nothing said yet) without throwing', () => {
+    expect(() => buildGreetingPrompt({ ...brandNewUserCtx, userUtterance: '' })).not.toThrow();
+  });
+});
+
+describe('TurnInterpreterAdapter.generateGreeting — ROBUSTNESS (reported: "no greeting" / "same greeting every day")', () => {
+  const q: CivicsItem = { id: 'q1', question: 'Why is it important to pay federal taxes?', kind: 'static', acceptableAnswers: ['required by law'] };
+  const brandNewUserCtx: SessionStartContext = {
+    userUtterance: '',
+    isFirstSessionToday: true,
+    daysSinceLastSession: null,
+    progressReportMarkdown: null,
+    firstQuestion: q,
+  };
+
+  it('returns real, non-empty text when the model call succeeds', async () => {
+    const complete: ModelComplete = vi.fn(async () => 'Welcome! Ready to begin?');
+    const adapter = new TurnInterpreterAdapter(complete);
+    const text = await adapter.generateGreeting(brandNewUserCtx);
+    expect(text).toBe('Welcome! Ready to begin?');
+  });
+
+  it('CRITICAL: still returns non-empty, speakable text when the model call THROWS (e.g. Bedrock timeout/cold-start)', async () => {
+    const complete: ModelComplete = vi.fn(async () => { throw new Error('simulated Bedrock timeout'); });
+    const adapter = new TurnInterpreterAdapter(complete);
+    const text = await adapter.generateGreeting(brandNewUserCtx);
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).toContain(q.question); // the question still gets asked even on total model failure
+  });
+
+  it('CRITICAL: still returns non-empty text when the model call returns an empty/whitespace string', async () => {
+    const complete: ModelComplete = vi.fn(async () => '   ');
+    const adapter = new TurnInterpreterAdapter(complete);
+    const text = await adapter.generateGreeting(brandNewUserCtx);
+    expect(text.trim().length).toBeGreaterThan(0);
+  });
+
+  it('this is the SAME static fallback every time the model fails — explains "I don\'t get a new greeting" if the model call is silently failing every day', async () => {
+    const alwaysFails: ModelComplete = vi.fn(async () => { throw new Error('fails'); });
+    const adapter = new TurnInterpreterAdapter(alwaysFails);
+    const day1 = await adapter.generateGreeting(brandNewUserCtx);
+    const day2 = await adapter.generateGreeting(brandNewUserCtx);
+    // Documents the real behavior: if the LLM call never succeeds, every
+    // day's "greeting" is this IDENTICAL hardcoded string — which is
+    // indistinguishable, from the user's seat, from "never getting a new
+    // greeting". This test exists to make that failure mode visible, not to
+    // endorse it.
+    expect(day1).toBe(day2);
   });
 });
 

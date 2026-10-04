@@ -3,7 +3,7 @@
 // The output is a CLAIM; turn-policy.ts enforces the consequences in code.
 
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import type { Intent, ProposedGrade, TurnContext, TurnInterpretation, SessionStartContext } from './types';
+import type { Intent, ProposedGrade, TurnContext, TurnInterpretation, SessionStartContext, WelcomeBannerContext } from './types';
 
 const INTENTS: readonly Intent[] = [
   'answer', 'explain', 'assist', 'affirmation',
@@ -151,6 +151,44 @@ export function buildGreetingPrompt(ctx: SessionStartContext): { system: string;
   return { system, user };
 }
 
+/**
+ * On-screen (TEXT ONLY — never spoken, no Polly) welcome banner shown when
+ * the app loads, independent of starting a practice session. Deliberately
+ * simpler than buildGreetingPrompt: just two cases, no anxiety/logistics/
+ * long-break/mastery branching (that richness still lives in the spoken
+ * in-session greeting path if ever needed again) — and no TTS hygiene rules,
+ * since nothing here is ever read aloud by Polly.
+ */
+export function buildWelcomeBannerPrompt(ctx: WelcomeBannerContext): { system: string; user: string } {
+  const lang = ctx.preferredLanguage ? ` Write in the user's preferred language: ${ctx.preferredLanguage}.` : '';
+  const system = [
+    'You write a short welcome message displayed as TEXT on screen (never spoken aloud) when a',
+    'US Civics naturalization test study app loads, before the user starts practicing.',
+    'Keep it warm and encouraging, 3-5 sentences, plain prose (no markdown, no bullet points).' + lang,
+    '',
+    'Write exactly ONE of these two cases, matching "User type" below:',
+    '- NEW USER (no prior activity at all): give a warm welcome, briefly explain the purpose of this',
+    '  app — practicing for the US naturalization civics interview by answering real test questions',
+    '  out loud — and end with a few words of encouragement to get started.',
+    '- RETURNING USER (has prior activity): briefly summarize their achievement so far using the',
+    '  stats provided (e.g. total questions answered and accuracy), suggest a focus/goal for this',
+    '  session (if recently-missed questions are provided, reference what they cover), and end with',
+    '  a few words of encouragement.',
+  ].join('\n');
+
+  const user = ctx.isNewUser
+    ? 'User type: NEW USER (no prior activity).'
+    : [
+        'User type: RETURNING USER.',
+        `Lifetime: ${ctx.lifetimeStats?.answered ?? 0} questions answered, ${ctx.lifetimeStats?.accuracyPct ?? 0}% accuracy.`,
+        ctx.lifetimeStats?.recentlyMissedQuestions?.length
+          ? `Recently missed questions (for suggesting today's focus):\n${ctx.lifetimeStats.recentlyMissedQuestions.map((q) => `- ${q}`).join('\n')}`
+          : 'No specific recently-missed questions on file.',
+      ].join('\n');
+
+  return { system, user };
+}
+
 export function buildProgressQueryPrompt(ragContext: string, question: string): { system: string; user: string } {
   const system = [
     'You are a warm, encouraging civics tutor.',
@@ -193,6 +231,24 @@ export class TurnInterpreterAdapter {
       return `Welcome back! Based on your recent progress report, let's focus on strengthening your civics knowledge today. Let's start with your first question: ${ctx.firstQuestion.question}`;
     }
     return `Welcome! Let's get started with today's civics practice. First question: ${ctx.firstQuestion.question}`;
+  }
+
+  async generateWelcomeBanner(ctx: WelcomeBannerContext): Promise<string> {
+    try {
+      const raw = await this.complete(buildWelcomeBannerPrompt(ctx));
+      if (raw && raw.trim()) {
+        return raw.trim();
+      }
+    } catch {
+      // fallback below
+    }
+
+    if (ctx.isNewUser) {
+      return "Welcome! This app helps you practice for your US naturalization civics interview by answering real test questions out loud. Let's get started whenever you're ready — you've got this!";
+    }
+    const acc = ctx.lifetimeStats?.accuracyPct ?? 0;
+    const answered = ctx.lifetimeStats?.answered ?? 0;
+    return `Welcome back! So far you've answered ${answered} question${answered === 1 ? '' : 's'} with ${acc}% accuracy. Keep up the great work — let's keep building on that today.`;
   }
 
   async answerProgressQuery(ragContext: string, question: string): Promise<string> {

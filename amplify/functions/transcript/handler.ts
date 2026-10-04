@@ -4,7 +4,6 @@ import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 import { getItem, selectNextQuestion } from './turn/bank';
-import type { CivicsItem } from './turn/types';
 import { TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn } from './turn/turn-policy';
 
@@ -76,6 +75,12 @@ interface RequestBody {
    * to trigger it implicitly.
    */
   sessionStart?: boolean;
+  /**
+   * True for the on-screen (TEXT ONLY, never spoken) welcome banner fetched
+   * when the app loads, independent of starting a practice session. Returns
+   * early with no Polly synthesis at all.
+   */
+  welcomeBanner?: boolean;
 }
 
 interface ExtendedSdkStream {
@@ -175,90 +180,13 @@ async function fetchUserProgressReport(userId: string): Promise<string> {
   return 'No prior progress history available. Begin baseline assessment across American Government, American History, and Integrated Civics.';
 }
 
-async function isFirstSessionOfDay(userId: string, currentSessionId?: string): Promise<boolean> {
-  const supabase = getSupabaseClient();
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-
-  try {
-    let query = supabase
-      .from('sessions')
-      .select('id, started_at', { count: 'exact', head: false })
-      .eq('user_id', userId)
-      .gte('started_at', todayStart.toISOString())
-      .order('started_at', { ascending: true });
-
-    if (currentSessionId) {
-      query = query.neq('id', currentSessionId);
-    }
-
-    const { count, error } = await query;
-    if (error) {
-      console.warn('[Lambda-SessionCheck] Error checking daily sessions:', error.message);
-      return true;
-    }
-
-    return (count ?? 0) === 0;
-  } catch (err) {
-    console.error('[Lambda-SessionCheck] Exception checking daily sessions:', err);
-    return true;
-  }
-}
-
-async function getDaysSinceLastSession(userId: string, currentSessionId?: string): Promise<number | null> {
-  const supabase = getSupabaseClient();
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-
-  try {
-    let query = supabase
-      .from('sessions')
-      .select('id, started_at')
-      .eq('user_id', userId)
-      .lt('started_at', todayStart.toISOString())
-      .order('started_at', { ascending: false })
-      .limit(1);
-
-    if (currentSessionId) {
-      query = query.neq('id', currentSessionId);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      console.warn('[Lambda-SessionCheck] Error checking last session date:', error.message);
-      return null;
-    }
-    if (!data || data.length === 0) return null; // no prior session -> new learner
-
-    const lastStartDay = new Date(data[0].started_at as string);
-    lastStartDay.setUTCHours(0, 0, 0, 0);
-    return Math.round((todayStart.getTime() - lastStartDay.getTime()) / (1000 * 60 * 60 * 24));
-  } catch (err) {
-    console.error('[Lambda-SessionCheck] Exception checking last session date:', err);
-    return null;
-  }
-}
-
-async function generateSessionGreeting(
-  userId: string,
-  userUtterance: string,
-  firstQuestion: CivicsItem,
-  currentSessionId?: string
-): Promise<string> {
-  const isFirstToday = await isFirstSessionOfDay(userId, currentSessionId);
-  const daysSinceLastSession = await getDaysSinceLastSession(userId, currentSessionId);
-  const rawReport = await fetchUserProgressReport(userId);
-
-  console.log(`[Lambda-Greeting] isFirstSessionToday=${isFirstToday}, daysSinceLastSession=${daysSinceLastSession}, hasReport=${Boolean(rawReport)}`);
-
-  return turnInterpreter.generateGreeting({
-    userUtterance,
-    isFirstSessionToday: isFirstToday,
-    daysSinceLastSession,
-    progressReportMarkdown: rawReport,
-    firstQuestion,
-  });
-}
+// NOTE: the spoken, in-session personalized greeting (isFirstSessionOfDay /
+// getDaysSinceLastSession / generateSessionGreeting, driving buildGreetingPrompt
+// in turn-interpreter.ts) was removed here — that narrative content now lives
+// in the separate, TEXT-ONLY welcomeBanner path above, fetched on app load
+// rather than spoken at session start. buildGreetingPrompt/generateGreeting
+// remain intact and tested in turn-interpreter.ts if ever needed again; they
+// are simply not called from this handler anymore.
 
 async function getTitanEmbedding(text: string): Promise<number[] | null> {
   try {
@@ -408,6 +336,46 @@ async function getRecentSessionItemIds(
   }
 }
 
+/**
+ * Lifetime stats across ALL of the user's sessions (not just one), for the
+ * welcome banner's "summary of achievement so far". Same RLS-scoped pattern
+ * as getRecentSessionItemIds. A zero-answered result IS the "new user" signal
+ * — no separate existence check needed.
+ */
+async function getLifetimeStats(
+  token: string,
+  traceId: string,
+  recentMissedLimit = 3
+): Promise<{ answered: number; correct: number; accuracyPct: number; recentlyMissedQuestions: string[] }> {
+  try {
+    const db = getUserScopedSupabase(token);
+    const { data, error } = await db
+      .from('graded_answers')
+      .select('item_id, verdict, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn(`[Lambda-WelcomeBanner] [${traceId}] lifetime-stats query error: ${error.message}`);
+      return { answered: 0, correct: 0, accuracyPct: 0, recentlyMissedQuestions: [] };
+    }
+
+    const rows = (data ?? []) as Array<{ item_id: string; verdict: string }>;
+    const answered = rows.length;
+    const correct = rows.filter((r) => r.verdict === 'correct').length;
+    const accuracyPct = answered > 0 ? Math.round((correct / answered) * 100) : 0;
+    const recentlyMissedQuestions = rows
+      .filter((r) => r.verdict !== 'correct')
+      .slice(0, recentMissedLimit)
+      .map((r) => getItem(r.item_id)?.question)
+      .filter((q): q is string => Boolean(q));
+
+    return { answered, correct, accuracyPct, recentlyMissedQuestions };
+  } catch (err) {
+    console.error(`[Lambda-WelcomeBanner] [${traceId}] lifetime-stats exception:`, err);
+    return { answered: 0, correct: 0, accuracyPct: 0, recentlyMissedQuestions: [] };
+  }
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const traceId = getCaseInsensitiveHeader(event.headers || {}, 'x-correlation-trace-id') || `lambda-trace-${Date.now()}`;
 
@@ -472,6 +440,34 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     }
 
+    // ---- On-screen welcome banner (TEXT ONLY, never spoken) ----
+    // Fetched when the app loads, independent of starting a practice session.
+    // Returns early, before the transcript guard or any Polly synthesis —
+    // this call has no transcript and produces no audio at all.
+    if (parsedBody.welcomeBanner === true) {
+      const lifetime = await getLifetimeStats(token, traceId);
+      const isNewUser = lifetime.answered === 0;
+      const message = await turnInterpreter.generateWelcomeBanner(
+        isNewUser
+          ? { isNewUser: true }
+          : {
+              isNewUser: false,
+              lifetimeStats: {
+                answered: lifetime.answered,
+                correct: lifetime.correct,
+                accuracyPct: lifetime.accuracyPct,
+                recentlyMissedQuestions: lifetime.recentlyMissedQuestions,
+              },
+            }
+      );
+      console.log(`[Lambda-WelcomeBanner] [${traceId}] isNewUser=${isNewUser}, lifetimeAnswered=${lifetime.answered}`);
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify({ responseText: message, isNewUser }),
+      };
+    }
+
     const rawTranscript = parsedBody.transcript || '';
     const cleanedTranscript = rawTranscript.replace(/\s+/g, ' ').trim();
 
@@ -508,16 +504,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const askedItem = getItem(parsedBody.currentItemId);
 
     if (parsedBody.sessionStart === true) {
-      // ---- EXPLICIT session start (item 6): fires proactively on session
-      // begin, before any real user speech, so the greeting speaks first. ----
-      console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; generating personalized session greeting.`);
+      // ---- EXPLICIT session start (item 6): fires proactively before any
+      // real user speech, so the first question is established and spoken
+      // immediately. The personalized narrative welcome now lives in the
+      // separate, text-only welcomeBanner path above — this just needs to
+      // pick + announce the first question, so no LLM call is needed here
+      // at all (faster and one less thing that can fail). ----
+      console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; picking first question (no narrative LLM call).`);
       const first = selectNextQuestion();
-      generatedAssistantText = await generateSessionGreeting(
-        userId,
-        cleanedTranscript, // usually empty for a real sessionStart call
-        first,
-        parsedBody.sessionId
-      );
+      generatedAssistantText = `Let's begin. ${first.question}`;
       nextItemId = first.id;
       nextQuestionText = first.question;
 
@@ -532,17 +527,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     } else if (!askedItem) {
       // ---- Legacy/fallback START path: no active question and no explicit
-      // sessionStart flag (e.g. an older client). Same greeting logic, kept
-      // as a safety net so the app still works even if the client never
-      // calls sessionStart. ----
-      console.log(`[Lambda-Start] [${traceId}] No active question (implicit); generating personalized session greeting.`);
+      // sessionStart flag (e.g. an older client). Kept as a safety net so the
+      // app still works even if the client never calls sessionStart — same
+      // simplified behavior (no LLM call) as the explicit sessionStart path. ----
+      console.log(`[Lambda-Start] [${traceId}] No active question (implicit); picking first question.`);
       const first = selectNextQuestion();
-      generatedAssistantText = await generateSessionGreeting(
-        userId,
-        cleanedTranscript,
-        first,
-        parsedBody.sessionId
-      );
+      generatedAssistantText = `Let's begin. ${first.question}`;
       nextItemId = first.id;
       nextQuestionText = first.question;
 
