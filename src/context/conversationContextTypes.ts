@@ -55,7 +55,8 @@ export type ConversationAction =
   | { type: 'CLEAR_ERROR' }
   | { type: 'SET_SESSION_ID'; payload: string | null }
   | { type: 'LOAD_HISTORICAL_MESSAGES'; payload: { messages: Message[]; hasMore: boolean; oldestCursor: string | null; replace?: boolean } }
-  | { type: 'SET_LIVE_STATS'; payload: LiveSessionStats | null };
+  | { type: 'SET_LIVE_STATS'; payload: LiveSessionStats | null }
+  | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string } };
 
 export const initialState: ConversationState = {
   conversationHistory: [],
@@ -98,6 +99,26 @@ export const conversationReducer = (state: ConversationState, action: Conversati
 
     case 'SET_LIVE_STATS':
       return { ...state, liveStats: action.payload };
+
+    case 'ADD_ASSISTANT_MESSAGE': {
+      // Unlike SEND_MESSAGE_START, this adds ONLY an assistant message — no
+      // paired user message. For system-initiated text (the welcome banner,
+      // the "let's begin" session-start announcement) there is no real user
+      // utterance to pair it with; previously an empty-content placeholder
+      // user message was used to satisfy SEND_MESSAGE_START's contract, which
+      // rendered as a visible blank bubble appearing BEFORE the greeting.
+      const message: Message = {
+        id: action.payload.assistantMessageId,
+        role: 'assistant',
+        content: action.payload.content,
+        timestamp: new Date().toISOString(),
+      };
+      return {
+        ...state,
+        conversationHistory: [...state.conversationHistory, message],
+        assistantMessageId: action.payload.assistantMessageId,
+      };
+    }
 
     case 'SET_TRANSCRIPT':
       return { ...state, transcript: action.payload, appStatus: 'listening' };

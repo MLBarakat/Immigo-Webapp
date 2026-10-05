@@ -94,7 +94,7 @@ export function VoiceHub({
       <button 
         onClick={handleButtonClick} 
         disabled={isProcessingActive}
-        className={`w-12 h-12 flex items-center justify-center transition-transform active:scale-95 duration-200 ${
+        className={`w-14 h-14 flex items-center justify-center transition-transform active:scale-95 duration-200 ${
           isProcessingActive ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
         }`} 
         aria-label={isSessionActive ? 'Stop Voice Recording Session' : 'Start Voice Recording Session'}

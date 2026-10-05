@@ -3,6 +3,7 @@ import { ConversationContext } from '../context/conversationContextTypes';
 import { ApiClient, ApiError } from '../services/apiClient';
 import { Message } from '../context/conversationContextTypes';
 import { ChatPersistenceService } from '../services/chatPersistenceService';
+import { fetchLiveSessionStats } from '../services/liveProgressService';
 import { useWhisper } from './useWhisper';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
@@ -19,11 +20,6 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   }
   const { state: conversationState, dispatch } = context;
   const intervalRef = useRef<number | null>(null);
-  // Guards the on-screen welcome banner fetch to exactly once per app load —
-  // it is independent of starting/ending a practice session (no audio, no
-  // recording side effects), so it must not re-fire on every render or on
-  // every session start/end.
-  const hasFetchedWelcomeBannerRef = useRef(false);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
   const audioPlaybackUrlRef = useRef<string | null>(null);
   const audioPlaybackGenerationRef = useRef(0);
@@ -37,6 +33,15 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
   // While set (and matching the current item), the next answer is sent as a
   // confirmation retry so the server commits the honest final verdict.
   const awaitingConfirmationRef = useRef<string | null>(null);
+  // Counts GRADED turns this session, to trigger a periodic narrative-report
+  // refresh every 10 answers (in addition to the session-end refresh) without
+  // regenerating the expensive LLM narrative after every single question.
+  const answeredCountRef = useRef<number>(0);
+  // Guards the on-screen welcome banner fetch to exactly once per app load —
+  // it is independent of starting/ending a practice session (no audio, no
+  // recording side effects), so it must not re-fire on every render or on
+  // every session start/end.
+  const hasFetchedWelcomeBannerRef = useRef(false);
   // True while Polly audio is actively playing — used to mute the VAD so the
   // microphone does not pick up the speaker output and loop it back as input.
   const isPollyPlayingRef = useRef<boolean>(false);
@@ -220,6 +225,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       let audioData: ArrayBuffer | null = null;
       let nextItemId: string | null = null;
       let needsConfirmation = false;
+      let verdict: 'correct' | 'incorrect' | 'partial' | null = null;
 
       // If we're mid-confirmation/mid-multi-part-answer on THIS item, tell the
       // server this is the follow-up turn so it commits a final verdict.
@@ -241,6 +247,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
           audioData = res.audioData;
           nextItemId = res.nextItemId;
           needsConfirmation = res.needsConfirmation;
+          verdict = res.verdict;
           break;
         } catch (err: unknown) {
           accumulatedLastError = err;
@@ -270,6 +277,28 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       //  - server asked to confirm/complete -> arm the retry flag for this item
       //  - otherwise                        -> clear it (the round is over)
       awaitingConfirmationRef.current = needsConfirmation ? nextItemId : null;
+
+      // A grade was actually committed (not a repeat/hint/clarify/near-miss
+      // turn) -> refresh the free, real-time stats, and every 10th committed
+      // answer, also refresh the (expensive) narrative report mid-session so
+      // it doesn't go stale for the whole session, without regenerating it
+      // after every single question.
+      if (verdict !== null) {
+        answeredCountRef.current += 1;
+        if (activeSessionId) {
+          void fetchLiveSessionStats(activeSessionId).then((stats) => {
+            if (stats) dispatch({ type: 'SET_LIVE_STATS', payload: stats });
+          });
+          if (answeredCountRef.current % 10 === 0 && apiClient) {
+            void apiClient.completeSession(activeSessionId).catch((error: unknown) => {
+              logger.error('Periodic (every-10) progress report refresh failed (non-fatal).', undefined, {
+                sessionId: activeSessionId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
+          }
+        }
+      }
 
       dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: responseText } });
 
@@ -402,6 +431,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     sessionIdRef.current = null;
     currentItemIdRef.current = null;
     awaitingConfirmationRef.current = null;
+    answeredCountRef.current = 0;
 
     let newSessionId: string | null = null;
     if (userId) {
@@ -421,28 +451,33 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     }
 
     const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    const secureUserMessageId = `user-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const secureAssistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+    // One quick retry before giving up: the single most common cause of a
+    // sessionStart failure is a brand-new account hitting a transient,
+    // self-resolving race (cold Lambda start, freshly-inserted rows that RLS/
+    // triggers are still catching up on) — a short retry fixes the majority
+    // of these without ever reaching the fallback path below.
+    const attemptSessionStart = async () => {
+      try {
+        return await apiClient!.postSessionStart(newSessionId, { headers: { 'x-correlation-trace-id': traceId } });
+      } catch (firstError) {
+        logger.warn('postSessionStart failed once; retrying shortly.', { error: String(firstError), traceId });
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        return await apiClient!.postSessionStart(newSessionId, { headers: { 'x-correlation-trace-id': traceId } });
+      }
+    };
+
     try {
-      const res = await apiClient.postSessionStart(newSessionId, {
-        headers: { 'x-correlation-trace-id': traceId },
-      });
+      const res = await attemptSessionStart();
 
       currentItemIdRef.current = res.nextItemId;
       awaitingConfirmationRef.current = res.needsConfirmation ? res.nextItemId : null;
 
-      // No real user utterance preceded this — an empty-content placeholder
-      // keeps the existing SEND_MESSAGE_START contract (which always pairs a
-      // user + assistant message) without inventing new reducer actions.
-      const placeholderUserMessage: Message = {
-        id: secureUserMessageId,
-        role: 'user',
-        content: '',
-        timestamp: new Date().toISOString(),
-      };
-      dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage: placeholderUserMessage, assistantMessageId: secureAssistantMessageId } });
-      dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: res.responseText } });
+      // No real user utterance preceded this — add ONLY the assistant message
+      // (no paired placeholder user bubble, which previously rendered as a
+      // visible blank bubble BEFORE the greeting).
+      dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: secureAssistantMessageId, content: res.responseText } });
 
       if (userId && newSessionId) {
         void ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', res.responseText);
@@ -486,13 +521,43 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
         }, 300);
       };
     } catch (error: unknown) {
-      // Resilience: if the proactive greeting call fails for any reason, fall
-      // back to the old behavior (start listening; the server's implicit
-      // greeting-on-first-utterance path still covers this as a safety net).
-      logger.error('Proactive session-start greeting failed; falling back to listen-first.', undefined, {
+      // Both attempts failed. Previously this was completely silent — no
+      // spoken or visual feedback at all, which is exactly what produced "I
+      // opened the app and got no greeting" for a brand new account. Instead:
+      // show AND speak a local, non-personalized fallback (no further server
+      // dependency, since the server call is what just failed twice), then
+      // proceed to recording. currentItemId stays null, so the user's first
+      // real utterance correctly falls through to the server's legacy
+      // greeting path (already tested to be robust even if its own LLM call
+      // fails) and the conversation still starts properly from there.
+      logger.error('Proactive session-start greeting failed after retry; using local fallback.', undefined, {
         error: error instanceof Error ? error.message : String(error),
         traceId,
       });
+
+      const fallbackText = "Welcome! Let's get started with today's civics practice — go ahead whenever you're ready.";
+      dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: secureAssistantMessageId, content: fallbackText } });
+
+      const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
+      if (canSpeak) {
+        try {
+          isPollyPlayingRef.current = true;
+          const utterance = new SpeechSynthesisUtterance(fallbackText);
+          const resume = () => {
+            isPollyPlayingRef.current = false;
+            startRecording();
+          };
+          utterance.onend = resume;
+          utterance.onerror = resume;
+          window.speechSynthesis.speak(utterance);
+          return;
+        } catch (speechError) {
+          logger.warn('Local fallback speech synthesis failed; proceeding silently to recording.', { error: String(speechError) });
+          isPollyPlayingRef.current = false;
+        }
+      }
+      // No speech synthesis available (or it failed) — the text is still
+      // visible in chat; proceed straight to recording.
       startRecording();
     }
   }, [userId, dispatch, startRecording, apiClient, clearAudioPlayback]);
@@ -505,6 +570,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     sessionIdRef.current = null;
     currentItemIdRef.current = null;
     awaitingConfirmationRef.current = null;
+    answeredCountRef.current = 0;
     dispatch({ type: 'SET_SESSION_ID', payload: null });
     analytics.track('session_ended', { duration_seconds: conversationState.sessionTime });
 
@@ -536,14 +602,11 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     };
   }, [conversationState.isSessionActive, dispatch]);
 
-  const stopRecordingRef = useRef(stopRecording);
-  useEffect(() => {
-    stopRecordingRef.current = stopRecording;
-  }, [stopRecording]);
-
   // On-screen welcome banner (TEXT ONLY, never spoken): fetched once when the
   // app loads, independent of tapping "Start Session". Displayed as a plain
   // chat message — no audio, no mute-gate, no recording side effects at all.
+  // No paired user message: this is the very first thing in the conversation,
+  // so there must be nothing (not even an empty bubble) before it.
   useEffect(() => {
     if (!apiClient || !userId || hasFetchedWelcomeBannerRef.current) return;
     hasFetchedWelcomeBannerRef.current = true;
@@ -551,17 +614,8 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     void (async () => {
       try {
         const { message } = await apiClient.fetchWelcomeBanner();
-        const userMessageId = `user-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const assistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        dispatch({
-          type: 'SEND_MESSAGE_START',
-          payload: {
-            userMessage: { id: userMessageId, role: 'user', content: '', timestamp: new Date().toISOString() },
-            assistantMessageId,
-          },
-        });
-        dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: message } });
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId, content: message } });
       } catch (error: unknown) {
         // Non-fatal: the welcome banner is a nice-to-have, not required to
         // start practicing. Log and move on; no user-facing error needed.
@@ -571,6 +625,40 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
       }
     })();
   }, [apiClient, userId, dispatch]);
+
+  const stopRecordingRef = useRef(stopRecording);
+  useEffect(() => {
+    stopRecordingRef.current = stopRecording;
+  }, [stopRecording]);
+
+  // Reliable progress-report generation on tab-close/background, not just an
+  // explicit "End Session" tap. `document.hidden` fires on tab-switch, app
+  // backgrounding (mobile), and as the page is torn down; `pagehide` covers
+  // actual navigation/close. completeSession already uses
+  // fetch(..., { keepalive: true }) with the user's auth header — the correct
+  // tool here, since navigator.sendBeacon cannot carry a custom Authorization
+  // header. This does NOT end the session in the UI (the user may switch
+  // back) — it only ensures a progress snapshot exists even if they never do.
+  useEffect(() => {
+    const triggerBackgroundSnapshot = () => {
+      if (document.visibilityState !== 'hidden') return;
+      if (!conversationState.isSessionActive || !apiClient) return;
+      const activeSessionId = sessionIdRef.current || conversationState.sessionId;
+      if (!activeSessionId) return;
+      void apiClient.completeSession(activeSessionId).catch((error: unknown) => {
+        logger.error('Background (tab-hidden) progress report snapshot failed.', undefined, {
+          sessionId: activeSessionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    };
+    document.addEventListener('visibilitychange', triggerBackgroundSnapshot);
+    window.addEventListener('pagehide', triggerBackgroundSnapshot);
+    return () => {
+      document.removeEventListener('visibilitychange', triggerBackgroundSnapshot);
+      window.removeEventListener('pagehide', triggerBackgroundSnapshot);
+    };
+  }, [apiClient, conversationState.isSessionActive, conversationState.sessionId]);
 
   useEffect(() => {
     return () => {

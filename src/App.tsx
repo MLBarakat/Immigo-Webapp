@@ -94,8 +94,12 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   return (
-    /* FIXED: Enforced h-screen and overflow-hidden to lock the app to the viewport size exactly */
-    <div className="flex flex-col h-screen w-full bg-immigo-gray-50 text-deep-navy font-sans antialiased overflow-hidden">
+    /* Enforced h-dvh (not h-screen/100vh) and overflow-hidden to lock the app to the
+       REAL visible viewport — h-screen (100vh) does not account for mobile browser
+       chrome (address bar) showing/hiding, which can clip bottom content (the mic
+       button) with no way to scroll to it since overflow is hidden. h-dvh tracks the
+       actual visible viewport and matches the 100dvh already used on #root in index.css. */
+    <div className="flex flex-col h-dvh w-full bg-immigo-gray-50 text-deep-navy font-sans antialiased overflow-hidden">
 
       {/* Absolute Positioning Overlays */}
       {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} />}
@@ -183,8 +187,11 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
             <ChatInput onSendMessage={manager.sendTextMessage} disabled={manager.isSessionActive} />
           </div>
 
-          {/* Mobile Footer Voice Hub (Hidden on Desktop) */}
-          <div className="md:hidden flex justify-center mt-4 border-t border-immigo-gray-200 pt-4 shrink-0">
+          {/* Mobile Footer Voice Hub (Hidden on Desktop). pb-[env(...)] adds the
+              device's safe-area inset (home-indicator gesture bar on notched
+              phones) on top of the normal pt-4, so the primary mic button is
+              never crowded by or rendered under it. */}
+          <div className="md:hidden flex justify-center mt-4 border-t border-immigo-gray-200 pt-4 pb-[env(safe-area-inset-bottom)] shrink-0">
             <VoiceHub
               status={manager.appStatus}
               isSessionActive={manager.isSessionActive}
@@ -248,7 +255,7 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="h-screen w-full bg-deep-navy flex flex-col items-center justify-center text-star-white p-6" role="alert" aria-busy="true">
+      <div className="h-dvh w-full bg-deep-navy flex flex-col items-center justify-center text-star-white p-6" role="alert" aria-busy="true">
         <div className="w-10 h-10 border-4 border-art-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
         <h2 className="text-base font-bold tracking-wide">{t('app.loading')}</h2>
       </div>
@@ -257,7 +264,7 @@ function AppContent() {
 
   if (initializationError) {
     return (
-      <div className="h-screen w-full bg-immigo-gray-50 flex items-center justify-center p-6" role="alert">
+      <div className="h-dvh w-full bg-immigo-gray-50 flex items-center justify-center p-6" role="alert">
         <div className="w-full max-w-md rounded-xl border border-immigo-gray-200 bg-star-white p-8 text-center shadow-md">
           <h2 className="text-xl font-bold text-deep-navy">{t('app.authUnavailable')}</h2>
           <p className="mt-3 text-sm text-immigo-gray-600">{initializationError}</p>

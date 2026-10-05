@@ -221,7 +221,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
 
   const containerClasses = isDesktop
     ? "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
-    : "h-screen w-screen bg-immigo-gray-100 flex flex-col font-sans";
+    : "h-dvh w-screen bg-immigo-gray-100 flex flex-col font-sans";
 
   const contentClasses = isDesktop
     ? "bg-star-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden"
