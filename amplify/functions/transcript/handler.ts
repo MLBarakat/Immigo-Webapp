@@ -88,6 +88,55 @@ interface RequestBody {
   voiceId?: string;
 }
 
+/** Escapes XML special characters so arbitrary model-generated text is always valid inside SSML. */
+export function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// Common abbreviations that must NOT be treated as sentence boundaries. U.S./
+// U.N./D.C. in particular appear constantly in this app's own civics content
+// ("the U.S. Constitution", "Washington, D.C."), so a naive split on ". "
+// would insert an audible pause mid-abbreviation.
+const PROTECTED_ABBREVIATIONS = ['U.S.', 'U.N.', 'D.C.', 'Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Jr.', 'Sr.', 'St.', 'vs.', 'etc.'];
+const ABBREVIATION_PLACEHOLDER = '\u0000';
+
+/**
+ * Wraps plain spoken text in <speak>...</speak> and inserts <break> tags at
+ * real sentence boundaries — a code-level (not LLM-generated) way to add the
+ * micro-pauses real speech has between ideas. <break> has full support across
+ * standard, neural, AND generative Polly engines. The text itself is built
+ * entirely in code and XML-escaped, so a model's own reply text (which may
+ * contain "&", quotes, etc.) can never produce malformed SSML.
+ */
+export function wrapWithSpeechBreaks(text: string, breakMs = 250): string {
+  if (!text || !text.trim()) return '<speak></speak>';
+
+  let protectedText = text;
+  PROTECTED_ABBREVIATIONS.forEach((abbr, i) => {
+    protectedText = protectedText.split(abbr).join(`${ABBREVIATION_PLACEHOLDER}${i}${ABBREVIATION_PLACEHOLDER}`);
+  });
+
+  const rawSentences = protectedText.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
+
+  const sentences = rawSentences.map((s) => {
+    let restored = s;
+    PROTECTED_ABBREVIATIONS.forEach((abbr, i) => {
+      restored = restored.split(`${ABBREVIATION_PLACEHOLDER}${i}${ABBREVIATION_PLACEHOLDER}`).join(abbr);
+    });
+    return escapeXml(restored);
+  });
+
+  if (sentences.length <= 1) {
+    return `<speak>${escapeXml(text)}</speak>`;
+  }
+  return `<speak>${sentences.join(` <break time="${breakMs}ms"/> `)}</speak>`;
+}
+
 const ALLOWED_VOICES: Record<string, string> = {
   'Joanna': 'Joanna',
   'Matthew': 'Matthew',
@@ -639,31 +688,57 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice ${targetVoiceId} (region: ${pollyRegion})...`);
     const pollyVoiceId = targetVoiceId as VoiceId;
+    const ssmlText = wrapWithSpeechBreaks(generatedAssistantText);
     let pollyResponse;
+    let usedEngine: 'generative' | 'neural' | 'standard' = 'generative';
     try {
-      const pollyCommand = new SynthesizeSpeechCommand({
+      // Generative: most expressive engine, infers natural prosody/emotion
+      // from context automatically. By AWS design it does NOT accept manual
+      // <prosody>/<emphasis> SSML (that's the trade-off for its improved
+      // naturalness) — only <break> is used here, which IS supported.
+      // Not every voice/language has a generative variant yet, so ANY
+      // failure here falls through to the existing, proven cascade below
+      // rather than failing the turn.
+      const generativeCommand = new SynthesizeSpeechCommand({
         OutputFormat: 'mp3',
-        Text: generatedAssistantText,
+        Text: ssmlText,
+        TextType: 'ssml',
         VoiceId: pollyVoiceId,
-        Engine: 'neural'
+        Engine: 'generative'
       });
-
-      pollyResponse = await pollyClient.send(pollyCommand);
-    } catch (pollyErr: unknown) {
-      const pollyErrMsg = pollyErr instanceof Error ? pollyErr.message : String(pollyErr);
-      if (pollyErrMsg.includes('not supported in this region') || pollyErrMsg.includes('UnsupportedFeatureException')) {
-        console.warn(`[Lambda-Polly-Warn] [${traceId}] Neural engine unsupported; falling back to standard engine.`);
-        const fallbackCommand = new SynthesizeSpeechCommand({
+      pollyResponse = await pollyClient.send(generativeCommand);
+    } catch (generativeErr: unknown) {
+      console.warn(`[Lambda-Polly-Warn] [${traceId}] Generative engine unavailable for voice ${targetVoiceId} (${generativeErr instanceof Error ? generativeErr.message : String(generativeErr)}); falling back to neural.`);
+      usedEngine = 'neural';
+      try {
+        const pollyCommand = new SynthesizeSpeechCommand({
           OutputFormat: 'mp3',
-          Text: generatedAssistantText,
+          Text: ssmlText,
+          TextType: 'ssml',
           VoiceId: pollyVoiceId,
-          Engine: 'standard'
+          Engine: 'neural'
         });
-        pollyResponse = await pollyClient.send(fallbackCommand);
-      } else {
-        throw pollyErr;
+
+        pollyResponse = await pollyClient.send(pollyCommand);
+      } catch (pollyErr: unknown) {
+        const pollyErrMsg = pollyErr instanceof Error ? pollyErr.message : String(pollyErr);
+        if (pollyErrMsg.includes('not supported in this region') || pollyErrMsg.includes('UnsupportedFeatureException')) {
+          console.warn(`[Lambda-Polly-Warn] [${traceId}] Neural engine unsupported; falling back to standard engine.`);
+          usedEngine = 'standard';
+          const fallbackCommand = new SynthesizeSpeechCommand({
+            OutputFormat: 'mp3',
+            Text: ssmlText,
+            TextType: 'ssml',
+            VoiceId: pollyVoiceId,
+            Engine: 'standard'
+          });
+          pollyResponse = await pollyClient.send(fallbackCommand);
+        } else {
+          throw pollyErr;
+        }
       }
     }
+    console.log(`[Lambda-Polly] [${traceId}] Used engine: ${usedEngine}`);
 
     if (!pollyResponse.AudioStream) {
       console.error(`[Lambda-Polly-Error] [${traceId}] Empty AudioStream from Polly.`);

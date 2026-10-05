@@ -47,6 +47,13 @@ const TTS_HYGIENE = [
   '- Never write parenthetical math or equations (e.g. "(50 states x 2)"). Spell out numbers and',
   '  arithmetic in natural spoken words instead (e.g. "two from each of the fifty states").',
   '- Keep "reply" to at most 2-3 spoken sentences. Hand the conversation back to the user quickly.',
+  '- WRITE FOR THE EAR, NOT THE PAGE: the voice engine infers its tone and rhythm FROM the words',
+  '  themselves (it does not accept manual pitch/rate tuning), so natural phrasing IS the delivery:',
+  '  use contractions ("you\'re", "let\'s", "that\'s") instead of formal forms ("you are", "let us"),',
+  '  prefer short, plain clauses over long written-style sentences, and avoid stiff written',
+  '  constructions ("in order to", "with respect to", "it is important to note that").',
+  '- Punctuate the way someone would actually pause when speaking: a period or question mark at the',
+  '  end of a real thought, not run-on clauses joined with commas.',
 ].join('\n');
 
 export function buildTurnPrompt(ctx: TurnContext, utterance: string): { system: string; user: string } {
