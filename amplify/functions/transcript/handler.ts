@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
+import { PollyClient, SynthesizeSpeechCommand, VoiceId } from '@aws-sdk/client-polly';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 import { getItem, selectNextQuestion } from './turn/bank';
@@ -638,12 +638,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       : 'Joanna';
 
     console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice ${targetVoiceId} (region: ${pollyRegion})...`);
+    const pollyVoiceId = targetVoiceId as VoiceId;
     let pollyResponse;
     try {
       const pollyCommand = new SynthesizeSpeechCommand({
         OutputFormat: 'mp3',
         Text: generatedAssistantText,
-        VoiceId: targetVoiceId,
+        VoiceId: pollyVoiceId,
         Engine: 'neural'
       });
 
@@ -655,7 +656,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         const fallbackCommand = new SynthesizeSpeechCommand({
           OutputFormat: 'mp3',
           Text: generatedAssistantText,
-          VoiceId: targetVoiceId,
+          VoiceId: pollyVoiceId,
           Engine: 'standard'
         });
         pollyResponse = await pollyClient.send(fallbackCommand);
