@@ -8,12 +8,13 @@ import { TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter
 import { resolveTurn } from './turn/turn-policy';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
+const pollyRegion = process.env.POLLY_REGION || 'us-east-1';
 const modelId = process.env.DEFAULT_MODEL_ID || 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 const embeddingModelId = process.env.EMBEDDING_MODEL_ID || 'amazon.titan-embed-text-v2:0';
 
 // Clients must be created BEFORE anything that uses them (const is not hoisted).
 const bedrockClient = new BedrockRuntimeClient({ region });
-const pollyClient = new PollyClient({ region });
+const pollyClient = new PollyClient({ region: pollyRegion });
 
 // One shared model transport, reused by the interpreter and the assist path.
 const modelComplete = bedrockComplete(bedrockClient, modelId);
@@ -616,15 +617,32 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // 3. Polly Speech Synthesis
-    console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice Joanna...`);
-    const pollyCommand = new SynthesizeSpeechCommand({
-      OutputFormat: 'mp3',
-      Text: generatedAssistantText,
-      VoiceId: 'Joanna',
-      Engine: 'neural'
-    });
+    console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice Joanna (region: ${pollyRegion})...`);
+    let pollyResponse;
+    try {
+      const pollyCommand = new SynthesizeSpeechCommand({
+        OutputFormat: 'mp3',
+        Text: generatedAssistantText,
+        VoiceId: 'Joanna',
+        Engine: 'neural'
+      });
 
-    const pollyResponse = await pollyClient.send(pollyCommand);
+      pollyResponse = await pollyClient.send(pollyCommand);
+    } catch (pollyErr: unknown) {
+      const pollyErrMsg = pollyErr instanceof Error ? pollyErr.message : String(pollyErr);
+      if (pollyErrMsg.includes('not supported in this region') || pollyErrMsg.includes('UnsupportedFeatureException')) {
+        console.warn(`[Lambda-Polly-Warn] [${traceId}] Neural engine unsupported; falling back to standard engine.`);
+        const fallbackCommand = new SynthesizeSpeechCommand({
+          OutputFormat: 'mp3',
+          Text: generatedAssistantText,
+          VoiceId: 'Joanna',
+          Engine: 'standard'
+        });
+        pollyResponse = await pollyClient.send(fallbackCommand);
+      } else {
+        throw pollyErr;
+      }
+    }
 
     if (!pollyResponse.AudioStream) {
       console.error(`[Lambda-Polly-Error] [${traceId}] Empty AudioStream from Polly.`);
