@@ -223,8 +223,8 @@ export class ApiClient {
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     currentItemId?: string | null,
-    confirmationRetry?: boolean,
-    options: { headers?: Record<string, string> } = {}
+    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; voiceId?: string },
+    options: { headers?: Record<string, string>; voiceId?: string } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -233,14 +233,30 @@ export class ApiClient {
     nextItemId: string | null;
     nextQuestion: string | null;
   }> {
+    let confirmationRetry: boolean | undefined;
+    let effectiveOptions = options;
+    if (typeof confirmationRetryOrOptions === 'boolean') {
+      confirmationRetry = confirmationRetryOrOptions;
+    } else if (confirmationRetryOrOptions && typeof confirmationRetryOrOptions === 'object') {
+      effectiveOptions = confirmationRetryOrOptions;
+    }
+
     logger.info('[ApiClient] Dispatching postTranscript request:', {
       transcriptLength: transcript.length,
       windowTurns: conversationWindow.length,
-      sessionId
+      sessionId,
+      voiceId: effectiveOptions.voiceId
     });
     return this.sendTranscriptRequest(
-      { transcript, conversationWindow, sessionId, currentItemId, confirmationRetry },
-      options
+      {
+        transcript,
+        conversationWindow,
+        sessionId,
+        currentItemId,
+        confirmationRetry,
+        ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {})
+      },
+      effectiveOptions
     );
   }
 
@@ -252,7 +268,7 @@ export class ApiClient {
    */
   async postSessionStart(
     sessionId?: string | null,
-    options: { headers?: Record<string, string> } = {}
+    options: { headers?: Record<string, string>; voiceId?: string } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -261,8 +277,12 @@ export class ApiClient {
     nextItemId: string | null;
     nextQuestion: string | null;
   }> {
-    logger.info('[ApiClient] Dispatching postSessionStart request:', { sessionId });
-    return this.sendTranscriptRequest({ sessionStart: true, sessionId }, options);
+    logger.info('[ApiClient] Dispatching postSessionStart request:', { sessionId, voiceId: options.voiceId });
+    return this.sendTranscriptRequest({
+      sessionStart: true,
+      sessionId,
+      ...(options.voiceId ? { voiceId: options.voiceId } : {})
+    }, options);
   }
 
   /**

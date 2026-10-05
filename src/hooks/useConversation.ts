@@ -11,14 +11,20 @@ import { logger } from '../logger';
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
   userId?: string | null;
+  voiceId?: string | null;
 }
 
-export function useConversation({ apiClient, userId }: UseConversationManagerProps) {
+export function useConversation({ apiClient, userId, voiceId }: UseConversationManagerProps) {
   const context = useContext(ConversationContext);
   if (!context) {
     throw new Error('useConversation must be used within a ConversationProvider');
   }
   const { state: conversationState, dispatch } = context;
+  const voiceIdRef = useRef<string | null>(voiceId ?? null);
+  useEffect(() => {
+    voiceIdRef.current = voiceId ?? null;
+  }, [voiceId]);
+
   const intervalRef = useRef<number | null>(null);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
   const audioPlaybackUrlRef = useRef<string | null>(null);
@@ -241,7 +247,7 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
             activeSessionId,
             currentItemIdRef.current,
             isConfirmationRetry,
-            { headers: { 'x-correlation-trace-id': traceId } }
+            { headers: { 'x-correlation-trace-id': traceId }, voiceId: voiceIdRef.current ?? undefined }
           );
           responseText = res.responseText;
           audioData = res.audioData;
@@ -459,12 +465,16 @@ export function useConversation({ apiClient, userId }: UseConversationManagerPro
     // triggers are still catching up on) — a short retry fixes the majority
     // of these without ever reaching the fallback path below.
     const attemptSessionStart = async () => {
+      const sessionOptions = {
+        headers: { 'x-correlation-trace-id': traceId },
+        voiceId: voiceIdRef.current ?? undefined,
+      };
       try {
-        return await apiClient!.postSessionStart(newSessionId, { headers: { 'x-correlation-trace-id': traceId } });
+        return await apiClient!.postSessionStart(newSessionId, sessionOptions);
       } catch (firstError) {
         logger.warn('postSessionStart failed once; retrying shortly.', { error: String(firstError), traceId });
         await new Promise((resolve) => setTimeout(resolve, 800));
-        return await apiClient!.postSessionStart(newSessionId, { headers: { 'x-correlation-trace-id': traceId } });
+        return await apiClient!.postSessionStart(newSessionId, sessionOptions);
       }
     };
 

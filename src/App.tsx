@@ -29,6 +29,7 @@ import { logger } from './logger';
 import useMediaQuery from './hooks/useMediaQuery';
 import { normalizeAppLanguage } from './i18n';
 import { I18nProvider } from './i18n/I18nProvider';
+import { APP_VOICES, getDefaultVoiceId, normalizeVoiceId } from './constants/voices';
 
 try {
   if (amplifyOutputs) {
@@ -47,7 +48,12 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const { user, profile, logout, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
   const { t } = useTranslation(['conversation', 'common']);
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const manager = useConversation({ apiClient: apiClientInstance, userId: user?.id ?? null });
+  // Resolve the active voice: prefer the user's saved setting, fall back to
+  // the language-matched default, then hard-fall-back to Joanna.
+  const activeVoiceId = normalizeVoiceId(
+    userSettings.ai_voice_id ?? getDefaultVoiceId(userSettings.language || profile?.language)
+  );
+  const manager = useConversation({ apiClient: apiClientInstance, userId: user?.id ?? null, voiceId: activeVoiceId });
 
   // UI Modal State Management
   const hasSeenWelcome = Boolean(
@@ -108,7 +114,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         <ApplicationSettingsModal
           isOpen={showAppSettings}
           settings={userSettings}
-          pollyVoices={[]}
+          pollyVoices={APP_VOICES.map(v => ({ id: v.id, name: v.displayName }))}
           isDesktop={isDesktop}
           onClose={() => setShowAppSettings(false)}
           onSave={async (newSettings) => {

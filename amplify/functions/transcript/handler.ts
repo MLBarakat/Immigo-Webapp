@@ -82,7 +82,23 @@ interface RequestBody {
    * early with no Polly synthesis at all.
    */
   welcomeBanner?: boolean;
+  /**
+   * Optional Polly Voice ID selected by the user (e.g. Joanna, Matthew, Mia, Andres, etc.).
+   */
+  voiceId?: string;
 }
+
+const ALLOWED_VOICES: Record<string, string> = {
+  'Joanna': 'Joanna',
+  'Matthew': 'Matthew',
+  'Mia': 'Mia',
+  'Andres': 'Andres',
+  'Andrés': 'Andres',
+  'Lea': 'Lea',
+  'Remi': 'Remi',
+  'Hala': 'Hala',
+  'Zayd': 'Zayd',
+};
 
 interface ExtendedSdkStream {
   transformToByteArray(): Promise<Uint8Array>;
@@ -617,13 +633,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // 3. Polly Speech Synthesis
-    console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice Joanna (region: ${pollyRegion})...`);
+    const targetVoiceId = (parsedBody.voiceId && ALLOWED_VOICES[parsedBody.voiceId])
+      ? ALLOWED_VOICES[parsedBody.voiceId]
+      : 'Joanna';
+
+    console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice ${targetVoiceId} (region: ${pollyRegion})...`);
     let pollyResponse;
     try {
       const pollyCommand = new SynthesizeSpeechCommand({
         OutputFormat: 'mp3',
         Text: generatedAssistantText,
-        VoiceId: 'Joanna',
+        VoiceId: targetVoiceId,
         Engine: 'neural'
       });
 
@@ -635,7 +655,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         const fallbackCommand = new SynthesizeSpeechCommand({
           OutputFormat: 'mp3',
           Text: generatedAssistantText,
-          VoiceId: 'Joanna',
+          VoiceId: targetVoiceId,
           Engine: 'standard'
         });
         pollyResponse = await pollyClient.send(fallbackCommand);
