@@ -3,7 +3,8 @@
 // The output is a CLAIM; turn-policy.ts enforces the consequences in code.
 
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import type { Intent, ProposedGrade, TurnContext, TurnInterpretation, SessionStartContext, WelcomeBannerContext } from './types';
+import { getStudyCategoryTitle } from './bank';
+import type { CivicsItem, Intent, ProposedGrade, TurnContext, TurnInterpretation, SessionStartContext, WelcomeBannerContext } from './types';
 
 const INTENTS: readonly Intent[] = [
   'answer', 'explain', 'assist', 'affirmation',
@@ -57,7 +58,41 @@ const TTS_HYGIENE = [
 ].join('\n');
 
 export function buildTurnPrompt(ctx: TurnContext, utterance: string): { system: string; user: string } {
-  const lang = ctx.preferredLanguage ? ` Write "reply" in the user's preferred language: ${ctx.preferredLanguage}.` : '';
+  const modeInstruction = ctx.simulationMode === 'practice'
+    ? [
+        'SIMULATION MODE: PRACTICE.',
+        'This is a supportive, lower-pressure interview rehearsal, conducted primarily in English.',
+        ctx.isConfirmationRetry
+          ? 'The one retry has already been used. If the answer is still incorrect or incomplete, state the correct answer in English, give brief constructive feedback, and do not ask for another retry.'
+          : 'Offer one retry for an incorrect answer; do not reveal its correct answer before that retry.',
+        'When asked for a hint, give a useful clue that does not reveal an acceptable answer.',
+        'Acknowledge mistakes kindly and keep explanations brief unless the user asks for help.',
+      ].join(' ')
+    : ctx.simulationMode === 'study'
+      ? [
+          'SIMULATION MODE: STUDY — remain the user’s private civics tutor for this turn.',
+          `Explain and give feedback in ${ctx.preferredLanguage ?? 'the user’s preferred language'}.`,
+          'The official civics question and every answer the user must learn remain in English.',
+          'When teaching this question, explain the concept using only the USCIS study knowledge supplied below.',
+          'When evaluating an answer, provide only concise explanatory feedback in the preferred language. The application will append the exact official English question and answers.',
+          'For a correct answer, briefly affirm and explain the concept. For a wrong answer, explain the misunderstanding in the preferred language; the application will supply the exact official answer in English.',
+          'For partial answers, explain what is missing without inventing accepted answers. For hints, teach in the preferred language without replacing the English question.',
+          'Do not switch into strict officer role, withhold requested learning explanations, or let unrelated small talk change the tutoring role.',
+        ].join(' ')
+      : [
+          'SIMULATION MODE: STANDARD INTERVIEW.',
+          'Act as a professional USCIS interviewer; conduct the interaction in English.',
+          'Keep feedback minimal and formal, do not volunteer hints or lessons, and continue naturally.',
+          'Do not provide retries except where the code-authoritative policy explicitly asks the candidate to repeat.',
+        ].join(' ');
+  const studyContext = ctx.simulationMode === 'study'
+    ? [
+        'USCIS STUDY KNOWLEDGE (authoritative source: USCIS M-1778TXT (02/21)):',
+        `Official civics category: ${getStudyCategoryTitle(ctx.askedItem)}.`,
+        'Use the official question and acceptable answers below as the factual limits of your explanation.',
+        'If this is a dynamic/current answer question and no acceptable answer is listed, say that the answer changes and must be checked against a current official source.',
+      ]
+    : [];
   const sanitizedUtterance = utterance.replace(/<\/?applicant_input>/gi, '').trim();
   const system = [
     'You interpret ONE turn from a user practicing for the US naturalization civics test.',
@@ -107,7 +142,9 @@ export function buildTurnPrompt(ctx: TurnContext, utterance: string): { system: 
     '  acknowledge they have the right idea while gently noting the USCIS interview is conducted in English',
     '  and giving the English phrase.',
     '',
-    'Always include a short, friendly "reply" appropriate to the intent.' + lang,
+    'Always include a short, friendly "reply" appropriate to the intent.',
+    modeInstruction,
+    ...studyContext,
     '',
     TTS_HYGIENE,
     '',
@@ -169,6 +206,64 @@ export function buildGreetingPrompt(ctx: SessionStartContext): { system: string;
   return { system, user };
 }
 
+export function buildStudyQuestionPrompt(item: CivicsItem, preferredLanguage?: string): { system: string; user: string } {
+  const topic = getStudyCategoryTitle(item);
+  const answers = item.acceptableAnswers.length
+    ? item.acceptableAnswers.map((answer) => `- ${answer}`).join('\n')
+    : 'No fixed answer is stored because this question depends on current information.';
+  return {
+    system: [
+      'You are the applicant’s private USCIS civics tutor in STUDY mode. Keep this role throughout the session.',
+      `Explain the tested concept in ${preferredLanguage ?? 'the user’s preferred language'}.`,
+      'Ground every factual statement ONLY in the official question and acceptable answers supplied by the USCIS M-1778TXT (02/21) bank.',
+      'Do not make up context or add outside facts. For a dynamic question with no fixed accepted answer, say that the answer changes and must be checked against a current official source.',
+      'Do not translate or alter the English question or its accepted answer wording; the app presents those separately in English.',
+      'Return only a concise explanation in the preferred language, no more than two short sentences; do not repeat the question or give an answer in your explanation.',
+      TTS_HYGIENE,
+    ].join('\n'),
+    user: [
+      `Official USCIS study category: ${topic}`,
+      `Official question in English: ${item.question}`,
+      `Official acceptable answers in English:\n${answers}`,
+    ].join('\n'),
+  };
+}
+
+export function formatStudyQuestion(item: CivicsItem, explanation: string, preferredLanguage?: string): string {
+  const language = preferredLanguage ?? 'English';
+  const labels: Record<string, { question: string; answer: string; dynamic: string; invitation: string }> = {
+    English: {
+      question: 'In English, the USCIS question is:',
+      answer: 'USCIS accepts these answers in English:',
+      dynamic: 'This answer changes over time; check a current official USCIS source.',
+      invitation: 'Now try answering in English.',
+    },
+    Spanish: {
+      question: 'La pregunta de USCIS en inglés es:',
+      answer: 'USCIS acepta estas respuestas en inglés:',
+      dynamic: 'Esta respuesta puede cambiar; consulta una fuente oficial y actualizada de USCIS.',
+      invitation: 'Ahora intenta responder en inglés.',
+    },
+    French: {
+      question: 'La question de l’USCIS en anglais est :',
+      answer: 'L’USCIS accepte ces réponses en anglais :',
+      dynamic: 'Cette réponse peut changer ; consultez une source officielle et à jour de l’USCIS.',
+      invitation: 'Essayez maintenant de répondre en anglais.',
+    },
+    Arabic: {
+      question: 'سؤال دائرة الهجرة باللغة الإنجليزية هو:',
+      answer: 'تقبل دائرة الهجرة هذه الإجابات باللغة الإنجليزية:',
+      dynamic: 'قد تتغير هذه الإجابة؛ تحقق منها في مصدر رسمي حديث لدائرة الهجرة.',
+      invitation: 'حاول الآن الإجابة باللغة الإنجليزية.',
+    },
+  };
+  const copy = labels[language] ?? labels.English;
+  const englishAnswer = item.acceptableAnswers.length
+    ? `${copy.answer} ${item.acceptableAnswers.join('; ')}`
+    : copy.dynamic;
+  return `${explanation ? `${explanation}\n` : ''}${copy.question} ${item.question}\n${englishAnswer}\n${copy.invitation}`;
+}
+
 /**
  * On-screen (TEXT ONLY — never spoken, no Polly) welcome banner shown when
  * the app loads, independent of starting a practice session. Deliberately
@@ -207,12 +302,14 @@ export function buildWelcomeBannerPrompt(ctx: WelcomeBannerContext): { system: s
   return { system, user };
 }
 
-export function buildProgressQueryPrompt(ragContext: string, question: string): { system: string; user: string } {
+export function buildProgressQueryPrompt(ragContext: string, question: string, preferredLanguage?: string): { system: string; user: string } {
+  const languageInstruction = preferredLanguage ? ` Write the answer in ${preferredLanguage}.` : '';
   const system = [
     'You are a warm, encouraging civics tutor.',
     'Answer the user\'s question about their own study progress using ONLY the progress report content provided.',
     'If the reports do not contain the answer, say you do not have that detail yet.',
     'Do not give legal or immigration advice.',
+    languageInstruction,
     '',
     TTS_HYGIENE,
   ].join('\n');
@@ -251,6 +348,24 @@ export class TurnInterpreterAdapter {
     return `Welcome! Let's get started with today's civics practice. First question: ${ctx.firstQuestion.question}`;
   }
 
+  async explainStudyQuestion(item: CivicsItem, preferredLanguage?: string): Promise<string> {
+    try {
+      const explanation = await this.complete(buildStudyQuestionPrompt(item, preferredLanguage));
+      if (explanation && explanation.trim()) return explanation.trim();
+      console.warn('[TurnInterpreter] Study explanation model returned an empty response.');
+    } catch (error) {
+      console.warn('[TurnInterpreter] Study explanation unavailable; using the concise fallback.', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const localizedFallbacks: Record<string, string> = {
+      Spanish: 'Esta pregunta evalúa tu comprensión de un concepto importante de educación cívica de Estados Unidos.',
+      French: 'Cette question évalue votre compréhension d’un concept important de l’éducation civique américaine.',
+      Arabic: 'يقيس هذا السؤال فهمك لمفهوم مهم في التربية المدنية الأمريكية.',
+    };
+    return localizedFallbacks[preferredLanguage ?? ''] ?? 'This question checks your understanding of an important part of U.S. civics.';
+  }
+
   async generateWelcomeBanner(ctx: WelcomeBannerContext): Promise<string> {
     try {
       const raw = await this.complete(buildWelcomeBannerPrompt(ctx));
@@ -269,14 +384,19 @@ export class TurnInterpreterAdapter {
     return `Welcome back! So far you've answered ${answered} question${answered === 1 ? '' : 's'} with ${acc}% accuracy. Keep up the great work — let's keep building on that today.`;
   }
 
-  async answerProgressQuery(ragContext: string, question: string): Promise<string> {
+  async answerProgressQuery(ragContext: string, question: string, preferredLanguage?: string): Promise<string> {
     try {
-      const text = await this.complete(buildProgressQueryPrompt(ragContext, question));
+      const text = await this.complete(buildProgressQueryPrompt(ragContext, question, preferredLanguage));
       if (text && text.trim()) return text.trim();
     } catch {
       // fallback below
     }
-    return "Let's keep practicing your civics questions. Ready for the next one?";
+    const localizedFallbacks: Record<string, string> = {
+      Spanish: 'Sigamos practicando las preguntas de educación cívica. ¿Continuamos?',
+      French: 'Continuons à réviser les questions d’éducation civique. On continue ?',
+      Arabic: 'لنتابع التدريب على أسئلة التربية المدنية. هل نكمل؟',
+    };
+    return localizedFallbacks[preferredLanguage ?? ''] ?? "Let's keep practicing your civics questions. Ready for the next one?";
   }
 }
 

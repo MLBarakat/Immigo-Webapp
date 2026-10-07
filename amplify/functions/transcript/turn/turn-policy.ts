@@ -16,7 +16,7 @@
  */
 import type { CivicsItem } from './types';
 import { answerInBank, isNearMiss, isLegalAdviceQuery } from './matching';
-import type { Intent, TurnInterpretation } from './types';
+import type { Intent, SimulationMode, TurnInterpretation } from './types';
 
 export type ReplyKind =
   | 'grade_feedback' | 'teach' | 'assist' | 'affirm' | 'redirect' | 'clarify' | 'safe_fail'
@@ -47,6 +47,8 @@ const SAFE = {
   safeFail: "Sorry, something went wrong on my side. Let's try that again.",
   offTopic: "That's outside what I can help with here, but I'm happy to keep practicing civics with you.",
   confirm: "I want to make sure I heard you correctly. Could you say your answer once more?",
+  practiceRetry: "That's not quite right. Try once more, or ask me for a hint.",
+  dynamicAnswer: 'This answer changes over time and cannot be verified from the stored official bank. I will leave it unscored and move on.',
   legalAdvice: "I can only help you practice civics questions and English speaking. I cannot provide legal advice or evaluate your eligibility for naturalization. Please consult a licensed immigration attorney or a DOJ-accredited representative.",
 };
 
@@ -68,6 +70,7 @@ export interface ResolveOptions {
    * model's self-reported matchedAnswer.
    */
   rawTranscript?: string | null;
+  simulationMode?: SimulationMode;
 }
 
 export function resolveTurn(interp: TurnInterpretation | null, opts: ResolveOptions): TurnOutcome {
@@ -105,7 +108,7 @@ export function resolveTurn(interp: TurnInterpretation | null, opts: ResolveOpti
     case 'off_topic':
       return outcome('off_topic', null, false, false, 'redirect', SAFE.offTopic, false, ['off_topic']);
     case 'unclear':
-      return outcome('unclear', null, false, false, 'clarify', SAFE.clarify, false, []);
+      return outcome('unclear', null, false, false, 'clarify', SAFE.clarify, false, ['unclear_input']);
 
     case 'repeat': {
       // Literal re-ask, built from the REAL question text (not the model's own
@@ -134,6 +137,9 @@ function resolveAnswer(interp: TurnInterpretation, opts: ResolveOptions): TurnOu
   if (!item) {
     // Claimed an answer but the server has no active question -> don't grade.
     return outcome('unclear', null, false, false, 'clarify', SAFE.clarify, false, ['answer_without_active_question']);
+  }
+  if (item.kind === 'dynamic') {
+    return outcome('answer', null, false, true, 'grade_feedback', SAFE.dynamicAnswer, false, ['dynamic_ungraded']);
   }
   const g = interp.grade;
   if (!g) {
@@ -200,6 +206,12 @@ function resolveAnswer(interp: TurnInterpretation, opts: ResolveOptions): TurnOu
 function notCorrect(opts: ResolveOptions, interp: TurnInterpretation, item: CivicsItem, extraFlags: string[]): TurnOutcome {
   if (opts.isConfirmationRetry) {
     return outcome('answer', 'incorrect', true, true, 'grade_feedback', interp.reply, true, extraFlags);
+  }
+  if (opts.simulationMode === 'practice') {
+    return outcome('answer', null, false, false, 'needs_confirmation', SAFE.practiceRetry, false, [...extraFlags, 'practice_retry']);
+  }
+  if (opts.simulationMode === 'study') {
+    return outcome('answer', 'incorrect', true, true, 'grade_feedback', interp.reply, true, [...extraFlags, 'study_feedback']);
   }
   if (isNearMiss(opts.rawTranscript ?? null, item.acceptableAnswers)) {
     return outcome('answer', null, false, false, 'needs_confirmation', SAFE.confirm, false, [...extraFlags, 'awaiting_confirmation', 'near_miss']);

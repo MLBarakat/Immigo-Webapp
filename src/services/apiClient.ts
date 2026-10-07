@@ -1,5 +1,6 @@
 import amplifyOutputs from '../../amplify_outputs.json';
 import { logger } from '../logger';
+import type { SimulationMode } from '../context/conversationContextTypes';
 
 const API_BASE_URL = (amplifyOutputs as { custom?: { apiBaseUrl?: string; API_URL?: string } }).custom?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || '';
 const API_KEY = import.meta.env.VITE_API_KEY;
@@ -223,8 +224,8 @@ export class ApiClient {
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     currentItemId?: string | null,
-    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; voiceId?: string },
-    options: { headers?: Record<string, string>; voiceId?: string } = {}
+    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string },
+    options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -254,6 +255,8 @@ export class ApiClient {
         sessionId,
         currentItemId,
         confirmationRetry,
+        simulationMode: effectiveOptions.simulationMode ?? 'standard',
+        preferredLanguage: effectiveOptions.preferredLanguage ?? 'en-US',
         ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {})
       },
       effectiveOptions
@@ -268,7 +271,7 @@ export class ApiClient {
    */
   async postSessionStart(
     sessionId?: string | null,
-    options: { headers?: Record<string, string>; voiceId?: string } = {}
+    options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -281,6 +284,8 @@ export class ApiClient {
     return this.sendTranscriptRequest({
       sessionStart: true,
       sessionId,
+      simulationMode: options.simulationMode ?? 'standard',
+      preferredLanguage: options.preferredLanguage ?? 'en-US',
       ...(options.voiceId ? { voiceId: options.voiceId } : {})
     }, options);
   }

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { BookOpen, MessageSquare, SlidersHorizontal } from 'lucide-react';
 import { Amplify } from 'aws-amplify';
 import { useTranslation } from 'react-i18next';
 import amplifyOutputs from '../amplify_outputs.json';
@@ -14,13 +15,14 @@ import { AuthPage } from './components/AuthPage';
 
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { ConversationHistory } from './components/ConversationHistory';
-import { ChatInput } from './components/ChatInput';
-import { VoiceHub } from './components/VoiceHub';
 import { WelcomeModal } from './components/WelcomeModal';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { MobileMenuOverlay } from './components/MobileMenuOverlay';
+import { LeftPanel } from './components/LeftPanel';
+import { CenterPanel } from './components/CenterPanel';
+import { RightPanel } from './components/RightPanel';
+import type { SimulationMode } from './context/conversationContextTypes';
 
 import { DisplayUser } from './types/user';
 import { UserSettings, FontSize } from './types/settings';
@@ -46,24 +48,28 @@ interface ConversationWorkspaceProps {
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
   const { user, profile, logout, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
-  const { t } = useTranslation(['conversation', 'common']);
+  const { t: tConversation } = useTranslation('conversation');
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  // Resolve the active voice: prefer the user's saved setting, fall back to
-  // the language-matched default, then hard-fall-back to Joanna.
+  const [simulationMode, setSimulationMode] = useState<SimulationMode>('standard');
+  const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
+
   const activeVoiceId = normalizeVoiceId(
     userSettings.ai_voice_id ?? getDefaultVoiceId(userSettings.language || profile?.language)
   );
-  const manager = useConversation({ apiClient: apiClientInstance, userId: user?.id ?? null, voiceId: activeVoiceId });
+  const manager = useConversation({
+    apiClient: apiClientInstance,
+    userId: user?.id ?? null,
+    voiceId: activeVoiceId,
+    simulationMode,
+    preferredLanguage: currentLanguageCode,
+  });
 
-  // UI Modal State Management
+  // ── UI State ──
   const hasSeenWelcome = Boolean(
     userSettings.has_seen_welcome ||
     (user?.id && (() => {
-      try {
-        return localStorage.getItem(`immigo_welcome_seen_${user.id}`) === 'true';
-      } catch {
-        return false;
-      }
+      try { return localStorage.getItem(`immigo_welcome_seen_${user.id}`) === 'true'; }
+      catch { return false; }
     })())
   );
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
@@ -72,11 +78,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const handleCloseWelcome = () => {
     setWelcomeDismissed(true);
     if (user?.id) {
-      try {
-        localStorage.setItem(`immigo_welcome_seen_${user.id}`, 'true');
-      } catch {
-        // Ignore localStorage error in restricted environments
-      }
+      try { localStorage.setItem(`immigo_welcome_seen_${user.id}`, 'true'); }
+      catch { /* ignore */ }
     }
     void updateUserSettings({ has_seen_welcome: true });
   };
@@ -85,29 +88,163 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
+  // ── Panel collapse state ──
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [mobileWorkspace, setMobileWorkspace] = useState<'interview' | 'resources' | 'controls'>('interview');
 
   const displayUser: DisplayUser = {
     name: profile?.full_name || user?.email || 'User',
-    initials: (profile?.full_name || user?.email || 'U').substring(0, 2).toUpperCase()
+    initials: (() => {
+      const fullName = profile?.full_name?.trim();
+      if (fullName) {
+        const parts = fullName.split(/\s+/);
+        if (parts.length >= 2) {
+          return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        }
+        return parts[0].substring(0, 2).toUpperCase();
+      }
+      return (user?.email || 'U').substring(0, 2).toUpperCase();
+    })(),
   };
 
   const handleSettingChange = (key: keyof UserSettings, value: unknown) => {
-    if (key === 'font_size') {
-      applyFontSize(value as FontSize);
-    }
+    if (key === 'font_size') applyFontSize(value as FontSize);
     void updateUserSettings({ [key]: value } as Partial<UserSettings>);
   };
+  const isFocusMode = leftCollapsed && rightCollapsed;
+  const toggleFocusMode = () => {
+    const shouldCollapse = !isFocusMode;
+    setLeftCollapsed(shouldCollapse);
+    setRightCollapsed(shouldCollapse);
+  };
 
+  // ── Mobile layout ──
+  if (!isDesktop) {
+    return (
+      <div className="flex flex-col h-dvh w-full bg-immigo-gray-50 text-deep-navy font-sans antialiased overflow-hidden">
+        {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} />}
+        {showAppSettings && (
+          <ApplicationSettingsModal
+            isOpen={showAppSettings}
+            settings={userSettings}
+            pollyVoices={APP_VOICES.map(v => ({ id: v.id, name: v.displayName }))}
+            isDesktop={false}
+            onClose={() => setShowAppSettings(false)}
+            onSave={async (newSettings) => { await updateUserSettings(newSettings); setShowAppSettings(false); }}
+          />
+        )}
+        {showAccountSettings && (
+          <AccountSettingsPage onNavigateBack={() => setShowAccountSettings(false)} isDesktop={false} />
+        )}
+        <MobileMenuOverlay
+          isOpen={showMobileMenu}
+          onClose={() => setShowMobileMenu(false)}
+          onOpenAppSettings={() => { setShowMobileMenu(false); setShowAppSettings(true); }}
+          onOpenAccountSettings={() => { setShowMobileMenu(false); setShowAccountSettings(true); }}
+          onSignOut={logout}
+          onClearConversation={manager.clearConversation}
+          onDownloadTranscript={manager.downloadTranscript}
+          user={displayUser}
+          userSettings={userSettings}
+          currentLanguageCode={currentLanguageCode}
+          onLanguageChange={(code) => { void updateUserLanguage(code); }}
+          onSettingChange={handleSettingChange}
+        />
+        <Header
+          displayUser={displayUser}
+          userSettings={userSettings}
+          onOpenAppSettings={() => setShowAppSettings(true)}
+          onOpenAccountSettings={() => setShowAccountSettings(true)}
+          onSignOut={logout}
+          onToggleMobileMenu={() => setShowMobileMenu(true)}
+          onSettingChange={handleSettingChange}
+          currentLanguageCode={currentLanguageCode}
+          onLanguageChange={(code) => { void updateUserLanguage(code); }}
+        />
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {mobileWorkspace === 'resources' && (
+            <LeftPanel
+              isCollapsed={false}
+              isMobile
+              onToggleCollapse={() => setMobileWorkspace('interview')}
+              liveStats={manager.liveStats}
+              conversationLength={manager.conversationHistory.length}
+              userId={user?.id}
+              isGeneratingProgressReport={manager.isGeneratingProgressReport}
+            />
+          )}
+          {mobileWorkspace === 'interview' && (
+            <CenterPanel
+              conversationHistory={manager.conversationHistory}
+              displayUser={displayUser}
+              interimTranscript={manager.interimTranscript}
+              appStatus={manager.appStatus}
+              isSessionActive={manager.isSessionActive}
+              sessionTime={manager.sessionTime}
+              errorMessage={manager.errorMessage}
+              hasMoreHistory={manager.hasMoreHistory}
+              onSendMessage={manager.sendTextMessage}
+              onStartSession={manager.startSession}
+              onStartTextSession={manager.startTextSession}
+              onEndSession={manager.endSession}
+              onLoadOlder={manager.loadOlderMessages}
+              onClearError={manager.clearError}
+            />
+          )}
+          {mobileWorkspace === 'controls' && (
+            <RightPanel
+              isCollapsed={false}
+              isMobile
+              onToggleCollapse={() => setMobileWorkspace('interview')}
+              simulationMode={simulationMode}
+              onSimulationModeChange={setSimulationMode}
+              onClearSession={manager.clearConversation}
+              onDownloadTranscript={manager.downloadTranscript}
+              conversationLength={manager.conversationHistory.length}
+              appStatus={manager.appStatus}
+            />
+          )}
+        </div>
+        <nav className="grid grid-cols-3 border-t border-immigo-gray-200 bg-star-white shrink-0" aria-label={tConversation('workspace.mobile.navigation')}>
+          <button
+            type="button"
+            onClick={() => setMobileWorkspace('resources')}
+            aria-current={mobileWorkspace === 'resources' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center gap-1 py-2 text-xs font-semibold ${mobileWorkspace === 'resources' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+          >
+            <BookOpen className="w-5 h-5" />
+            {tConversation('workspace.mobile.resources')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileWorkspace('interview')}
+            aria-current={mobileWorkspace === 'interview' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center gap-1 py-2 text-xs font-semibold ${mobileWorkspace === 'interview' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+          >
+            <MessageSquare className="w-5 h-5" />
+            {tConversation('workspace.mobile.interview')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileWorkspace('controls')}
+            aria-current={mobileWorkspace === 'controls' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center gap-1 py-2 text-xs font-semibold ${mobileWorkspace === 'controls' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+          >
+            <SlidersHorizontal className="w-5 h-5" />
+            {tConversation('workspace.mobile.controls')}
+          </button>
+        </nav>
+        <Footer />
+      </div>
+    );
+  }
+
+  // ── Desktop three-panel layout ──
   return (
-    /* Enforced h-dvh (not h-screen/100vh) and overflow-hidden to lock the app to the
-       REAL visible viewport — h-screen (100vh) does not account for mobile browser
-       chrome (address bar) showing/hiding, which can clip bottom content (the mic
-       button) with no way to scroll to it since overflow is hidden. h-dvh tracks the
-       actual visible viewport and matches the 100dvh already used on #root in index.css. */
     <div className="flex flex-col h-dvh w-full bg-immigo-gray-50 text-deep-navy font-sans antialiased overflow-hidden">
 
-      {/* Absolute Positioning Overlays */}
+      {/* Modals / Overlays */}
       {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} />}
 
       {showAppSettings && (
@@ -117,18 +254,12 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           pollyVoices={APP_VOICES.map(v => ({ id: v.id, name: v.displayName }))}
           isDesktop={isDesktop}
           onClose={() => setShowAppSettings(false)}
-          onSave={async (newSettings) => {
-            await updateUserSettings(newSettings);
-            setShowAppSettings(false);
-          }}
+          onSave={async (newSettings) => { await updateUserSettings(newSettings); setShowAppSettings(false); }}
         />
       )}
 
       {showAccountSettings && (
-        <AccountSettingsPage
-          onNavigateBack={() => setShowAccountSettings(false)}
-          isDesktop={isDesktop}
-        />
+        <AccountSettingsPage onNavigateBack={() => setShowAccountSettings(false)} isDesktop={isDesktop} />
       )}
 
       <MobileMenuOverlay
@@ -140,9 +271,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         onClearConversation={manager.clearConversation}
         onDownloadTranscript={manager.downloadTranscript}
         user={displayUser}
+        userSettings={userSettings}
+        currentLanguageCode={currentLanguageCode}
+        onLanguageChange={(code) => { void updateUserLanguage(code); }}
+        onSettingChange={handleSettingChange}
       />
 
-      {/* Global Navigation Layout */}
+      {/* Top Navigation */}
       <Header
         displayUser={displayUser}
         userSettings={userSettings}
@@ -152,91 +287,54 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         onToggleMobileMenu={() => setShowMobileMenu(true)}
         onSettingChange={handleSettingChange}
         currentLanguageCode={currentLanguageCode}
-        onLanguageChange={(languageCode) => { void updateUserLanguage(languageCode); }}
+        onLanguageChange={(code) => { void updateUserLanguage(code); }}
       />
 
-      {/* FIXED: min-h-0 prevents children from breaking out of the strict flex bounds */}
-      <main className="flex-grow flex max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 gap-6 justify-center items-stretch min-h-0">
+      {/* Three-column workspace */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* LEFT PANEL */}
+        <LeftPanel
+          isCollapsed={leftCollapsed}
+          onToggleCollapse={() => setLeftCollapsed(p => !p)}
+          liveStats={manager.liveStats}
+          conversationLength={manager.conversationHistory.length}
+          userId={user?.id}
+          isGeneratingProgressReport={manager.isGeneratingProgressReport}
+        />
 
-        {/* Left Hand: Scrollable Chat Window Area */}
-        <section className="flex-grow flex flex-col bg-star-white rounded-xl shadow-md p-4 md:p-6 overflow-hidden relative border border-immigo-gray-200 min-h-0 w-full">
+        {/* CENTER PANEL */}
+        <CenterPanel
+          conversationHistory={manager.conversationHistory}
+          displayUser={displayUser}
+          interimTranscript={manager.interimTranscript}
+          appStatus={manager.appStatus}
+          isSessionActive={manager.isSessionActive}
+          sessionTime={manager.sessionTime}
+          errorMessage={manager.errorMessage}
+          hasMoreHistory={manager.hasMoreHistory}
+          onSendMessage={manager.sendTextMessage}
+          onStartSession={manager.startSession}
+          onStartTextSession={manager.startTextSession}
+          onEndSession={manager.endSession}
+          onLoadOlder={manager.loadOlderMessages}
+          onClearError={manager.clearError}
+          onToggleFocus={toggleFocusMode}
+          isFocusMode={isFocusMode}
+        />
 
-          {/* FIXED: Removed redundant AudioRecorder (and its placeholder text/button) completely */}
+        {/* RIGHT PANEL */}
+        <RightPanel
+          isCollapsed={rightCollapsed}
+          onToggleCollapse={() => setRightCollapsed(p => !p)}
+          simulationMode={simulationMode}
+          onSimulationModeChange={setSimulationMode}
+          onClearSession={manager.clearConversation}
+          onDownloadTranscript={manager.downloadTranscript}
+          conversationLength={manager.conversationHistory.length}
+          appStatus={manager.appStatus}
+        />
+      </div>
 
-          {manager.errorMessage && (
-            <div className="p-4 mb-4 bg-art-red-50 border-l-4 border-art-red-600 rounded text-sm text-art-red-800 flex justify-between items-center shrink-0" role="alert">
-              <p className="font-medium">{t('app.systemError', { message: manager.errorMessage })}</p>
-              <button onClick={manager.clearError} className="text-xs underline hover:text-art-red-900 cursor-pointer">{t('app.acknowledge')}</button>
-            </div>
-          )}
-
-          {/* Core Chat Scroll Viewport */}
-          <div className="flex-1 overflow-y-auto flex flex-col mb-4 min-h-0">
-            {manager.conversationHistory.length > 0 || manager.interimTranscript ? (
-              <ConversationHistory
-                messages={manager.conversationHistory}
-                displayUser={displayUser}
-                interimTranscript={manager.interimTranscript}
-                onLoadOlder={manager.loadOlderMessages}
-                hasMore={manager.hasMoreHistory}
-              />
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-75">
-                <p className="text-sm text-immigo-gray-500 italic">{t('app.noMessages')}</p>
-                <p className="text-xs text-immigo-gray-400 mt-2">{t('app.startTraining')}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Desktop/Mobile Universal Text Interface */}
-          <div className="border-t border-immigo-gray-200 pt-4 mt-auto shrink-0">
-            <ChatInput onSendMessage={manager.sendTextMessage} disabled={manager.isSessionActive} />
-          </div>
-
-          {/* Mobile Footer Voice Hub (Hidden on Desktop). pb-[env(...)] adds the
-              device's safe-area inset (home-indicator gesture bar on notched
-              phones) on top of the normal pt-4, so the primary mic button is
-              never crowded by or rendered under it. */}
-          <div className="md:hidden flex justify-center mt-4 border-t border-immigo-gray-200 pt-4 pb-[env(safe-area-inset-bottom)] shrink-0">
-            <VoiceHub
-              status={manager.appStatus}
-              isSessionActive={manager.isSessionActive}
-              sessionTime={manager.sessionTime}
-              onStartSession={manager.startSession}
-              onEndSession={manager.endSession}
-            />
-          </div>
-        </section>
-
-        {/* Right Hand: Fixed Tool Sidebar (Hidden on Mobile) */}
-        <aside className="hidden md:flex w-72 flex-col shrink-0 bg-star-white rounded-xl shadow-md p-6 space-y-6 border border-immigo-gray-200 overflow-y-auto">
-          <div className="flex flex-col space-y-3 pb-6 border-b border-immigo-gray-200">
-            <button
-              onClick={manager.clearConversation}
-              disabled={manager.conversationHistory.length === 0}
-              className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium transition-colors border border-immigo-gray-200 text-immigo-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <span className="mr-2 text-lg">🗑️</span> {t('app.clearConversation')}
-            </button>
-            <button
-              onClick={manager.downloadTranscript}
-              disabled={manager.conversationHistory.length === 0}
-              className="flex items-center justify-center p-3 rounded-lg hover:bg-immigo-gray-100 text-sm font-medium transition-colors border border-immigo-gray-200 text-immigo-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <span className="mr-2 text-lg">⬇️</span> {t('app.downloadScript')}
-            </button>
-          </div>
-
-          <VoiceHub
-            status={manager.appStatus}
-            isSessionActive={manager.isSessionActive}
-            sessionTime={manager.sessionTime}
-            onStartSession={manager.startSession}
-            onEndSession={manager.endSession}
-          />
-        </aside>
-
-      </main>
       <Footer />
     </div>
   );

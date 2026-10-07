@@ -2,6 +2,9 @@ import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Settings, LogOut, Trash2, Download } from 'lucide-react';
 import { DisplayUser } from '../types/user'; // Import the new type
+import { UserSettings } from '../types/settings';
+import { FontSizeSelector } from './FontSizeSelector';
+import { LanguageSelector } from './LanguageSelector';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface MobileMenuOverlayProps {
@@ -13,6 +16,10 @@ interface MobileMenuOverlayProps {
   onClearConversation: () => void;
   onDownloadTranscript: () => void;
   user: DisplayUser; // Use the new type
+  userSettings: Partial<UserSettings>;
+  currentLanguageCode: string;
+  onLanguageChange: (code: string) => void;
+  onSettingChange: (key: keyof UserSettings, value: unknown) => void;
 }
 
 export const MobileMenuOverlay: React.FC<MobileMenuOverlayProps> = ({
@@ -23,15 +30,19 @@ export const MobileMenuOverlay: React.FC<MobileMenuOverlayProps> = ({
   onSignOut,
   onClearConversation,
   onDownloadTranscript,
-  user
+  user,
+  userSettings,
+  currentLanguageCode,
+  onLanguageChange,
+  onSettingChange,
 }) => {
   if (!isOpen) return null;
 
-  return <MobileMenuContent {...{ isOpen, onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user }} />;
+  return <MobileMenuContent {...{ isOpen, onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user, userSettings, currentLanguageCode, onLanguageChange, onSettingChange }} />;
 };
 
-function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user }: MobileMenuOverlayProps): JSX.Element {
-  const { t } = useTranslation();
+function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user, userSettings, currentLanguageCode, onLanguageChange, onSettingChange }: MobileMenuOverlayProps): JSX.Element {
+  const { t } = useTranslation(['common', 'conversation']);
   const modalRef = useFocusTrap(true);
 
   useEffect(() => {
@@ -45,6 +56,11 @@ function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, 
   const handleAction = (action: () => void) => {
     action();
     onClose();
+  };
+  const handleClearConversation = () => {
+    if (window.confirm(t('workspace.right.clearConfirmMessage', { ns: 'conversation' }))) {
+      handleAction(onClearConversation);
+    }
   };
 
   return (
@@ -77,9 +93,20 @@ function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, 
           </div>
 
           <div>
+            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">{t('workspace.mobile.accessibility', { ns: 'conversation' })}</h3>
+            <div className="flex flex-wrap items-center gap-3 px-3 pt-2">
+              <LanguageSelector currentLanguageCode={currentLanguageCode} onLanguageChange={onLanguageChange} />
+              <FontSizeSelector
+                currentFontSize={userSettings.font_size || 'default'}
+                onFontSizeChange={(size) => onSettingChange('font_size', size)}
+              />
+            </div>
+          </div>
+
+          <div>
             <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">{t('menu.tools')}</h3>
             <div className="mt-1">
-              <button onClick={() => handleAction(onClearConversation)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
+              <button onClick={handleClearConversation} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
                 <Trash2 className="w-6 h-6 text-immigo-gray-700" />
                 <span className="font-semibold text-deep-navy">{t('menu.clearConversation')}</span>
               </button>

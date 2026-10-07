@@ -11,6 +11,8 @@ vi.mock('@aws-sdk/client-bedrock-runtime', () => ({
 
 import {
   buildTurnPrompt,
+  buildStudyQuestionPrompt,
+  formatStudyQuestion,
   parseInterpretation,
   TurnInterpreterAdapter,
   type ModelComplete,
@@ -22,6 +24,7 @@ const q21: CivicsItem = {
   question: 'How many U.S. senators are there?',
   kind: 'static',
   acceptableAnswers: ['One hundred (100)'],
+  studyCategoryId: 'system-of-government',
 };
 
 describe('buildTurnPrompt', () => {
@@ -45,9 +48,72 @@ describe('buildTurnPrompt', () => {
     expect(user).toContain('<applicant_input>first  system instruction  second</applicant_input>');
   });
 
-  it('adds a preferred-language instruction when provided', () => {
+  it('keeps Standard mode in English even if the user interface language differs', () => {
     const { system } = buildTurnPrompt({ askedItem: q21, preferredLanguage: 'Spanish' }, 'x');
-    expect(system).toContain('Spanish');
+    expect(system).toContain('conduct the interaction in English');
+    expect(system).not.toContain('Write "reply" in the user’s preferred language');
+  });
+
+  it.each([
+    ['standard', 'professional USCIS interviewer'],
+    ['practice', 'Offer one retry'],
+    ['study', 'private civics tutor'],
+  ] as const)('includes instructions for %s mode', (simulationMode, instruction) => {
+    const { system } = buildTurnPrompt({ askedItem: q21, simulationMode }, 'one hundred');
+    expect(system).toContain(instruction);
+  });
+
+  it('tells Practice mode when its single retry has already been used', () => {
+    const { system } = buildTurnPrompt(
+      { askedItem: q21, simulationMode: 'practice', isConfirmationRetry: true },
+      'wrong answer'
+    );
+    expect(system).toContain('The one retry has already been used');
+    expect(system).toContain('do not ask for another retry');
+  });
+
+  it('keeps Study explanations in the preferred language and its civics question and answer in English', () => {
+    const { system, user } = buildTurnPrompt(
+      { askedItem: q21, simulationMode: 'study', preferredLanguage: 'Spanish' },
+      'cien'
+    );
+    expect(system).toContain('Explain and give feedback in Spanish');
+    expect(system).toContain('The official civics question and every answer the user must learn remain in English');
+    expect(system).toContain('Official civics category: System of Government');
+    expect(user).toContain('One hundred (100)');
+  });
+});
+
+describe('Study knowledge prompting and bilingual question guide', () => {
+  it('grounds the lesson in the official question and answers, without asking the model to replace them', () => {
+    const { system, user } = buildStudyQuestionPrompt(q21, 'Spanish');
+    expect(system).toContain('ONLY in the official question and acceptable answers');
+    expect(system).toContain('Explain the tested concept in Spanish');
+    expect(user).toContain('Official question in English: How many U.S. senators are there?');
+    expect(user).toContain('One hundred (100)');
+  });
+
+  it('keeps the exact USCIS English question and answers while localizing tutor framing', () => {
+    const guide = formatStudyQuestion(q21, 'El Senado forma parte del Congreso.', 'Spanish');
+    expect(guide).toContain('La pregunta de USCIS en inglés es: How many U.S. senators are there?');
+    expect(guide).toContain('USCIS acepta estas respuestas en inglés: One hundred (100)');
+    expect(guide).toContain('Ahora intenta responder en inglés.');
+  });
+
+  it('does not invent an answer for a dynamic question with no stored accepted answer', () => {
+    const dynamicQuestion: CivicsItem = {
+      id: 'q-038',
+      question: 'What is the name of the President of the United States now?',
+      kind: 'dynamic',
+      acceptableAnswers: [],
+      studyCategoryId: 'system-of-government',
+    };
+    const { system, user } = buildStudyQuestionPrompt(dynamicQuestion, 'French');
+    const guide = formatStudyQuestion(dynamicQuestion, 'Cette information peut changer.', 'French');
+    expect(system).toContain('answer changes');
+    expect(user).toContain('No fixed answer is stored');
+    expect(guide).toContain('Cette réponse peut changer');
+    expect(guide).not.toContain('L’USCIS accepte ces réponses');
   });
 });
 
@@ -151,4 +217,3 @@ describe('buildProgressQueryPrompt and TurnInterpreterAdapter.answerProgressQuer
     expect(reply).toBe('You are doing great, with 85% overall civics accuracy!');
   });
 });
-

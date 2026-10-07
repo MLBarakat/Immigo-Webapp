@@ -26,6 +26,63 @@ const interp = (o: Partial<TurnInterpretation>): TurnInterpretation => ({
 });
 
 describe('confirm-on-mismatch, targeted (near-miss vs far-miss)', () => {
+  it('practice mode offers one retry without committing a wrong answer', () => {
+    const firstAttempt = resolveTurn(
+      interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+      { askedItem: nameItem, rawTranscript: 'jefferson', simulationMode: 'practice' }
+    );
+    expect(firstAttempt.replyKind).toBe('needs_confirmation');
+    expect(firstAttempt.committedVerdict).toBeNull();
+    expect(firstAttempt.scoreChanged).toBe(false);
+    expect(firstAttempt.advanceQuestion).toBe(false);
+    expect(firstAttempt.flags).toContain('practice_retry');
+
+    const retry = resolveTurn(
+      interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+      { askedItem: nameItem, rawTranscript: 'jefferson', isConfirmationRetry: true, simulationMode: 'practice' }
+    );
+    expect(retry.committedVerdict).toBe('incorrect');
+    expect(retry.advanceQuestion).toBe(true);
+  });
+
+  it('practice mode still accepts a correct answer immediately', () => {
+    const out = resolveTurn(
+      interp({ grade: { verdict: 'correct', matchedAnswer: 'Washington' } }),
+      { askedItem: nameItem, rawTranscript: 'Washington', simulationMode: 'practice' }
+    );
+    expect(out.committedVerdict).toBe('correct');
+    expect(out.advanceQuestion).toBe(true);
+  });
+
+  it('study mode gives tutor feedback and records a wrong answer without a retry', () => {
+    const out = resolveTurn(
+      interp({ grade: { verdict: 'incorrect', matchedAnswer: null }, reply: 'El Senado tiene cien miembros.' }),
+      { askedItem: nameItem, rawTranscript: 'jefferson', simulationMode: 'study' }
+    );
+    expect(out.committedVerdict).toBe('incorrect');
+    expect(out.scoreChanged).toBe(true);
+    expect(out.advanceQuestion).toBe(true);
+    expect(out.replyKind).toBe('grade_feedback');
+    expect(out.flags).toContain('study_feedback');
+  });
+
+  it('leaves dynamic current-answer questions ungraded but advances the session', () => {
+    const dynamicItem: CivicsItem = {
+      id: 'q-038',
+      question: 'Who is the President of the United States now?',
+      kind: 'dynamic',
+      acceptableAnswers: [],
+    };
+    const out = resolveTurn(
+      interp({ grade: { verdict: 'correct', matchedAnswer: 'An unverified answer' } }),
+      { askedItem: dynamicItem, rawTranscript: 'An unverified answer', simulationMode: 'study' }
+    );
+    expect(out.committedVerdict).toBeNull();
+    expect(out.scoreChanged).toBe(false);
+    expect(out.advanceQuestion).toBe(true);
+    expect(out.flags).toContain('dynamic_ungraded');
+  });
+
   it('NEAR-MISS (accent-garbled) -> needs_confirmation, no grade yet', () => {
     const out = resolveTurn(
       interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, screen, cleanup } from '@testing-library/react';
 import { VoiceHub } from '../VoiceHub';
+import { MIC_CONSENT_VERSION } from '../../utils/micConsent';
 
 // Mock the nested sub-component to prevent rendering dependencies from polluting tests
 vi.mock('../AnimatedStatusButton', () => ({
@@ -93,6 +94,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
   });
 
   it('should suppress rapid click spamming patterns to safeguard background audio recording channels', () => {
+    localStorage.setItem('immigo_mic_consent_version', MIC_CONSENT_VERSION);
     let mockTime = 1000;
     vi.spyOn(performance, 'now').mockImplementation(() => mockTime);
 

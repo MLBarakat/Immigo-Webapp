@@ -9,12 +9,15 @@ export interface CivicsItem {
   kind: 'static' | 'dynamic';
   acceptableAnswers: string[];
   asterisk?: boolean;
+  studyCategoryId?: string;
 }
 
 export type Intent =
   | 'answer' | 'explain' | 'assist' | 'affirmation'
   | 'smalltalk' | 'off_topic' | 'manipulation' | 'unclear'
   | 'repeat' | 'hint' | 'legal_advice';
+
+export type SimulationMode = 'standard' | 'practice' | 'study';
 
 export interface ProposedGrade {
   verdict: 'correct' | 'incorrect' | 'partial';
@@ -33,6 +36,8 @@ export interface TurnContext {
   askedItem: CivicsItem;
   preferredLanguage?: string;
   userFirstName?: string;
+  simulationMode?: SimulationMode;
+  isConfirmationRetry?: boolean;
 }
 
 export interface SessionStartContext {

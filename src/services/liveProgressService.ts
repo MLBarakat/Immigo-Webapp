@@ -20,6 +20,12 @@ export interface LiveSessionStats {
   missedItemIds: string[]; // incorrect or partial, most-recent first
 }
 
+export interface ProgressReport {
+  id: string;
+  date: string;
+  report_markdown: string;
+}
+
 interface GradedRow {
   item_id: string;
   verdict: 'correct' | 'incorrect' | 'partial';
@@ -58,9 +64,29 @@ export async function fetchLiveSessionStats(sessionId: string): Promise<LiveSess
       logger.warn('[LiveProgress] graded_answers query error (non-fatal):', { error: error.message });
       return null;
     }
+
     return computeLiveStats((data ?? []) as GradedRow[]);
   } catch (err) {
     logger.warn('[LiveProgress] Exception fetching live stats (non-fatal):', { error: String(err) });
     return null;
   }
+}
+
+export async function fetchProgressReports(userId: string): Promise<ProgressReport[]> {
+  if (!userId) return [];
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('daily_progress_reports')
+    .select('id, date, report_markdown')
+    .eq('user_id', userId)
+    .order('date', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    logger.error('[LiveProgress] Failed to load historical reports:', undefined, { error: error.message });
+    throw new Error('Progress reports could not be loaded. Please try again.');
+  }
+
+  return (data ?? []) as ProgressReport[];
 }

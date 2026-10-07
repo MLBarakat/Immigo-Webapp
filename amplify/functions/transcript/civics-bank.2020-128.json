@@ -3,6 +3,66 @@
   "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
   "effectiveNote": "Basis of the 2025 civics test (effective 2025-10-20). Applies to N-400 filed on/after 2025-10-20. Pre-cutoff filers take the 2008/100 test (see PMF-02).",
   "builtAt": "2026-08-23T09:15:50.885Z",
+  "studyKnowledge": {
+    "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
+    "grounding": "For each question, the official English question and acceptableAnswers are the factual source for study explanations. Explain the concept without adding unsupported details. Dynamic answers may change and must not be invented.",
+    "categories": [
+      {
+        "id": "principles-of-american-democracy",
+        "title": "Principles of American Democracy",
+        "firstQuestion": 1,
+        "lastQuestion": 12
+      },
+      {
+        "id": "system-of-government",
+        "title": "System of Government",
+        "firstQuestion": 13,
+        "lastQuestion": 62
+      },
+      {
+        "id": "rights-and-responsibilities",
+        "title": "Rights and Responsibilities",
+        "firstQuestion": 63,
+        "lastQuestion": 72
+      },
+      {
+        "id": "colonial-period-and-independence",
+        "title": "Colonial Period and Independence",
+        "firstQuestion": 73,
+        "lastQuestion": 85
+      },
+      {
+        "id": "1800s",
+        "title": "1800s",
+        "firstQuestion": 86,
+        "lastQuestion": 99
+      },
+      {
+        "id": "recent-history",
+        "title": "Recent American History and Other Important Historical Information",
+        "firstQuestion": 100,
+        "lastQuestion": 116
+      },
+      {
+        "id": "geography",
+        "title": "Geography",
+        "firstQuestion": 117,
+        "lastQuestion": 120
+      },
+      {
+        "id": "symbols",
+        "title": "Symbols",
+        "firstQuestion": 121,
+        "lastQuestion": 124
+      },
+      {
+        "id": "holidays",
+        "title": "Holidays",
+        "firstQuestion": 125,
+        "lastQuestion": 128
+      }
+    ]
+  },
   "items": [
     {
       "id": "q-001",
@@ -17,7 +77,8 @@
         "Representative democracy"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-002",
@@ -30,7 +91,8 @@
         "(U.S.) Constitution"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-003",
@@ -46,7 +108,8 @@
         "Protects the rights of the people"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-004",
@@ -63,7 +126,8 @@
         "(Example of) social contract"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-005",
@@ -77,7 +141,8 @@
         "The amendment process"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-006",
@@ -91,7 +156,8 @@
         "(The basic) rights of people living in the United States"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-007",
@@ -104,7 +170,8 @@
         "Twenty-seven (27)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-008",
@@ -120,7 +187,8 @@
         "It identifies individual freedoms."
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-009",
@@ -133,7 +201,8 @@
         "Declaration of Independence"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-010",
@@ -151,7 +220,8 @@
         "Self-government"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-011",
@@ -164,7 +234,8 @@
         "Declaration of Independence"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-012",
@@ -178,7 +249,8 @@
         "Free market economy"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "principles-of-american-democracy"
     },
     {
       "id": "q-013",
@@ -194,7 +266,8 @@
         "No one is above the law."
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-014",
@@ -214,7 +287,8 @@
         "Iroquois Great Law of Peace"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-015",
@@ -229,7 +303,8 @@
         "Separation of powers"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-016",
@@ -243,7 +318,8 @@
         "Congress, president, and the courts"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-017",
@@ -256,7 +332,8 @@
         "Executive branch"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-018",
@@ -271,7 +348,8 @@
         "Legislative branch"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-019",
@@ -284,7 +362,8 @@
         "Senate and House (of Representatives)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-020",
@@ -299,7 +378,8 @@
         "Makes the federal budget"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-021",
@@ -312,7 +392,8 @@
         "One hundred (100)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-022",
@@ -325,7 +406,8 @@
         "Six (6) years"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-023",
@@ -337,7 +419,8 @@
       "acceptableAnswers": [],
       "jurisdictionDependent": true,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-024",
@@ -350,7 +433,8 @@
         "Four hundred thirty-five (435)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-025",
@@ -363,7 +447,8 @@
         "Two (2) years"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-026",
@@ -376,7 +461,8 @@
         "To more closely follow public opinion"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-027",
@@ -389,7 +475,8 @@
         "Two (2)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-028",
@@ -403,7 +490,8 @@
         "The Great Compromise (Connecticut Compromise)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-029",
@@ -415,7 +503,8 @@
       "acceptableAnswers": [],
       "jurisdictionDependent": true,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-030",
@@ -424,13 +513,15 @@
       "asterisk": true,
       "question": "What is the name of the Speaker of the House of Representatives now?",
       "kind": "static",
-      "acceptableAnswers": ["Mike Johnson",
+      "acceptableAnswers": [
+        "Mike Johnson",
         "M. Johnson",
         "Johnson"
       ],
       "jurisdictionDependent": false,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-031",
@@ -444,7 +535,8 @@
         "People of their state"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-032",
@@ -457,7 +549,8 @@
         "Citizens from their state"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-033",
@@ -473,7 +566,8 @@
         "People in their district"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-034",
@@ -486,7 +580,8 @@
         "Citizens from their (congressional) district"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-035",
@@ -501,7 +596,8 @@
         "(Because) some states have more people"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-036",
@@ -514,7 +610,8 @@
         "Four (4) years"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-037",
@@ -528,7 +625,8 @@
         "To keep the president from becoming too powerful"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-038",
@@ -537,13 +635,15 @@
       "asterisk": true,
       "question": "What is the name of the President of the United States now?",
       "kind": "static",
-      "acceptableAnswers": ["Donald Trump",
+      "acceptableAnswers": [
+        "Donald Trump",
         "D. Trump",
         "Trump"
       ],
       "jurisdictionDependent": false,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-039",
@@ -552,12 +652,15 @@
       "asterisk": false,
       "question": "What is the name of the Vice President of the United States now?",
       "kind": "static",
-      "acceptableAnswers": ["JD. Vance",
+      "acceptableAnswers": [
+        "JD. Vance",
         "J. Vance",
-        "Vance"],
+        "Vance"
+      ],
       "jurisdictionDependent": false,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-040",
@@ -570,7 +673,8 @@
         "The Vice President (of the United States)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-041",
@@ -587,7 +691,8 @@
         "Chief diplomat"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-042",
@@ -600,7 +705,8 @@
         "The President (of the United States)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-043",
@@ -613,7 +719,8 @@
         "The President (of the United States)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-044",
@@ -626,7 +733,8 @@
         "The President (of the United States)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-045",
@@ -639,7 +747,8 @@
         "The President (of the United States)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-046",
@@ -654,7 +763,8 @@
         "Federal departments and agencies"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-047",
@@ -667,7 +777,8 @@
         "Advises the President (of the United States)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-048",
@@ -695,7 +806,8 @@
         "Vice President (of the United States)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-049",
@@ -709,7 +821,8 @@
         "It provides a compromise between the popular election of the president and congressional selection."
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-050",
@@ -723,7 +836,8 @@
         "Federal Courts"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-051",
@@ -739,7 +853,8 @@
         "Decides if a law goes against the (U.S.) Constitution"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-052",
@@ -752,7 +867,8 @@
         "Supreme Court"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-053",
@@ -765,7 +881,8 @@
         "Nine (9)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-054",
@@ -778,7 +895,8 @@
         "Five (5)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-055",
@@ -793,7 +911,8 @@
         "(Until) retirement"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-056",
@@ -807,7 +926,8 @@
         "To limit outside (political) influence"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-057",
@@ -816,14 +936,16 @@
       "asterisk": false,
       "question": "Who is the Chief Justice of the United States now?",
       "kind": "static",
-      "acceptableAnswers": ["John Roberts",
+      "acceptableAnswers": [
+        "John Roberts",
         "John G. Roberts",
         "J. Roberts",
         "Roberts"
       ],
       "jurisdictionDependent": false,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-058",
@@ -841,7 +963,8 @@
         "Set foreign policy"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-059",
@@ -858,7 +981,8 @@
         "Approve zoning and land use"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-060",
@@ -871,7 +995,8 @@
         "(It states that the) powers not given to the federal government belong to the states or to the people."
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-061",
@@ -883,7 +1008,8 @@
       "acceptableAnswers": [],
       "jurisdictionDependent": true,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-062",
@@ -895,7 +1021,8 @@
       "acceptableAnswers": [],
       "jurisdictionDependent": true,
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "system-of-government"
     },
     {
       "id": "q-063",
@@ -911,7 +1038,8 @@
         "A male citizen of any race (can vote)."
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-064",
@@ -926,7 +1054,8 @@
         "U.S. citizens"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-065",
@@ -944,7 +1073,8 @@
         "The right to bear arms"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-066",
@@ -958,7 +1088,8 @@
         "The flag"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-067",
@@ -976,7 +1107,8 @@
         "Be loyal to the United States"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-068",
@@ -991,7 +1123,8 @@
         "Be born in the United States"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-069",
@@ -1013,7 +1146,8 @@
         "Write to a newspaper"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-070",
@@ -1031,7 +1165,8 @@
         "Work for local, state, or federal government"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-071",
@@ -1047,7 +1182,8 @@
         "Civic duty"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-072",
@@ -1062,7 +1198,8 @@
         "Makes the draft fair, if needed"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "rights-and-responsibilities"
     },
     {
       "id": "q-073",
@@ -1079,7 +1216,8 @@
         "Escape persecution"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-074",
@@ -1093,7 +1231,8 @@
         "Native Americans"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-075",
@@ -1107,7 +1246,8 @@
         "People from Africa"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-076",
@@ -1122,7 +1262,8 @@
         "War for (American) Independence"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-077",
@@ -1144,7 +1285,8 @@
         "Intolerable (Coercive) Acts"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-078",
@@ -1157,7 +1299,8 @@
         "(Thomas) Jefferson"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-079",
@@ -1170,7 +1313,8 @@
         "July 4, 1776"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-080",
@@ -1188,7 +1332,8 @@
         "(Battle of) Yorktown (British surrender at Yorktown)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-081",
@@ -1213,7 +1358,8 @@
         "Georgia"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-082",
@@ -1226,7 +1372,8 @@
         "(U.S.) Constitution"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-083",
@@ -1242,7 +1389,8 @@
         "Publius"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-084",
@@ -1256,7 +1404,8 @@
         "They supported passing the (U.S.) Constitution."
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-085",
@@ -1273,7 +1422,8 @@
         "U.S. diplomat"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "colonial-period-and-independence"
     },
     {
       "id": "q-086",
@@ -1289,7 +1439,8 @@
         "President of the Constitutional Convention"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-087",
@@ -1307,7 +1458,8 @@
         "Writer of the Virginia Statute on Religious Freedom"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-088",
@@ -1323,7 +1475,8 @@
         "One of the writers of the Federalist Papers"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-089",
@@ -1340,7 +1493,8 @@
         "Member of the Continental Congress"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-090",
@@ -1354,7 +1508,8 @@
         "Louisiana"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-091",
@@ -1370,7 +1525,8 @@
         "Spanish-American War"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-092",
@@ -1383,7 +1539,8 @@
         "The Civil War"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-093",
@@ -1403,7 +1560,8 @@
         "Lincoln was assassinated."
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-094",
@@ -1420,7 +1578,8 @@
         "Delivered the Gettysburg Address"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-095",
@@ -1436,7 +1595,8 @@
         "Freed slaves in most Southern states"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-096",
@@ -1449,7 +1609,8 @@
         "The Civil War"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-097",
@@ -1462,7 +1623,8 @@
         "14th Amendment"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-098",
@@ -1478,7 +1640,8 @@
         "1870"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-099",
@@ -1496,7 +1659,8 @@
         "Lucy Stone"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "1800s"
     },
     {
       "id": "q-100",
@@ -1513,7 +1677,8 @@
         "(Persian) Gulf War"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-101",
@@ -1528,7 +1693,8 @@
         "To oppose the Central Powers (Germany, Austria-Hungary, the Ottoman Empire, and Bulgaria)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-102",
@@ -1543,7 +1709,8 @@
         "(With the) 19th Amendment"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-103",
@@ -1556,7 +1723,8 @@
         "Longest economic recession in modern history"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-104",
@@ -1570,7 +1738,8 @@
         "Stock market crash of 1929"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-105",
@@ -1583,7 +1752,8 @@
         "(Franklin) Roosevelt"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-106",
@@ -1599,7 +1769,8 @@
         "To oppose the Axis Powers (Germany, Italy, and Japan)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-107",
@@ -1615,7 +1786,8 @@
         "Signed the Federal-Aid Highway Act of 1956 (Created the Interstate System)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-108",
@@ -1630,7 +1802,8 @@
         "Russia"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-109",
@@ -1644,7 +1817,8 @@
         "Nuclear war"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-110",
@@ -1657,7 +1831,8 @@
         "To stop the spread of communism"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-111",
@@ -1670,7 +1845,8 @@
         "To stop the spread of communism"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-112",
@@ -1683,7 +1859,8 @@
         "Fought to end racial discrimination"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-113",
@@ -1698,7 +1875,8 @@
         "Worked to ensure that people would \"not be judged by the color of their skin, but by the content of their character\""
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-114",
@@ -1711,7 +1889,8 @@
         "To force the Iraqi military from Kuwait"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-115",
@@ -1727,7 +1906,8 @@
         "Terrorists took over a plane originally aimed at Washington, D.C., and crashed in a field in Pennsylvania"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-116",
@@ -1742,7 +1922,8 @@
         "War in Iraq"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "recent-history"
     },
     {
       "id": "q-117",
@@ -1779,7 +1960,8 @@
         "Tuscarora"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "geography"
     },
     {
       "id": "q-118",
@@ -1798,7 +1980,8 @@
         "Integrated circuit (IC)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "geography"
     },
     {
       "id": "q-119",
@@ -1811,7 +1994,8 @@
         "Washington, D.C."
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "geography"
     },
     {
       "id": "q-120",
@@ -1828,7 +2012,8 @@
         "on the Hudson (River)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "geography"
     },
     {
       "id": "q-121",
@@ -1842,7 +2027,8 @@
         "(Because the stripes) represent the original colonies"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "symbols"
     },
     {
       "id": "q-122",
@@ -1857,7 +2043,8 @@
         "(Because there are) 50 states"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "symbols"
     },
     {
       "id": "q-123",
@@ -1870,7 +2057,8 @@
         "The Star-Spangled Banner"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "symbols"
     },
     {
       "id": "q-124",
@@ -1884,7 +2072,8 @@
         "We all become one"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "symbols"
     },
     {
       "id": "q-125",
@@ -1898,7 +2087,8 @@
         "The country's birthday"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "holidays"
     },
     {
       "id": "q-126",
@@ -1920,7 +2110,8 @@
         "Christmas Day"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "holidays"
     },
     {
       "id": "q-127",
@@ -1933,7 +2124,8 @@
         "A holiday to honor soldiers who died in military service"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "holidays"
     },
     {
       "id": "q-128",
@@ -1947,7 +2139,8 @@
         "A holiday to honor people who have served (in the U.S. military)"
       ],
       "source": "USCIS M-1778TXT (02/21), retrieved 2026-08-23 from uscis.gov",
-      "sourceVersion": "M-1778TXT-02-21"
+      "sourceVersion": "M-1778TXT-02-21",
+      "studyCategoryId": "holidays"
     }
   ]
 }

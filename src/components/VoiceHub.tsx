@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppStatus } from '../context/conversationContextTypes';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
 import { logger } from '../logger';
@@ -20,6 +21,7 @@ export function VoiceHub({
   onStartSession, 
   onEndSession 
 }: VoiceHubProps): JSX.Element {
+  const { t } = useTranslation('conversation');
   
   // Track user interaction patterns to block adversarial click spamming
   const lastInteractionTimestampRef = useRef<number>(0);
@@ -73,12 +75,12 @@ export function VoiceHub({
 
   const statusMessage = (): string => {
     switch (status) {
-      case 'idle': return 'Ready';
-      case 'listening': return 'Listening';
-      case 'processing': return 'Thinking...';
-      case 'speaking': return 'Speaking';
-      case 'error': return 'System Error';
-      default: return 'Ready';
+      case 'idle': return t('workspace.voice.ready');
+      case 'listening': return t('workspace.voice.listening');
+      case 'processing': return t('workspace.voice.thinking');
+      case 'speaking': return t('workspace.voice.speaking');
+      case 'error': return t('workspace.voice.systemError');
+      default: return t('workspace.voice.ready');
     }
   };
 
@@ -90,14 +92,14 @@ export function VoiceHub({
       {showMicConsent && (
         <MicConsentModal onAccept={handleMicConsentAccept} onCancel={() => setShowMicConsent(false)} />
       )}
-    <div className="flex flex-col items-center justify-center pl-2" role="region" aria-label="Voice Interaction Hub">
+    <div className="flex flex-col items-center justify-center pl-2" role="region" aria-label={t('workspace.voice.region')}>
       <button 
         onClick={handleButtonClick} 
         disabled={isProcessingActive}
         className={`w-14 h-14 flex items-center justify-center transition-transform active:scale-95 duration-200 ${
           isProcessingActive ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
         }`} 
-        aria-label={isSessionActive ? 'Stop Voice Recording Session' : 'Start Voice Recording Session'}
+        aria-label={t(isSessionActive ? 'workspace.voice.stop' : 'workspace.voice.start')}
         aria-busy={isProcessingActive}
         aria-live="polite"
       >

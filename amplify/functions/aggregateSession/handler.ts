@@ -272,6 +272,8 @@ USCIS N-400 Examination Categories:
 
 Instructions:
 - The "AUTHORITATIVE GRADING FACTS" block (computed from recorded per-answer verdicts) is the source of truth for this session's accuracy, counts, and which questions were missed. Report those numbers and the missed-question list EXACTLY; never override them with your own judgment of the transcript.
+- These authoritative facts include every committed answer from Standard Interview, Practice, and Study modes. Treat them as one combined measure of civics-question progress; do not omit or discount a mode.
+- Some questions require a current answer and are intentionally ungraded until an authoritative current answer is available. Do not infer a score for those turns from the transcript.
 - Evaluate the candidate's performance in practiced categories during this session.
 - For categories NOT practiced in this session, inherit the previous scores and feedback from the Previous Progress Report.
 - Output a clean, structured Markdown report including:

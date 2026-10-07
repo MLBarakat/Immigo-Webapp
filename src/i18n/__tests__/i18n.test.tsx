@@ -92,6 +92,24 @@ describe('i18n configuration and utilities', () => {
     }
   });
 
+  it('provides matching workspace translation keys for every supported locale', () => {
+    const flattenKeys = (value: unknown, prefix = ''): string[] => {
+      if (typeof value !== 'object' || value === null) return [prefix];
+      return Object.entries(value).flatMap(([key, child]) =>
+        flattenKeys(child, prefix ? `${prefix}.${key}` : key)
+      );
+    };
+    const englishKeys = flattenKeys(resources['en-US'].conversation.workspace).sort();
+
+    for (const code of SUPPORTED_LANGUAGE_CODES) {
+      expect(flattenKeys(resources[code].conversation.workspace).sort()).toEqual(englishKeys);
+    }
+
+    expect(i18n.t('workspace.center.title', { ns: 'conversation', lng: 'es-ES' })).toBe('Entrevista de naturalización');
+    expect(i18n.t('workspace.right.title', { ns: 'conversation', lng: 'fr-FR' })).toBe('Configuration et commandes');
+    expect(i18n.t('workspace.left.title', { ns: 'conversation', lng: 'ar-SA' })).toBe('التعلّم والموارد');
+  });
+
   it('renders settings namespace translations and responds to language changes', async () => {
     const { rerender } = render(
       <I18nProvider>

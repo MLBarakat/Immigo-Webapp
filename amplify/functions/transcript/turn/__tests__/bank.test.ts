@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { allItems, getItem, selectNextQuestion } from '../bank';
+import { allItems, getItem, getStudyCategoryTitle, selectNextQuestion } from '../bank';
 
 describe('civics bank — coverage & integrity', () => {
   const items = allItems();
@@ -26,6 +26,19 @@ describe('civics bank — coverage & integrity', () => {
 
   it('every item has a non-empty question', () => {
     expect(items.every((i) => typeof i.question === 'string' && i.question.trim().length > 0)).toBe(true);
+  });
+
+  it('provides official study-category metadata for each bank question', () => {
+    const missing = items.filter((item) => {
+      try {
+        return !getStudyCategoryTitle(item);
+      } catch {
+        return true;
+      }
+    });
+    expect(missing).toEqual([]);
+    expect(getStudyCategoryTitle(getItem('q-001')!)).toBe('Principles of American Democracy');
+    expect(getStudyCategoryTitle(getItem('q-128')!)).toBe('Holidays');
   });
 });
 

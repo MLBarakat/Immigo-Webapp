@@ -1,5 +1,7 @@
-import { useCallback, useRef, useEffect, useContext } from 'react';
+import { useCallback, useRef, useEffect, useContext, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ConversationContext } from '../context/conversationContextTypes';
+import { SimulationMode } from '../context/conversationContextTypes';
 import { ApiClient, ApiError } from '../services/apiClient';
 import { Message } from '../context/conversationContextTypes';
 import { ChatPersistenceService } from '../services/chatPersistenceService';
@@ -12,18 +14,30 @@ interface UseConversationManagerProps {
   apiClient: ApiClient | null;
   userId?: string | null;
   voiceId?: string | null;
+  simulationMode?: SimulationMode;
+  preferredLanguage?: string;
 }
 
-export function useConversation({ apiClient, userId, voiceId }: UseConversationManagerProps) {
+export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', preferredLanguage = 'en-US' }: UseConversationManagerProps) {
+  const { t, i18n } = useTranslation('conversation');
   const context = useContext(ConversationContext);
   if (!context) {
     throw new Error('useConversation must be used within a ConversationProvider');
   }
   const { state: conversationState, dispatch } = context;
+  const [isGeneratingProgressReport, setIsGeneratingProgressReport] = useState(false);
   const voiceIdRef = useRef<string | null>(voiceId ?? null);
+  const simulationModeRef = useRef<SimulationMode>(simulationMode);
+  const preferredLanguageRef = useRef(preferredLanguage);
   useEffect(() => {
     voiceIdRef.current = voiceId ?? null;
   }, [voiceId]);
+  useEffect(() => {
+    simulationModeRef.current = simulationMode;
+  }, [simulationMode]);
+  useEffect(() => {
+    preferredLanguageRef.current = preferredLanguage;
+  }, [preferredLanguage]);
 
   const intervalRef = useRef<number | null>(null);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
@@ -34,6 +48,7 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
   // Tracks which bank question the server last asked, so the next answer is
   // graded against the correct item (server-owned grounded grading).
   const currentItemIdRef = useRef<string | null>(null);
+  const voiceSessionRef = useRef(conversationState.isSessionActive);
   // One-shot flag: set when the server asks the user to confirm/repeat an
   // answer or complete a multi-part one (turn-policy's needs_confirmation).
   // While set (and matching the current item), the next answer is sent as a
@@ -204,6 +219,7 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
     };
     const activeSessionId = sessionIdRef.current || conversationState.sessionId;
 
+    if (conversationState.isSessionActive) stopRecording();
     dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage, assistantMessageId: secureAssistantMessageId } });
     dispatch({ type: 'SET_STATUS', payload: 'processing' });
     clearTranscript?.();
@@ -247,7 +263,7 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
             activeSessionId,
             currentItemIdRef.current,
             isConfirmationRetry,
-            { headers: { 'x-correlation-trace-id': traceId }, voiceId: voiceIdRef.current ?? undefined }
+            { headers: { 'x-correlation-trace-id': traceId }, voiceId: voiceIdRef.current ?? undefined, simulationMode: simulationModeRef.current, preferredLanguage: preferredLanguageRef.current }
           );
           responseText = res.responseText;
           audioData = res.audioData;
@@ -318,7 +334,7 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
         );
       }
 
-      if (!conversationState.isSessionActive) {
+      if (!conversationState.isSessionActive || !voiceSessionRef.current) {
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
         return;
       }
@@ -391,11 +407,11 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
         traceId 
       });
       
-      if (conversationState.isSessionActive) {
+      if (conversationState.isSessionActive && voiceSessionRef.current) {
         startRecording();
       }
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive]);
 
   // Word-boundary comparison for live audio transcription handoff
   useEffect(() => {
@@ -430,7 +446,8 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
     }
   }, [finalTranscript, sendTextMessage]);
 
-  const initiateSession = useCallback(async () => {
+  const initiateSession = useCallback(async (startVoice = true) => {
+    voiceSessionRef.current = startVoice;
     dispatch({ type: 'START_SESSION' });
     analytics.track('session_started');
     processedTranscriptRef.current = '';
@@ -452,7 +469,8 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
     // real server response before the mic ever opens for real user input —
     // the first answer is graded against the right question from the start.
     if (!apiClient) {
-      startRecording();
+      if (startVoice) startRecording();
+      else dispatch({ type: 'SET_STATUS', payload: 'idle' });
       return;
     }
 
@@ -468,6 +486,8 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
       const sessionOptions = {
         headers: { 'x-correlation-trace-id': traceId },
         voiceId: voiceIdRef.current ?? undefined,
+        simulationMode: simulationModeRef.current,
+        preferredLanguage: preferredLanguageRef.current,
       };
       try {
         return await apiClient!.postSessionStart(newSessionId, sessionOptions);
@@ -491,6 +511,11 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
 
       if (userId && newSessionId) {
         void ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', res.responseText);
+      }
+
+      if (!startVoice) {
+        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        return;
       }
 
       // Same playback + AEC mute-gate + resume-recording sequencing as every
@@ -548,6 +573,11 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
       const fallbackText = "Welcome! Let's get started with today's civics practice — go ahead whenever you're ready.";
       dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: secureAssistantMessageId, content: fallbackText } });
 
+      if (!startVoice) {
+        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        return;
+      }
+
       const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
       if (canSpeak) {
         try {
@@ -576,23 +606,34 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
     clearAudioPlayback();
     stopRecording();
     const activeSessionId = sessionIdRef.current || conversationState.sessionId;
+    if (activeSessionId) setIsGeneratingProgressReport(true);
     dispatch({ type: 'END_SESSION' });
     sessionIdRef.current = null;
     currentItemIdRef.current = null;
+    voiceSessionRef.current = false;
     awaitingConfirmationRef.current = null;
     answeredCountRef.current = 0;
     dispatch({ type: 'SET_SESSION_ID', payload: null });
     analytics.track('session_ended', { duration_seconds: conversationState.sessionTime });
 
     if (activeSessionId) {
-      await ChatPersistenceService.closeSession(activeSessionId);
-      if (apiClient) {
-        void apiClient.completeSession(activeSessionId).catch((error: unknown) => {
+      try {
+        await ChatPersistenceService.closeSession(activeSessionId);
+      } catch (error: unknown) {
+        logger.error('Closing the interview session failed.', undefined, {
+          sessionId: activeSessionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      try {
+        if (apiClient) await apiClient.completeSession(activeSessionId);
+      } catch (error: unknown) {
           logger.error('Session progress report request failed.', undefined, {
             sessionId: activeSessionId,
             error: error instanceof Error ? error.message : String(error),
           });
-        });
+      } finally {
+        setIsGeneratingProgressReport(false);
       }
     }
   }, [conversationState.sessionId, conversationState.sessionTime, apiClient, dispatch, stopRecording, clearAudioPlayback]);
@@ -677,30 +718,77 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
     };
   }, [clearAudioPlayback]);
 
-  const wipeConversationHistory = useCallback(() => {
+  const wipeConversationHistory = useCallback(async () => {
+    if (conversationState.isSessionActive) {
+      clearAudioPlayback();
+      stopRecording();
+      const activeSessionId = sessionIdRef.current || conversationState.sessionId;
+      if (activeSessionId) setIsGeneratingProgressReport(true);
+      dispatch({ type: 'END_SESSION' });
+      sessionIdRef.current = null;
+      currentItemIdRef.current = null;
+      voiceSessionRef.current = false;
+      awaitingConfirmationRef.current = null;
+      answeredCountRef.current = 0;
+      dispatch({ type: 'SET_SESSION_ID', payload: null });
+      dispatch({ type: 'CLEAR_CONVERSATION' });
+      analytics.track('conversation_cleared');
+      if (activeSessionId) {
+        try {
+          await ChatPersistenceService.closeSession(activeSessionId);
+        } catch (error: unknown) {
+          logger.error('Closing the interview session after clearing failed.', undefined, {
+            sessionId: activeSessionId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        try {
+          if (apiClient) await apiClient.completeSession(activeSessionId);
+        } catch (error: unknown) {
+            logger.error('Session report generation after clearing failed.', undefined, {
+              sessionId: activeSessionId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+        } finally {
+          setIsGeneratingProgressReport(false);
+        }
+      }
+      return;
+    }
     dispatch({ type: 'CLEAR_CONVERSATION' });
     analytics.track('conversation_cleared');
-  }, [dispatch]);
+  }, [conversationState.isSessionActive, conversationState.sessionId, clearAudioPlayback, stopRecording, apiClient, dispatch]);
 
   const exportTranscriptFile = useCallback(() => {
-    const transcriptText = conversationState.conversationHistory
-      .map((msg: Message) => `${msg.role.toUpperCase()}: ${msg.content}`)
-      .join('\n\n');
-      
-    const textBlob = new Blob([transcriptText], { type: 'plain' });
+    const exportedAt = new Date();
+    const transcriptText = [
+      t('workspace.transcript.title'),
+      `${t('workspace.transcript.sessionId')}: ${conversationState.sessionId ?? t('workspace.transcript.notAssigned')}`,
+      `${t('workspace.transcript.duration')}: ${Math.floor(conversationState.sessionTime / 60).toString().padStart(2, '0')}:${(conversationState.sessionTime % 60).toString().padStart(2, '0')}`,
+      `${t('workspace.transcript.exported')}: ${exportedAt.toLocaleString(i18n.language)}`,
+      '',
+      ...conversationState.conversationHistory.map((msg: Message) => {
+        const speaker = t(msg.role === 'assistant' ? 'workspace.transcript.officer' : 'workspace.transcript.user');
+        return `[${new Date(msg.timestamp).toLocaleString(i18n.language)}] ${speaker}:\n${msg.content}`;
+      }),
+    ].join('\n\n');
+
+    const textBlob = new Blob([transcriptText], { type: 'text/plain;charset=utf-8' });
     const downloadBlobUrl = URL.createObjectURL(textBlob);
     const hiddenAnchorElement = document.createElement('a');
-    
     hiddenAnchorElement.href = downloadBlobUrl;
-    hiddenAnchorElement.download = `immigo_transcript_${new Date().toISOString()}.txt`;
+    hiddenAnchorElement.download = `immigo_transcript_${exportedAt.toISOString().replace(/[:.]/g, '-')}.txt`;
+    hiddenAnchorElement.style.display = 'none';
+    document.body.appendChild(hiddenAnchorElement);
     hiddenAnchorElement.click();
-    
-    URL.revokeObjectURL(downloadBlobUrl);
+    hiddenAnchorElement.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadBlobUrl), 0);
     analytics.track('transcript_downloaded');
-  }, [conversationState.conversationHistory]);
+  }, [conversationState.conversationHistory, conversationState.sessionId, conversationState.sessionTime, t, i18n.language]);
 
   return {
     ...conversationState,
+    isGeneratingProgressReport,
     currentState,
     interimTranscript: displayTranscript,
     finalTranscript,
@@ -708,7 +796,8 @@ export function useConversation({ apiClient, userId, voiceId }: UseConversationM
     isVadReady,
     modelLoadingProgress,
     isTranscribing,
-    startSession: initiateSession,
+    startSession: () => initiateSession(true),
+    startTextSession: () => initiateSession(false),
     endSession: terminateSession,
     sendTextMessage,
     loadOlderMessages,

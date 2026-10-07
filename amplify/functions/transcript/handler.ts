@@ -4,8 +4,9 @@ import { PollyClient, SynthesizeSpeechCommand, VoiceId } from '@aws-sdk/client-p
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 import { getItem, selectNextQuestion } from './turn/bank';
-import { TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
+import { formatStudyQuestion, TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn } from './turn/turn-policy';
+import type { SimulationMode } from './turn/types';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const pollyRegion = process.env.POLLY_REGION || 'us-east-1';
@@ -69,6 +70,8 @@ interface RequestBody {
   sessionId?: string;
   currentItemId?: string;
   confirmationRetry?: boolean;
+  simulationMode?: SimulationMode;
+  preferredLanguage?: 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA';
   /**
    * True for a proactive, client-initiated session-start call (item 6): fired
    * automatically the moment a session begins, before any user speech, so the
@@ -141,13 +144,85 @@ const ALLOWED_VOICES: Record<string, string> = {
   'Joanna': 'Joanna',
   'Matthew': 'Matthew',
   'Mia': 'Mia',
+  'Lupe': 'Lupe',
+  'Pedro': 'Pedro',
   'Andres': 'Andres',
   'Andrés': 'Andres',
   'Lea': 'Lea',
   'Remi': 'Remi',
   'Hala': 'Hala',
   'Zayd': 'Zayd',
+  'Ruth': 'Hala',
+  'Stephen': 'Zayd',
 };
+
+function getLocalizedStudyFallback(flags: string[], language: string): string | null {
+  const flag = [
+    'legal_advice_refusal',
+    'manipulation_detected',
+    'off_topic',
+    'parse_failure',
+    'answer_without_grade',
+    'answer_without_active_question',
+    'unclear_input',
+    'dynamic_ungraded',
+    'awaiting_confirmation',
+    'near_miss',
+  ].find((candidate) => flags.includes(candidate));
+  if (!flag) return null;
+
+  const replies: Record<string, Record<string, string>> = {
+    'en-US': {
+      legal_advice_refusal: 'I can help you study civics, but I cannot give legal advice. Please ask a licensed immigration attorney or DOJ-accredited representative.',
+      manipulation_detected: 'Let’s stay focused on your civics lesson.',
+      off_topic: 'That is outside this civics lesson. I can help you study the current topic.',
+      parse_failure: 'I had trouble understanding that response. Let’s try again.',
+      answer_without_grade: 'I could not evaluate that answer. Please try saying it another way.',
+      answer_without_active_question: 'There is no active civics question yet. Let’s start with a question.',
+      unclear_input: 'I could not understand that. Please say it another way.',
+      dynamic_ungraded: 'This answer changes over time, so I cannot verify it from the stored official bank. I will leave it unscored and continue.',
+      awaiting_confirmation: 'I may have misheard you. Please say your answer once more.',
+      near_miss: 'I may have misheard you. Please say your answer once more.',
+    },
+    'es-ES': {
+      legal_advice_refusal: 'Puedo ayudarte a estudiar educación cívica, pero no puedo ofrecer asesoramiento legal. Consulta a un abogado de inmigración autorizado o a un representante acreditado por el Departamento de Justicia.',
+      manipulation_detected: 'Sigamos centrados en tu lección de educación cívica.',
+      off_topic: 'Eso queda fuera de esta lección de educación cívica. Puedo ayudarte con el tema actual.',
+      parse_failure: 'Me costó entender esa respuesta. Intentémoslo de nuevo.',
+      answer_without_grade: 'No pude evaluar esa respuesta. Intenta expresarla de otra manera.',
+      answer_without_active_question: 'Todavía no hay una pregunta activa. Empecemos con una pregunta.',
+      unclear_input: 'No entendí eso. Intenta decirlo de otra manera.',
+      dynamic_ungraded: 'Esta respuesta cambia con el tiempo y no puedo verificarla con el banco oficial guardado. No la calificaré y continuaré.',
+      awaiting_confirmation: 'Es posible que te haya oído mal. Repite tu respuesta, por favor.',
+      near_miss: 'Es posible que te haya oído mal. Repite tu respuesta, por favor.',
+    },
+    'fr-FR': {
+      legal_advice_refusal: 'Je peux vous aider à étudier l’éducation civique, mais pas vous donner de conseil juridique. Consultez un avocat spécialisé en immigration ou un représentant accrédité par le ministère de la Justice.',
+      manipulation_detected: 'Restons concentrés sur votre leçon d’éducation civique.',
+      off_topic: 'Cela ne fait pas partie de cette leçon d’éducation civique. Je peux vous aider sur le sujet actuel.',
+      parse_failure: 'J’ai eu du mal à comprendre cette réponse. Réessayons.',
+      answer_without_grade: 'Je n’ai pas pu évaluer cette réponse. Essayez de la formuler autrement.',
+      answer_without_active_question: 'Aucune question de civique n’est active. Commençons par une question.',
+      unclear_input: 'Je n’ai pas compris. Essayez de le dire autrement.',
+      dynamic_ungraded: 'Cette réponse change avec le temps et je ne peux pas la vérifier à partir de la banque officielle enregistrée. Je ne la noterai pas et je vais continuer.',
+      awaiting_confirmation: 'J’ai peut-être mal entendu. Répétez votre réponse, s’il vous plaît.',
+      near_miss: 'J’ai peut-être mal entendu. Répétez votre réponse, s’il vous plaît.',
+    },
+    'ar-SA': {
+      legal_advice_refusal: 'يمكنني مساعدتك في دراسة التربية المدنية، لكن لا أستطيع تقديم مشورة قانونية. يُرجى استشارة محامٍ مختص بالهجرة أو ممثل معتمد من وزارة العدل.',
+      manipulation_detected: 'لنبقَ مركزين على درس التربية المدنية.',
+      off_topic: 'هذا خارج موضوع درس التربية المدنية. يمكنني مساعدتك في دراسة الموضوع الحالي.',
+      parse_failure: 'واجهت صعوبة في فهم إجابتك. لنحاول مرة أخرى.',
+      answer_without_grade: 'لم أتمكن من تقييم هذه الإجابة. حاول صياغتها بطريقة أخرى.',
+      answer_without_active_question: 'لا يوجد سؤال مدني نشط بعد. لنبدأ بسؤال.',
+      unclear_input: 'لم أفهم ذلك. حاول صياغته بطريقة أخرى.',
+      dynamic_ungraded: 'تتغير هذه الإجابة بمرور الوقت ولا يمكنني التحقق منها من البنك الرسمي المحفوظ. لن أقيّمها وسأتابع.',
+      awaiting_confirmation: 'ربما لم أسمعك جيدًا. أعد إجابتك من فضلك.',
+      near_miss: 'ربما لم أسمعك جيدًا. أعد إجابتك من فضلك.',
+    },
+  };
+  return replies[language]?.[flag] ?? null;
+}
 
 interface ExtendedSdkStream {
   transformToByteArray(): Promise<Uint8Array>;
@@ -284,7 +359,7 @@ async function getTitanEmbedding(text: string): Promise<number[] | null> {
  * Retrieves the user's report context (vector match, with a baseline fallback)
  * and answers ONLY from it.
  */
-async function answerProgressQuery(userId: string, question: string, traceId: string): Promise<string> {
+async function answerProgressQuery(userId: string, question: string, traceId: string, preferredLanguage?: string): Promise<string> {
   const supabase = getSupabaseClient();
   let ragContext = '';
 
@@ -314,7 +389,7 @@ async function answerProgressQuery(userId: string, question: string, traceId: st
     ragContext = await fetchUserProgressReport(userId);
   }
 
-  return turnInterpreter.answerProgressQuery(ragContext, question);
+  return turnInterpreter.answerProgressQuery(ragContext, question, preferredLanguage);
 }
 
 /**
@@ -505,6 +580,32 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         body: JSON.stringify({ error: 'Malformed JSON Exception: Failed to parse request body.' })
       };
     }
+    if (parsedBody.simulationMode !== undefined
+      && parsedBody.simulationMode !== 'standard'
+      && parsedBody.simulationMode !== 'practice'
+      && parsedBody.simulationMode !== 'study') {
+      return {
+        statusCode: 400,
+        headers: responseHeaders,
+        body: JSON.stringify({ error: 'Payload Exception: Invalid simulation mode.' }),
+      };
+    }
+    const simulationMode: SimulationMode = parsedBody.simulationMode ?? 'standard';
+    if (parsedBody.preferredLanguage !== undefined
+      && !['en-US', 'es-ES', 'fr-FR', 'ar-SA'].includes(parsedBody.preferredLanguage)) {
+      return {
+        statusCode: 400,
+        headers: responseHeaders,
+        body: JSON.stringify({ error: 'Payload Exception: Invalid preferred language.' }),
+      };
+    }
+    const preferredLanguageCode = parsedBody.preferredLanguage ?? 'en-US';
+    const preferredLanguage = ({
+      'en-US': 'English',
+      'es-ES': 'Spanish',
+      'fr-FR': 'French',
+      'ar-SA': 'Arabic',
+    } as const)[preferredLanguageCode];
 
     // ---- On-screen welcome banner (TEXT ONLY, never spoken) ----
     // Fetched when the app loads, independent of starting a practice session.
@@ -578,14 +679,24 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       // at all (faster and one less thing that can fail). ----
       console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; picking first question (no narrative LLM call).`);
       const first = selectNextQuestion();
-      generatedAssistantText = `Let's begin. ${first.question}`;
+      const explanation = simulationMode === 'study'
+        ? await turnInterpreter.explainStudyQuestion(first, preferredLanguage)
+        : '';
+      generatedAssistantText = simulationMode === 'study'
+        ? formatStudyQuestion(first, explanation, preferredLanguage)
+        : `Let's begin. ${first.question}`;
       nextItemId = first.id;
       nextQuestionText = first.question;
 
     } else if (cleanedTranscript && isRagQuery(cleanedTranscript)) {
       // ---- ASSIST / progress path (grounded in the user's own reports) ----
       console.log(`[Lambda-RAG] [${traceId}] Progress intent detected.`);
-      generatedAssistantText = await answerProgressQuery(userId, cleanedTranscript, traceId);
+      generatedAssistantText = await answerProgressQuery(
+        userId,
+        cleanedTranscript,
+        traceId,
+        simulationMode === 'study' ? preferredLanguage : undefined
+      );
       // Do NOT advance the civics question; keep the user's place.
       const stay = askedItem ?? selectNextQuestion();
       nextItemId = stay.id;
@@ -598,14 +709,24 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       // simplified behavior (no LLM call) as the explicit sessionStart path. ----
       console.log(`[Lambda-Start] [${traceId}] No active question (implicit); picking first question.`);
       const first = selectNextQuestion();
-      generatedAssistantText = `Let's begin. ${first.question}`;
+      const explanation = simulationMode === 'study'
+        ? await turnInterpreter.explainStudyQuestion(first, preferredLanguage)
+        : '';
+      generatedAssistantText = simulationMode === 'study'
+        ? formatStudyQuestion(first, explanation, preferredLanguage)
+        : `Let's begin. ${first.question}`;
       nextItemId = first.id;
       nextQuestionText = first.question;
 
     } else {
       // ---- GRADING path (grounded: server owns the asked item) ----
       const interp = await turnInterpreter.interpret(
-        { askedItem, preferredLanguage: undefined /* wire from profile later */ },
+        {
+          askedItem,
+          preferredLanguage,
+          simulationMode,
+          isConfirmationRetry: parsedBody.confirmationRetry === true,
+        },
         cleanedTranscript
       );
 
@@ -617,6 +738,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         askedItem,
         isConfirmationRetry: parsedBody.confirmationRetry === true,
         rawTranscript: cleanedTranscript,
+        simulationMode,
       });
       verdict = outcome.committedVerdict;
 
@@ -639,10 +761,28 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         // stay reasons (explain/assist/manipulation/off_topic/unclear/repeat/
         // hint) don't need any retry bookkeeping — the next turn is simply a
         // fresh attempt at the same still-current question.
-        needsConfirmation = outcome.replyKind === 'needs_confirmation';
-        generatedAssistantText = outcome.useModelReply
-          ? (interp?.reply || outcome.safeReply)
-          : outcome.safeReply;
+        needsConfirmation = outcome.replyKind === 'needs_confirmation'
+          || outcome.flags.includes('practice_retry');
+        const practiceRetryReplies = {
+          'en-US': "That's not quite right. Try once more, or ask me for a hint.",
+          'es-ES': 'Esa respuesta no es del todo correcta. Inténtalo una vez más o pídeme una pista.',
+          'fr-FR': 'Ce n’est pas tout à fait exact. Réessayez ou demandez-moi un indice.',
+          'ar-SA': 'هذه الإجابة ليست صحيحة تمامًا. حاول مرة أخرى أو اطلب مني تلميحًا.',
+        } as const;
+        const safeReply = outcome.flags.includes('practice_retry')
+          ? practiceRetryReplies[preferredLanguageCode]
+          : simulationMode === 'study' && !outcome.useModelReply
+            ? getLocalizedStudyFallback(outcome.flags, preferredLanguageCode) ?? outcome.safeReply
+            : outcome.safeReply;
+        const turnReply = simulationMode === 'study' && outcome.effectiveIntent === 'repeat'
+          ? ''
+          : outcome.useModelReply
+          ? (interp?.reply || safeReply)
+          : safeReply;
+        generatedAssistantText = simulationMode === 'study'
+          && ['answer', 'explain', 'hint', 'repeat'].includes(outcome.effectiveIntent)
+          ? formatStudyQuestion(askedItem, turnReply, preferredLanguage)
+          : turnReply;
         nextItemId = askedItem.id;            // stay on the same question
         nextQuestionText = askedItem.question;
         console.log(`[Lambda-Grade] [${traceId}] not advancing (intent=${outcome.effectiveIntent}, replyKind=${outcome.replyKind}, needsConfirmation=${needsConfirmation})`);
@@ -659,7 +799,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           );
         }
 
-        const feedback = outcome.useModelReply
+        const feedback = simulationMode === 'study' && !outcome.useModelReply
+          ? getLocalizedStudyFallback(outcome.flags, preferredLanguageCode) ?? outcome.safeReply
+          : outcome.useModelReply
           ? (interp?.reply || outcome.safeReply)
           : outcome.safeReply;
 
@@ -667,13 +809,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         // but everything asked so far this session (up to a bound) — the
         // persist above already wrote askedItem.id, so it's included here too.
         const recentItemIds = await getRecentSessionItemIds(token, parsedBody.sessionId, traceId);
-        const excludeIds = recentItemIds.length > 0 ? recentItemIds : [askedItem.id];
+        const excludeIds = [...new Set([...recentItemIds, askedItem.id])];
         const next = selectNextQuestion(excludeIds);
         nextItemId = next.id;
         nextQuestionText = next.question;
 
         // Speak the feedback AND the next question so the voice loop keeps flowing.
-        generatedAssistantText = `${feedback} Next question: ${next.question}`;
+        const explanation = simulationMode === 'study'
+          ? await turnInterpreter.explainStudyQuestion(next, preferredLanguage)
+          : '';
+        generatedAssistantText = simulationMode === 'study'
+          ? `${formatStudyQuestion(askedItem, feedback, preferredLanguage)}\n${formatStudyQuestion(next, explanation, preferredLanguage)}`
+          : `${feedback} Next question: ${next.question}`;
       }
     }
 
@@ -682,9 +829,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // 3. Polly Speech Synthesis
-    const targetVoiceId = (parsedBody.voiceId && ALLOWED_VOICES[parsedBody.voiceId])
+    const studyVoiceByLanguage: Record<string, { female: string; male: string }> = {
+      'en-US': { female: 'Joanna', male: 'Matthew' },
+      'es-ES': { female: 'Lupe', male: 'Pedro' },
+      'fr-FR': { female: 'Lea', male: 'Remi' },
+      'ar-SA': { female: 'Hala', male: 'Zayd' },
+    };
+    const requestedVoiceId = (parsedBody.voiceId && ALLOWED_VOICES[parsedBody.voiceId])
       ? ALLOWED_VOICES[parsedBody.voiceId]
       : 'Joanna';
+    const requestedMaleVoice = ['Matthew', 'Pedro', 'Andres', 'Andrés', 'Remi', 'Zayd', 'Stephen'].includes(parsedBody.voiceId ?? '');
+    const targetVoiceId = simulationMode === 'study'
+      ? studyVoiceByLanguage[preferredLanguageCode][requestedMaleVoice ? 'male' : 'female']
+      : requestedVoiceId;
 
     console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice ${targetVoiceId} (region: ${pollyRegion})...`);
     const pollyVoiceId = targetVoiceId as VoiceId;

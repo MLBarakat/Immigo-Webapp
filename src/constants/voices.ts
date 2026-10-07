@@ -18,23 +18,23 @@ export const APP_VOICES: readonly AppVoice[] = [
   { id: 'Matthew', displayName: 'Matthew (Male)', gender: 'male', locale: 'en-US', accentLabel: 'English (US)', isDefault: false },
 
   // Spanish
-  { id: 'Lupe', displayName: 'Mia (Femenino)', gender: 'female', locale: 'es-ES', accentLabel: 'Español (LatAm)', isDefault: true },
-  { id: 'Pedro', displayName: 'Andrés (Masculino)', gender: 'male', locale: 'es-ES', accentLabel: 'Español (LatAm)', isDefault: false },
+  { id: 'Lupe', displayName: 'Lupe (Femenino)', gender: 'female', locale: 'es-ES', accentLabel: 'Español (LatAm)', isDefault: true },
+  { id: 'Pedro', displayName: 'Pedro (Masculino)', gender: 'male', locale: 'es-ES', accentLabel: 'Español (LatAm)', isDefault: false },
 
   // French
   { id: 'Lea', displayName: 'Léa (Féminin)', gender: 'female', locale: 'fr-FR', accentLabel: 'Français (FR)', isDefault: true },
   { id: 'Remi', displayName: 'Rémi (Masculin)', gender: 'male', locale: 'fr-FR', accentLabel: 'Français (FR)', isDefault: false },
 
   // Arabic
-  { id: 'Ruth', displayName: 'Ruth (Female)', gender: 'female', locale: 'ar-SA', accentLabel: 'English (US)', isDefault: true },
-  { id: 'Stephen', displayName: 'Stephen (Male)', gender: 'male', locale: 'ar-SA', accentLabel: 'English (US)', isDefault: false },
+  { id: 'Hala', displayName: 'Hala (Female)', gender: 'female', locale: 'ar-SA', accentLabel: 'Arabic (Gulf)', isDefault: true },
+  { id: 'Zayd', displayName: 'Zayd (Male)', gender: 'male', locale: 'ar-SA', accentLabel: 'Arabic (Gulf)', isDefault: false },
 ] as const;
 
 export const DEFAULT_VOICE_BY_LOCALE: Record<string, string> = {
   'en-US': 'Joanna',
   'es-ES': 'Lupe',
   'fr-FR': 'Lea',
-  'ar-SA': 'Ruth',
+  'ar-SA': 'Hala',
 };
 
 /** Set of valid voice IDs for rapid lookup and validation */
@@ -45,8 +45,8 @@ export const VALID_VOICE_IDS = new Set<string>([
   'Pedro',
   'Lea',
   'Remi',
-  'Ruth',
-  'Stephen',
+  'Hala',
+  'Zayd',
 ]);
 
 /**
@@ -59,7 +59,7 @@ export function getDefaultVoiceId(locale?: string | null): string {
   if (directMatch) return directMatch;
 
   const prefix = locale.split('-')[0].toLowerCase();
-  if (prefix === 'es') return 'Mia';
+  if (prefix === 'es') return 'Lupe';
   if (prefix === 'fr') return 'Lea';
   if (prefix === 'ar') return 'Hala';
   return 'Joanna';
@@ -70,7 +70,10 @@ export function getDefaultVoiceId(locale?: string | null): string {
  */
 export function normalizeVoiceId(voiceId?: string | null): string {
   if (!voiceId) return 'Joanna';
-  if (voiceId === 'Andrés') return 'Andres';
+  if (voiceId === 'Andrés' || voiceId === 'Andres') return 'Pedro';
+  if (voiceId === 'Mia') return 'Lupe';
+  if (voiceId === 'Ruth') return 'Hala';
+  if (voiceId === 'Stephen') return 'Zayd';
   if (VALID_VOICE_IDS.has(voiceId)) return voiceId;
   return 'Joanna';
 }

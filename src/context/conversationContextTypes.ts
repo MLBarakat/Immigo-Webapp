@@ -3,6 +3,7 @@ import { createContext } from 'react';
 
 // Synchronized directly with the Authoritative FSM state machine targets
 export type AppStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
+export type SimulationMode = 'standard' | 'practice' | 'study';
 
 export interface Message {
   id: string;
@@ -92,9 +93,7 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         ...state, 
         isSessionActive: false, 
         appStatus: 'idle', 
-        sessionTime: 0, 
         interimTranscript: '',
-        liveStats: null
       };
 
     case 'SET_LIVE_STATS':
@@ -130,7 +129,18 @@ export const conversationReducer = (state: ConversationState, action: Conversati
       return { ...state, appStatus: action.payload };
 
     case 'CLEAR_CONVERSATION':
-      return { ...state, conversationHistory: [], interimTranscript: '', oldestMessageCursor: null, hasMoreHistory: false };
+      return {
+        ...state,
+        conversationHistory: [],
+        interimTranscript: '',
+        oldestMessageCursor: null,
+        hasMoreHistory: false,
+        liveStats: null,
+        sessionId: null,
+        sessionTime: 0,
+        isSessionActive: false,
+        appStatus: 'idle',
+      };
 
     case 'TICK_SESSION_TIMER':
       return { ...state, sessionTime: state.isSessionActive ? state.sessionTime + 1 : 0 };

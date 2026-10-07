@@ -65,6 +65,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     // Construct a type-safe mock API Client instance mirror
     mockApiClient = {
       postTranscript: vi.fn(),
+      postSessionStart: vi.fn(),
     } as unknown as Mocked<ApiClient>;
 
     // 1. FIXED: Inject a resilient, runtime mock for the global HTMLAudioElement tracking fixture
@@ -193,7 +194,12 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         [],
         undefined,
         null,
-        expect.objectContaining({ headers: expect.any(Object) })
+        false,
+        expect.objectContaining({
+          headers: expect.any(Object),
+          simulationMode: 'standard',
+          preferredLanguage: 'en-US',
+        })
       );
     });
   });
@@ -244,7 +250,93 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       [],
       undefined,
       'q-001',
-      expect.objectContaining({ headers: expect.any(Object) })
+      false,
+      expect.objectContaining({
+        headers: expect.any(Object),
+        simulationMode: 'standard',
+        preferredLanguage: 'en-US',
+      })
+    );
+  });
+
+  it('starts a text-only session without activating the microphone or audio playback', async () => {
+    mockApiClient.postSessionStart.mockResolvedValue({
+      responseText: 'First civics question?',
+      audioData: new ArrayBuffer(8),
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: 'q-001',
+      nextQuestion: 'First civics question?',
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await act(async () => {
+      await result.current.startTextSession();
+    });
+
+    expect(mockApiClient.postSessionStart).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        simulationMode: 'standard',
+        preferredLanguage: 'en-US',
+      })
+    );
+    expect(mockStartRecording).not.toHaveBeenCalled();
+    expect(mockAudioInstance.play).not.toHaveBeenCalled();
+    expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+  });
+
+  it('uses a newly selected mode and language on subsequent turns in the same session', async () => {
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Tutor feedback',
+      audioData: new ArrayBuffer(0),
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: 'q-001',
+      nextQuestion: 'Question?',
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    type ModeProps = { mode: 'standard' | 'practice' | 'study' };
+    const { result, rerender } = renderHook(
+      ({ mode }: ModeProps) => useConversation({
+        apiClient: mockApiClient,
+        simulationMode: mode,
+        preferredLanguage: mode === 'study' ? 'es-ES' : 'en-US',
+      }),
+      { wrapper, initialProps: { mode: 'standard' } }
+    );
+
+    await act(async () => result.current.sendTextMessage('First answer'));
+    rerender({ mode: 'study' });
+    await act(async () => result.current.sendTextMessage('Second answer'));
+
+    expect(mockApiClient.postTranscript).toHaveBeenNthCalledWith(
+      1,
+      'First answer',
+      [],
+      undefined,
+      null,
+      false,
+      expect.objectContaining({ simulationMode: 'standard', preferredLanguage: 'en-US' })
+    );
+    expect(mockApiClient.postTranscript).toHaveBeenNthCalledWith(
+      2,
+      'Second answer',
+      [],
+      undefined,
+      'q-001',
+      false,
+      expect.objectContaining({ simulationMode: 'study', preferredLanguage: 'es-ES' })
     );
   });
 
