@@ -8,7 +8,7 @@ afterEach(() => {
   cleanup();
 });
 
-function renderCenterPanel(isSessionActive: boolean, onStartTextSession = vi.fn()) {
+function renderCenterPanel(isSessionActive: boolean) {
   return render(
     <CenterPanel
       conversationHistory={[]}
@@ -21,7 +21,6 @@ function renderCenterPanel(isSessionActive: boolean, onStartTextSession = vi.fn(
       hasMoreHistory={false}
       onSendMessage={vi.fn()}
       onStartSession={vi.fn()}
-      onStartTextSession={onStartTextSession}
       onEndSession={vi.fn()}
       onLoadOlder={vi.fn()}
       onClearError={vi.fn()}
@@ -30,13 +29,10 @@ function renderCenterPanel(isSessionActive: boolean, onStartTextSession = vi.fn(
 }
 
 describe('CenterPanel text interview flow', () => {
-  it('offers text-only session start and keeps the answer field disabled before a session', () => {
-    const onStartTextSession = vi.fn();
-    renderCenterPanel(false, onStartTextSession);
+  it('does not show a text-session start button and keeps the answer field disabled before a session', () => {
+    renderCenterPanel(false);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start interview with text' }));
-
-    expect(onStartTextSession).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Start interview with text' })).toBeNull();
     expect((screen.getByRole('textbox', { name: 'Type your response' }) as HTMLTextAreaElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Send message' }) as HTMLButtonElement).disabled).toBe(true);
   });

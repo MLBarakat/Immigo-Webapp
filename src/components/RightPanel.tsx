@@ -80,8 +80,10 @@ export function RightPanel({
 
   return (
     <aside
-      className="flex flex-col bg-star-white border-l border-immigo-gray-200 shrink-0 overflow-hidden transition-all duration-300"
-      style={isMobile ? { width: '100%', minWidth: 0, maxWidth: 'none' } : { width: '23%', minWidth: '250px', maxWidth: '360px' }}
+      className="flex flex-col bg-star-white border-l border-immigo-gray-200 overflow-hidden transition-all duration-300"
+      style={isMobile
+        ? { width: '100%', minWidth: 0, maxWidth: 'none' }
+        : { width: '23%', minWidth: 'clamp(200px, 23vw, 420px)', maxWidth: 'none', flexBasis: '23%', flexShrink: 1 }}
     >
       {/* Panel Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 bg-star-white sticky top-0 z-10">
@@ -99,17 +101,16 @@ export function RightPanel({
         </div>
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3">
 
         {/* ── Section 1: Simulation Modes ── */}
         <section>
-          <div className="flex items-center gap-2 mb-3">
+          <div className="mb-2 flex items-center gap-2">
             <SlidersHorizontal className="w-4 h-4 text-art-blue-600" />
             <span className="text-xs font-bold uppercase tracking-widest text-immigo-gray-600">{t('workspace.right.simulationModes')}</span>
           </div>
 
-          <fieldset className="space-y-2">
+          <fieldset className="space-y-1.5">
             <legend className="sr-only">{t('workspace.right.modeLegend')}</legend>
             {MODE_IDS.map(modeId => {
               const isSelected = simulationMode === modeId;
@@ -117,7 +118,7 @@ export function RightPanel({
               return (
                 <label
                   key={modeId}
-                  className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all duration-150 ${
+                  className={`flex items-start gap-2 p-2 rounded-xl border-2 cursor-pointer transition-all duration-150 ${
                     isSelected
                       ? 'border-art-blue-600 bg-art-blue-50'
                       : 'border-immigo-gray-200 hover:border-art-blue-300 hover:bg-immigo-gray-50'
@@ -133,7 +134,7 @@ export function RightPanel({
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className={`text-sm font-semibold block ${isSelected ? 'text-art-blue-700' : 'text-deep-navy'}`}>
+                    <span className={`text-xs font-semibold block ${isSelected ? 'text-art-blue-700' : 'text-deep-navy'}`}>
                       {mode.label}
                     </span>
                     <span className="text-xs text-immigo-gray-500 block mt-0.5">{mode.description}</span>
@@ -152,11 +153,11 @@ export function RightPanel({
           </fieldset>
         </section>
 
-        <div className="border-t border-immigo-gray-200" />
+        <div className="shrink-0 border-t border-immigo-gray-200" />
 
         {/* ── Section 2: Session Utilities ── */}
         <section>
-          <div className="flex items-center gap-2 mb-3">
+          <div className="mb-2 flex items-center gap-2">
             <span className="text-base">🔧</span>
             <span className="text-xs font-bold uppercase tracking-widest text-immigo-gray-600">{t('workspace.right.utilities')}</span>
           </div>
@@ -189,7 +190,7 @@ export function RightPanel({
               <button
                 onClick={handleClearRequest}
                 disabled={conversationLength === 0 || isRequestInFlight}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-art-red-300 text-art-red-600 hover:bg-art-red-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 font-semibold text-sm"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl border-2 border-art-red-300 text-art-red-600 hover:bg-art-red-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 font-semibold text-sm"
               >
                 <Trash2 className="w-4 h-4 flex-shrink-0" />
                 {t('workspace.right.clear')}
@@ -200,7 +201,7 @@ export function RightPanel({
             <button
               onClick={onDownloadTranscript}
               disabled={conversationLength === 0}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-immigo-gray-200 text-immigo-gray-700 hover:bg-immigo-gray-50 hover:border-immigo-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 font-semibold text-sm"
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-xl border-2 border-immigo-gray-200 text-immigo-gray-700 hover:bg-immigo-gray-50 hover:border-immigo-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 font-semibold text-sm"
             >
               <Download className="w-4 h-4 flex-shrink-0" />
               {t('workspace.right.downloadTranscript')}

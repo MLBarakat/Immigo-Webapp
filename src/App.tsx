@@ -186,7 +186,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               hasMoreHistory={manager.hasMoreHistory}
               onSendMessage={manager.sendTextMessage}
               onStartSession={manager.startSession}
-              onStartTextSession={manager.startTextSession}
               onEndSession={manager.endSession}
               onLoadOlder={manager.loadOlderMessages}
               onClearError={manager.clearError}
@@ -314,7 +313,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           hasMoreHistory={manager.hasMoreHistory}
           onSendMessage={manager.sendTextMessage}
           onStartSession={manager.startSession}
-          onStartTextSession={manager.startTextSession}
           onEndSession={manager.endSession}
           onLoadOlder={manager.loadOlderMessages}
           onClearError={manager.clearError}

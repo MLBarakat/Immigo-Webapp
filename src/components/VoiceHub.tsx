@@ -9,7 +9,6 @@ import { hasMicConsent, setMicConsent } from '../utils/micConsent';
 interface VoiceHubProps {
   readonly status: AppStatus;
   readonly isSessionActive: boolean;
-  readonly sessionTime: number;
   readonly onStartSession: () => void;
   readonly onEndSession: () => void;
 }
@@ -17,7 +16,6 @@ interface VoiceHubProps {
 export function VoiceHub({ 
   status, 
   isSessionActive, 
-  sessionTime, 
   onStartSession, 
   onEndSession 
 }: VoiceHubProps): JSX.Element {
@@ -66,25 +64,6 @@ export function VoiceHub({
     onStartSession();
   }, [onStartSession]);
 
-  const formatTime = (seconds: number): string => {
-    const absoluteSeconds = Math.max(0, Math.floor(seconds));
-    const minutes = Math.floor(absoluteSeconds / 60);
-    const remainingSeconds = absoluteSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
-
-  const statusMessage = (): string => {
-    switch (status) {
-      case 'idle': return t('workspace.voice.ready');
-      case 'listening': return t('workspace.voice.listening');
-      case 'processing': return t('workspace.voice.thinking');
-      case 'speaking': return t('workspace.voice.speaking');
-      case 'error': return t('workspace.voice.systemError');
-      default: return t('workspace.voice.ready');
-    }
-  };
-
-  const statusColor = isSessionActive ? 'text-art-red-600' : 'text-immigo-gray-600';
   const isProcessingActive = status === 'processing';
 
   return (
@@ -92,11 +71,11 @@ export function VoiceHub({
       {showMicConsent && (
         <MicConsentModal onAccept={handleMicConsentAccept} onCancel={() => setShowMicConsent(false)} />
       )}
-    <div className="flex flex-col items-center justify-center pl-2" role="region" aria-label={t('workspace.voice.region')}>
+    <div className="flex items-center justify-center" role="region" aria-label={t('workspace.voice.region')}>
       <button 
         onClick={handleButtonClick} 
         disabled={isProcessingActive}
-        className={`w-14 h-14 flex items-center justify-center transition-transform active:scale-95 duration-200 ${
+        className={`w-11 h-11 flex items-center justify-center rounded-full transition-transform active:scale-95 duration-200 ${
           isProcessingActive ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
         }`} 
         aria-label={t(isSessionActive ? 'workspace.voice.stop' : 'workspace.voice.start')}
@@ -105,21 +84,6 @@ export function VoiceHub({
       >
         <AnimatedStatusButton status={status} />
       </button>
-      
-      {/* Enforce ARIA Live parameters to ensure accessibility tools announce changes smoothly */}
-      <div className="text-center mt-1" aria-live="polite" id="asr-status-ledger">
-        <p 
-          className={`text-xs font-semibold capitalize transition-colors duration-150 ${
-            status === 'error' ? 'text-art-red-600' : 'text-deep-navy'
-          }`}
-          role="status"
-        >
-          {statusMessage()}
-        </p>
-        <p className={`text-sm font-mono transition-colors duration-150 ${statusColor}`}>
-          {formatTime(sessionTime)}
-        </p>
-      </div>
     </div>
     </>
   );

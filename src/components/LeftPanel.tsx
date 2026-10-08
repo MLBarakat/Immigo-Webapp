@@ -74,7 +74,6 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
   const [performanceOpen, setPerformanceOpen] = useState(true);
   const [studyBankOpen, setStudyBankOpen] = useState(true);
   const [mediaOpen, setMediaOpen] = useState(true);
-  const [analyticsOpen, setAnalyticsOpen] = useState(true);
   const [reportsOpen, setReportsOpen] = useState(true);
   const [reports, setReports] = useState<ProgressReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(Boolean(userId));
@@ -153,7 +152,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
           <button type="button" onClick={() => { setKnowledgeBankOpen(true); setMediaOpen(true); onToggleCollapse(); }} title={t('workspace.left.officialMedia')} aria-label={t('workspace.left.openMedia')} className="p-2 rounded-lg hover:bg-immigo-gray-100 text-art-blue-600">
             <Video className="w-5 h-5" />
           </button>
-          <button type="button" onClick={() => { setPerformanceOpen(true); setAnalyticsOpen(true); onToggleCollapse(); }} title={t('workspace.left.analytics')} aria-label={t('workspace.left.openAnalytics')} className="p-2 rounded-lg hover:bg-immigo-gray-100 text-art-blue-600">
+          <button type="button" onClick={() => { setPerformanceOpen(true); onToggleCollapse(); }} title={t('workspace.left.analytics')} aria-label={t('workspace.left.openAnalytics')} className="p-2 rounded-lg hover:bg-immigo-gray-100 text-art-blue-600">
             <BarChart2 className="w-5 h-5" />
           </button>
           <button type="button" onClick={() => { setPerformanceOpen(true); setReportsOpen(true); onToggleCollapse(); }} title={t('workspace.left.previousReports')} aria-label={t('workspace.left.openReports')} className="p-2 rounded-lg hover:bg-immigo-gray-100 text-art-blue-600">
@@ -166,8 +165,10 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
 
   return (
     <aside
-      className="flex flex-col bg-star-white border-r border-immigo-gray-200 shrink-0 overflow-hidden transition-all duration-300"
-      style={isMobile ? { width: '100%', minWidth: 0, maxWidth: 'none' } : { width: '23%', minWidth: '250px', maxWidth: '360px' }}
+      className="flex flex-col bg-star-white border-r border-immigo-gray-200 overflow-hidden transition-all duration-300"
+      style={isMobile
+        ? { width: '100%', minWidth: 0, maxWidth: 'none' }
+        : { width: '23%', minWidth: 'clamp(200px, 23vw, 420px)', maxWidth: 'none', flexBasis: '23%', flexShrink: 1 }}
     >
       {/* Panel Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 bg-star-white sticky top-0 z-10">
@@ -185,12 +186,11 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
         </button>}
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
         {/* ── Section 1: USCIS Knowledge Bank ── */}
-        <section>
+        <section className="flex min-h-0 flex-[0.9] flex-col overflow-hidden">
           <button
-            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-immigo-gray-600 hover:bg-immigo-gray-50 transition-colors"
+            className="w-full shrink-0 flex items-center justify-between px-4 py-2 text-xs font-bold uppercase tracking-widest text-immigo-gray-600 hover:bg-immigo-gray-50 transition-colors"
             onClick={() => setKnowledgeBankOpen(p => !p)}
             aria-expanded={knowledgeBankOpen}
           >
@@ -199,10 +199,10 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
           </button>
 
           {knowledgeBankOpen && (
-            <div className="px-3 pb-3">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-2">
               {/* Study Bank */}
-              <div className="mb-3">
-                <button type="button" onClick={() => setStudyBankOpen(p => !p)} aria-expanded={studyBankOpen} className="w-full flex items-center justify-between px-1 mb-2 text-left">
+              <div className="flex min-h-0 flex-1 flex-col">
+                <button type="button" onClick={() => setStudyBankOpen(p => !p)} aria-expanded={studyBankOpen} className="w-full shrink-0 flex items-center justify-between px-1 py-1.5 text-left">
                   <span className="flex items-center gap-1.5">
                   <GraduationCap className="w-3.5 h-3.5 text-art-blue-600" />
                   <span className="text-xs font-semibold text-deep-navy">{t('workspace.left.studyBank')}</span>
@@ -210,7 +210,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                   {studyBankOpen ? <ChevronUp className="w-3 h-3 text-immigo-gray-500" /> : <ChevronDown className="w-3 h-3 text-immigo-gray-500" />}
                 </button>
                 {studyBankOpen && (
-                <ul className="space-y-1.5">
+                <ul className="min-h-0 flex-1 overflow-y-auto space-y-1">
                   {STUDY_MATERIALS.map(item => {
                     const material = t(`workspace.left.materials.${item.id}`, { returnObjects: true }) as { title: string; subtitle: string; badge: string };
                     return (
@@ -233,8 +233,8 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
               </div>
 
               {/* Official USCIS Media */}
-              <div>
-                <button type="button" onClick={() => setMediaOpen(p => !p)} aria-expanded={mediaOpen} className="w-full flex items-center justify-between px-1 mb-2 text-left">
+              <div className="flex min-h-0 flex-1 flex-col">
+                <button type="button" onClick={() => setMediaOpen(p => !p)} aria-expanded={mediaOpen} className="w-full shrink-0 flex items-center justify-between px-1 py-1.5 text-left">
                   <span className="flex items-center gap-1.5">
                   <Play className="w-3.5 h-3.5 text-art-blue-600" />
                   <span className="text-xs font-semibold text-deep-navy">{t('workspace.left.officialMedia')}</span>
@@ -242,7 +242,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                   {mediaOpen ? <ChevronUp className="w-3 h-3 text-immigo-gray-500" /> : <ChevronDown className="w-3 h-3 text-immigo-gray-500" />}
                 </button>
                 {mediaOpen && (
-                <ul className="space-y-1.5">
+                <ul className="min-h-0 flex-1 overflow-y-auto space-y-1">
                   {USCIS_MEDIA.map(item => (
                     <li key={item.id}>
                       <a
@@ -266,12 +266,12 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
           )}
         </section>
 
-        <div className="border-t border-immigo-gray-200 mx-3" />
+        <div className="mx-3 shrink-0 border-t border-immigo-gray-200" />
 
         {/* ── Section 2: Performance and Exports ── */}
-        <section>
+        <section className="flex min-h-0 flex-[1.1] flex-col overflow-hidden">
           <button
-            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-immigo-gray-600 hover:bg-immigo-gray-50 transition-colors"
+            className="w-full shrink-0 flex items-center justify-between px-4 py-2 text-xs font-bold uppercase tracking-widest text-immigo-gray-600 hover:bg-immigo-gray-50 transition-colors"
             onClick={() => setPerformanceOpen(p => !p)}
             aria-expanded={performanceOpen}
           >
@@ -280,22 +280,20 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
           </button>
 
           {performanceOpen && (
-            <div className="px-3 pb-4">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-2">
               {/* Session Analytics */}
-              <div className="mb-4">
-                <button type="button" onClick={() => setAnalyticsOpen(p => !p)} aria-expanded={analyticsOpen} className="w-full flex items-center justify-between px-1 mb-3 text-left">
+              <div className="shrink-0 pb-2">
+                <div className="flex items-center justify-between px-1 py-1.5">
                   <span className="flex items-center gap-1.5">
                   <BarChart2 className="w-3.5 h-3.5 text-art-blue-600" />
                   <span className="text-xs font-semibold text-deep-navy">{t('workspace.left.analytics')}</span>
                   </span>
-                  {analyticsOpen ? <ChevronUp className="w-3 h-3 text-immigo-gray-500" /> : <ChevronDown className="w-3 h-3 text-immigo-gray-500" />}
-                </button>
+                </div>
 
-                {analyticsOpen && <>
                 {conversationLength === 0 || !liveStats ? (
                   <p className="text-[11px] text-immigo-gray-400 italic px-1 py-2">{t('workspace.left.metricsStart')}</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-1.5">
                     <CircularProgress pct={accuracy} color="#2563EB" label={t('workspace.left.answerAccuracy')} />
                     <CircularProgress pct={null} color="#16a34a" label={t('workspace.left.englishClarity')} />
                     <CircularProgress pct={null} color="#d97706" label={t('workspace.left.responseCompleteness')} />
@@ -315,12 +313,11 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                     </div>
                   </div>
                 )}
-                </>}
               </div>
 
               {/* Previous Progress Reports */}
-              <div>
-                <button type="button" onClick={() => setReportsOpen(p => !p)} aria-expanded={reportsOpen} className="w-full flex items-center justify-between px-1 mb-2 text-left">
+              <div className="flex min-h-0 flex-1 flex-col border-t border-immigo-gray-200 pt-1">
+                <button type="button" onClick={() => setReportsOpen(p => !p)} aria-expanded={reportsOpen} className="w-full shrink-0 flex items-center justify-between px-1 py-1.5 text-left">
                   <span className="flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-art-blue-600" />
                   <span className="text-xs font-semibold text-deep-navy">{t('workspace.left.previousReports')}</span>
@@ -328,7 +325,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                   {reportsOpen ? <ChevronUp className="w-3 h-3 text-immigo-gray-500" /> : <ChevronDown className="w-3 h-3 text-immigo-gray-500" />}
                 </button>
                 {reportsOpen && (
-                  <div>
+                  <div className="min-h-0 flex-1 overflow-y-auto">
                     {reportsLoading && <p className="text-[11px] text-immigo-gray-500 px-1 py-2" role="status">{t('workspace.left.reportsLoading')}</p>}
                     {reportsError && (
                       <div className="px-1 py-2" role="alert">
@@ -339,7 +336,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                     {!reportsLoading && !reportsError && reports.length === 0 && (
                       <p className="text-[11px] text-immigo-gray-500 px-1 py-2">{t('workspace.left.reportsEmpty')}</p>
                     )}
-                    <ul className="space-y-1.5">
+                    <ul className="space-y-1">
                       {reports.map(report => (
                         <li key={report.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border border-immigo-gray-200">
                           <button type="button" onClick={() => setSelectedReport(report)} className="min-w-0 text-left hover:text-art-blue-700">

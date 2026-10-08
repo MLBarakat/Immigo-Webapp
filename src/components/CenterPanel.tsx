@@ -17,7 +17,6 @@ interface CenterPanelProps {
   hasMoreHistory: boolean;
   onSendMessage: (message: string) => void;
   onStartSession: () => void;
-  onStartTextSession: () => void;
   onEndSession: () => void;
   onLoadOlder: () => void;
   onClearError: () => void;
@@ -59,7 +58,6 @@ export function CenterPanel({
   hasMoreHistory,
   onSendMessage,
   onStartSession,
-  onStartTextSession,
   onEndSession,
   onLoadOlder,
   onClearError,
@@ -150,7 +148,7 @@ export function CenterPanel({
       )}
 
       {/* Conversation Area */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-hidden min-h-0">
         {conversationHistory.length > 0 || interimTranscript ? (
           <ConversationHistory
             messages={conversationHistory}
@@ -174,17 +172,6 @@ export function CenterPanel({
 
       {/* Input Area */}
       <div className="shrink-0 bg-star-white border-t border-immigo-gray-200">
-        {!isSessionActive && (
-          <div className="px-4 pt-3">
-            <button
-              type="button"
-              onClick={onStartTextSession}
-              className="w-full rounded-xl border border-art-blue-200 bg-art-blue-50 px-4 py-2.5 text-sm font-semibold text-art-blue-700 hover:bg-art-blue-100 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
-            >
-              {t('workspace.center.startWithText')}
-            </button>
-          </div>
-        )}
         <div className="flex items-end gap-3 px-4 py-3">
           {/* Text input */}
           <div className="flex-1 relative">
@@ -205,7 +192,7 @@ export function CenterPanel({
           <button
             onClick={handleSend}
             disabled={isEmpty || !isSessionActive || appStatus === 'processing' || appStatus === 'speaking'}
-            className="w-11 h-11 flex items-center justify-center rounded-xl bg-art-blue-600 text-star-white hover:bg-art-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 shrink-0 shadow-sm hover:shadow-md active:scale-95"
+            className="w-11 h-11 flex items-center justify-center rounded-full bg-art-blue-600 text-star-white hover:bg-art-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 shrink-0 shadow-sm hover:shadow-md active:scale-95"
             aria-label={t('workspace.center.send')}
           >
             <Send className="w-4 h-4" />
@@ -216,7 +203,6 @@ export function CenterPanel({
             <VoiceHub
               status={appStatus}
               isSessionActive={isSessionActive}
-              sessionTime={sessionTime}
               onStartSession={onStartSession}
               onEndSession={onEndSession}
             />

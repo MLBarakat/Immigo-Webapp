@@ -31,12 +31,11 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     vi.restoreAllMocks();
   });
 
-  it('should render standard textual labels and accessibility markup accurately when idle', () => {
+  it('renders a compact microphone control without status or timer text', () => {
     render(
       <VoiceHub
         status="idle"
         isSessionActive={false}
-        sessionTime={0}
         onStartSession={mockStartSession}
         onEndSession={mockEndSession}
       />
@@ -49,24 +48,11 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     // Validate structural WAI-ARIA compliance attributes
     expect(interactiveButton.getAttribute('aria-busy')).toBe('false');
     expect(interactiveButton.getAttribute('aria-live')).toBe('polite');
-    
-    const operationalStatusLabel = screen.getByRole('status');
-    expect(operationalStatusLabel.textContent).toBe('Ready');
-    expect(screen.getByText('00:00')).not.toBeNull();
-  });
-
-  it('should correctly format internal numeric clock entries into legible string formats', () => {
-    render(
-      <VoiceHub
-        status="listening"
-        isSessionActive={true}
-        sessionTime={125} // Maps directly to 2 minutes and 5 seconds
-        onStartSession={mockStartSession}
-        onEndSession={mockEndSession}
-      />
-    );
-
-    expect(screen.getByText('02:05')).not.toBeNull();
+    expect(interactiveButton.className).toContain('w-11');
+    expect(interactiveButton.className).toContain('h-11');
+    expect(interactiveButton.className).toContain('rounded-full');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText('00:00')).toBeNull();
   });
 
   it('should block manual user selection triggers when backend processing loops are running', () => {
@@ -74,7 +60,6 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       <VoiceHub
         status="processing"
         isSessionActive={true}
-        sessionTime={10}
         onStartSession={mockStartSession}
         onEndSession={mockEndSession}
       />
@@ -85,7 +70,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     // Assert structural lock states are correctly registered by the browser DOM layer
     expect(interactiveButton.disabled).toBe(true);
     expect(interactiveButton.getAttribute('aria-busy')).toBe('true');
-    expect(screen.getByRole('status').textContent).toBe('Thinking...');
+    expect(screen.queryByRole('status')).toBeNull();
 
     // Verify interaction inputs are dropped when clicked during an active inference lock
     fireEvent.click(interactiveButton);
@@ -102,7 +87,6 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       <VoiceHub
         status="idle"
         isSessionActive={false}
-        sessionTime={0}
         onStartSession={mockStartSession}
         onEndSession={mockEndSession}
       />

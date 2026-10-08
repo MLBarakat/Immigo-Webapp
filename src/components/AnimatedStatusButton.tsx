@@ -135,11 +135,11 @@ export function AnimatedStatusButton({ status }: AnimatedStatusButtonProps): JSX
         <div
             className={`
                 w-full h-full aspect-square rounded-full bg-star-white hover:bg-immigo-gray-100 backdrop-blur-sm
-                border-4 ${color}
+                border-2 ${color}
                 flex items-center justify-center
                 shadow-md
                 transition-colors duration-500
-                p-2 md:p-4
+                p-1
             `}
         >
             <div className="w-full h-full status-enter-active">{component}</div>
