@@ -181,11 +181,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               interimTranscript={manager.interimTranscript}
               appStatus={manager.appStatus}
               isSessionActive={manager.isSessionActive}
+              isVoiceSessionActive={manager.isVoiceSessionActive}
               sessionTime={manager.sessionTime}
               errorMessage={manager.errorMessage}
               hasMoreHistory={manager.hasMoreHistory}
               onSendMessage={manager.sendTextMessage}
               onStartSession={manager.startSession}
+              onStartTextSession={manager.startTextSession}
               onEndSession={manager.endSession}
               onLoadOlder={manager.loadOlderMessages}
               onClearError={manager.clearError}
@@ -308,11 +310,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           interimTranscript={manager.interimTranscript}
           appStatus={manager.appStatus}
           isSessionActive={manager.isSessionActive}
+          isVoiceSessionActive={manager.isVoiceSessionActive}
           sessionTime={manager.sessionTime}
           errorMessage={manager.errorMessage}
           hasMoreHistory={manager.hasMoreHistory}
           onSendMessage={manager.sendTextMessage}
           onStartSession={manager.startSession}
+          onStartTextSession={manager.startTextSession}
           onEndSession={manager.endSession}
           onLoadOlder={manager.loadOlderMessages}
           onClearError={manager.clearError}

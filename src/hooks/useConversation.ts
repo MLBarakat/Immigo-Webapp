@@ -49,6 +49,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // graded against the correct item (server-owned grounded grading).
   const currentItemIdRef = useRef<string | null>(null);
   const voiceSessionRef = useRef(conversationState.isSessionActive);
+  const [isVoiceSessionActive, setIsVoiceSessionActive] = useState(conversationState.isSessionActive);
   // One-shot flag: set when the server asks the user to confirm/repeat an
   // answer or complete a multi-part one (turn-policy's needs_confirmation).
   // While set (and matching the current item), the next answer is sent as a
@@ -448,6 +449,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
   const initiateSession = useCallback(async (startVoice = true) => {
     voiceSessionRef.current = startVoice;
+    setIsVoiceSessionActive(startVoice);
     dispatch({ type: 'START_SESSION' });
     analytics.track('session_started');
     processedTranscriptRef.current = '';
@@ -611,6 +613,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     sessionIdRef.current = null;
     currentItemIdRef.current = null;
     voiceSessionRef.current = false;
+    setIsVoiceSessionActive(false);
     awaitingConfirmationRef.current = null;
     answeredCountRef.current = 0;
     dispatch({ type: 'SET_SESSION_ID', payload: null });
@@ -728,6 +731,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       sessionIdRef.current = null;
       currentItemIdRef.current = null;
       voiceSessionRef.current = false;
+      setIsVoiceSessionActive(false);
       awaitingConfirmationRef.current = null;
       answeredCountRef.current = 0;
       dispatch({ type: 'SET_SESSION_ID', payload: null });
@@ -788,6 +792,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
   return {
     ...conversationState,
+    isVoiceSessionActive: conversationState.isSessionActive && isVoiceSessionActive,
     isGeneratingProgressReport,
     currentState,
     interimTranscript: displayTranscript,

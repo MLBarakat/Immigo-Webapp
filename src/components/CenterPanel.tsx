@@ -12,11 +12,13 @@ interface CenterPanelProps {
   interimTranscript: string;
   appStatus: AppStatus;
   isSessionActive: boolean;
+  isVoiceSessionActive: boolean;
   sessionTime: number;
   errorMessage: string | null;
   hasMoreHistory: boolean;
   onSendMessage: (message: string) => void;
   onStartSession: () => void;
+  onStartTextSession: () => Promise<void>;
   onEndSession: () => void;
   onLoadOlder: () => void;
   onClearError: () => void;
@@ -53,11 +55,13 @@ export function CenterPanel({
   interimTranscript,
   appStatus,
   isSessionActive,
+  isVoiceSessionActive,
   sessionTime,
   errorMessage,
   hasMoreHistory,
   onSendMessage,
   onStartSession,
+  onStartTextSession,
   onEndSession,
   onLoadOlder,
   onClearError,
@@ -65,6 +69,7 @@ export function CenterPanel({
   isFocusMode = false,
 }: CenterPanelProps) {
   const [message, setMessage] = useState('');
+  const [isStartingTextSession, setIsStartingTextSession] = useState(false);
   const { t } = useTranslation('conversation');
   const statusLabelKeys: Record<AppStatus, string> = {
     idle: 'workspace.center.status.ready',
@@ -74,12 +79,23 @@ export function CenterPanel({
     error: 'workspace.center.status.error',
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = message.trim();
-    if (text && appStatus !== 'processing' && appStatus !== 'speaking') {
-      onSendMessage(text);
-      setMessage('');
+    if (!text || isVoiceSessionActive || isStartingTextSession) {
+      return;
     }
+
+    if (!isSessionActive) {
+      setIsStartingTextSession(true);
+      try {
+        await onStartTextSession();
+      } finally {
+        setIsStartingTextSession(false);
+      }
+    }
+
+    onSendMessage(text);
+    setMessage('');
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -90,6 +106,10 @@ export function CenterPanel({
   };
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(68, Math.min(textarea.scrollHeight, 120))}px`;
+    textarea.style.overflowY = textarea.scrollHeight > 120 ? 'auto' : 'hidden';
     setMessage(e.target.value);
   };
 
@@ -172,40 +192,37 @@ export function CenterPanel({
 
       {/* Input Area */}
       <div className="shrink-0 bg-star-white border-t border-immigo-gray-200">
-        <div className="flex items-end gap-3 px-4 py-3">
-          {/* Text input */}
-          <div className="flex-1 relative">
+        <div className="px-4 py-3">
+          <div className="relative">
             <textarea
-              rows={1}
-              className="w-full px-4 py-3 pr-4 border-2 border-immigo-gray-200 rounded-xl resize-none focus:outline-none focus:border-art-blue-500 disabled:bg-immigo-gray-50 disabled:cursor-not-allowed text-sm text-deep-navy placeholder-immigo-gray-400 transition-colors duration-150"
-              style={{ maxHeight: '120px', overflowY: 'auto' }}
+              rows={2}
+              className="w-full min-h-[68px] px-4 py-3 pr-28 border-2 border-immigo-gray-200 rounded-xl resize-none focus:outline-none focus:border-art-blue-500 disabled:bg-immigo-gray-50 disabled:cursor-not-allowed text-sm text-deep-navy placeholder-immigo-gray-400 transition-colors duration-150"
+              style={{ maxHeight: '120px', overflowY: 'hidden' }}
               placeholder={t('workspace.center.inputPlaceholder')}
               value={message}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              disabled={!isSessionActive || appStatus === 'processing' || appStatus === 'speaking'}
+              disabled={isVoiceSessionActive || isStartingTextSession}
               aria-label={t('workspace.center.inputAria')}
             />
-          </div>
 
-          {/* Send button */}
-          <button
-            onClick={handleSend}
-            disabled={isEmpty || !isSessionActive || appStatus === 'processing' || appStatus === 'speaking'}
-            className="w-11 h-11 flex items-center justify-center rounded-full bg-art-blue-600 text-star-white hover:bg-art-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 shrink-0 shadow-sm hover:shadow-md active:scale-95"
-            aria-label={t('workspace.center.send')}
-          >
-            <Send className="w-4 h-4" />
-          </button>
+            <div className="absolute bottom-2 right-2 flex items-center gap-2">
+              <button
+                onClick={handleSend}
+                disabled={isEmpty || isVoiceSessionActive || isStartingTextSession}
+                className="w-11 h-11 flex items-center justify-center rounded-full bg-art-blue-600 text-star-white hover:bg-art-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 shrink-0 shadow-sm hover:shadow-md active:scale-95"
+                aria-label={t('workspace.center.send')}
+              >
+                <Send className="w-4 h-4" />
+              </button>
 
-          {/* Mic / Voice Hub */}
-          <div className="shrink-0">
-            <VoiceHub
-              status={appStatus}
-              isSessionActive={isSessionActive}
-              onStartSession={onStartSession}
-              onEndSession={onEndSession}
-            />
+              <VoiceHub
+                status={appStatus}
+                isSessionActive={isSessionActive}
+                onStartSession={onStartSession}
+                onEndSession={onEndSession}
+              />
+            </div>
           </div>
         </div>
       </div>
