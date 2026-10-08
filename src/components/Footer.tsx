@@ -10,12 +10,12 @@ export const Footer: React.FC = () => {
   const [showPrivacy, setShowPrivacy] = useState(false);
 
   return (
-    <footer className="w-full bg-star-white dark:bg-gray-800 text-immigo-gray-600 dark:text-immigo-gray-400 text-center py-2.5 px-4 text-xs sm:text-sm border-t border-immigo-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
-      <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-        <p className="text-immigo-gray-500 text-[11px] sm:text-xs text-center sm:text-left">
+    <footer className="w-full shrink-0 bg-star-white dark:bg-gray-800 text-immigo-gray-600 dark:text-immigo-gray-400 py-2 px-3 sm:px-4 text-[10px] sm:text-sm border-t border-immigo-gray-200 dark:border-gray-700">
+      <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-row items-center justify-between gap-2">
+        <p className="min-w-0 flex-1 truncate text-left text-[9px] leading-tight text-immigo-gray-500 sm:text-xs" title={t('footer.disclaimer')}>
           {t('footer.disclaimer')}
         </p>
-        <div className="flex items-center gap-4 text-immigo-gray-600 dark:text-immigo-gray-300 flex-shrink-0">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-4 whitespace-nowrap text-[10px] sm:text-sm text-immigo-gray-600 dark:text-immigo-gray-300">
           <span>&copy; {currentYear} ImmiGO</span>
           <button
             type="button"

@@ -22,17 +22,20 @@ export function ConversationHistory({
   const { t, i18n } = useTranslation('conversation');
   const conversationRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
-  const previousLastMessageIdRef = useRef<string | null>(null);
-  const lastMessageId = messages.at(-1)?.id ?? null;
+  const previousLastMessageRef = useRef<{ id: string; content: string } | null>(null);
+  const lastMessage = messages.at(-1) ?? null;
 
   useLayoutEffect(() => {
-    const hasNewLatestMessage = lastMessageId !== previousLastMessageIdRef.current;
-    previousLastMessageIdRef.current = lastMessageId;
+    const hasNewLatestMessage = lastMessage?.id !== previousLastMessageRef.current?.id
+      || lastMessage?.content !== previousLastMessageRef.current?.content;
+    previousLastMessageRef.current = lastMessage
+      ? { id: lastMessage.id, content: lastMessage.content }
+      : null;
     if (hasNewLatestMessage || interimTranscript) {
       const viewport = conversationRef.current;
       if (viewport) viewport.scrollTop = viewport.scrollHeight;
     }
-  }, [lastMessageId, interimTranscript]);
+  }, [lastMessage, interimTranscript]);
 
   useEffect(() => {
     if (!onLoadOlder || !hasMore || !topSentinelRef.current) return;
@@ -46,7 +49,7 @@ export function ConversationHistory({
   }, [onLoadOlder, hasMore]);
 
   return (
-    <div ref={conversationRef} className="h-full overflow-y-auto px-4 sm:px-6 py-5 space-y-5" role="log" aria-label={t('workspace.center.conversationAria')}>
+    <div ref={conversationRef} className="h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-4 sm:px-6 py-5 space-y-5" role="log" aria-label={t('workspace.center.conversationAria')}>
       {/* Top Sentinel for Infinite Scroll Upward */}
       <div ref={topSentinelRef} className="h-1 w-full">
         {hasMore && <span className="text-xs text-immigo-gray-400 italic flex justify-center py-1">{t('workspace.center.loadingOlder')}</span>}

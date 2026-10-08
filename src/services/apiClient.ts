@@ -133,7 +133,7 @@ export class ApiClient {
    * (postSessionStart) — same response shape, different request body. */
   private async sendTranscriptRequest(
     body: Record<string, unknown>,
-    options: { headers?: Record<string, string> } = {}
+    options: { headers?: Record<string, string>; signal?: AbortSignal } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -148,6 +148,7 @@ export class ApiClient {
         method: 'POST',
         headers: options.headers,
         body: JSON.stringify(body),
+        signal: options.signal,
       });
     } catch (err) {
       logger.error('[ApiClient] transcript endpoint network/CORS exception:', undefined, {
@@ -224,8 +225,8 @@ export class ApiClient {
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     currentItemId?: string | null,
-    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string },
-    options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
+    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string },
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;

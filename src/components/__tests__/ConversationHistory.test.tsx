@@ -35,6 +35,8 @@ describe('ConversationHistory', () => {
       <ConversationHistory messages={[message('first', '2025-01-01T12:00:00.000Z')]} displayUser={displayUser} interimTranscript="" />
     );
     const log = screen.getByRole('log');
+    expect(log.className).toContain('overflow-y-auto');
+    expect(log.className).toContain('touch-pan-y');
     Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 500 });
     log.scrollTop = 0;
 

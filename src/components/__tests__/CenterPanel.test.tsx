@@ -1,8 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CenterPanel } from '../CenterPanel';
 
-vi.mock('../VoiceHub', () => ({ VoiceHub: () => <button aria-label="Voice microphone" /> }));
+vi.mock('../VoiceHub', () => ({
+  VoiceHub: ({ onStartSession }: { onStartSession: () => void }) => (
+    <button aria-label="Voice microphone" onClick={onStartSession} />
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -13,13 +17,13 @@ function renderCenterPanel({
   isVoiceSessionActive = false,
   appStatus = 'idle',
   onSendMessage = vi.fn(),
-  onStartTextSession = vi.fn().mockResolvedValue(undefined),
+  onStartSession = vi.fn(),
 }: {
   isSessionActive?: boolean;
   isVoiceSessionActive?: boolean;
   appStatus?: 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
   onSendMessage?: (message: string) => void;
-  onStartTextSession?: () => Promise<void>;
+  onStartSession?: () => void;
 } = {}) {
   return render(
     <CenterPanel
@@ -33,8 +37,7 @@ function renderCenterPanel({
       errorMessage={null}
       hasMoreHistory={false}
       onSendMessage={onSendMessage}
-      onStartSession={vi.fn()}
-      onStartTextSession={onStartTextSession}
+      onStartSession={onStartSession}
       onEndSession={vi.fn()}
       onLoadOlder={vi.fn()}
       onClearError={vi.fn()}
@@ -43,11 +46,11 @@ function renderCenterPanel({
 }
 
 describe('CenterPanel text interview flow', () => {
-  it('allows text input before a session and starts a text session on the first send', async () => {
-    const onStartTextSession = vi.fn().mockResolvedValue(undefined);
+  it('allows text input before a session without activating voice conversation', () => {
+    const onStartSession = vi.fn();
     const onSendMessage = vi.fn();
 
-    renderCenterPanel({ onStartTextSession, onSendMessage });
+    renderCenterPanel({ onStartSession, onSendMessage });
 
     const input = screen.getByRole('textbox', { name: 'Type your response' }) as HTMLTextAreaElement;
     const sendButton = screen.getByRole('button', { name: 'Send message' }) as HTMLButtonElement;
@@ -58,8 +61,8 @@ describe('CenterPanel text interview flow', () => {
     expect(sendButton.disabled).toBe(false);
     fireEvent.click(sendButton);
 
-    await waitFor(() => expect(onStartTextSession).toHaveBeenCalledOnce());
     expect(onSendMessage).toHaveBeenCalledWith('My typed answer');
+    expect(onStartSession).not.toHaveBeenCalled();
     expect(input.value).toBe('');
   });
 
@@ -108,5 +111,13 @@ describe('CenterPanel text interview flow', () => {
     expect(input.rows).toBe(2);
     expect(input.parentElement?.querySelector('[aria-label="Send message"]')).not.toBeNull();
     expect(input.parentElement?.querySelector('[aria-label="Voice microphone"]')).not.toBeNull();
+  });
+
+  it('activates voice conversation only when the microphone is clicked', () => {
+    const onStartSession = vi.fn();
+    renderCenterPanel({ onStartSession });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Voice microphone' }));
+    expect(onStartSession).toHaveBeenCalledOnce();
   });
 });

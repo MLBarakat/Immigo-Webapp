@@ -18,7 +18,6 @@ interface CenterPanelProps {
   hasMoreHistory: boolean;
   onSendMessage: (message: string) => void;
   onStartSession: () => void;
-  onStartTextSession: () => Promise<void>;
   onEndSession: () => void;
   onLoadOlder: () => void;
   onClearError: () => void;
@@ -61,7 +60,6 @@ export function CenterPanel({
   hasMoreHistory,
   onSendMessage,
   onStartSession,
-  onStartTextSession,
   onEndSession,
   onLoadOlder,
   onClearError,
@@ -69,7 +67,6 @@ export function CenterPanel({
   isFocusMode = false,
 }: CenterPanelProps) {
   const [message, setMessage] = useState('');
-  const [isStartingTextSession, setIsStartingTextSession] = useState(false);
   const { t } = useTranslation('conversation');
   const statusLabelKeys: Record<AppStatus, string> = {
     idle: 'workspace.center.status.ready',
@@ -79,21 +76,9 @@ export function CenterPanel({
     error: 'workspace.center.status.error',
   };
 
-  const handleSend = async () => {
+  const handleSend = () => {
     const text = message.trim();
-    if (!text || isVoiceSessionActive || isStartingTextSession) {
-      return;
-    }
-
-    if (!isSessionActive) {
-      setIsStartingTextSession(true);
-      try {
-        await onStartTextSession();
-      } finally {
-        setIsStartingTextSession(false);
-      }
-    }
-
+    if (!text || isVoiceSessionActive) return;
     onSendMessage(text);
     setMessage('');
   };
@@ -194,34 +179,36 @@ export function CenterPanel({
       <div className="shrink-0 bg-star-white border-t border-immigo-gray-200">
         <div className="px-4 py-3">
           <div className="relative">
-            <textarea
-              rows={2}
-              className="w-full min-h-[68px] px-4 py-3 pr-28 border-2 border-immigo-gray-200 rounded-xl resize-none focus:outline-none focus:border-art-blue-500 disabled:bg-immigo-gray-50 disabled:cursor-not-allowed text-sm text-deep-navy placeholder-immigo-gray-400 transition-colors duration-150"
-              style={{ maxHeight: '120px', overflowY: 'hidden' }}
-              placeholder={t('workspace.center.inputPlaceholder')}
-              value={message}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-              disabled={isVoiceSessionActive || isStartingTextSession}
-              aria-label={t('workspace.center.inputAria')}
-            />
-
-            <div className="absolute bottom-2 right-2 flex items-center gap-2">
-              <button
-                onClick={handleSend}
-                disabled={isEmpty || isVoiceSessionActive || isStartingTextSession}
-                className="w-11 h-11 flex items-center justify-center rounded-full bg-art-blue-600 text-star-white hover:bg-art-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 shrink-0 shadow-sm hover:shadow-md active:scale-95"
-                aria-label={t('workspace.center.send')}
-              >
-                <Send className="w-4 h-4" />
-              </button>
-
-              <VoiceHub
-                status={appStatus}
-                isSessionActive={isSessionActive}
-                onStartSession={onStartSession}
-                onEndSession={onEndSession}
+            <div className="relative min-h-[68px] rounded-xl border-2 border-immigo-gray-200 bg-star-white transition-colors duration-150 focus-within:border-art-blue-500">
+              <textarea
+                rows={2}
+                className="block w-full min-h-[64px] px-4 py-3 pr-[112px] border-0 rounded-xl bg-transparent resize-none focus:outline-none focus:ring-0 disabled:bg-immigo-gray-50 disabled:cursor-not-allowed text-sm text-deep-navy placeholder-immigo-gray-400"
+                style={{ maxHeight: '120px', overflowY: 'hidden' }}
+                placeholder={t('workspace.center.inputPlaceholder')}
+                value={message}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                disabled={isVoiceSessionActive}
+                aria-label={t('workspace.center.inputAria')}
               />
+
+              <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1.5">
+                <button
+                  onClick={handleSend}
+                  disabled={isEmpty || isVoiceSessionActive}
+                  className="w-11 h-11 flex items-center justify-center rounded-full bg-art-blue-600 text-star-white hover:bg-art-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 shrink-0 shadow-sm hover:shadow-md active:scale-95"
+                  aria-label={t('workspace.center.send')}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+
+                <VoiceHub
+                  status={appStatus}
+                  isSessionActive={isSessionActive}
+                  onStartSession={onStartSession}
+                  onEndSession={onEndSession}
+                />
+              </div>
             </div>
           </div>
         </div>

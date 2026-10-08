@@ -162,7 +162,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           currentLanguageCode={currentLanguageCode}
           onLanguageChange={(code) => { void updateUserLanguage(code); }}
         />
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
           {mobileWorkspace === 'resources' && (
             <LeftPanel
               isCollapsed={false}
@@ -187,7 +187,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               hasMoreHistory={manager.hasMoreHistory}
               onSendMessage={manager.sendTextMessage}
               onStartSession={manager.startSession}
-              onStartTextSession={manager.startTextSession}
               onEndSession={manager.endSession}
               onLoadOlder={manager.loadOlderMessages}
               onClearError={manager.clearError}
@@ -316,7 +315,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           hasMoreHistory={manager.hasMoreHistory}
           onSendMessage={manager.sendTextMessage}
           onStartSession={manager.startSession}
-          onStartTextSession={manager.startTextSession}
           onEndSession={manager.endSession}
           onLoadOlder={manager.loadOlderMessages}
           onClearError={manager.clearError}

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, useContext, useState } from 'react';
+import { useCallback, useRef, useEffect, useLayoutEffect, useContext, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConversationContext } from '../context/conversationContextTypes';
 import { SimulationMode } from '../context/conversationContextTypes';
@@ -44,10 +44,18 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const audioPlaybackUrlRef = useRef<string | null>(null);
   const audioPlaybackGenerationRef = useRef(0);
   const processedTranscriptRef = useRef<string>('');
+  const activeTurnControllerRef = useRef<AbortController | null>(null);
+  const activeAssistantMessageIdRef = useRef<string | null>(null);
+  const turnGenerationRef = useRef(0);
   const sessionIdRef = useRef<string | null>(conversationState.sessionId);
   // Tracks which bank question the server last asked, so the next answer is
   // graded against the correct item (server-owned grounded grading).
   const currentItemIdRef = useRef<string | null>(null);
+  const hydratedHistoryUserIdRef = useRef<string | null>(null);
+  const skipNextHistoryCacheWriteRef = useRef(false);
+  const historyChangedBeforeHydrationRef = useRef(false);
+  const historyClearedBeforeHydrationRef = useRef(false);
+  const latestConversationHistoryRef = useRef(conversationState.conversationHistory);
   const voiceSessionRef = useRef(conversationState.isSessionActive);
   const [isVoiceSessionActive, setIsVoiceSessionActive] = useState(conversationState.isSessionActive);
   // One-shot flag: set when the server asks the user to confirm/repeat an
@@ -124,18 +132,58 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   useEffect(() => {
     sessionIdRef.current = conversationState.sessionId;
   }, [conversationState.sessionId]);
+  useLayoutEffect(() => {
+    latestConversationHistoryRef.current = conversationState.conversationHistory;
+  }, [conversationState.conversationHistory]);
 
   // Sync live interim transcript modifications to viewport UI
   useEffect(() => {
     dispatch({ type: 'SET_INTERIM_TRANSCRIPT', payload: displayTranscript });
   }, [displayTranscript, dispatch]);
 
-  // Load initial chat history on mount or when userId changes
-  useEffect(() => {
+  // Restore this tab's latest conversation immediately; fetch the database
+  // history when no local snapshot exists, or to retain its pagination cursor.
+  useLayoutEffect(() => {
+    hydratedHistoryUserIdRef.current = null;
     if (!userId) return;
 
     let isMounted = true;
-    ChatPersistenceService.loadRecentMessages(userId, 25).then(payload => {
+    const cacheKey = `immigo_conversation_${userId}`;
+    let cachedMessages: Message[] | null = null;
+    try {
+      const stored = sessionStorage.getItem(cacheKey);
+      if (stored !== null) {
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.every((entry): entry is Message =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof entry.id === 'string' &&
+          (entry.role === 'user' || entry.role === 'assistant') &&
+          typeof entry.content === 'string' &&
+          typeof entry.timestamp === 'string'
+        )) {
+          cachedMessages = parsed.slice(-100);
+        } else {
+          logger.warn('Ignoring invalid per-tab conversation cache.', { userId });
+        }
+      }
+    } catch (error: unknown) {
+      logger.error('Failed to read per-tab conversation cache.', undefined, {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    if (cachedMessages !== null) {
+      skipNextHistoryCacheWriteRef.current = true;
+      dispatch({
+        type: 'LOAD_HISTORICAL_MESSAGES',
+        payload: { messages: cachedMessages, hasMore: false, oldestCursor: null, replace: true },
+      });
+    }
+    hydratedHistoryUserIdRef.current = userId;
+
+    void ChatPersistenceService.loadRecentMessages(userId, 25).then(payload => {
       if (!isMounted) return;
       const formattedMessages: Message[] = payload.messages.map(m => ({
         id: m.id,
@@ -146,10 +194,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({
         type: 'LOAD_HISTORICAL_MESSAGES',
         payload: {
-          messages: formattedMessages,
+          messages: cachedMessages !== null || historyClearedBeforeHydrationRef.current
+            ? []
+            : formattedMessages,
           hasMore: payload.hasMore,
           oldestCursor: payload.oldestCursor,
-          replace: true
+          replace: cachedMessages === null && !historyChangedBeforeHydrationRef.current
         }
       });
     }).catch(err => {
@@ -160,6 +210,25 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       isMounted = false;
     };
   }, [userId, dispatch]);
+
+  useEffect(() => {
+    if (!userId || hydratedHistoryUserIdRef.current !== userId) return;
+    if (skipNextHistoryCacheWriteRef.current) {
+      skipNextHistoryCacheWriteRef.current = false;
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        `immigo_conversation_${userId}`,
+        JSON.stringify(conversationState.conversationHistory.slice(-100))
+      );
+    } catch (error: unknown) {
+      logger.error('Failed to persist per-tab conversation cache.', undefined, {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [conversationState.conversationHistory, userId]);
 
   const loadOlderMessages = useCallback(async () => {
     if (!userId || !conversationState.oldestMessageCursor || !conversationState.hasMoreHistory) return;
@@ -194,6 +263,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const sendTextMessage = useCallback(async (text: string) => {
     const validatedText = text.replace(/\s+/g, ' ').trim();
     if (!validatedText) return;
+    historyChangedBeforeHydrationRef.current = true;
 
     const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const secureUserMessageId = `user-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -211,6 +281,20 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ type: 'SET_STATUS', payload: 'idle' });
       return;
     }
+
+    if (activeTurnControllerRef.current) {
+      activeTurnControllerRef.current.abort();
+      if (activeAssistantMessageIdRef.current) {
+        dispatch({
+          type: 'REMOVE_PENDING_ASSISTANT_MESSAGE',
+          payload: { assistantMessageId: activeAssistantMessageIdRef.current },
+        });
+      }
+    }
+    const turnController = new AbortController();
+    activeTurnControllerRef.current = turnController;
+    const turnGeneration = ++turnGenerationRef.current;
+    activeAssistantMessageIdRef.current = secureAssistantMessageId;
 
     const userMessage: Message = { 
       id: secureUserMessageId, 
@@ -264,7 +348,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
             activeSessionId,
             currentItemIdRef.current,
             isConfirmationRetry,
-            { headers: { 'x-correlation-trace-id': traceId }, voiceId: voiceIdRef.current ?? undefined, simulationMode: simulationModeRef.current, preferredLanguage: preferredLanguageRef.current }
+              { headers: { 'x-correlation-trace-id': traceId }, signal: turnController.signal, voiceId: voiceIdRef.current ?? undefined, simulationMode: simulationModeRef.current, preferredLanguage: preferredLanguageRef.current }
           );
           responseText = res.responseText;
           audioData = res.audioData;
@@ -292,6 +376,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       if (!responseText || !audioData) {
         throw accumulatedLastError || new Error('Structural Exception: Inbound gateway transmission payload properties missing.');
       }
+      if (turnGeneration !== turnGenerationRef.current) return;
 
       // Remember the question the server just asked; the NEXT answer is graded against it.
       currentItemIdRef.current = nextItemId;
@@ -337,6 +422,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       if (!conversationState.isSessionActive || !voiceSessionRef.current) {
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        activeTurnControllerRef.current = null;
+        activeAssistantMessageIdRef.current = null;
         return;
       }
 
@@ -389,8 +476,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           startRecording();
         }, 300); // 300 ms AEC settle window
       };
+      activeTurnControllerRef.current = null;
+      activeAssistantMessageIdRef.current = null;
 
     } catch (error: unknown) {
+      if (turnController.signal.aborted || turnGeneration !== turnGenerationRef.current) return;
+      activeAssistantMessageIdRef.current = null;
       const parsedErrorMessage = error instanceof Error ? error.message : 'Failed to synchronize conversation transactions.';
       
       dispatch({ type: 'SET_STATUS', payload: 'error' });
@@ -410,6 +501,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       
       if (conversationState.isSessionActive && voiceSessionRef.current) {
         startRecording();
+      }
+    } finally {
+      if (activeTurnControllerRef.current === turnController) {
+        activeTurnControllerRef.current = null;
       }
     }
   }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive]);
@@ -447,9 +542,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [finalTranscript, sendTextMessage]);
 
-  const initiateSession = useCallback(async (startVoice = true) => {
-    voiceSessionRef.current = startVoice;
-    setIsVoiceSessionActive(startVoice);
+  const initiateSession = useCallback(async () => {
+    historyChangedBeforeHydrationRef.current = true;
+    voiceSessionRef.current = true;
+    setIsVoiceSessionActive(true);
     dispatch({ type: 'START_SESSION' });
     analytics.track('session_started');
     processedTranscriptRef.current = '';
@@ -471,8 +567,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     // real server response before the mic ever opens for real user input —
     // the first answer is graded against the right question from the start.
     if (!apiClient) {
-      if (startVoice) startRecording();
-      else dispatch({ type: 'SET_STATUS', payload: 'idle' });
+      startRecording();
       return;
     }
 
@@ -513,11 +608,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       if (userId && newSessionId) {
         void ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', res.responseText);
-      }
-
-      if (!startVoice) {
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
-        return;
       }
 
       // Same playback + AEC mute-gate + resume-recording sequencing as every
@@ -574,11 +664,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       const fallbackText = "Welcome! Let's get started with today's civics practice — go ahead whenever you're ready.";
       dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: secureAssistantMessageId, content: fallbackText } });
-
-      if (!startVoice) {
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
-        return;
-      }
 
       const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
       if (canSpeak) {
@@ -662,12 +747,13 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // No paired user message: this is the very first thing in the conversation,
   // so there must be nothing (not even an empty bubble) before it.
   useEffect(() => {
-    if (!apiClient || !userId || hasFetchedWelcomeBannerRef.current) return;
+    if (!apiClient || !userId || hasFetchedWelcomeBannerRef.current || conversationState.conversationHistory.length > 0) return;
     hasFetchedWelcomeBannerRef.current = true;
 
     void (async () => {
       try {
         const { message } = await apiClient.fetchWelcomeBanner();
+        if (latestConversationHistoryRef.current.length > 0) return;
         const assistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId, content: message } });
       } catch (error: unknown) {
@@ -678,41 +764,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         });
       }
     })();
-  }, [apiClient, userId, dispatch]);
+  }, [apiClient, userId, dispatch, conversationState.conversationHistory.length]);
 
   const stopRecordingRef = useRef(stopRecording);
   useEffect(() => {
     stopRecordingRef.current = stopRecording;
   }, [stopRecording]);
-
-  // Reliable progress-report generation on tab-close/background, not just an
-  // explicit "End Session" tap. `document.hidden` fires on tab-switch, app
-  // backgrounding (mobile), and as the page is torn down; `pagehide` covers
-  // actual navigation/close. completeSession already uses
-  // fetch(..., { keepalive: true }) with the user's auth header — the correct
-  // tool here, since navigator.sendBeacon cannot carry a custom Authorization
-  // header. This does NOT end the session in the UI (the user may switch
-  // back) — it only ensures a progress snapshot exists even if they never do.
-  useEffect(() => {
-    const triggerBackgroundSnapshot = () => {
-      if (document.visibilityState !== 'hidden') return;
-      if (!conversationState.isSessionActive || !apiClient) return;
-      const activeSessionId = sessionIdRef.current || conversationState.sessionId;
-      if (!activeSessionId) return;
-      void apiClient.completeSession(activeSessionId).catch((error: unknown) => {
-        logger.error('Background (tab-hidden) progress report snapshot failed.', undefined, {
-          sessionId: activeSessionId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
-    };
-    document.addEventListener('visibilitychange', triggerBackgroundSnapshot);
-    window.addEventListener('pagehide', triggerBackgroundSnapshot);
-    return () => {
-      document.removeEventListener('visibilitychange', triggerBackgroundSnapshot);
-      window.removeEventListener('pagehide', triggerBackgroundSnapshot);
-    };
-  }, [apiClient, conversationState.isSessionActive, conversationState.sessionId]);
 
   useEffect(() => {
     return () => {
@@ -722,6 +779,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [clearAudioPlayback]);
 
   const wipeConversationHistory = useCallback(async () => {
+    historyChangedBeforeHydrationRef.current = true;
+    historyClearedBeforeHydrationRef.current = true;
     if (conversationState.isSessionActive) {
       clearAudioPlayback();
       stopRecording();
@@ -801,8 +860,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     isVadReady,
     modelLoadingProgress,
     isTranscribing,
-    startSession: () => initiateSession(true),
-    startTextSession: () => initiateSession(false),
+    startSession: initiateSession,
     endSession: terminateSession,
     sendTextMessage,
     loadOlderMessages,

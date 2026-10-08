@@ -17,6 +17,15 @@ describe('Footer Component (LEG-01 Disclaimers)', () => {
     expect(screen.getByRole('button', { name: 'Privacy' })).toBeDefined();
   });
 
+  it('keeps legal links and a compact disclaimer in a single mobile footer row', () => {
+    const { container } = render(<Footer />);
+    const footerRow = container.querySelector('footer > div');
+    const disclaimer = screen.getByText(/ImmiGO is an independent educational tool/i);
+
+    expect(footerRow?.className).toContain('flex-row');
+    expect(disclaimer.className).toContain('truncate');
+  });
+
   it('opens and closes Terms modal on click', () => {
     render(<Footer />);
 
@@ -45,4 +54,3 @@ describe('Footer Component (LEG-01 Disclaimers)', () => {
     expect(screen.queryByRole('dialog', { name: /Privacy Policy/i })).toBeNull();
   });
 });
-

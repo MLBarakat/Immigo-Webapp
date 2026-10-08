@@ -3,6 +3,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { useConversation } from '../useConversation';
 import { ConversationContext } from '../../context/conversationContextTypes';
+import { ConversationProvider } from '../../context/ConversationContext';
 import { useWhisper } from '../useWhisper';
 import { ApiClient, ApiError } from '../../services/apiClient';
 
@@ -25,6 +26,16 @@ vi.mock('../../logger', () => ({
   },
 }));
 
+vi.mock('../../services/chatPersistenceService', () => ({
+  ChatPersistenceService: {
+    createSession: vi.fn().mockResolvedValue(null),
+    closeSession: vi.fn().mockResolvedValue(undefined),
+    persistMessage: vi.fn().mockResolvedValue(null),
+    loadRecentMessages: vi.fn().mockResolvedValue({ messages: [], hasMore: false, oldestCursor: null }),
+    loadOlderMessages: vi.fn().mockResolvedValue({ messages: [], hasMore: false, oldestCursor: null }),
+  },
+}));
+
 describe('Orchestration Hook Runtime Validation: useConversation', () => {
   // Functional execution context tracker references
   let mockDispatch: any;
@@ -35,6 +46,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   let mockContextValue: any;
 
   beforeEach(() => {
+    sessionStorage.clear();
     mockDispatch = vi.fn();
     mockStartRecording = vi.fn();
     mockStopRecording = vi.fn();
@@ -66,6 +78,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockApiClient = {
       postTranscript: vi.fn(),
       postSessionStart: vi.fn(),
+      completeSession: vi.fn().mockResolvedValue(undefined),
     } as unknown as Mocked<ApiClient>;
 
     // 1. FIXED: Inject a resilient, runtime mock for the global HTMLAudioElement tracking fixture
@@ -116,6 +129,123 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(mockStopRecording).not.toHaveBeenCalled();
     expect(mockAudioInstance.play).not.toHaveBeenCalled();
     expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+  });
+
+  it('cancels an in-flight text response when the user sends an interrupting message', async () => {
+    let firstSignal: AbortSignal | undefined;
+    mockApiClient.postTranscript
+      .mockImplementationOnce((_text, _window, _session, _item, _retry, options) => {
+        firstSignal = options?.signal;
+        return new Promise((_resolve, reject) => {
+          firstSignal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+        });
+      })
+      .mockResolvedValueOnce({
+        responseText: 'Interruption response',
+        audioData: new ArrayBuffer(0),
+        verdict: null,
+        needsConfirmation: false,
+        nextItemId: null,
+        nextQuestion: null,
+      });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+    let firstTurn!: Promise<void>;
+
+    await act(async () => {
+      firstTurn = result.current.sendTextMessage('First message');
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await result.current.sendTextMessage('Please interrupt');
+    });
+    await act(async () => {
+      await firstTurn;
+    });
+
+    expect(firstSignal?.aborted).toBe(true);
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'REMOVE_PENDING_ASSISTANT_MESSAGE',
+    }));
+  });
+
+  it('restores a per-tab conversation snapshot before remote history finishes loading', async () => {
+    const cachedMessage = {
+      id: 'cached-message',
+      role: 'user' as const,
+      content: 'Saved text answer',
+      timestamp: '2026-10-08T18:00:00.000Z',
+    };
+    sessionStorage.setItem('immigo_conversation_user-cache', JSON.stringify([cachedMessage]));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    renderHook(() => useConversation({ apiClient: null, userId: 'user-cache' }), { wrapper });
+
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith({
+        type: 'LOAD_HISTORICAL_MESSAGES',
+        payload: {
+          messages: [cachedMessage],
+          hasMore: false,
+          oldestCursor: null,
+          replace: true,
+        },
+      });
+    });
+    expect(sessionStorage.getItem('immigo_conversation_user-cache')).toBe(JSON.stringify([cachedMessage]));
+  });
+
+  it('persists new text conversation turns in the current browser tab', async () => {
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'A saved assistant reply',
+      audioData: new ArrayBuffer(0),
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: null,
+      nextQuestion: null,
+    });
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-session-cache' }),
+      { wrapper: ConversationProvider }
+    );
+
+    await act(async () => {
+      await result.current.sendTextMessage('A saved user answer');
+    });
+    expect(result.current.conversationHistory.map(message => message.content)).toEqual([
+      'A saved user answer',
+      'A saved assistant reply',
+    ]);
+    await waitFor(() => {
+      expect(JSON.parse(sessionStorage.getItem('immigo_conversation_user-session-cache') ?? '[]')).toHaveLength(2);
+    });
+  });
+
+  it('does not finalize an active session when the browser tab is hidden', () => {
+    mockContextValue.state.isSessionActive = true;
+    mockContextValue.state.sessionId = 'active-session';
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(mockApiClient.completeSession).not.toHaveBeenCalled();
   });
 
   it('should dispatch an atomic rollback object payload structure upon catching cloud proxy failures', async () => {
@@ -257,39 +387,6 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         preferredLanguage: 'en-US',
       })
     );
-  });
-
-  it('starts a text-only session without activating the microphone or audio playback', async () => {
-    mockApiClient.postSessionStart.mockResolvedValue({
-      responseText: 'First civics question?',
-      audioData: new ArrayBuffer(8),
-      verdict: null,
-      needsConfirmation: false,
-      nextItemId: 'q-001',
-      nextQuestion: 'First civics question?',
-    });
-
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <ConversationContext.Provider value={mockContextValue}>
-        {children}
-      </ConversationContext.Provider>
-    );
-    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
-
-    await act(async () => {
-      await result.current.startTextSession();
-    });
-
-    expect(mockApiClient.postSessionStart).toHaveBeenCalledWith(
-      null,
-      expect.objectContaining({
-        simulationMode: 'standard',
-        preferredLanguage: 'en-US',
-      })
-    );
-    expect(mockStartRecording).not.toHaveBeenCalled();
-    expect(mockAudioInstance.play).not.toHaveBeenCalled();
-    expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
   });
 
   it('uses a newly selected mode and language on subsequent turns in the same session', async () => {

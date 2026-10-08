@@ -52,6 +52,7 @@ export type ConversationAction =
   | { type: 'FINISH_ASSISTANT_RESPONSE' }
   | { type: 'SEND_MESSAGE_FAILURE'; payload: { error: string; userMessageId: string; assistantMessageId: string } }
   | { type: 'SEND_MESSAGE_ROLLBACK'; payload: { userMessageId: string; assistantMessageId: string } }
+  | { type: 'REMOVE_PENDING_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string } }
   | { type: 'SET_STATUS'; payload: AppStatus }
   | { type: 'CLEAR_ERROR' }
   | { type: 'SET_SESSION_ID'; payload: string | null }
@@ -213,6 +214,14 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         ...state,
         conversationHistory: state.conversationHistory.filter(
           msg => msg.id !== action.payload.userMessageId && msg.id !== action.payload.assistantMessageId
+        ),
+      };
+
+    case 'REMOVE_PENDING_ASSISTANT_MESSAGE':
+      return {
+        ...state,
+        conversationHistory: state.conversationHistory.filter(
+          msg => msg.id !== action.payload.assistantMessageId
         ),
       };
 

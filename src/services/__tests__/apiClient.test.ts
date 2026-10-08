@@ -42,6 +42,29 @@ describe('ApiClient active route contracts', () => {
     });
   });
 
+  it('passes an abort signal through to transcript requests for interruptions', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      responseText: 'Next question',
+      audioData: '',
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: null,
+      nextQuestion: null,
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    await new ApiClient('token', 'https://api.example.test').postTranscript(
+      'Please interrupt',
+      [],
+      null,
+      null,
+      { signal: controller.signal }
+    );
+
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBe(controller.signal);
+  });
+
   it('sends the selected simulation mode and language for session starts', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       responseText: 'First question',
