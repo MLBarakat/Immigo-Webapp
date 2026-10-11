@@ -1,4 +1,8 @@
 {
+  "passwordVisibility": {
+    "show": "Show password",
+    "hide": "Hide password"
+  },
   "account": {
     "title": "Account Settings",
     "profile": {

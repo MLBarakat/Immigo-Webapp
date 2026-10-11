@@ -6,7 +6,7 @@ import { TermsModal } from './TermsModal';
 import { PrivacyModal } from './PrivacyModal';
 import { TERMS_VERSION } from '../legal/terms-content';
 import { PRIVACY_VERSION } from '../legal/privacy-content';
-import { User, Mail, KeyRound, Globe, AlertCircle } from 'lucide-react';
+import { User, Mail, KeyRound, Globe, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { PasswordStrengthChecker, isPasswordValid } from './PasswordStrengthChecker';
 import { SUPPORTED_LANGUAGES } from '../constants';
 import { Language } from '../types/language';
@@ -18,6 +18,7 @@ export function AuthPage(): JSX.Element {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [language, setLanguage] = useState(() => i18n.language || 'en-US');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -137,14 +138,25 @@ export function AuthPage(): JSX.Element {
                 <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" aria-hidden="true" />
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete={isLogin ? 'current-password' : 'new-password'}
                   placeholder={t('auth.password')}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow"
+                  className="w-full py-3 pl-12 pr-12 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={t(showPassword ? 'passwordVisibility.hide' : 'passwordVisibility.show')}
+                  aria-controls="password"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-immigo-gray-500 hover:text-immigo-gray-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
+                >
+                  {showPassword
+                    ? <EyeOff className="w-5 h-5" aria-hidden="true" />
+                    : <Eye className="w-5 h-5" aria-hidden="true" />}
+                </button>
               </div>
               {!isLogin && <PasswordStrengthChecker password={password} />}
             </div>

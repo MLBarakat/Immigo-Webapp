@@ -69,4 +69,23 @@ describe('AccountSettingsPage', () => {
     expect(updatePassword).not.toHaveBeenCalled();
     expect(screen.getByRole('status').textContent).toContain('Passwords do not match.');
   });
+
+  it('toggles visibility independently for each password field', () => {
+    renderPage();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Security & Login' })[0]);
+
+    const newPassword = screen.getByLabelText('New Password');
+    const confirmPassword = screen.getByLabelText('Confirm New Password');
+    expect(newPassword.getAttribute('type')).toBe('password');
+    expect(confirmPassword.getAttribute('type')).toBe('password');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show password' })[0]);
+
+    expect(newPassword.getAttribute('type')).toBe('text');
+    expect(confirmPassword.getAttribute('type')).toBe('password');
+    expect(screen.getAllByRole('button', { name: 'Hide password' })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(confirmPassword.getAttribute('type')).toBe('text');
+  });
 });

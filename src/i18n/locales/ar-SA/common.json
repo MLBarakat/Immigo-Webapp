@@ -1,4 +1,8 @@
 {
+  "passwordVisibility": {
+    "show": "إظهار كلمة المرور",
+    "hide": "إخفاء كلمة المرور"
+  },
   "account": {
     "title": "إعدادات الحساب",
     "profile": {

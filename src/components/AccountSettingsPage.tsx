@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiClient } from '../services/apiClient';
-import { ArrowLeft, User, Lock, Share2, AlertTriangle, X } from 'lucide-react';
+import { ArrowLeft, User, Lock, Share2, AlertTriangle, X, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import amplifyOutputs from '../../amplify_outputs.json';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -23,6 +23,8 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -146,11 +148,37 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
             <form className="space-y-4" onSubmit={handlePasswordSubmit}>
               <div>
                 <label htmlFor="new-password" className="block text-sm font-medium text-immigo-gray-700">{t('account.security.newPassword')}</label>
-                <input type="password" id="new-password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                <div className="relative mt-1">
+                  <input type={showNewPassword ? 'text' : 'password'} id="new-password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="block w-full rounded-md border-immigo-gray-300 pr-12 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((visible) => !visible)}
+                    aria-label={t(showNewPassword ? 'passwordVisibility.hide' : 'passwordVisibility.show')}
+                    aria-controls="new-password"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-immigo-gray-500 hover:text-immigo-gray-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
+                  >
+                    {showNewPassword
+                      ? <EyeOff className="w-5 h-5" aria-hidden="true" />
+                      : <Eye className="w-5 h-5" aria-hidden="true" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label htmlFor="confirm-password" className="block text-sm font-medium text-immigo-gray-700">{t('account.security.confirmPassword')}</label>
-                <input type="password" id="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                <div className="relative mt-1">
+                  <input type={showConfirmPassword ? 'text' : 'password'} id="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="block w-full rounded-md border-immigo-gray-300 pr-12 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((visible) => !visible)}
+                    aria-label={t(showConfirmPassword ? 'passwordVisibility.hide' : 'passwordVisibility.show')}
+                    aria-controls="confirm-password"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-immigo-gray-500 hover:text-immigo-gray-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
+                  >
+                    {showConfirmPassword
+                      ? <EyeOff className="w-5 h-5" aria-hidden="true" />
+                      : <Eye className="w-5 h-5" aria-hidden="true" />}
+                  </button>
+                </div>
               </div>
               {passwordMessage && <p className="text-sm text-immigo-gray-600" role="status">{passwordMessage}</p>}
               <button type="submit" disabled={passwordSaving} className="px-4 py-2 bg-art-blue-600 text-white rounded-md font-semibold hover:bg-art-blue-700 disabled:opacity-60">
