@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { BookOpen, MessageSquare, SlidersHorizontal } from 'lucide-react';
 import { Amplify } from 'aws-amplify';
 import { useTranslation } from 'react-i18next';
@@ -25,8 +25,9 @@ import { RightPanel } from './components/RightPanel';
 import type { SimulationMode } from './context/conversationContextTypes';
 
 import { DisplayUser } from './types/user';
-import { UserSettings, FontSize } from './types/settings';
+import { UserSettings, FontSize, ThemeOption } from './types/settings';
 import { applyFontSize } from './utils/fontSize';
+import { applyTheme, subscribeToSystemThemeChange } from './utils/theme';
 import { logger } from './logger';
 import useMediaQuery from './hooks/useMediaQuery';
 import { normalizeAppLanguage } from './i18n';
@@ -52,6 +53,15 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [simulationMode, setSimulationMode] = useState<SimulationMode>('standard');
   const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
+  const [previewTheme, setPreviewTheme] = useState<ThemeOption | null>(null);
+
+  useEffect(() => {
+    const activeTheme = previewTheme ?? userSettings.theme;
+    const updateTheme = () => applyTheme(activeTheme);
+    updateTheme();
+    if (activeTheme !== 'system') return;
+    return subscribeToSystemThemeChange(updateTheme);
+  }, [previewTheme, userSettings.theme]);
 
   const activeVoiceId = normalizeVoiceId(
     userSettings.ai_voice_id ?? getDefaultVoiceId(userSettings.language || profile?.language)
@@ -122,7 +132,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   // ── Mobile layout ──
   if (!isDesktop) {
     return (
-      <div className="flex flex-col h-dvh w-full bg-immigo-gray-50 text-deep-navy font-sans antialiased overflow-hidden">
+      <div className="flex flex-col h-dvh w-full bg-immigo-gray-50 dark:bg-gray-900 text-deep-navy dark:text-gray-100 font-sans antialiased overflow-hidden">
         {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} />}
         {showAppSettings && (
           <ApplicationSettingsModal
@@ -130,8 +140,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
             settings={userSettings}
             pollyVoices={APP_VOICES.map(v => ({ id: v.id, name: v.displayName }))}
             isDesktop={false}
-            onClose={() => setShowAppSettings(false)}
-            onSave={async (newSettings) => { await updateUserSettings(newSettings); setShowAppSettings(false); }}
+            onClose={() => { setPreviewTheme(null); setShowAppSettings(false); }}
+            onThemePreview={setPreviewTheme}
+            onSave={async (newSettings) => { await updateUserSettings(newSettings); }}
           />
         )}
         {showAccountSettings && (
@@ -242,7 +253,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 
   // ── Desktop three-panel layout ──
   return (
-    <div className="flex flex-col h-dvh w-full bg-immigo-gray-50 text-deep-navy font-sans antialiased overflow-hidden">
+    <div className="flex flex-col h-dvh w-full bg-immigo-gray-50 dark:bg-gray-900 text-deep-navy dark:text-gray-100 font-sans antialiased overflow-hidden">
 
       {/* Modals / Overlays */}
       {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} />}
@@ -253,8 +264,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           settings={userSettings}
           pollyVoices={APP_VOICES.map(v => ({ id: v.id, name: v.displayName }))}
           isDesktop={isDesktop}
-          onClose={() => setShowAppSettings(false)}
-          onSave={async (newSettings) => { await updateUserSettings(newSettings); setShowAppSettings(false); }}
+          onClose={() => { setPreviewTheme(null); setShowAppSettings(false); }}
+          onThemePreview={setPreviewTheme}
+          onSave={async (newSettings) => { await updateUserSettings(newSettings); }}
         />
       )}
 

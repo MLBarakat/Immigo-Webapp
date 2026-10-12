@@ -7,7 +7,8 @@ import { applyFontSize, getStoredFontSize } from '../utils/fontSize';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
 import { AuthContext, SignUpPayload } from './authContextTypes';
-import { UserSettingsService } from '../services/userSettingsService';
+import { UserSettingsService, userSettingsRowToSettings } from '../services/userSettingsService';
+import type { UserSettingsRow } from '../services/userSettingsService';
 
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
@@ -22,6 +23,8 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   }));
   const [initializationAttempt, setInitializationAttempt] = useState(0);
   const sessionLoadGenerationRef = useRef(0);
+  const settingsRealtimeGenerationRef = useRef(0);
+  const profileRealtimeGenerationRef = useRef(0);
 
   useEffect(() => {
     applyFontSize(userSettings.font_size);
@@ -67,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     let cancelled = false;
     const loadSessionAndProfile = async (currentSession: Session | null): Promise<void> => {
       const generation = ++sessionLoadGenerationRef.current;
+      const settingsRealtimeGeneration = settingsRealtimeGenerationRef.current;
+      const profileRealtimeGeneration = profileRealtimeGenerationRef.current;
       const currentUser = currentSession?.user ?? null;
 
       setSession(currentSession);
@@ -100,33 +105,37 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
 
         if (cancelled || generation !== sessionLoadGenerationRef.current) return;
 
-        if (profileResult.error) {
-          setProfile(null);
-          logger.error('Error fetching user profile.', { error: profileResult.error.message, userId: currentUser.id });
-        } else {
-          setProfile(profileResult.data);
-          if (!remoteSettings.language && profileResult.data?.language) {
-            mergedSettings.language = profileResult.data.language;
+        if (profileRealtimeGenerationRef.current === profileRealtimeGeneration) {
+          if (profileResult.error) {
+            setProfile(null);
+            logger.error('Error fetching user profile.', { error: profileResult.error.message, userId: currentUser.id });
+          } else {
+            setProfile(profileResult.data);
+            if (!remoteSettings.language && profileResult.data?.language) {
+              mergedSettings.language = profileResult.data.language;
+            }
           }
         }
 
-        if (dbSettings) {
-          // DB row exists → use it as the highest-priority source.
-          setUserSettings(prev => ({
-            ...prev,
-            ...dbSettings,
-            // Always prefer the DB font_size; fall back to localStorage only if DB has none.
-            font_size: dbSettings.font_size ?? prev.font_size,
-          }));
-        } else {
-          // No row yet → upsert defaults so the record exists for next time.
-          logger.info('No user_settings row found; creating defaults.', { userId: currentUser.id });
-          setUserSettings(prev => ({
-            ...prev,
-            ...mergedSettings,
-            font_size: mergedSettings.font_size ?? prev.font_size,
-          }));
-          void UserSettingsService.upsertSettings(supabase, currentUser.id, mergedSettings);
+        if (settingsRealtimeGenerationRef.current === settingsRealtimeGeneration) {
+          if (dbSettings) {
+            // DB row exists → use it as the highest-priority source.
+            setUserSettings(prev => ({
+              ...prev,
+              ...dbSettings,
+              // Always prefer the DB font_size; fall back to localStorage only if DB has none.
+              font_size: dbSettings.font_size ?? prev.font_size,
+            }));
+          } else {
+            // No row yet → upsert defaults so the record exists for next time.
+            logger.info('No user_settings row found; creating defaults.', { userId: currentUser.id });
+            setUserSettings(prev => ({
+              ...prev,
+              ...mergedSettings,
+              font_size: mergedSettings.font_size ?? prev.font_size,
+            }));
+            void UserSettingsService.upsertSettings(supabase, currentUser.id, mergedSettings);
+          }
         }
       } catch (err) {
         if (cancelled || generation !== sessionLoadGenerationRef.current) return;
@@ -179,6 +188,53 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       subscription?.unsubscribe();
     };
   }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase || !user?.id) return;
+
+    const channel = supabase
+      .channel(`user-session-sync-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          settingsRealtimeGenerationRef.current += 1;
+          if (payload.eventType === 'DELETE') {
+            setUserSettings(DEFAULT_USER_SETTINGS);
+            return;
+          }
+          setUserSettings((current) => ({
+            ...current,
+            ...userSettingsRowToSettings(payload.new as UserSettingsRow),
+          }));
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+        (payload) => {
+          profileRealtimeGenerationRef.current += 1;
+          if (payload.eventType === 'DELETE') {
+            setProfile(null);
+            return;
+          }
+          setProfile(payload.new as UserProfile);
+        },
+      )
+      .subscribe((status, error) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          logger.error('Realtime session synchronization failed.', {
+            userId: user.id,
+            status,
+            error: error?.message,
+          });
+        }
+      });
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, user?.id]);
 
   const login = useCallback(async (email: string, password: string): Promise<void> => {
     if (!supabase) throw new Error("Supabase client not initialized.");

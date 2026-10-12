@@ -42,6 +42,24 @@ function createSession(userId: string): Session {
 
 function createSupabaseMock(initialSession: Session | null = null) {
   const authStateHandlers: Array<(event: string, session: Session | null) => void> = [];
+  const realtimeHandlers: Array<{
+    filter: { event: string; schema: string; table: string; filter: string };
+    callback: (payload: { eventType: string; new: Record<string, unknown> }) => void;
+  }> = [];
+  const channel = {
+    on: vi.fn((
+      _type: string,
+      filter: { event: string; schema: string; table: string; filter: string },
+      callback: (payload: { eventType: string; new: Record<string, unknown> }) => void,
+    ) => {
+      realtimeHandlers.push({ filter, callback });
+      return channel;
+    }),
+    subscribe: vi.fn((callback?: (status: string) => void) => {
+      callback?.('SUBSCRIBED');
+      return channel;
+    }),
+  };
   const client = {
     auth: {
       getSession: vi.fn().mockResolvedValue({ data: { session: initialSession }, error: null }),
@@ -54,9 +72,11 @@ function createSupabaseMock(initialSession: Session | null = null) {
       signOut: vi.fn(),
     },
     from: vi.fn(),
+    channel: vi.fn(() => channel),
+    removeChannel: vi.fn().mockResolvedValue('ok'),
   };
 
-  return { client, authStateHandlers };
+  return { client, authStateHandlers, realtimeHandlers };
 }
 
 function wrapper({ children }: { children: ReactNode }): JSX.Element {
@@ -96,7 +116,16 @@ describe('AuthProvider', () => {
     const profilePromiseB = new Promise<{ data: typeof profileB; error: null }>((resolve) => { resolveProfileB = resolve; });
     const supabase = createSupabaseMock(sessionA);
 
-    supabase.client.from.mockImplementation((_table: string) => {
+    const settingsQuery = {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      }),
+      upsert: vi.fn().mockResolvedValue({ error: null }),
+    };
+    supabase.client.from.mockImplementation((table: string) => {
+      if (table === 'user_settings') return settingsQuery;
       const query = {
         select: () => query,
         eq: (_column: string, userId: string) => ({
@@ -131,7 +160,15 @@ describe('AuthProvider', () => {
       single: vi.fn().mockResolvedValue({ data: profile, error: null }),
       update: vi.fn(() => profileQuery),
     };
-    supabase.client.from.mockReturnValue(profileQuery);
+    const settingsQuery = {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      }),
+      upsert: vi.fn().mockResolvedValue({ error: null }),
+    };
+    supabase.client.from.mockImplementation((table: string) => table === 'user_settings' ? settingsQuery : profileQuery);
     supabase.client.auth.updateUser = vi.fn()
       .mockResolvedValueOnce({ error: null })
       .mockResolvedValueOnce({ data: { user: session.user }, error: null });
@@ -151,6 +188,68 @@ describe('AuthProvider', () => {
     expect(supabase.client.auth.updateUser).toHaveBeenNthCalledWith(2, {
       data: { settings: expect.objectContaining({ font_size: 'large' }) },
     });
+  });
+
+  it('applies settings and profile updates received from another active session', async () => {
+    const session = createSession('user-a');
+    const supabase = createSupabaseMock(session);
+    const profile = { id: 'user-a', full_name: 'Old Name', language: 'en-US', created_at: '', updated_at: '' };
+    const settingsRow = {
+      user_id: 'user-a',
+      language: 'en-US',
+      theme: 'system',
+      ai_voice_id: 'Joanna',
+      live_feedback_enabled: true,
+      mic_mode: 'voice_activity',
+      barge_in: 'balanced',
+      progress_report_frequency: 'weekly',
+      font_size: 'default',
+      has_seen_welcome: false,
+      updated_at: '',
+    };
+    const profileQuery = {
+      select: () => profileQuery,
+      eq: () => profileQuery,
+      single: vi.fn().mockResolvedValue({ data: profile, error: null }),
+    };
+    const settingsQuery = {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: vi.fn().mockResolvedValue({ data: settingsRow, error: null }),
+        }),
+      }),
+      upsert: vi.fn().mockResolvedValue({ error: null }),
+    };
+    supabase.client.from.mockImplementation((table: string) => table === 'user_settings' ? settingsQuery : profileQuery);
+    getSupabaseClientMock.mockResolvedValue(supabase.client);
+
+    const { result, unmount } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.profile?.full_name).toBe('Old Name'));
+    await waitFor(() => expect(supabase.realtimeHandlers).toHaveLength(2));
+
+    const settingsListener = supabase.realtimeHandlers.find(({ filter }) => filter.table === 'user_settings');
+    const profileListener = supabase.realtimeHandlers.find(({ filter }) => filter.table === 'profiles');
+    expect(settingsListener?.filter.filter).toBe('user_id=eq.user-a');
+    expect(profileListener?.filter.filter).toBe('id=eq.user-a');
+
+    act(() => {
+      settingsListener?.callback({
+        eventType: 'UPDATE',
+        new: { ...settingsRow, theme: 'dark', font_size: 'large', language: 'fr-FR' },
+      });
+      profileListener?.callback({
+        eventType: 'UPDATE',
+        new: { ...profile, full_name: 'Updated Name', language: 'fr-FR' },
+      });
+    });
+
+    expect(result.current.userSettings.theme).toBe('dark');
+    expect(result.current.userSettings.font_size).toBe('large');
+    expect(result.current.userSettings.language).toBe('fr-FR');
+    expect(result.current.profile?.full_name).toBe('Updated Name');
+
+    unmount();
+    expect(supabase.client.removeChannel).toHaveBeenCalled();
   });
 
   it('persists language changes to user_settings, profile, metadata, and context cache', async () => {

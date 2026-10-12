@@ -101,13 +101,13 @@ export function CenterPanel({
   const isEmpty = !message.trim();
 
   return (
-    <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-immigo-gray-50">
+    <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-immigo-gray-50 dark:bg-gray-900">
       {/* Center Panel Header */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-star-white border-b border-immigo-gray-200 shrink-0">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-star-white dark:bg-gray-800 border-b border-immigo-gray-200 dark:border-gray-700 shrink-0">
         <div className="flex items-center gap-3">
           <span className="text-lg" aria-hidden="true">🏛</span>
           <div>
-            <h1 className="text-sm font-bold text-deep-navy leading-tight">{t('workspace.center.title')}</h1>
+            <h1 className="text-sm font-bold text-deep-navy dark:text-gray-100 leading-tight">{t('workspace.center.title')}</h1>
             <p className="text-[11px] text-immigo-gray-500 leading-tight">{t('workspace.center.subtitle')}</p>
           </div>
         </div>
@@ -124,9 +124,9 @@ export function CenterPanel({
 
           {/* Timer */}
           {isSessionActive && (
-            <div className="flex items-center gap-1.5 bg-immigo-gray-100 rounded-lg px-3 py-1.5">
-              <Timer className="w-3.5 h-3.5 text-immigo-gray-600" />
-              <span className="text-xs font-mono font-bold text-deep-navy tabular-nums">{formatTime(sessionTime)}</span>
+            <div className="flex items-center gap-1.5 bg-immigo-gray-100 dark:bg-gray-700 rounded-lg px-3 py-1.5">
+            <Timer className="w-3.5 h-3.5 text-immigo-gray-600 dark:text-gray-300" />
+            <span className="text-xs font-mono font-bold text-deep-navy dark:text-gray-100 tabular-nums">{formatTime(sessionTime)}</span>
             </div>
           )}
           {onToggleFocus && (
@@ -176,13 +176,13 @@ export function CenterPanel({
       </div>
 
       {/* Input Area */}
-      <div className="shrink-0 bg-star-white border-t border-immigo-gray-200">
+      <div className="shrink-0 bg-star-white dark:bg-gray-800 border-t border-immigo-gray-200 dark:border-gray-700">
         <div className="px-4 py-3">
           <div className="relative">
-            <div className="relative min-h-[68px] rounded-xl border-2 border-immigo-gray-200 bg-star-white transition-colors duration-150 focus-within:border-art-blue-500">
+            <div className="relative min-h-[68px] rounded-xl border-2 border-immigo-gray-200 dark:border-gray-600 bg-star-white dark:bg-gray-800 transition-colors duration-150 focus-within:border-art-blue-500">
               <textarea
                 rows={2}
-                className="block w-full min-h-[64px] px-4 py-3 pr-[112px] border-0 rounded-xl bg-transparent resize-none focus:outline-none focus:ring-0 disabled:bg-immigo-gray-50 disabled:cursor-not-allowed text-sm text-deep-navy placeholder-immigo-gray-400"
+                className="block w-full min-h-[64px] px-4 py-3 pr-[112px] border-0 rounded-xl bg-transparent resize-none focus:outline-none focus:ring-0 disabled:bg-immigo-gray-50 disabled:dark:bg-gray-700 disabled:cursor-not-allowed text-sm text-deep-navy dark:text-gray-100 placeholder-immigo-gray-400"
                 style={{ maxHeight: '120px', overflowY: 'hidden' }}
                 placeholder={t('workspace.center.inputPlaceholder')}
                 value={message}

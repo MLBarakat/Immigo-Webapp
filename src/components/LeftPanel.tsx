@@ -134,7 +134,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
   if (isCollapsed) {
     return (
       <aside
-        className="flex flex-col items-center gap-5 py-4 bg-star-white border-r border-immigo-gray-200 shrink-0 transition-all duration-300"
+        className="flex flex-col items-center gap-5 py-4 bg-star-white dark:bg-gray-800 border-r border-immigo-gray-200 dark:border-gray-700 shrink-0 transition-all duration-300"
         style={{ width: '56px' }}
       >
         <button
@@ -165,16 +165,16 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
 
   return (
     <aside
-      className="flex flex-col bg-star-white border-r border-immigo-gray-200 overflow-hidden transition-all duration-300"
+      className="flex flex-col bg-star-white dark:bg-gray-800 border-r border-immigo-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300"
       style={isMobile
         ? { width: '100%', minWidth: 0, maxWidth: 'none' }
         : { width: '23%', minWidth: 'clamp(200px, 23vw, 420px)', maxWidth: 'none', flexBasis: '23%', flexShrink: 1 }}
     >
       {/* Panel Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 bg-star-white sticky top-0 z-10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 dark:border-gray-700 bg-star-white dark:bg-gray-800 sticky top-0 z-10">
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-art-blue-600" />
-          <span className="text-sm font-bold text-deep-navy tracking-tight">{t('workspace.left.title')}</span>
+          <span className="text-sm font-bold text-deep-navy dark:text-gray-100 tracking-tight">{t('workspace.left.title')}</span>
         </div>
         {!isMobile && <button
           onClick={onToggleCollapse}

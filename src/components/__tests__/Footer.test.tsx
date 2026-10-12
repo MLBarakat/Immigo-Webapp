@@ -26,6 +26,15 @@ describe('Footer Component (LEG-01 Disclaimers)', () => {
     expect(disclaimer.className).toContain('truncate');
   });
 
+  it('uses the Immigo navy background with readable foreground colors', () => {
+    const { container } = render(<Footer />);
+    const footer = container.querySelector('footer');
+
+    expect(footer?.className).toContain('bg-deep-navy');
+    expect(footer?.className).toContain('text-star-white');
+    expect(screen.getByText(/ImmiGO is an independent educational tool/i).className).toContain('text-immigo-gray-300');
+  });
+
   it('opens and closes Terms modal on click', () => {
     render(<Footer />);
 

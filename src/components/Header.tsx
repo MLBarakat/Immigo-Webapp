@@ -33,7 +33,7 @@ export function Header({
   const { t } = useTranslation();
 
   return (
-    <header className="flex items-center justify-between p-4 bg-star-white shadow-sm border-b-2 border-immigo-gray-300">
+    <header className="flex items-center justify-between p-4 bg-star-white dark:bg-gray-800 shadow-sm border-b-2 border-immigo-gray-300 dark:border-gray-700">
       <div className="flex items-center gap-1">
         <img src={ImmigoLogo} alt="ImmiGo Logo" className="h-10 w-10 object-contain" />
         <ImmiGOLabel className="flex items-baseline font-sans font-bold text-3xl select-none" />
@@ -48,13 +48,13 @@ export function Header({
           currentFontSize={userSettings.font_size || 'default'}
           onFontSizeChange={(size) => onSettingChange('font_size', size)}
         />
-        <button onClick={onOpenAppSettings} aria-label={t('header.openSettings')} className="p-2 rounded-full hover:bg-immigo-gray-100">
-          <Settings className="w-6 h-6 text-immigo-gray-600" />
+        <button onClick={onOpenAppSettings} aria-label={t('header.openSettings')} className="p-2 rounded-full hover:bg-immigo-gray-100 dark:hover:bg-gray-700">
+          <Settings className="w-6 h-6 text-immigo-gray-600 dark:text-gray-300" />
         </button>
         <button onClick={onOpenAccountSettings} aria-label={t('header.openAccount')} className="w-9 h-9 bg-art-blue-600 text-star-white rounded-full flex items-center justify-center font-bold">
           {displayUser.initials}
         </button>
-        <button onClick={onSignOut} aria-label={t('header.signOut')} className="p-2 rounded-full hover:bg-immigo-gray-100">
+        <button onClick={onSignOut} aria-label={t('header.signOut')} className="p-2 rounded-full hover:bg-immigo-gray-100 dark:hover:bg-gray-700">
           <LogOut className="w-6 h-6 text-art-red-600" />
         </button>
       </nav>

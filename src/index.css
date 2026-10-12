@@ -4,6 +4,38 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --star-white: 255 255 255;
+  --deep-navy: 10 17 40;
+  --immigo-gray-50: 249 250 251;
+  --immigo-gray-100: 241 243 245;
+  --immigo-gray-200: 229 231 235;
+  --immigo-gray-300: 222 226 230;
+  --immigo-gray-500: 173 181 189;
+  --immigo-gray-600: 75 85 99;
+  --immigo-gray-700: 73 80 87;
+}
+
+html.dark {
+  color-scheme: dark;
+  --star-white: 31 41 55;
+  --immigo-gray-50: 17 24 39;
+  --immigo-gray-100: 31 41 55;
+  --immigo-gray-200: 55 65 81;
+  --immigo-gray-300: 75 85 99;
+  --immigo-gray-500: 156 163 175;
+  --immigo-gray-600: 209 213 219;
+  --immigo-gray-700: 229 231 235;
+}
+
+html.dark .text-deep-navy {
+  color: rgb(249 250 251 / var(--tw-text-opacity, 1));
+}
+
+html.dark .text-star-white {
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
 body {
   @apply bg-immigo-gray-50 text-deep-navy font-sans antialiased;
 }

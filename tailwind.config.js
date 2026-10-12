@@ -1,4 +1,5 @@
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -14,9 +15,17 @@ export default {
         'art-red': { 50: '#FFF1F2', 100: '#FFE4E6', 200: '#FFC0C7', 300: '#FF99A4', 400: '#FF6F7E', 500: '#FF3D51', 600: '#DC2626', 700: '#D91C30', 800: '#C01427', 900: '#A10D1E', 'logo': '#BF0A30', },
         'art-blue': { 50: '#E6F0FF', 100: '#CCDDFE', 200: '#99BFFD', 300: '#669BFD', 400: '#3376FC', 500: '#0055FC', 600: '#2563EB', 700: '#003BAF', 800: '#002E8A', 900: '#002266', 'logo': '#002868', },
         'accent-cyan': { 50: '#E0F8FF', 100: '#B3F0FF', 200: '#80E7FF', 300: '#4DDFFF', 400: '#26D7FF', 500: '#00CFFF', 600: '#00A6D9', 700: '#007EAF', 800: '#00568A', 900: '#003A66', },
-        'star-white': '#FFFFFF',
-        'deep-navy': '#0A1128',
-        'immigo-gray': { 50: '#F9FAFB', 100: '#F1F3F5', 200: '#E5E7EB', 300: '#DEE2E6', 500: '#ADB5BD', 600: '#4B5563', 700: '#495057', }
+        'star-white': 'rgb(var(--star-white) / <alpha-value>)',
+        'deep-navy': 'rgb(var(--deep-navy) / <alpha-value>)',
+        'immigo-gray': {
+          50: 'rgb(var(--immigo-gray-50) / <alpha-value>)',
+          100: 'rgb(var(--immigo-gray-100) / <alpha-value>)',
+          200: 'rgb(var(--immigo-gray-200) / <alpha-value>)',
+          300: 'rgb(var(--immigo-gray-300) / <alpha-value>)',
+          500: 'rgb(var(--immigo-gray-500) / <alpha-value>)',
+          600: 'rgb(var(--immigo-gray-600) / <alpha-value>)',
+          700: 'rgb(var(--immigo-gray-700) / <alpha-value>)',
+        }
       },
       fontFamily: {
         sans: ['"Inter"', 'sans-serif'],

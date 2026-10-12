@@ -21,7 +21,7 @@ export interface UserSettingsRow {
 }
 
 /** Maps a DB row to the application `UserSettings` shape. */
-function rowToSettings(row: UserSettingsRow): Partial<UserSettings> {
+export function userSettingsRowToSettings(row: UserSettingsRow): Partial<UserSettings> {
   return {
     language: row.language ?? DEFAULT_USER_SETTINGS.language,
     theme: row.theme as UserSettings['theme'],
@@ -72,7 +72,7 @@ export class UserSettingsService {
         return null;
       }
 
-      return data ? rowToSettings(data as UserSettingsRow) : null;
+      return data ? userSettingsRowToSettings(data as UserSettingsRow) : null;
     } catch (err) {
       logger.error('Exception fetching user_settings.', { error: String(err), userId });
       return null;
