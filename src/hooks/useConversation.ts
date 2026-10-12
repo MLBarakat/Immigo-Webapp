@@ -468,7 +468,16 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       content: validatedText, 
       timestamp: new Date().toISOString() 
     };
-    const activeSessionId = sessionIdRef.current || conversationState.sessionId;
+    let activeSessionId = sessionIdRef.current || conversationState.sessionId;
+    if (!activeSessionId && userId && !voiceSessionRef.current) {
+      activeSessionId = await ChatPersistenceService.createSession(userId);
+      if (turnGeneration !== turnGenerationRef.current) return;
+      if (activeSessionId) {
+        sessionIdRef.current = activeSessionId;
+        dispatch({ type: 'SET_SESSION_ID', payload: activeSessionId });
+        analytics.track('session_started', { mode: 'text' });
+      }
+    }
 
     if (conversationState.isSessionActive) stopRecording();
     dispatch({ type: 'SEND_MESSAGE_START', payload: { userMessage, assistantMessageId: secureAssistantMessageId } });
@@ -831,20 +840,24 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
   const initiateSession = useCallback(async () => {
     historyChangedBeforeHydrationRef.current = true;
+    const existingSessionId = sessionIdRef.current || conversationState.sessionId;
+    const continuingTextSession = Boolean(existingSessionId && !conversationState.isSessionActive);
     voiceSessionRef.current = true;
     setIsVoiceSessionActive(true);
     dispatch({ type: 'START_SESSION' });
-    analytics.track('session_started');
+    if (!continuingTextSession) analytics.track('session_started', { mode: 'voice' });
     processedTranscriptRef.current = '';
     pendingTranscriptClearRef.current = false;
-    sessionIdRef.current = null;
-    currentItemIdRef.current = null;
-    awaitingConfirmationRef.current = null;
-    answeredCountRef.current = 0;
-    openingResponseRef.current = true;
+    if (!continuingTextSession) {
+      sessionIdRef.current = null;
+      currentItemIdRef.current = null;
+      awaitingConfirmationRef.current = null;
+      answeredCountRef.current = 0;
+      openingResponseRef.current = true;
+    }
 
-    let newSessionId: string | null = null;
-    if (userId) {
+    let newSessionId: string | null = existingSessionId;
+    if (!newSessionId && userId) {
       newSessionId = await ChatPersistenceService.createSession(userId);
       if (!voiceSessionRef.current) {
         if (newSessionId) {
@@ -859,6 +872,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
       sessionIdRef.current = newSessionId;
       dispatch({ type: 'SET_SESSION_ID', payload: newSessionId });
+    }
+
+    if (continuingTextSession && currentItemIdRef.current) {
+      dispatch({ type: 'SET_STATUS', payload: 'listening' });
+      startRecording();
+      return;
     }
 
     // Select the current question before opening the microphone, but leave
@@ -960,7 +979,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ type: 'SET_STATUS', payload: 'listening' });
       startRecording();
     }
-  }, [userId, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal]);
+  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal]);
 
   const terminateSession = useCallback(async () => {
     if (silenceNudgeTimerRef.current !== null) {
@@ -992,7 +1011,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     awaitingConfirmationRef.current = null;
     answeredCountRef.current = 0;
     dispatch({ type: 'SET_SESSION_ID', payload: null });
-    analytics.track('session_ended', { duration_seconds: conversationState.sessionTime });
+    analytics.track('session_ended', { duration_seconds: conversationState.sessionTime, mode: 'voice' });
 
     if (activeSessionId) {
       try {
@@ -1073,47 +1092,48 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const wipeConversationHistory = useCallback(async () => {
     historyChangedBeforeHydrationRef.current = true;
     historyClearedBeforeHydrationRef.current = true;
+    const activeSessionId = sessionIdRef.current || conversationState.sessionId;
+    if (activeSessionId) setIsGeneratingProgressReport(true);
     if (conversationState.isSessionActive) {
       clearAudioPlayback();
       stopRecording();
-      const activeSessionId = sessionIdRef.current || conversationState.sessionId;
-      if (activeSessionId) setIsGeneratingProgressReport(true);
       dispatch({ type: 'END_SESSION' });
-      pendingTranscriptClearRef.current = false;
-      sessionIdRef.current = null;
-      currentItemIdRef.current = null;
-      openingResponseRef.current = false;
-      voiceSessionRef.current = false;
-      setIsVoiceSessionActive(false);
-      awaitingConfirmationRef.current = null;
-      answeredCountRef.current = 0;
-      dispatch({ type: 'SET_SESSION_ID', payload: null });
-      dispatch({ type: 'CLEAR_CONVERSATION' });
-      analytics.track('conversation_cleared');
-      if (activeSessionId) {
-        try {
-          await ChatPersistenceService.closeSession(activeSessionId);
-        } catch (error: unknown) {
-          logger.error('Closing the interview session after clearing failed.', undefined, {
-            sessionId: activeSessionId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-        try {
-          if (apiClient) await apiClient.completeSession(activeSessionId);
-        } catch (error: unknown) {
-            logger.error('Session report generation after clearing failed.', undefined, {
-              sessionId: activeSessionId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-        } finally {
-          setIsGeneratingProgressReport(false);
-        }
-      }
-      return;
     }
+    if (activeSessionId && !conversationState.isSessionActive) {
+      analytics.track('session_ended', { mode: 'text' });
+    }
+
+    pendingTranscriptClearRef.current = false;
+    sessionIdRef.current = null;
+    currentItemIdRef.current = null;
+    openingResponseRef.current = false;
+    voiceSessionRef.current = false;
+    setIsVoiceSessionActive(false);
+    awaitingConfirmationRef.current = null;
+    answeredCountRef.current = 0;
+    dispatch({ type: 'SET_SESSION_ID', payload: null });
     dispatch({ type: 'CLEAR_CONVERSATION' });
     analytics.track('conversation_cleared');
+    if (activeSessionId) {
+      try {
+        await ChatPersistenceService.closeSession(activeSessionId);
+      } catch (error: unknown) {
+        logger.error('Closing the interview session after clearing failed.', undefined, {
+          sessionId: activeSessionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      try {
+        if (apiClient) await apiClient.completeSession(activeSessionId);
+      } catch (error: unknown) {
+        logger.error('Session report generation after clearing failed.', undefined, {
+          sessionId: activeSessionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        setIsGeneratingProgressReport(false);
+      }
+    }
   }, [conversationState.isSessionActive, conversationState.sessionId, clearAudioPlayback, stopRecording, apiClient, dispatch]);
 
   const exportTranscriptFile = useCallback(() => {

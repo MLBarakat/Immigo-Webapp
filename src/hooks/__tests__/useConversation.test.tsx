@@ -6,6 +6,9 @@ import { ConversationContext, conversationReducer } from '../../context/conversa
 import { ConversationProvider } from '../../context/ConversationContext';
 import { useWhisper } from '../useWhisper';
 import { ApiClient, ApiError } from '../../services/apiClient';
+import { ChatPersistenceService } from '../../services/chatPersistenceService';
+import { fetchLiveSessionStats } from '../../services/liveProgressService';
+import { analytics } from '../../analytics';
 
 vi.mock('../useWhisper', () => ({
   useWhisper: vi.fn(),
@@ -99,6 +102,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         reportMarkdown: 'Overall Session Summary\nYou answered ten questions.',
       }),
     } as unknown as Mocked<ApiClient>;
+    vi.mocked(ChatPersistenceService.createSession).mockResolvedValue(null);
 
     // 1. FIXED: Inject a resilient, runtime mock for the global HTMLAudioElement tracking fixture
     mockAudioInstance = {
@@ -226,6 +230,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       nextItemId: 'q-next',
       nextQuestion: 'Next question?',
     });
+
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
         {children}
@@ -248,6 +253,73 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         }),
       }));
     });
+  });
+
+  it('creates a reportable analytics session for text-only graded answers', async () => {
+    vi.mocked(ChatPersistenceService.createSession).mockResolvedValue('text-session');
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Correct. Next question.',
+      audioData: new ArrayBuffer(0),
+      verdict: 'correct',
+      needsConfirmation: false,
+      nextItemId: 'q-next',
+      nextQuestion: 'Next question?',
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient, userId: 'user-1' }), { wrapper });
+
+    for (let answer = 0; answer < 10; answer += 1) {
+      await act(async () => {
+        await result.current.sendTextMessage(`Text answer ${answer + 1}`);
+      });
+    }
+
+    expect(ChatPersistenceService.createSession).toHaveBeenCalledOnce();
+    expect(mockApiClient.postTranscript).toHaveBeenLastCalledWith(
+      'Text answer 10',
+      expect.any(Array),
+      'text-session',
+      'q-next',
+      false,
+      expect.any(Object),
+    );
+    expect(fetchLiveSessionStats).toHaveBeenCalledWith('text-session');
+    expect(analytics.track).toHaveBeenCalledWith('session_started', { mode: 'text' });
+    await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledWith('text-session'));
+    expect(mockStartRecording).not.toHaveBeenCalled();
+  });
+
+  it('continues the same persisted session when voice is enabled after text practice', async () => {
+    vi.mocked(ChatPersistenceService.createSession).mockResolvedValue('text-session');
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'How many senators are there?',
+      audioData: new ArrayBuffer(0),
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: 'q-next',
+      nextQuestion: 'How many senators are there?',
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient, userId: 'user-1' }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendTextMessage('I am ready to practice');
+    });
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    expect(ChatPersistenceService.createSession).toHaveBeenCalledOnce();
+    expect(mockApiClient.postSessionStart).not.toHaveBeenCalled();
+    expect(mockStartRecording).toHaveBeenCalledOnce();
   });
 
   it('ignores recognized Polly echo but stops playback for actual barging-in speech', async () => {
