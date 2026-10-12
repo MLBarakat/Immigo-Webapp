@@ -387,7 +387,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       negativeSpeechThreshold: 0.65,
       preSpeechPadMs: 500,  // FIXED: Converted from frame indexes to millisecond bounds
       minSpeechMs: 200,     // FIXED: Converted from frame indexes to millisecond bounds
-      redemptionMs: 1000,   // FIXED: Converted from frame indexes to millisecond bounds
+      redemptionMs: 500,
       onSpeechStart: () => {
         if (!isRecordingRef.current || !isLeaderRef.current) return;
         activeTraceIdRef.current = generateLocalTraceId();

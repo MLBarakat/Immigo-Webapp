@@ -102,6 +102,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     voiceId: activeVoiceId,
     simulationMode,
     preferredLanguage: currentLanguageCode,
+    bargeIn: userSettings.barge_in,
   });
 
   // ── UI State ──
@@ -221,6 +222,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               displayUser={displayUser}
               interimTranscript={manager.interimTranscript}
               appStatus={manager.appStatus}
+              isModelLoading={manager.isModelLoading}
+              isVadReady={manager.isVadReady}
+              modelLoadingProgress={manager.modelLoadingProgress}
               isSessionActive={manager.isSessionActive}
               isVoiceSessionActive={manager.isVoiceSessionActive}
               sessionTime={manager.sessionTime}
@@ -354,6 +358,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           displayUser={displayUser}
           interimTranscript={manager.interimTranscript}
           appStatus={manager.appStatus}
+          isModelLoading={manager.isModelLoading}
+          isVadReady={manager.isVadReady}
+          modelLoadingProgress={manager.modelLoadingProgress}
           isSessionActive={manager.isSessionActive}
           isVoiceSessionActive={manager.isVoiceSessionActive}
           sessionTime={manager.sessionTime}

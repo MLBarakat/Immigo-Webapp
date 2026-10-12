@@ -87,6 +87,7 @@
       "region": "Voice Interaction Hub",
       "start": "Start Voice Recording Session",
       "stop": "Stop Voice Recording Session",
+      "loading": "Preparing voice listener… {{progress}}%",
       "systemError": "System Error",
       "consentTitle": "Microphone & voice",
       "consentDescription": "To practice out loud, ImmiGO uses your microphone. Your speech is transcribed to text",

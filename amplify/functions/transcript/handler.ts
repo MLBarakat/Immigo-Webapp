@@ -6,7 +6,7 @@ import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 import { getItem, selectNextQuestion } from './turn/bank';
 import { formatStudyQuestion, TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn } from './turn/turn-policy';
-import type { SimulationMode } from './turn/types';
+import type { ConversationTurn, SimulationMode } from './turn/types';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const pollyRegion = process.env.POLLY_REGION || 'us-east-1';
@@ -59,14 +59,9 @@ const LambdaUnsupportedRealtimeTransport: WebSocketLikeConstructor = class {
   removeEventListener(_type: string, _listener: EventListener): void { }
 };
 
-interface ConversationTurn {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
 interface RequestBody {
   transcript?: string;
-  conversationWindow?: ConversationTurn[];
+  conversationWindow?: unknown;
   sessionId?: string;
   currentItemId?: string;
   confirmationRetry?: boolean;
@@ -89,6 +84,21 @@ interface RequestBody {
    * Optional Polly Voice ID selected by the user (e.g. Joanna, Matthew, Mia, Andres, etc.).
    */
   voiceId?: string;
+}
+
+function getRecentTurns(value: unknown): ConversationTurn[] {
+  if (!Array.isArray(value)) return [];
+  const recentTurns: ConversationTurn[] = [];
+  for (const entry of value.slice(-6)) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    if (!('role' in entry) || !('content' in entry)) continue;
+    const { role, content } = entry;
+    if ((role !== 'user' && role !== 'assistant') || typeof content !== 'string') continue;
+    const trimmedContent = content.trim();
+    if (!trimmedContent) continue;
+    recentTurns.push({ role, content: trimmedContent.slice(0, 500) });
+  }
+  return recentTurns;
 }
 
 /** Escapes XML special characters so arbitrary model-generated text is always valid inside SSML. */
@@ -723,6 +733,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const interp = await turnInterpreter.interpret(
         {
           askedItem,
+          recentTurns: getRecentTurns(parsedBody.conversationWindow),
           preferredLanguage,
           simulationMode,
           isConfirmationRetry: parsedBody.confirmationRetry === true,

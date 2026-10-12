@@ -87,6 +87,7 @@
       "region": "Centro de interacción por voz",
       "start": "Iniciar sesión de grabación de voz",
       "stop": "Detener sesión de grabación de voz",
+      "loading": "Preparando el reconocimiento de voz… {{progress}}%",
       "systemError": "Error del sistema",
       "consentTitle": "Micrófono y voz",
       "consentDescription": "Para practicar en voz alta, ImmiGO utiliza tu micrófono. Tu voz se transcribe a texto",

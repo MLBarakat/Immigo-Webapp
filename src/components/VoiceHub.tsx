@@ -8,6 +8,9 @@ import { hasMicConsent } from '../utils/micConsent';
 
 interface VoiceHubProps {
   readonly status: AppStatus;
+  readonly isModelLoading?: boolean;
+  readonly isVadReady?: boolean;
+  readonly modelLoadingProgress?: number;
   readonly isSessionActive: boolean;
   readonly onStartSession: () => void;
   readonly onEndSession: () => void;
@@ -19,6 +22,9 @@ interface VoiceHubProps {
 
 export function VoiceHub({ 
   status, 
+  isModelLoading = false,
+  isVadReady = true,
+  modelLoadingProgress = 0,
   isSessionActive, 
   onStartSession, 
   onEndSession,
@@ -34,6 +40,7 @@ export function VoiceHub({
   const [showMicConsent, setShowMicConsent] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
   const DEBOUNCE_DELAY_MS = 800; // Rigid interaction safety threshold window
+  const isListenerLoading = isModelLoading || !isVadReady;
 
   const handleButtonClick = useCallback(() => {
     const currentTimestamp = performance.now();
@@ -45,7 +52,7 @@ export function VoiceHub({
     }
 
     // Lock interaction loops while the background neural worker is executing matrix splits
-    if (status === 'processing') {
+    if (status === 'processing' || isListenerLoading) {
       logger.warn('Interaction locked: pipeline is verifying truth ledger audio chunks. Disabling toggle.');
       return;
     }
@@ -66,7 +73,7 @@ export function VoiceHub({
       logger.info('VoiceHub: manual user intervention captured. Launching speech session recording.');
       onStartSession();
     }
-  }, [isSessionActive, status, onStartSession, onEndSession, micConsentVersion, onClearMicAccessError]);
+  }, [isSessionActive, status, isListenerLoading, onStartSession, onEndSession, micConsentVersion, onClearMicAccessError]);
 
   const handleMicConsentAccept = useCallback(async () => {
     if (!onMicConsent) {
@@ -78,14 +85,15 @@ export function VoiceHub({
       await onMicConsent();
       setShowMicConsent(false);
       logger.info('VoiceHub: microphone consent acknowledged. Launching speech session recording.');
-      onStartSession();
+      if (!isListenerLoading) onStartSession();
     } catch (error) {
       setConsentError(error instanceof Error ? error.message : 'Unable to save microphone consent. Please try again.');
       logger.error('Failed to persist microphone consent.', { error: String(error) });
     }
-  }, [onMicConsent, onStartSession]);
+  }, [onMicConsent, onStartSession, isListenerLoading]);
 
   const isProcessingActive = status === 'processing';
+  const isButtonDisabled = isProcessingActive || (isListenerLoading && !isSessionActive);
 
   return (
     <>
@@ -93,16 +101,24 @@ export function VoiceHub({
         <MicConsentModal onAccept={() => { void handleMicConsentAccept(); }} onCancel={() => { setShowMicConsent(false); setConsentError(null); }} error={consentError} />
       )}
     <div className="flex flex-col items-center justify-center gap-1" role="region" aria-label={t('workspace.voice.region')}>
+      {isListenerLoading && !isSessionActive && (
+        <span className="absolute sr-only" role="status">
+          {t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })}
+        </span>
+      )}
       {micAccessError && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{micAccessError}</p>}
       <button 
         onClick={handleButtonClick} 
-        disabled={isProcessingActive}
+        disabled={isButtonDisabled}
         className={`w-11 h-11 flex items-center justify-center rounded-full transition-transform active:scale-95 duration-200 ${
-          isProcessingActive ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+          isButtonDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+        } ${
+          isListenerLoading && !isSessionActive ? 'animate-pulse ring-2 ring-art-blue-400 ring-offset-2' : ''
         }`} 
         aria-label={t(isSessionActive ? 'workspace.voice.stop' : 'workspace.voice.start')}
-        aria-busy={isProcessingActive}
+        aria-busy={isButtonDisabled || (isListenerLoading && isSessionActive)}
         aria-live="polite"
+        title={isListenerLoading ? t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) }) : undefined}
       >
         <AnimatedStatusButton status={status} />
       </button>

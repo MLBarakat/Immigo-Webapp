@@ -87,6 +87,7 @@
       "region": "Centre d’interaction vocale",
       "start": "Démarrer l’enregistrement vocal",
       "stop": "Arrêter l’enregistrement vocal",
+      "loading": "Préparation de l’écoute vocale… {{progress}} %",
       "systemError": "Erreur système",
       "consentTitle": "Microphone et voix",
       "consentDescription": "Pour vous entraîner à voix haute, ImmiGO utilise votre microphone. Votre parole est transcrite en texte",

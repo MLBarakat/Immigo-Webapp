@@ -128,7 +128,9 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     // 2. FIXED: Assert absolute execution alignment matching echo suppression gates
     expect(mockStopRecording).not.toHaveBeenCalled();
     expect(mockAudioInstance.play).not.toHaveBeenCalled();
-    expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+    });
   });
 
   it('cancels an in-flight text response when the user sends an interrupting message', async () => {
@@ -221,10 +223,12 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     await act(async () => {
       await result.current.sendTextMessage('A saved user answer');
     });
-    expect(result.current.conversationHistory.map(message => message.content)).toEqual([
-      'A saved user answer',
-      'A saved assistant reply',
-    ]);
+    await waitFor(() => {
+      expect(result.current.conversationHistory.map(message => message.content)).toEqual([
+        'A saved user answer',
+        'A saved assistant reply',
+      ]);
+    });
     await waitFor(() => {
       expect(JSON.parse(sessionStorage.getItem('immigo_conversation_user-session-cache') ?? '[]')).toHaveLength(2);
     });

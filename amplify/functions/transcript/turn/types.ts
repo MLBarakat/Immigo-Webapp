@@ -19,6 +19,11 @@ export type Intent =
 
 export type SimulationMode = 'standard' | 'practice' | 'study';
 
+export interface ConversationTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface ProposedGrade {
   verdict: 'correct' | 'incorrect' | 'partial';
   matchedAnswer: string | null;
@@ -34,6 +39,7 @@ export interface TurnInterpretation {
 
 export interface TurnContext {
   askedItem: CivicsItem;
+  recentTurns?: ConversationTurn[];
   preferredLanguage?: string;
   userFirstName?: string;
   simulationMode?: SimulationMode;

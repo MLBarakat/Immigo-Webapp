@@ -80,6 +80,27 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     expect(mockEndSession).not.toHaveBeenCalled();
   });
 
+  it('flashes and blocks starting until the speech listener is ready', () => {
+    render(
+      <VoiceHub
+        status="idle"
+        isModelLoading={true}
+        isVadReady={false}
+        modelLoadingProgress={42}
+        isSessionActive={false}
+        onStartSession={mockStartSession}
+        onEndSession={mockEndSession}
+      />
+    );
+
+    const button = screen.getByRole('button', { name: /start voice recording session/i }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.className).toContain('animate-pulse');
+    expect(button.title).toContain('42%');
+    fireEvent.click(button);
+    expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
   it('should suppress rapid click spamming patterns to safeguard background audio recording channels', () => {
     let mockTime = 1000;
     vi.spyOn(performance, 'now').mockImplementation(() => mockTime);

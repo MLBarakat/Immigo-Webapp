@@ -11,6 +11,9 @@ interface CenterPanelProps {
   displayUser: DisplayUser;
   interimTranscript: string;
   appStatus: AppStatus;
+  isModelLoading: boolean;
+  isVadReady: boolean;
+  modelLoadingProgress: number;
   isSessionActive: boolean;
   isVoiceSessionActive: boolean;
   sessionTime: number;
@@ -57,6 +60,9 @@ export function CenterPanel({
   displayUser,
   interimTranscript,
   appStatus,
+  isModelLoading,
+  isVadReady,
+  modelLoadingProgress,
   isSessionActive,
   isVoiceSessionActive,
   sessionTime,
@@ -212,6 +218,9 @@ export function CenterPanel({
 
                 <VoiceHub
                   status={appStatus}
+                  isModelLoading={isModelLoading}
+                  isVadReady={isVadReady}
+                  modelLoadingProgress={modelLoadingProgress}
                   isSessionActive={isSessionActive}
                   onStartSession={onStartSession}
                   onEndSession={onEndSession}

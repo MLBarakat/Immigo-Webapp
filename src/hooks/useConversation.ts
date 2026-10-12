@@ -9,6 +9,8 @@ import { fetchLiveSessionStats } from '../services/liveProgressService';
 import { useWhisper } from './useWhisper';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
+import type { BargeIn } from '../types/settings';
+import { getBargeInHoldDurationMs } from '../utils/bargeIn';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
@@ -16,9 +18,17 @@ interface UseConversationManagerProps {
   voiceId?: string | null;
   simulationMode?: SimulationMode;
   preferredLanguage?: string;
+  bargeIn?: BargeIn;
 }
 
-export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', preferredLanguage = 'en-US' }: UseConversationManagerProps) {
+interface AssistantReveal {
+  words: string[];
+  revealedWords: number;
+  timerId: number;
+  audioNode: HTMLAudioElement | null;
+}
+
+export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', preferredLanguage = 'en-US', bargeIn = 'balanced' }: UseConversationManagerProps) {
   const { t, i18n } = useTranslation('conversation');
   const context = useContext(ConversationContext);
   if (!context) {
@@ -29,6 +39,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const voiceIdRef = useRef<string | null>(voiceId ?? null);
   const simulationModeRef = useRef<SimulationMode>(simulationMode);
   const preferredLanguageRef = useRef(preferredLanguage);
+  const bargeInRef = useRef<BargeIn>(bargeIn);
   useEffect(() => {
     voiceIdRef.current = voiceId ?? null;
   }, [voiceId]);
@@ -38,6 +49,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   useEffect(() => {
     preferredLanguageRef.current = preferredLanguage;
   }, [preferredLanguage]);
+  useEffect(() => {
+    bargeInRef.current = bargeIn;
+  }, [bargeIn]);
 
   const intervalRef = useRef<number | null>(null);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
@@ -72,14 +86,85 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // recording side effects), so it must not re-fire on every render or on
   // every session start/end.
   const hasFetchedWelcomeBannerRef = useRef(false);
-  // True while Polly audio is actively playing — used to mute the VAD so the
-  // microphone does not pick up the speaker output and loop it back as input.
+  // True while Polly audio is actively playing; paired with the playback node
+  // to constrain interruption handling to audible assistant speech.
   const isPollyPlayingRef = useRef<boolean>(false);
   // Timer handle for the post-playback AEC settle window (clears on unmount).
   const pollyMuteGateTimerRef = useRef<number | null>(null);
+  const interruptionTimerRef = useRef<number | null>(null);
+  const assistantRevealRef = useRef<AssistantReveal | null>(null);
+
+  const stopAssistantReveal = useCallback((complete = false) => {
+    const reveal = assistantRevealRef.current;
+    if (!reveal) return;
+    window.clearInterval(reveal.timerId);
+    if (complete && reveal.revealedWords < reveal.words.length) {
+      dispatch({
+        type: 'RECEIVE_ASSISTANT_CHUNK',
+        payload: { content: ` ${reveal.words.slice(reveal.revealedWords).join(' ')}` },
+      });
+    }
+    assistantRevealRef.current = null;
+  }, [dispatch]);
+
+  const startAssistantReveal = useCallback((messageId: string, content: string, audioNode: HTMLAudioElement | null = null) => {
+    stopAssistantReveal();
+    const words = content.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return;
+    dispatch({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: messageId, content: words[0] },
+    });
+    if (words.length === 1) {
+      if (!audioNode) {
+        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        if (activeAssistantMessageIdRef.current === messageId) activeAssistantMessageIdRef.current = null;
+      }
+      return;
+    }
+
+    const reveal: AssistantReveal = {
+      words,
+      revealedWords: 1,
+      timerId: 0,
+      audioNode,
+    };
+    reveal.timerId = window.setInterval(() => {
+      if (assistantRevealRef.current !== reveal) return;
+      let targetWordCount: number;
+      if (reveal.audioNode) {
+        const duration = reveal.audioNode.duration;
+        if (!Number.isFinite(duration) || duration <= 0) return;
+        targetWordCount = Math.min(
+          words.length,
+          Math.max(1, Math.floor((reveal.audioNode.currentTime / duration) * words.length) + 1)
+        );
+      } else {
+        targetWordCount = reveal.revealedWords + 1;
+      }
+      if (targetWordCount > reveal.revealedWords) {
+        dispatch({
+          type: 'RECEIVE_ASSISTANT_CHUNK',
+          payload: { content: ` ${words.slice(reveal.revealedWords, targetWordCount).join(' ')}` },
+        });
+        reveal.revealedWords = targetWordCount;
+      }
+      if (!audioNode && reveal.revealedWords >= words.length) {
+        stopAssistantReveal();
+        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        if (activeAssistantMessageIdRef.current === messageId) activeAssistantMessageIdRef.current = null;
+      }
+    }, audioNode ? 50 : 80);
+    assistantRevealRef.current = reveal;
+  }, [dispatch, stopAssistantReveal]);
 
   const clearAudioPlayback = useCallback(() => {
     audioPlaybackGenerationRef.current += 1;
+    stopAssistantReveal();
+    if (interruptionTimerRef.current !== null) {
+      window.clearTimeout(interruptionTimerRef.current);
+      interruptionTimerRef.current = null;
+    }
 
     if (pollyMuteGateTimerRef.current !== null) {
       window.clearTimeout(pollyMuteGateTimerRef.current);
@@ -101,7 +186,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
 
     isPollyPlayingRef.current = false;
-  }, []);
+  }, [stopAssistantReveal]);
 
   // Dual-Track Speculative Merger orchestration hook
   const {
@@ -117,15 +202,17 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     clearTranscript
   } = useWhisper({
     onSpeechStart: () => {
-      // If Polly is still inside the AEC mute-gate window, the VAD detected
-      // Polly's own speaker output — suppress the callback entirely so we
-      // don't interrupt or loop back the assistant's own voice.
-      if (isPollyPlayingRef.current) return;
-
       const activePlayback = audioPlaybackRef.current;
       if (!activePlayback) return;
-      clearAudioPlayback();
-      dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+      // Let a short stretch of speech confirm an interruption, reducing false
+      // triggers from residual speaker echo while still allowing real barging-in.
+      if (interruptionTimerRef.current !== null) window.clearTimeout(interruptionTimerRef.current);
+      interruptionTimerRef.current = window.setTimeout(() => {
+        interruptionTimerRef.current = null;
+        if (audioPlaybackRef.current !== activePlayback || !isPollyPlayingRef.current) return;
+        clearAudioPlayback();
+        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+      }, getBargeInHoldDurationMs(bargeInRef.current));
     }
   });
 
@@ -408,8 +495,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         }
       }
 
-      dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { content: responseText } });
-
       // Persist Assistant Message to Supabase
       if (userId && activeSessionId) {
         void ChatPersistenceService.persistMessage(
@@ -421,7 +506,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
 
       if (!conversationState.isSessionActive || !voiceSessionRef.current) {
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        dispatch({ type: 'SET_STATUS', payload: 'speaking' });
+        startAssistantReveal(secureAssistantMessageId, responseText);
         activeTurnControllerRef.current = null;
         activeAssistantMessageIdRef.current = null;
         return;
@@ -434,10 +520,13 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       audioPlaybackRef.current = audioPlaybackNode;
       audioPlaybackUrlRef.current = audioBlobUrl;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
+      startAssistantReveal(secureAssistantMessageId, responseText, audioPlaybackNode);
 
-      // Raise the Polly mute gate BEFORE playback starts so that any AEC
-      // bleed-through during the first frames is suppressed.
+      // Keep capture active during playback so VAD can recognize a real
+      // interruption; browser echo cancellation and the barge-in holdoff
+      // suppress speaker bleed.
       isPollyPlayingRef.current = true;
+      startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
         pollyMuteGateTimerRef.current = null;
@@ -464,6 +553,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       audioPlaybackNode.onended = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        stopAssistantReveal(true);
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
         clearAudioPlayback();
 
@@ -473,7 +563,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         pollyMuteGateTimerRef.current = window.setTimeout(() => {
           isPollyPlayingRef.current = false;
           pollyMuteGateTimerRef.current = null;
-          startRecording();
         }, 300); // 300 ms AEC settle window
       };
       activeTurnControllerRef.current = null;
@@ -507,7 +596,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         activeTurnControllerRef.current = null;
       }
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal]);
 
   // Word-boundary comparison for live audio transcription handoff
   useEffect(() => {
@@ -601,18 +690,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       currentItemIdRef.current = res.nextItemId;
       awaitingConfirmationRef.current = res.needsConfirmation ? res.nextItemId : null;
 
-      // No real user utterance preceded this — add ONLY the assistant message
-      // (no paired placeholder user bubble, which previously rendered as a
-      // visible blank bubble BEFORE the greeting).
-      dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: secureAssistantMessageId, content: res.responseText } });
-
       if (userId && newSessionId) {
         void ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', res.responseText);
       }
 
-      // Same playback + AEC mute-gate + resume-recording sequencing as every
-      // other assistant response, so the mic doesn't open until the greeting
-      // audio has fully finished (plus the settle window).
+      // Keep capture active during playback for barge-in. The assistant bubble
+      // is created with its first word only after the greeting is ready.
       const audioBlob = new Blob([res.audioData], { type: 'audio/mpeg' });
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
@@ -620,8 +703,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       audioPlaybackRef.current = audioPlaybackNode;
       audioPlaybackUrlRef.current = audioBlobUrl;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
+      activeAssistantMessageIdRef.current = secureAssistantMessageId;
+      startAssistantReveal(secureAssistantMessageId, res.responseText, audioPlaybackNode);
 
       isPollyPlayingRef.current = true;
+      startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
         pollyMuteGateTimerRef.current = null;
@@ -639,12 +725,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       audioPlaybackNode.onended = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        stopAssistantReveal(true);
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
         clearAudioPlayback();
         pollyMuteGateTimerRef.current = window.setTimeout(() => {
           isPollyPlayingRef.current = false;
           pollyMuteGateTimerRef.current = null;
-          startRecording();
         }, 300);
       };
     } catch (error: unknown) {
@@ -687,7 +773,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // visible in chat; proceed straight to recording.
       startRecording();
     }
-  }, [userId, dispatch, startRecording, apiClient, clearAudioPlayback]);
+  }, [userId, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal]);
 
   const terminateSession = useCallback(async () => {
     clearAudioPlayback();

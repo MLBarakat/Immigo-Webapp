@@ -101,12 +101,9 @@ export const conversationReducer = (state: ConversationState, action: Conversati
       return { ...state, liveStats: action.payload };
 
     case 'ADD_ASSISTANT_MESSAGE': {
-      // Unlike SEND_MESSAGE_START, this adds ONLY an assistant message — no
-      // paired user message. For system-initiated text (the welcome banner,
-      // the "let's begin" session-start announcement) there is no real user
-      // utterance to pair it with; previously an empty-content placeholder
-      // user message was used to satisfy SEND_MESSAGE_START's contract, which
-      // rendered as a visible blank bubble appearing BEFORE the greeting.
+      // Add the assistant bubble only after its first content is ready. System
+      // messages have no paired user turn, and normal responses must not show
+      // an empty placeholder while the server is still generating them.
       const message: Message = {
         id: action.payload.assistantMessageId,
         role: 'assistant',
@@ -163,19 +160,13 @@ export const conversationReducer = (state: ConversationState, action: Conversati
     }
 
     case 'SEND_MESSAGE_START': {
-      const newAssistantMessage: Message = { 
-        id: action.payload.assistantMessageId, 
-        role: 'assistant', 
-        content: '', 
-        timestamp: new Date().toISOString() 
-      };
       return {
         ...state,
         appStatus: 'processing',
         transcript: '',
         interimTranscript: '', // Clear speculative holder on prompt dispatch
         errorMessage: null,
-        conversationHistory: [...state.conversationHistory, action.payload.userMessage, newAssistantMessage],
+        conversationHistory: [...state.conversationHistory, action.payload.userMessage],
         assistantMessageId: action.payload.assistantMessageId,
       };
     }
