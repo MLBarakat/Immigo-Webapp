@@ -85,8 +85,8 @@
     },
     "voice": {
       "region": "Centro de interacción por voz",
-      "start": "Iniciar sesión de grabación de voz",
-      "stop": "Detener sesión de grabación de voz",
+      "start": "Iniciar modo de voz",
+      "stop": "Detener modo de voz",
       "pause": "Pausar",
       "loading": "Preparando el reconocimiento de voz… {{progress}}%",
       "systemError": "Error del sistema",

@@ -85,8 +85,8 @@
     },
     "voice": {
       "region": "Voice Interaction Hub",
-      "start": "Start Voice Recording Session",
-      "stop": "Stop Voice Recording Session",
+      "start": "Start Voice Mode",
+      "stop": "Stop Voice Mode",
       "pause": "Pause",
       "loading": "Preparing voice listener… {{progress}}%",
       "systemError": "System Error",

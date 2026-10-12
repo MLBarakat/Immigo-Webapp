@@ -85,8 +85,8 @@
     },
     "voice": {
       "region": "Centre d’interaction vocale",
-      "start": "Démarrer l’enregistrement vocal",
-      "stop": "Arrêter l’enregistrement vocal",
+      "start": "Démarrer mode vocal",
+      "stop": "Arrêter mode vocal",
       "pause": "Mettre en pause",
       "loading": "Préparation de l’écoute vocale… {{progress}} %",
       "systemError": "Erreur système",
