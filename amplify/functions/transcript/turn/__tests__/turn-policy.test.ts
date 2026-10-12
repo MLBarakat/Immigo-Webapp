@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { resolveTurn } from '../turn-policy';
+import { resolveTurn, sanitizeFinalAnswerFeedback } from '../turn-policy';
 import type { CivicsItem, Intent, TurnInterpretation } from '../types';
 
 const q21: CivicsItem = {
@@ -17,6 +17,26 @@ const interp = (o: Partial<TurnInterpretation>): TurnInterpretation => ({
   grade: null,
   reply: '',
   ...o,
+});
+
+describe('sanitizeFinalAnswerFeedback', () => {
+  it('removes model-added next questions so the handler can append exactly one official question', () => {
+    const feedback = 'The Japanese flag is not an answer. Next question: Name one right in the Bill of Rights? Next question: When was it adopted?';
+    expect(sanitizeFinalAnswerFeedback(feedback, 'When was the Declaration of Independence adopted?'))
+      .toBe('The Japanese flag is not an answer.');
+  });
+
+  it('removes a duplicate of the official next question even without a marker', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Correct. When was the Declaration of Independence adopted?',
+      'When was the Declaration of Independence adopted?',
+    )).toBe('Correct.');
+  });
+
+  it('removes a model-added follow-up question before the official question', () => {
+    expect(sanitizeFinalAnswerFeedback('Good answer. Can you explain why?', 'What is the capital?'))
+      .toBe('Good answer.');
+  });
 });
 
 describe('TurnPolicy.resolveTurn — grading guarantees', () => {
@@ -144,4 +164,3 @@ describe('TurnPolicy.resolveTurn — grading guarantees', () => {
     });
   });
 });
-

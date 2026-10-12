@@ -58,7 +58,8 @@ export type ConversationAction =
   | { type: 'SET_SESSION_ID'; payload: string | null }
   | { type: 'LOAD_HISTORICAL_MESSAGES'; payload: { messages: Message[]; hasMore: boolean; oldestCursor: string | null; replace?: boolean } }
   | { type: 'SET_LIVE_STATS'; payload: LiveSessionStats | null }
-  | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string } };
+  | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string } }
+  | { type: 'ADD_STANDALONE_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string } };
 
 export const initialState: ConversationState = {
   conversationHistory: [],
@@ -117,11 +118,23 @@ export const conversationReducer = (state: ConversationState, action: Conversati
       };
     }
 
+    case 'ADD_STANDALONE_ASSISTANT_MESSAGE': {
+      const message: Message = {
+        id: action.payload.assistantMessageId,
+        role: 'assistant',
+        content: action.payload.content,
+        timestamp: new Date().toISOString(),
+      };
+      return { ...state, conversationHistory: [...state.conversationHistory, message] };
+    }
+
     case 'SET_TRANSCRIPT':
       return { ...state, transcript: action.payload, appStatus: 'listening' };
 
     case 'SET_INTERIM_TRANSCRIPT':
-      return { ...state, interimTranscript: action.payload };
+      return action.payload.trim()
+        ? { ...state, interimTranscript: action.payload }
+        : state;
 
     case 'SET_STATUS':
       return { ...state, appStatus: action.payload };

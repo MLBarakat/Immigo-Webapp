@@ -43,6 +43,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }
   const { state: conversationState, dispatch } = context;
   const [isGeneratingProgressReport, setIsGeneratingProgressReport] = useState(false);
+  const pendingTranscriptClearRef = useRef(false);
   const voiceIdRef = useRef<string | null>(voiceId ?? null);
   const simulationModeRef = useRef<SimulationMode>(simulationMode);
   const preferredLanguageRef = useRef(preferredLanguage);
@@ -230,6 +231,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
   // Sync live interim transcript modifications to viewport UI
   useEffect(() => {
+    const transcript = displayTranscript.trim();
+    if (pendingTranscriptClearRef.current) {
+      if (!transcript) pendingTranscriptClearRef.current = false;
+      return;
+    }
     dispatch({ type: 'SET_INTERIM_TRANSCRIPT', payload: displayTranscript });
   }, [displayTranscript, dispatch]);
 
@@ -376,9 +382,44 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [userId, conversationState.oldestMessageCursor, conversationState.hasMoreHistory, dispatch]);
 
+  const generatePeriodicProgressReport = useCallback(async (activeSessionId: string) => {
+    if (!apiClient) return;
+    setIsGeneratingProgressReport(true);
+    try {
+      const { date, reportMarkdown } = await apiClient.completeSession(activeSessionId);
+      if (!reportMarkdown.trim()) {
+        throw new Error('The report service completed without returning a progress report.');
+      }
+      const reportDate = new Date(`${date}T00:00:00`).toLocaleDateString(i18n.language);
+      dispatch({
+        type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+        payload: {
+          assistantMessageId: `progress-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          content: `Your progress report for ${reportDate} is ready.\n\n${reportMarkdown}`,
+        },
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Periodic progress report generation failed.', undefined, {
+        sessionId: activeSessionId,
+        error: message,
+      });
+      dispatch({
+        type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+        payload: {
+          assistantMessageId: `progress-report-error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          content: 'I could not generate your progress report right now. Your session is still active; I will try again when it ends.',
+        },
+      });
+    } finally {
+      setIsGeneratingProgressReport(false);
+    }
+  }, [apiClient, dispatch, i18n.language]);
+
   const sendTextMessage = useCallback(async (text: string) => {
     const validatedText = text.replace(/\s+/g, ' ').trim();
     if (!validatedText) return;
+    pendingTranscriptClearRef.current = true;
     const isOpeningResponse = openingResponseRef.current;
     openingResponseRef.current = false;
     silenceNudgeControllerRef.current?.abort();
@@ -446,6 +487,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     // Build 6-turn sliding window from recent conversation history
     const slidingWindow = conversationState.conversationHistory
+      .filter(m => !m.id.startsWith('progress-report-'))
       .slice(-6)
       .map(m => ({ role: m.role, content: m.content }));
 
@@ -522,12 +564,17 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           void fetchLiveSessionStats(activeSessionId).then((stats) => {
             if (stats) dispatch({ type: 'SET_LIVE_STATS', payload: stats });
           });
-          if (answeredCountRef.current % 10 === 0 && apiClient) {
-            void apiClient.completeSession(activeSessionId).catch((error: unknown) => {
-              logger.error('Periodic (every-10) progress report refresh failed (non-fatal).', undefined, {
-                sessionId: activeSessionId,
-                error: error instanceof Error ? error.message : String(error),
-              });
+        }
+        if (answeredCountRef.current % 10 === 0) {
+          if (activeSessionId) {
+            void generatePeriodicProgressReport(activeSessionId);
+          } else {
+            dispatch({
+              type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+              payload: {
+                assistantMessageId: `progress-report-error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                content: 'I could not save your progress report because this session is not linked to a saved account session.',
+              },
             });
           }
         }
@@ -638,7 +685,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         activeTurnControllerRef.current = null;
       }
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, generatePeriodicProgressReport]);
 
   const requestSilenceNudge = useCallback(async () => {
     const currentItemId = currentItemIdRef.current;
@@ -789,6 +836,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     dispatch({ type: 'START_SESSION' });
     analytics.track('session_started');
     processedTranscriptRef.current = '';
+    pendingTranscriptClearRef.current = false;
     sessionIdRef.current = null;
     currentItemIdRef.current = null;
     awaitingConfirmationRef.current = null;
@@ -935,6 +983,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     const activeSessionId = sessionIdRef.current || conversationState.sessionId;
     if (activeSessionId) setIsGeneratingProgressReport(true);
     dispatch({ type: 'END_SESSION' });
+    pendingTranscriptClearRef.current = false;
     sessionIdRef.current = null;
     currentItemIdRef.current = null;
     openingResponseRef.current = false;
@@ -1030,6 +1079,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const activeSessionId = sessionIdRef.current || conversationState.sessionId;
       if (activeSessionId) setIsGeneratingProgressReport(true);
       dispatch({ type: 'END_SESSION' });
+      pendingTranscriptClearRef.current = false;
       sessionIdRef.current = null;
       currentItemIdRef.current = null;
       openingResponseRef.current = false;
@@ -1098,7 +1148,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     isVoiceSessionActive: conversationState.isSessionActive && isVoiceSessionActive,
     isGeneratingProgressReport,
     currentState,
-    interimTranscript: displayTranscript,
+    interimTranscript: conversationState.interimTranscript || displayTranscript,
     finalTranscript,
     isModelLoading,
     isVadReady,

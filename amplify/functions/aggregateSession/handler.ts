@@ -194,16 +194,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       .eq('user_id', userId)
       .order('created_at', { ascending: true });
 
-    if (msgError || !sessionMessages || sessionMessages.length === 0) {
-      console.log(`[Aggregator-Execution] No messages found for session ${sessionId}. Skipping aggregation.`);
-      return {
-        statusCode: 200,
-        headers: responseHeaders,
-        body: JSON.stringify({ success: true, message: 'No messages to aggregate.' })
-      };
+    if (msgError) {
+      throw new Error(`Failed to load session messages: ${msgError.message}`);
     }
 
-    const sessionTranscript = sessionMessages
+    const sessionTranscript = (sessionMessages ?? [])
       .map(m => `${m.role.toUpperCase()}: ${m.content}`)
       .join('\n');
 
@@ -235,6 +230,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const graded = (gradedRows ?? []) as Array<{ item_id: string; verdict: string }>;
+    if (sessionTranscript.length === 0 && graded.length === 0) {
+      console.log(`[Aggregator-Execution] No messages or graded answers found for session ${sessionId}. Skipping aggregation.`);
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify({ success: true, date: today, reportMarkdown: '' })
+      };
+    }
+
     const answered = graded.length;
     const correct = graded.filter((g) => g.verdict === 'correct').length;
     const partial = graded.filter((g) => g.verdict === 'partial').length;
@@ -352,7 +356,7 @@ Instructions:
     return {
       statusCode: 200,
       headers: responseHeaders,
-      body: JSON.stringify({ success: true, date: today })
+      body: JSON.stringify({ success: true, date: today, reportMarkdown })
     };
 
   } catch (error: unknown) {

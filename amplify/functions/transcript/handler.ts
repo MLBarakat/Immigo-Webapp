@@ -5,7 +5,7 @@ import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 import { getItem, selectNextQuestion } from './turn/bank';
 import { formatStudyQuestion, TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
-import { resolveTurn } from './turn/turn-policy';
+import { resolveTurn, sanitizeFinalAnswerFeedback } from './turn/turn-policy';
 import type { ConversationTurn, SimulationMode } from './turn/types';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
@@ -804,7 +804,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         const turnReply = simulationMode === 'study' && outcome.effectiveIntent === 'repeat'
           ? ''
           : outcome.effectiveIntent === 'unclear'
-          ? `${safeReply} Let's come back to this question: ${askedItem.question}`
+          ? `I didn't catch that clearly. Let's return to the question: ${askedItem.question}`
           : outcome.useModelReply
           ? (interp?.reply || safeReply)
           : safeReply;
@@ -828,7 +828,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           );
         }
 
-        const feedback = simulationMode === 'study' && !outcome.useModelReply
+        const rawFeedback = simulationMode === 'study' && !outcome.useModelReply
           ? getLocalizedStudyFallback(outcome.flags, preferredLanguageCode) ?? outcome.safeReply
           : outcome.useModelReply
           ? (interp?.reply || outcome.safeReply)
@@ -842,13 +842,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         const next = selectNextQuestion(excludeIds);
         nextItemId = next.id;
         nextQuestionText = next.question;
+        const feedback = sanitizeFinalAnswerFeedback(rawFeedback, next.question);
 
-        // Speak the feedback AND the next question so the voice loop keeps flowing.
+        // The server owns the one official next question. Strip any extra
+        // question the model included in feedback before adding it here.
         const explanation = simulationMode === 'study'
           ? await turnInterpreter.explainStudyQuestion(next, preferredLanguage)
           : '';
         generatedAssistantText = simulationMode === 'study'
-          ? `${formatStudyQuestion(askedItem, feedback, preferredLanguage)}\n${formatStudyQuestion(next, explanation, preferredLanguage)}`
+          ? `${feedback}\n${formatStudyQuestion(next, explanation, preferredLanguage)}`
           : `${feedback} Next question: ${next.question}`;
       }
     }

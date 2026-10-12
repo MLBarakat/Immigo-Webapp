@@ -52,6 +52,31 @@ const SAFE = {
   legalAdvice: "I can only help you practice civics questions and English speaking. I cannot provide legal advice or evaluate your eligibility for naturalization. Please consult a licensed immigration attorney or a DOJ-accredited representative.",
 };
 
+export function sanitizeFinalAnswerFeedback(reply: string, nextQuestion: string): string {
+  let feedback = reply.trim();
+  const nextQuestionMarker = /\bnext\s+question\s*:/i.exec(feedback);
+  if (nextQuestionMarker?.index !== undefined) {
+    feedback = feedback.slice(0, nextQuestionMarker.index).trim();
+  }
+
+  const canonicalQuestionIndex = feedback.toLocaleLowerCase().indexOf(nextQuestion.toLocaleLowerCase());
+  if (canonicalQuestionIndex >= 0) {
+    feedback = feedback.slice(0, canonicalQuestionIndex).trim();
+  }
+
+  const questionMarkIndex = feedback.indexOf('?');
+  if (questionMarkIndex >= 0) {
+    const sentenceBoundary = Math.max(
+      feedback.lastIndexOf('.', questionMarkIndex),
+      feedback.lastIndexOf('!', questionMarkIndex),
+      feedback.lastIndexOf('\n', questionMarkIndex),
+    );
+    feedback = feedback.slice(0, sentenceBoundary + 1).trim();
+  }
+
+  return feedback.replace(/[\s,:;—-]+$/u, '').trim() || "Let's keep going.";
+}
+
 export interface ResolveOptions {
   /** The question the SERVER asked this turn. Grading always targets THIS item. */
   askedItem: CivicsItem | null;

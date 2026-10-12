@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mocked } from 'vi
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { useConversation } from '../useConversation';
-import { ConversationContext } from '../../context/conversationContextTypes';
+import { ConversationContext, conversationReducer } from '../../context/conversationContextTypes';
 import { ConversationProvider } from '../../context/ConversationContext';
 import { useWhisper } from '../useWhisper';
 import { ApiClient, ApiError } from '../../services/apiClient';
@@ -15,6 +15,10 @@ vi.mock('../../analytics', () => ({
   analytics: {
     track: vi.fn(),
   },
+}));
+
+vi.mock('../../services/liveProgressService', () => ({
+  fetchLiveSessionStats: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../logger', () => ({
@@ -47,7 +51,18 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
-    mockDispatch = vi.fn();
+    mockDispatch = vi.fn((action: Parameters<typeof conversationReducer>[1]) => {
+      if (action.type === 'SET_INTERIM_TRANSCRIPT') {
+        mockContextValue.state = conversationReducer(mockContextValue.state, action);
+      } else if (
+        action.type === 'SEND_MESSAGE_START'
+        || action.type === 'START_SESSION'
+        || action.type === 'END_SESSION'
+        || action.type === 'CLEAR_CONVERSATION'
+      ) {
+        mockContextValue.state = { ...mockContextValue.state, interimTranscript: '' };
+      }
+    });
     mockStartRecording = vi.fn();
     mockStopRecording = vi.fn();
 
@@ -79,7 +94,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       postTranscript: vi.fn(),
       postSessionStart: vi.fn(),
       postSilenceNudge: vi.fn(),
-      completeSession: vi.fn().mockResolvedValue(undefined),
+      completeSession: vi.fn().mockResolvedValue({
+        date: '2026-10-12',
+        reportMarkdown: 'Overall Session Summary\nYou answered ten questions.',
+      }),
     } as unknown as Mocked<ApiClient>;
 
     // 1. FIXED: Inject a resilient, runtime mock for the global HTMLAudioElement tracking fixture
@@ -157,6 +175,79 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(mockAudioInstance.play).not.toHaveBeenCalled();
     expect(mockStartRecording).toHaveBeenCalledOnce();
     expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_STATUS', payload: 'listening' });
+  });
+
+  it('keeps a recognized user bubble visible across empty interim-transcript pauses', async () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result, rerender } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    (useWhisper as any).mockReturnValue({
+      currentState: 'SPECULATIVE',
+      displayTranscript: 'I think the answer is the executive branch',
+      finalTranscript: '',
+      isModelLoading: false,
+      isVadReady: true,
+      modelLoadingProgress: 100,
+      isTranscribing: false,
+      startRecording: mockStartRecording,
+      stopRecording: mockStopRecording,
+    });
+    rerender();
+    await waitFor(() => {
+      expect(result.current.interimTranscript).toBe('I think the answer is the executive branch');
+    });
+
+    (useWhisper as any).mockReturnValue({
+      currentState: 'LISTENING',
+      displayTranscript: '',
+      finalTranscript: '',
+      isModelLoading: false,
+      isVadReady: true,
+      modelLoadingProgress: 100,
+      isTranscribing: false,
+      startRecording: mockStartRecording,
+      stopRecording: mockStopRecording,
+    });
+    rerender();
+    expect(result.current.interimTranscript).toBe('I think the answer is the executive branch');
+  });
+
+  it('generates and displays a committed progress report after every ten graded answers', async () => {
+    mockContextValue.state.sessionId = 'report-session';
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Correct. Next question.',
+      audioData: new ArrayBuffer(0),
+      verdict: 'correct',
+      needsConfirmation: false,
+      nextItemId: 'q-next',
+      nextQuestion: 'Next question?',
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    for (let answer = 0; answer < 10; answer += 1) {
+      await act(async () => {
+        await result.current.sendTextMessage(`Answer ${answer + 1}`);
+      });
+    }
+
+    await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledOnce());
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+        payload: expect.objectContaining({
+          content: expect.stringContaining('You answered ten questions.'),
+        }),
+      }));
+    });
   });
 
   it('ignores recognized Polly echo but stops playback for actual barging-in speech', async () => {

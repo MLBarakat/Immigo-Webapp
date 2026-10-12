@@ -109,7 +109,7 @@ export function ConversationHistory({
                     : 'bg-star-white text-deep-navy rounded-bl-sm border border-immigo-gray-200'
                 }`}
               >
-                <p>{msg.content}</p>
+                <p className="whitespace-pre-wrap">{msg.content}</p>
                 <p className={`text-[10px] mt-1.5 ${msg.role === 'user' ? 'text-immigo-gray-300' : 'text-immigo-gray-400'}`}>
                   {messageDate.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}
                 </p>

@@ -147,11 +147,24 @@ describe('ApiClient active route contracts', () => {
 
   it('accepts a successful session completion response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        date: '2026-09-10',
+        reportMarkdown: 'Progress report text',
+      }), { status: 200 })
+    ));
+
+    await expect(new ApiClient('token', 'https://api.example.test').completeSession('session-1'))
+      .resolves.toEqual({ date: '2026-09-10', reportMarkdown: 'Progress report text' });
+  });
+
+  it('rejects a completed session response that does not include the committed report', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, date: '2026-09-10' }), { status: 200 })
     ));
 
     await expect(new ApiClient('token', 'https://api.example.test').completeSession('session-1'))
-      .resolves.toBeUndefined();
+      .rejects.toMatchObject({ name: 'ApiError', status: 500 });
   });
 
   it('surfaces non-success session completion responses', async () => {

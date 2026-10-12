@@ -329,8 +329,10 @@ export class ApiClient {
     return { message: data.responseText, isNewUser: data.isNewUser };
   }
 
-  async completeSession(sessionId: string): Promise<void> {
-    if (!sessionId) return;
+  async completeSession(sessionId: string): Promise<{ date: string; reportMarkdown: string }> {
+    if (!sessionId) {
+      throw new Error('Cannot generate a progress report without a saved session ID.');
+    }
     try {
       logger.info(`[ApiClient] Dispatching completeSession for sessionId: ${sessionId}`);
       const fullUrl = this.buildRequestUrl('/complete-session');
@@ -365,9 +367,13 @@ export class ApiClient {
         throw new ApiError('Session completion failed.', res.status, errorData);
       }
       const data: unknown = await res.json();
-      if (!isRecord(data) || data.success !== true || typeof data.date !== 'string') {
+      if (!isRecord(data)
+        || data.success !== true
+        || typeof data.date !== 'string'
+        || typeof data.reportMarkdown !== 'string') {
         throw new ApiError('Structural Exception: Invalid session completion response.', 500, data);
       }
+      return { date: data.date, reportMarkdown: data.reportMarkdown };
     } catch (error) {
       logger.error(`[ApiClient] Failed to dispatch completeSession for ${sessionId}:`, undefined, {
         error: error instanceof Error ? error.message : String(error),

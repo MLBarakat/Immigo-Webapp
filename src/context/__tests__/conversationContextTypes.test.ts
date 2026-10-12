@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { conversationReducer, initialState, type Message } from '../conversationContextTypes';
 
 describe('assistant message lifecycle', () => {
+  it('retains a recognized interim transcript when an empty pause update arrives', () => {
+    const recognized = conversationReducer(initialState, {
+      type: 'SET_INTERIM_TRANSCRIPT',
+      payload: 'I think the answer is the executive branch',
+    });
+    const paused = conversationReducer(recognized, {
+      type: 'SET_INTERIM_TRANSCRIPT',
+      payload: '',
+    });
+
+    expect(paused.interimTranscript).toBe('I think the answer is the executive branch');
+  });
+
   it('does not add an empty assistant bubble while a user message is processing', () => {
     const userMessage: Message = {
       id: 'user-1',
@@ -27,5 +40,25 @@ describe('assistant message lifecycle', () => {
       payload: { content: ' appears next.' },
     });
     expect(streamed.conversationHistory.at(-1)?.content).toBe('The first word appears next.');
+  });
+
+  it('adds standalone assistant notices without redirecting subsequent streamed chunks', () => {
+    const withPendingReply = conversationReducer(initialState, {
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: 'reply-1', content: 'The answer' },
+    });
+    const withReport = conversationReducer(withPendingReply, {
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: 'report-1', content: 'Progress report' },
+    });
+    const streamed = conversationReducer(withReport, {
+      type: 'RECEIVE_ASSISTANT_CHUNK',
+      payload: { content: ' continues.' },
+    });
+
+    expect(streamed.conversationHistory.map(message => message.content)).toEqual([
+      'The answer continues.',
+      'Progress report',
+    ]);
   });
 });
