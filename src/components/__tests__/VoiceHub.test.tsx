@@ -131,6 +131,13 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     fireEvent.click(screen.getByRole('button', { name: /start voice recording session/i }));
     expect(mockStartSession).not.toHaveBeenCalled();
 
+    const dialog = screen.getByRole('dialog', { name: 'Microphone & voice' });
+    const overlay = dialog.parentElement;
+    expect(overlay?.className).toContain('fixed');
+    expect(overlay?.className).toContain('inset-0');
+    expect(overlay?.className).toContain('items-center');
+    expect(overlay?.parentElement).toBe(document.body);
+
     fireEvent.click(screen.getByRole('button', { name: 'I understand — start' }));
     await vi.waitFor(() => expect(onMicConsent).toHaveBeenCalledTimes(1));
     expect(mockStartSession).toHaveBeenCalledTimes(1);

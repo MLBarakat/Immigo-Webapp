@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Mic, X } from 'lucide-react';
 
@@ -10,15 +11,15 @@ interface MicConsentModalProps {
 
 export const MicConsentModal: React.FC<MicConsentModalProps> = ({ onAccept, onCancel, error }) => {
   const { t } = useTranslation('conversation');
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
-      <div className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in">
+      <div role="dialog" aria-modal="true" aria-labelledby="mic-consent-title" className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in">
         <header className="flex items-center justify-between p-6 border-b border-immigo-gray-200 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-art-blue-50">
               <Mic className="w-5 h-5 text-art-blue-600" aria-hidden="true" />
             </div>
-            <h2 className="text-xl font-bold text-deep-navy font-display">{t('workspace.voice.consentTitle')}</h2>
+            <h2 id="mic-consent-title" className="text-xl font-bold text-deep-navy font-display">{t('workspace.voice.consentTitle')}</h2>
           </div>
           <button onClick={onCancel} aria-label={t('workspace.voice.cancel')} className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
             <X className="w-6 h-6 text-immigo-gray-600" />
@@ -51,6 +52,7 @@ export const MicConsentModal: React.FC<MicConsentModalProps> = ({ onAccept, onCa
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
