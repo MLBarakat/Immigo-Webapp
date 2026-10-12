@@ -180,13 +180,13 @@ describe('AuthProvider', () => {
     await act(async () => {
       await result.current.updateProfile('New Name');
       await result.current.updatePassword('new-password');
-      await result.current.updateUserSettings({ font_size: 'large' });
+      await result.current.updateUserSettings({ font_size: 'large', mic_consent_version: '2026-08-26' });
     });
 
     expect(profileQuery.update).toHaveBeenCalledWith({ full_name: 'New Name' });
     expect(supabase.client.auth.updateUser).toHaveBeenNthCalledWith(1, { password: 'new-password' });
     expect(supabase.client.auth.updateUser).toHaveBeenNthCalledWith(2, {
-      data: { settings: expect.objectContaining({ font_size: 'large' }) },
+      data: { settings: expect.objectContaining({ font_size: 'large', mic_consent_version: '2026-08-26' }) },
     });
   });
 
@@ -235,7 +235,7 @@ describe('AuthProvider', () => {
     act(() => {
       settingsListener?.callback({
         eventType: 'UPDATE',
-        new: { ...settingsRow, theme: 'dark', font_size: 'large', language: 'fr-FR' },
+        new: { ...settingsRow, theme: 'dark', font_size: 'large', language: 'fr-FR', mic_consent_version: '2026-08-26' },
       });
       profileListener?.callback({
         eventType: 'UPDATE',
@@ -246,6 +246,7 @@ describe('AuthProvider', () => {
     expect(result.current.userSettings.theme).toBe('dark');
     expect(result.current.userSettings.font_size).toBe('large');
     expect(result.current.userSettings.language).toBe('fr-FR');
+    expect(result.current.userSettings.mic_consent_version).toBe('2026-08-26');
     expect(result.current.profile?.full_name).toBe('Updated Name');
 
     unmount();

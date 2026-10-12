@@ -24,6 +24,7 @@ export interface UserSettings {
   progress_report_frequency: ProgressReportFrequency;
   font_size?: FontSize;
   has_seen_welcome?: boolean;
+  mic_consent_version?: string | null;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -36,4 +37,5 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   progress_report_frequency: 'after_session',
   font_size: 'default',
   has_seen_welcome: false,
+  mic_consent_version: null,
 };

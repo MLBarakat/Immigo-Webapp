@@ -14,6 +14,7 @@ create table if not exists public.user_settings (
   progress_report_frequency text    not null default 'after_session',
   font_size             text                 default 'default',
   has_seen_welcome      boolean     not null default false,
+  mic_consent_version   text,
   updated_at            timestamptz not null default now()
 );
 

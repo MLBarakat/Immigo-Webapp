@@ -5,9 +5,10 @@ import { Mic, X } from 'lucide-react';
 interface MicConsentModalProps {
   onAccept: () => void;
   onCancel: () => void;
+  error?: string | null;
 }
 
-export const MicConsentModal: React.FC<MicConsentModalProps> = ({ onAccept, onCancel }) => {
+export const MicConsentModal: React.FC<MicConsentModalProps> = ({ onAccept, onCancel, error }) => {
   const { t } = useTranslation('conversation');
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
@@ -32,6 +33,7 @@ export const MicConsentModal: React.FC<MicConsentModalProps> = ({ onAccept, onCa
             <strong>{t('workspace.voice.consentAudioPrivacy')}</strong>
             {' '}{t('workspace.voice.consentPrivacyDetails')}
           </p>
+          {error && <p className="text-art-red-600" role="alert">{error}</p>}
         </main>
 
         <footer className="p-6 border-t border-immigo-gray-200 flex justify-end gap-3 flex-shrink-0">

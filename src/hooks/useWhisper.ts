@@ -333,6 +333,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       baseAssetPath: '/',
       onnxWASMBasePath: '/',
       model: 'legacy',
+      startOnLoad: false,
       // Use browser hardware echo cancellation so Polly playback is suppressed
       // before it reaches the VAD and interruption recognizer.
       getStream: async () => {

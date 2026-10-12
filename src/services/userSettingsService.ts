@@ -17,6 +17,7 @@ export interface UserSettingsRow {
   progress_report_frequency: string;
   font_size: string | null;
   has_seen_welcome: boolean;
+  mic_consent_version: string | null;
   updated_at: string;
 }
 
@@ -32,6 +33,7 @@ export function userSettingsRowToSettings(row: UserSettingsRow): Partial<UserSet
     progress_report_frequency: row.progress_report_frequency as UserSettings['progress_report_frequency'],
     font_size: (row.font_size ?? undefined) as UserSettings['font_size'],
     has_seen_welcome: row.has_seen_welcome,
+    mic_consent_version: row.mic_consent_version ?? null,
   };
 }
 
@@ -48,6 +50,7 @@ function settingsToRow(userId: string, settings: UserSettings): Omit<UserSetting
     progress_report_frequency: settings.progress_report_frequency,
     font_size: settings.font_size ?? null,
     has_seen_welcome: settings.has_seen_welcome ?? false,
+    mic_consent_version: settings.mic_consent_version ?? null,
   };
 }
 

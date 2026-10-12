@@ -23,6 +23,10 @@ interface CenterPanelProps {
   onClearError: () => void;
   onToggleFocus?: () => void;
   isFocusMode?: boolean;
+  micConsentVersion?: string | null;
+  onMicConsent?: () => Promise<void>;
+  micAccessError?: string | null;
+  onClearMicAccessError?: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -65,6 +69,10 @@ export function CenterPanel({
   onClearError,
   onToggleFocus,
   isFocusMode = false,
+  micConsentVersion,
+  onMicConsent,
+  micAccessError,
+  onClearMicAccessError,
 }: CenterPanelProps) {
   const [message, setMessage] = useState('');
   const { t } = useTranslation('conversation');
@@ -207,6 +215,10 @@ export function CenterPanel({
                   isSessionActive={isSessionActive}
                   onStartSession={onStartSession}
                   onEndSession={onEndSession}
+                  micConsentVersion={micConsentVersion}
+                  onMicConsent={onMicConsent}
+                  micAccessError={micAccessError}
+                  onClearMicAccessError={onClearMicAccessError}
                 />
               </div>
             </div>

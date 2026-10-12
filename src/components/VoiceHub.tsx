@@ -4,26 +4,35 @@ import { AppStatus } from '../context/conversationContextTypes';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
 import { logger } from '../logger';
 import { MicConsentModal } from './MicConsentModal';
-import { hasMicConsent, setMicConsent } from '../utils/micConsent';
+import { hasMicConsent } from '../utils/micConsent';
 
 interface VoiceHubProps {
   readonly status: AppStatus;
   readonly isSessionActive: boolean;
   readonly onStartSession: () => void;
   readonly onEndSession: () => void;
+  readonly micConsentVersion?: string | null;
+  readonly onMicConsent?: () => Promise<void>;
+  readonly micAccessError?: string | null;
+  readonly onClearMicAccessError?: () => void;
 }
 
 export function VoiceHub({ 
   status, 
   isSessionActive, 
   onStartSession, 
-  onEndSession 
+  onEndSession,
+  micConsentVersion = null,
+  onMicConsent,
+  micAccessError = null,
+  onClearMicAccessError,
 }: VoiceHubProps): JSX.Element {
   const { t } = useTranslation('conversation');
   
   // Track user interaction patterns to block adversarial click spamming
   const lastInteractionTimestampRef = useRef<number>(0);
   const [showMicConsent, setShowMicConsent] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
   const DEBOUNCE_DELAY_MS = 800; // Rigid interaction safety threshold window
 
   const handleButtonClick = useCallback(() => {
@@ -42,36 +51,49 @@ export function VoiceHub({
     }
 
     lastInteractionTimestampRef.current = currentTimestamp;
+    onClearMicAccessError?.();
+    setConsentError(null);
 
     if (isSessionActive) {
       logger.info('VoiceHub: manual user intervention captured. Discontinuing speech session recording.');
       onEndSession();
     } else {
       // One-time microphone/voice disclosure before the first recording (E2 consent).
-      if (!hasMicConsent()) {
+      if (!hasMicConsent(micConsentVersion)) {
         setShowMicConsent(true);
         return;
       }
       logger.info('VoiceHub: manual user intervention captured. Launching speech session recording.');
       onStartSession();
     }
-  }, [isSessionActive, status, onStartSession, onEndSession]);
+  }, [isSessionActive, status, onStartSession, onEndSession, micConsentVersion, onClearMicAccessError]);
 
-  const handleMicConsentAccept = useCallback(() => {
-    setMicConsent();
-    setShowMicConsent(false);
-    logger.info('VoiceHub: microphone consent acknowledged. Launching speech session recording.');
-    onStartSession();
-  }, [onStartSession]);
+  const handleMicConsentAccept = useCallback(async () => {
+    if (!onMicConsent) {
+      setConsentError('Unable to save microphone consent. Please try again.');
+      logger.error('Microphone consent cannot be accepted because persistence is unavailable.');
+      return;
+    }
+    try {
+      await onMicConsent();
+      setShowMicConsent(false);
+      logger.info('VoiceHub: microphone consent acknowledged. Launching speech session recording.');
+      onStartSession();
+    } catch (error) {
+      setConsentError(error instanceof Error ? error.message : 'Unable to save microphone consent. Please try again.');
+      logger.error('Failed to persist microphone consent.', { error: String(error) });
+    }
+  }, [onMicConsent, onStartSession]);
 
   const isProcessingActive = status === 'processing';
 
   return (
     <>
       {showMicConsent && (
-        <MicConsentModal onAccept={handleMicConsentAccept} onCancel={() => setShowMicConsent(false)} />
+        <MicConsentModal onAccept={() => { void handleMicConsentAccept(); }} onCancel={() => { setShowMicConsent(false); setConsentError(null); }} error={consentError} />
       )}
-    <div className="flex items-center justify-center" role="region" aria-label={t('workspace.voice.region')}>
+    <div className="flex flex-col items-center justify-center gap-1" role="region" aria-label={t('workspace.voice.region')}>
+      {micAccessError && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{micAccessError}</p>}
       <button 
         onClick={handleButtonClick} 
         disabled={isProcessingActive}

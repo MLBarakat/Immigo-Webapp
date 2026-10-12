@@ -38,6 +38,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
         isSessionActive={false}
         onStartSession={mockStartSession}
         onEndSession={mockEndSession}
+        onMicConsent={vi.fn().mockResolvedValue(undefined)}
       />
     );
 
@@ -62,6 +63,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
         isSessionActive={true}
         onStartSession={mockStartSession}
         onEndSession={mockEndSession}
+        onMicConsent={vi.fn().mockResolvedValue(undefined)}
       />
     );
 
@@ -79,7 +81,6 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
   });
 
   it('should suppress rapid click spamming patterns to safeguard background audio recording channels', () => {
-    localStorage.setItem('immigo_mic_consent_version', MIC_CONSENT_VERSION);
     let mockTime = 1000;
     vi.spyOn(performance, 'now').mockImplementation(() => mockTime);
 
@@ -89,6 +90,8 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
         isSessionActive={false}
         onStartSession={mockStartSession}
         onEndSession={mockEndSession}
+        micConsentVersion={MIC_CONSENT_VERSION}
+        onMicConsent={vi.fn().mockResolvedValue(undefined)}
       />
     );
 
@@ -111,5 +114,60 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     // Verify inputs are accepted normally after the safety window expires
     fireEvent.click(interactiveButton);
     expect(mockStartSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for explicit consent before starting the first microphone session', async () => {
+    const onMicConsent = vi.fn().mockResolvedValue(undefined);
+    render(
+      <VoiceHub
+        status="idle"
+        isSessionActive={false}
+        onStartSession={mockStartSession}
+        onEndSession={mockEndSession}
+        onMicConsent={onMicConsent}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /start voice recording session/i }));
+    expect(mockStartSession).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'I understand — start' }));
+    await vi.waitFor(() => expect(onMicConsent).toHaveBeenCalledTimes(1));
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts a session without showing consent when the user has already consented', () => {
+    render(
+      <VoiceHub
+        status="idle"
+        isSessionActive={false}
+        onStartSession={mockStartSession}
+        onEndSession={mockEndSession}
+        micConsentVersion={MIC_CONSENT_VERSION}
+        onMicConsent={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /start voice recording session/i }));
+    expect(screen.queryByText(/I understand — start/i)).toBeNull();
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start recording if saving the consent fails', async () => {
+    render(
+      <VoiceHub
+        status="idle"
+        isSessionActive={false}
+        onStartSession={mockStartSession}
+        onEndSession={mockEndSession}
+        onMicConsent={vi.fn().mockRejectedValue(new Error('Could not save consent.'))}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /start voice recording session/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'I understand — start' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not save consent.');
+    expect(mockStartSession).not.toHaveBeenCalled();
   });
 });
