@@ -111,6 +111,9 @@ describe('CenterPanel text interview flow', () => {
     expect(input.rows).toBe(2);
     expect(input.parentElement?.querySelector('[aria-label="Send message"]')).not.toBeNull();
     expect(input.parentElement?.querySelector('[aria-label="Voice microphone"]')).not.toBeNull();
+    const controls = input.parentElement?.querySelector('.absolute');
+    expect(controls?.className).toContain('top-1/2');
+    expect(controls?.className).toContain('-translate-y-1/2');
   });
 
   it('activates voice conversation only when the microphone is clicked', () => {

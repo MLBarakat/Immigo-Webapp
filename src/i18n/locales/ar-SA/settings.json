@@ -10,7 +10,6 @@
     "description": "اختر مظهر ImmiGo."
   },
   "theme": {
-    "system": "النظام",
     "light": "فاتح",
     "dark": "داكن"
   },

@@ -123,7 +123,7 @@
     "cancel": "إلغاء",
     "saveFailed": "فشل الحفظ",
     "appearance": { "title": "المظهر", "description": "اختر مظهر ImmiGo." },
-    "theme": { "system": "النظام", "light": "فاتح", "dark": "داكن" },
+    "theme": { "light": "فاتح", "dark": "داكن" },
     "font": { "title": "حجم النص", "description": "اضبط حجم النص في التطبيق بالكامل (5 مستويات).", "extraSmall": "صغير جدا", "small": "صغير", "medium": "متوسط", "large": "كبير", "extraLarge": "كبير جدا" },
     "voice": { "title": "صوت الذكاء الاصطناعي", "description": "اختر صوت شريك المحادثة بالذكاء الاصطناعي." },
     "feedback": { "title": "ملاحظات مباشرة", "description": "احصل على نصائح فورية أثناء المحادثة.", "toggle": "تبديل الملاحظات المباشرة" },

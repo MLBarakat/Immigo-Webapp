@@ -125,7 +125,7 @@
     "cancel": "Cancelar",
     "saveFailed": "No se pudo guardar",
     "appearance": { "title": "Apariencia", "description": "Elige cómo se ve ImmiGo." },
-    "theme": { "system": "Sistema", "light": "Claro", "dark": "Oscuro" },
+    "theme": { "light": "Claro", "dark": "Oscuro" },
     "font": { "title": "Tamaño del texto", "description": "Ajusta la escala de texto de toda la aplicación (5 niveles).", "extraSmall": "Muy pequeño", "small": "Pequeño", "medium": "Mediano", "large": "Grande", "extraLarge": "Muy grande" },
     "voice": { "title": "Voz de IA", "description": "Selecciona la voz de tu compañero de conversación de IA." },
     "feedback": { "title": "Retroalimentación en vivo", "description": "Recibe consejos en tiempo real durante la conversación.", "toggle": "Activar o desactivar retroalimentación en vivo" },

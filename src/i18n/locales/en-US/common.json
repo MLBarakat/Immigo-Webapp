@@ -129,7 +129,6 @@
       "description": "Choose how ImmiGo looks."
     },
     "theme": {
-      "system": "System",
       "light": "Light",
       "dark": "Dark"
     },

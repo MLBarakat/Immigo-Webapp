@@ -27,7 +27,7 @@ import type { SimulationMode } from './context/conversationContextTypes';
 import { DisplayUser } from './types/user';
 import { UserSettings, FontSize, ThemeOption } from './types/settings';
 import { applyFontSize } from './utils/fontSize';
-import { applyTheme, subscribeToSystemThemeChange } from './utils/theme';
+import { applyTheme } from './utils/theme';
 import { MIC_CONSENT_VERSION, hasMicConsent } from './utils/micConsent';
 import { createMicrophoneStream } from './utils/audioUtils';
 import { logger } from './logger';
@@ -61,10 +61,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 
   useEffect(() => {
     const activeTheme = previewTheme ?? userSettings.theme;
-    const updateTheme = () => applyTheme(activeTheme);
-    updateTheme();
-    if (activeTheme !== 'system') return;
-    return subscribeToSystemThemeChange(updateTheme);
+    applyTheme(activeTheme);
   }, [previewTheme, userSettings.theme]);
 
   useEffect(() => {

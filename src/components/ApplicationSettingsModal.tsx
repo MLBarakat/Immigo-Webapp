@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import type { UserSettings, ThemeOption } from '../types/settings';
 import { FONT_SIZES, FONT_SIZE_LABELS, normalizeFontSize, type CanonicalFontSize } from '../utils/fontSize';
-import { applyTheme } from '../utils/theme';
+import { applyTheme, normalizeTheme } from '../utils/theme';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface Voice {
@@ -22,7 +22,7 @@ interface ApplicationSettingsModalProps {
   isDesktop: boolean;
 }
 
-const THEME_OPTION_VALUES: ThemeOption[] = ['system', 'light', 'dark'];
+const THEME_OPTION_VALUES: ThemeOption[] = ['light', 'dark'];
 
 const FONT_SIZE_NAME_KEYS: Record<CanonicalFontSize, string> = {
   'extra-small': 'font.extraSmall',
@@ -51,17 +51,17 @@ const SettingRow: React.FC<{ title: string; description: string; children: React
 
 export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, onThemePreview, pollyVoices = [], isDesktop }) => {
   const { t } = useTranslation('settings');
-  const defaults = useMemo((): UserSettings => ({ language: 'en-US', theme: 'system', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default', has_seen_welcome: false }), [pollyVoices]);
-  const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings });
+  const defaults = useMemo((): UserSettings => ({ language: 'en-US', theme: 'light', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default', has_seen_welcome: false }), [pollyVoices]);
+  const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings, theme: normalizeTheme(settings.theme ?? defaults.theme) });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const modalRef = useFocusTrap(isOpen);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (isOpen) { setDraft({ ...defaults, ...settings }); } }, [isOpen, settings, defaults]);
+  useEffect(() => { if (isOpen) { setDraft({ ...defaults, ...settings, theme: normalizeTheme(settings.theme ?? defaults.theme) }); } }, [isOpen, settings, defaults]);
 
   const handleClose = useCallback(() => {
-    applyTheme(settings.theme ?? defaults.theme);
+    applyTheme(normalizeTheme(settings.theme ?? defaults.theme));
     onThemePreview(null);
     onClose();
   }, [defaults.theme, onClose, onThemePreview, settings.theme]);

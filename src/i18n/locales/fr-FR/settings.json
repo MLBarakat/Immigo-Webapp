@@ -10,7 +10,6 @@
     "description": "Choisissez l'apparence d'ImmiGo."
   },
   "theme": {
-    "system": "Système",
     "light": "Clair",
     "dark": "Sombre"
   },

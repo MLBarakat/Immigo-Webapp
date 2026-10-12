@@ -123,7 +123,7 @@
     "cancel": "Annuler",
     "saveFailed": "Échec de l'enregistrement",
     "appearance": { "title": "Apparence", "description": "Choisissez l'apparence d'ImmiGo." },
-    "theme": { "system": "Système", "light": "Clair", "dark": "Sombre" },
+    "theme": { "light": "Clair", "dark": "Sombre" },
     "font": { "title": "Taille du texte", "description": "Ajustez l'échelle du texte dans toute l'application (5 niveaux).", "extraSmall": "Très petit", "small": "Petit", "medium": "Moyen", "large": "Grand", "extraLarge": "Très grand" },
     "voice": { "title": "Voix IA", "description": "Sélectionnez la voix de votre partenaire de conversation IA." },
     "feedback": { "title": "Retour en direct", "description": "Recevez des conseils en temps réel pendant votre conversation.", "toggle": "Activer ou désactiver le retour en direct" },

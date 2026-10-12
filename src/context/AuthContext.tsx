@@ -9,6 +9,7 @@ import { logger } from '../logger';
 import { AuthContext, SignUpPayload } from './authContextTypes';
 import { UserSettingsService, userSettingsRowToSettings } from '../services/userSettingsService';
 import type { UserSettingsRow } from '../services/userSettingsService';
+import { normalizeTheme } from '../utils/theme';
 
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
@@ -84,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       const mergedSettings: UserSettings = {
         ...DEFAULT_USER_SETTINGS,
         ...remoteSettings,
+        theme: normalizeTheme(remoteSettings.theme),
         font_size: remoteSettings.font_size ?? getStoredFontSize(),
       };
       setUserSettings(mergedSettings);

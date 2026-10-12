@@ -6,7 +6,7 @@
 create table if not exists public.user_settings (
   user_id               uuid primary key references auth.users(id) on delete cascade,
   language              text        not null default 'en-US',
-  theme                 text        not null default 'system',
+  theme                 text        not null default 'light',
   ai_voice_id           text,
   live_feedback_enabled boolean     not null default true,
   mic_mode              text        not null default 'voice_activity',
@@ -22,7 +22,7 @@ create table if not exists public.user_settings (
 -- missing columns. Keep this migration safe to rerun from the SQL editor.
 alter table public.user_settings
   add column if not exists language text not null default 'en-US',
-  add column if not exists theme text not null default 'system',
+  add column if not exists theme text not null default 'light',
   add column if not exists ai_voice_id text,
   add column if not exists live_feedback_enabled boolean not null default true,
   add column if not exists mic_mode text not null default 'voice_activity',

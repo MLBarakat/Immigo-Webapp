@@ -180,7 +180,7 @@ describe('i18n configuration and utilities', () => {
       retryInitialization: vi.fn(),
       userSettings: {
         language: 'fr-FR',
-        theme: 'system',
+        theme: 'light',
         ai_voice_id: 'Celine',
         live_feedback_enabled: true,
         mic_mode: 'voice_activity',

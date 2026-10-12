@@ -1,4 +1,4 @@
-export type ThemeOption = 'system' | 'light' | 'dark';
+export type ThemeOption = 'light' | 'dark';
 export type MicMode = 'voice_activity' | 'push_to_talk';
 export type BargeIn = 'relaxed' | 'balanced' | 'aggressive';
 export type ProgressReportFrequency = 'after_session' | 'daily' | 'weekly' | 'monthly';
@@ -29,7 +29,7 @@ export interface UserSettings {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'en-US',
-  theme: 'system',
+  theme: 'light',
   ai_voice_id: 'Joanna',
   live_feedback_enabled: true,
   mic_mode: 'voice_activity',

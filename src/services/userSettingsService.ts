@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { DEFAULT_USER_SETTINGS, UserSettings } from '../types/settings';
 import { logger } from '../logger';
+import { normalizeTheme } from '../utils/theme';
 
 /**
  * Shape of a row in the `user_settings` Supabase table.
@@ -25,7 +26,7 @@ export interface UserSettingsRow {
 export function userSettingsRowToSettings(row: UserSettingsRow): Partial<UserSettings> {
   return {
     language: row.language ?? DEFAULT_USER_SETTINGS.language,
-    theme: row.theme as UserSettings['theme'],
+    theme: normalizeTheme(row.theme),
     ai_voice_id: row.ai_voice_id ?? undefined,
     live_feedback_enabled: row.live_feedback_enabled,
     mic_mode: row.mic_mode as UserSettings['mic_mode'],

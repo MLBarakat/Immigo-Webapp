@@ -200,7 +200,7 @@ export function CenterPanel({
                 aria-label={t('workspace.center.inputAria')}
               />
 
-              <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1.5">
+              <div className="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-1.5">
                 <button
                   onClick={handleSend}
                   disabled={isEmpty || isVoiceSessionActive}
