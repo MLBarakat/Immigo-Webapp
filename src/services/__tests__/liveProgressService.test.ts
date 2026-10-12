@@ -1,12 +1,23 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { computeLiveStats } from '../liveProgressService';
+import { computeLiveStats, getUtcDayBounds } from '../liveProgressService';
 
 describe('computeLiveStats', () => {
   it('returns all zeros / empty for no answers yet', () => {
     const stats = computeLiveStats([]);
     expect(stats).toEqual({
       answered: 0, correct: 0, incorrect: 0, partial: 0, accuracyPct: 0, missedItemIds: [],
+    });
+
+    describe('getUtcDayBounds', () => {
+      it('returns a UTC day range that is identical regardless of the input offset', () => {
+        const bounds = getUtcDayBounds(new Date('2026-10-12T23:30:00-05:00'));
+
+        expect(bounds).toEqual({
+          start: '2026-10-13T00:00:00.000Z',
+          end: '2026-10-14T00:00:00.000Z',
+        });
+      });
     });
   });
 

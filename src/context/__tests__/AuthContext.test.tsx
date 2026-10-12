@@ -60,6 +60,16 @@ function createSupabaseMock(initialSession: Session | null = null) {
       return channel;
     }),
   };
+  let activeSessionRow: { user_id: string; device_id: string; updated_at?: string } | null = null;
+  const activeSessionQuery = {
+    upsert: vi.fn(async (row: { user_id: string; device_id: string; updated_at?: string }) => {
+      activeSessionRow = row;
+      return { error: null };
+    }),
+    select: vi.fn(() => activeSessionQuery),
+    eq: vi.fn(() => activeSessionQuery),
+    maybeSingle: vi.fn(async () => ({ data: activeSessionRow, error: null })),
+  };
   const client = {
     auth: {
       getSession: vi.fn().mockResolvedValue({ data: { session: initialSession }, error: null }),
@@ -69,14 +79,14 @@ function createSupabaseMock(initialSession: Session | null = null) {
       }),
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
-      signOut: vi.fn(),
+      signOut: vi.fn().mockResolvedValue({ error: null }),
     },
-    from: vi.fn(),
+    from: vi.fn((table: string) => table === 'active_user_sessions' ? activeSessionQuery : undefined),
     channel: vi.fn(() => channel),
     removeChannel: vi.fn().mockResolvedValue('ok'),
   };
 
-  return { client, authStateHandlers, realtimeHandlers };
+  return { client, authStateHandlers, realtimeHandlers, activeSessionQuery };
 }
 
 function wrapper({ children }: { children: ReactNode }): JSX.Element {
@@ -125,6 +135,7 @@ describe('AuthProvider', () => {
       upsert: vi.fn().mockResolvedValue({ error: null }),
     };
     supabase.client.from.mockImplementation((table: string) => {
+      if (table === 'active_user_sessions') return supabase.activeSessionQuery;
       if (table === 'user_settings') return settingsQuery;
       const query = {
         select: () => query,
@@ -168,7 +179,11 @@ describe('AuthProvider', () => {
       }),
       upsert: vi.fn().mockResolvedValue({ error: null }),
     };
-    supabase.client.from.mockImplementation((table: string) => table === 'user_settings' ? settingsQuery : profileQuery);
+    supabase.client.from.mockImplementation((table: string) => (
+      table === 'active_user_sessions' ? supabase.activeSessionQuery
+        : table === 'user_settings' ? settingsQuery
+          : profileQuery
+    ));
     supabase.client.auth.updateUser = vi.fn()
       .mockResolvedValueOnce({ error: null })
       .mockResolvedValueOnce({ data: { user: session.user }, error: null });
@@ -220,12 +235,16 @@ describe('AuthProvider', () => {
       }),
       upsert: vi.fn().mockResolvedValue({ error: null }),
     };
-    supabase.client.from.mockImplementation((table: string) => table === 'user_settings' ? settingsQuery : profileQuery);
+    supabase.client.from.mockImplementation((table: string) => (
+      table === 'active_user_sessions' ? supabase.activeSessionQuery
+        : table === 'user_settings' ? settingsQuery
+          : profileQuery
+    ));
     getSupabaseClientMock.mockResolvedValue(supabase.client);
 
     const { result, unmount } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.profile?.full_name).toBe('Old Name'));
-    await waitFor(() => expect(supabase.realtimeHandlers).toHaveLength(2));
+    await waitFor(() => expect(supabase.realtimeHandlers).toHaveLength(3));
 
     const settingsListener = supabase.realtimeHandlers.find(({ filter }) => filter.table === 'user_settings');
     const profileListener = supabase.realtimeHandlers.find(({ filter }) => filter.table === 'profiles');
@@ -237,6 +256,7 @@ describe('AuthProvider', () => {
         eventType: 'UPDATE',
         new: { ...settingsRow, theme: 'dark', font_size: 'large', language: 'fr-FR', mic_consent_version: '2026-08-26' },
       });
+
       profileListener?.callback({
         eventType: 'UPDATE',
         new: { ...profile, full_name: 'Updated Name', language: 'fr-FR' },
@@ -251,6 +271,50 @@ describe('AuthProvider', () => {
 
     unmount();
     expect(supabase.client.removeChannel).toHaveBeenCalled();
+  });
+
+  it('warns and signs out locally when another device claims the account', async () => {
+    const session = createSession('user-a');
+    const supabase = createSupabaseMock(session);
+    const profileQuery = {
+      select: () => profileQuery,
+      eq: () => profileQuery,
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    const settingsQuery = {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      }),
+      upsert: vi.fn().mockResolvedValue({ error: null }),
+    };
+    supabase.client.from.mockImplementation((table: string) => {
+      if (table === 'active_user_sessions') return supabase.activeSessionQuery;
+      if (table === 'user_settings') return settingsQuery;
+      return profileQuery;
+    });
+    getSupabaseClientMock.mockResolvedValue(supabase.client);
+
+    const { result, unmount } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.user?.id).toBe('user-a'));
+    await waitFor(() => expect(supabase.activeSessionQuery.upsert).toHaveBeenCalledOnce());
+    const activeSessionListener = supabase.realtimeHandlers.find(({ filter }) => filter.table === 'active_user_sessions');
+
+    act(() => {
+      activeSessionListener?.callback({
+        eventType: 'UPDATE',
+        new: { user_id: 'user-a', device_id: 'another-device' },
+      });
+    });
+
+    expect(result.current.sessionReplacementPending).toBe(true);
+    await act(async () => {
+      await result.current.logoutReplacedSession();
+    });
+    expect(supabase.client.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(result.current.sessionReplacementPending).toBe(false);
+    unmount();
   });
 
   it('persists language changes to user_settings, profile, metadata, and context cache', async () => {
@@ -292,7 +356,9 @@ describe('AuthProvider', () => {
     };
 
     supabase.client.from.mockImplementation((table: string) => (
-      table === 'user_settings' ? userSettingsQuery : profileQuery
+      table === 'active_user_sessions' ? supabase.activeSessionQuery
+        : table === 'user_settings' ? userSettingsQuery
+          : profileQuery
     ));
     supabase.client.auth.updateUser = vi.fn().mockResolvedValue({ data: { user: session.user }, error: null });
     getSupabaseClientMock.mockResolvedValue(supabase.client);

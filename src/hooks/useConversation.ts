@@ -5,7 +5,7 @@ import { SimulationMode } from '../context/conversationContextTypes';
 import { ApiClient, ApiError } from '../services/apiClient';
 import { Message } from '../context/conversationContextTypes';
 import { ChatPersistenceService } from '../services/chatPersistenceService';
-import { fetchLiveSessionStats } from '../services/liveProgressService';
+import { fetchDailyProgressStats } from '../services/liveProgressService';
 import { useWhisper } from './useWhisper';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
@@ -74,6 +74,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // graded against the correct item (server-owned grounded grading).
   const currentItemIdRef = useRef<string | null>(null);
   const openingResponseRef = useRef(false);
+  const reportMilestoneDateRef = useRef(new Date().toISOString().slice(0, 10));
   const hydratedHistoryUserIdRef = useRef<string | null>(null);
   const skipNextHistoryCacheWriteRef = useRef(false);
   const historyChangedBeforeHydrationRef = useRef(false);
@@ -86,10 +87,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // While set (and matching the current item), the next answer is sent as a
   // confirmation retry so the server commits the honest final verdict.
   const awaitingConfirmationRef = useRef<string | null>(null);
-  // Counts GRADED turns this session, to trigger a periodic narrative-report
-  // refresh every 10 answers (in addition to the session-end refresh) without
-  // regenerating the expensive LLM narrative after every single question.
-  const answeredCountRef = useRef<number>(0);
+  const lastReportedDailyMilestoneRef = useRef<number>(0);
   // Guards the on-screen welcome banner fetch to exactly once per app load —
   // it is independent of starting/ending a practice session (no audio, no
   // recording side effects), so it must not re-fire on every render or on
@@ -238,6 +236,31 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
     dispatch({ type: 'SET_INTERIM_TRANSCRIPT', payload: displayTranscript });
   }, [displayTranscript, dispatch]);
+
+  useEffect(() => {
+    if (!userId) {
+      dispatch({ type: 'SET_LIVE_STATS', payload: null });
+      return;
+    }
+
+    let isMounted = true;
+    const refreshDailyStats = async () => {
+      const stats = await fetchDailyProgressStats(userId);
+      if (isMounted && stats) dispatch({ type: 'SET_LIVE_STATS', payload: stats });
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void refreshDailyStats();
+    };
+
+    void refreshDailyStats();
+    const refreshTimer = window.setInterval(() => void refreshDailyStats(), 30_000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      isMounted = false;
+      window.clearInterval(refreshTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [userId, dispatch]);
 
   useEffect(() => {
     const activePlayback = audioPlaybackRef.current;
@@ -420,7 +443,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     const validatedText = text.replace(/\s+/g, ' ').trim();
     if (!validatedText) return;
     pendingTranscriptClearRef.current = true;
-    const isOpeningResponse = openingResponseRef.current;
+    const isOpeningResponse = openingResponseRef.current || !currentItemIdRef.current;
     openingResponseRef.current = false;
     silenceNudgeControllerRef.current?.abort();
     silenceNudgeControllerRef.current = null;
@@ -567,26 +590,21 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // answer, also refresh the (expensive) narrative report mid-session so
       // it doesn't go stale for the whole session, without regenerating it
       // after every single question.
-      if (verdict !== null) {
-        answeredCountRef.current += 1;
-        if (activeSessionId) {
-          void fetchLiveSessionStats(activeSessionId).then((stats) => {
-            if (stats) dispatch({ type: 'SET_LIVE_STATS', payload: stats });
-          });
+      if (verdict !== null && userId) {
+        const todayUtc = new Date().toISOString().slice(0, 10);
+        if (reportMilestoneDateRef.current !== todayUtc) {
+          reportMilestoneDateRef.current = todayUtc;
+          lastReportedDailyMilestoneRef.current = 0;
         }
-        if (answeredCountRef.current % 10 === 0) {
-          if (activeSessionId) {
-            void generatePeriodicProgressReport(activeSessionId);
-          } else {
-            dispatch({
-              type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
-              payload: {
-                assistantMessageId: `progress-report-error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                content: 'I could not save your progress report because this session is not linked to a saved account session.',
-              },
-            });
+        void fetchDailyProgressStats(userId).then((stats) => {
+          if (!stats) return;
+          dispatch({ type: 'SET_LIVE_STATS', payload: stats });
+          if (stats.answered > 0 && stats.answered % 10 === 0
+            && stats.answered > lastReportedDailyMilestoneRef.current) {
+            lastReportedDailyMilestoneRef.current = stats.answered;
+            if (activeSessionId) void generatePeriodicProgressReport(activeSessionId);
           }
-        }
+        });
       }
 
       // Persist Assistant Message to Supabase
@@ -852,7 +870,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       sessionIdRef.current = null;
       currentItemIdRef.current = null;
       awaitingConfirmationRef.current = null;
-      answeredCountRef.current = 0;
       openingResponseRef.current = true;
     }
 
@@ -1009,7 +1026,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     voiceSessionRef.current = false;
     setIsVoiceSessionActive(false);
     awaitingConfirmationRef.current = null;
-    answeredCountRef.current = 0;
     dispatch({ type: 'SET_SESSION_ID', payload: null });
     analytics.track('session_ended', { duration_seconds: conversationState.sessionTime, mode: 'voice' });
 
@@ -1110,7 +1126,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     voiceSessionRef.current = false;
     setIsVoiceSessionActive(false);
     awaitingConfirmationRef.current = null;
-    answeredCountRef.current = 0;
     dispatch({ type: 'SET_SESSION_ID', payload: null });
     dispatch({ type: 'CLEAR_CONVERSATION' });
     analytics.track('conversation_cleared');

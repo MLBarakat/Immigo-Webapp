@@ -38,4 +38,20 @@ describe('supabase migrations define the schema the code relies on', () => {
     expect(sql).toMatch(/create table[\s\S]*sessions/);
     expect(sql).toMatch(/create table[\s\S]*messages/);
   });
+
+  it('defines the single-active-device session table with row-level security', () => {
+    expect(sql).toMatch(/create table if not exists active_user_sessions/);
+    expect(sql).toMatch(/alter table active_user_sessions enable row level security/);
+  });
+
+  it('restricts active session reads and claims to the authenticated owner', () => {
+    expect(sql).toMatch(/on active_user_sessions[\s\S]*for select[\s\S]*using \(auth\.uid\(\) = user_id\)/);
+    expect(sql).toMatch(/on active_user_sessions[\s\S]*for insert[\s\S]*with check \(auth\.uid\(\) = user_id\)/);
+    expect(sql).toMatch(/on active_user_sessions[\s\S]*for update[\s\S]*using \(auth\.uid\(\) = user_id\)[\s\S]*with check \(auth\.uid\(\) = user_id\)/);
+  });
+
+  it('publishes active session ownership changes to Supabase Realtime', () => {
+    expect(sql).toContain("tablename = 'active_user_sessions'");
+    expect(sql).toMatch(/alter publication supabase_realtime add table public\.active_user_sessions/);
+  });
 });

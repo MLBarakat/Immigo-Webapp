@@ -39,6 +39,7 @@ export function VoiceHub({
   const lastInteractionTimestampRef = useRef<number>(0);
   const [showMicConsent, setShowMicConsent] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
+  const [showLoadingProgress, setShowLoadingProgress] = useState(false);
   const DEBOUNCE_DELAY_MS = 800; // Rigid interaction safety threshold window
   const isListenerLoading = isModelLoading || !isVadReady;
 
@@ -100,7 +101,7 @@ export function VoiceHub({
       {showMicConsent && (
         <MicConsentModal onAccept={() => { void handleMicConsentAccept(); }} onCancel={() => { setShowMicConsent(false); setConsentError(null); }} error={consentError} />
       )}
-    <div className="flex flex-col items-center justify-center gap-1" role="region" aria-label={t('workspace.voice.region')}>
+    <div className="relative flex flex-col items-center justify-center gap-1" role="region" aria-label={t('workspace.voice.region')}>
       {isListenerLoading && !isSessionActive && (
         <span className="absolute sr-only" role="status">
           {t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })}
@@ -109,6 +110,10 @@ export function VoiceHub({
       {micAccessError && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{micAccessError}</p>}
       <button 
         onClick={handleButtonClick} 
+        onMouseEnter={() => setShowLoadingProgress(true)}
+        onMouseLeave={() => setShowLoadingProgress(false)}
+        onFocus={() => setShowLoadingProgress(true)}
+        onBlur={() => setShowLoadingProgress(false)}
         disabled={isButtonDisabled}
         className={`w-11 h-11 flex items-center justify-center rounded-full transition-transform active:scale-95 duration-200 ${
           isButtonDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
@@ -126,6 +131,14 @@ export function VoiceHub({
       >
         <AnimatedStatusButton status={status} />
       </button>
+      {isListenerLoading && !isSessionActive && showLoadingProgress && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-full right-0 z-20 mb-2 whitespace-nowrap rounded-md bg-deep-navy px-2.5 py-1.5 text-xs font-semibold text-star-white shadow-lg"
+        >
+          {t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })}
+        </span>
+      )}
     </div>
     </>
   );

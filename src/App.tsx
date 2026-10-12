@@ -398,7 +398,15 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 }
 
 function AppContent() {
-  const { session, loading, initializationError, retryInitialization } = useAuth();
+  const {
+    session,
+    loading,
+    initializationError,
+    retryInitialization,
+    sessionReplacementPending,
+    sessionReplacementError,
+    logoutReplacedSession,
+  } = useAuth();
   const { t } = useTranslation();
   const accessToken = session?.access_token;
 
@@ -413,6 +421,31 @@ function AppContent() {
       return null;
     }
   }, [accessToken]);
+
+  if (sessionReplacementPending) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="session-replaced-title">
+        <div className="w-full max-w-md rounded-2xl bg-star-white p-6 shadow-2xl dark:bg-gray-800">
+          <h2 id="session-replaced-title" className="text-lg font-bold text-deep-navy dark:text-gray-100">
+            {t('auth.sessionReplaced.title')}
+          </h2>
+          <p className="mt-3 text-sm leading-relaxed text-immigo-gray-700 dark:text-gray-300">
+            {t('auth.sessionReplaced.message')}
+          </p>
+          {sessionReplacementError && (
+            <p className="mt-3 text-sm text-art-red-600" role="alert">{sessionReplacementError}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => { void logoutReplacedSession().catch(() => undefined); }}
+            className="mt-5 rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-star-white hover:bg-art-blue-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500 focus:ring-offset-2"
+          >
+            {t('auth.sessionReplaced.action')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

@@ -69,6 +69,11 @@
       "message": "Hemos enviado un enlace de verificación a {{email}}. Revisa tu bandeja de entrada y haz clic en el enlace de activación para comenzar tu recorrido.",
       "backToLogin": "Volver a la pantalla de inicio de sesión"
     },
+    "sessionReplaced": {
+      "title": "Se detectó un inicio de sesión en otro dispositivo",
+      "message": "Tu cuenta se inició en otro dispositivo. Por seguridad, esta sesión se cerrará en breve. Puedes volver a iniciar sesión aquí si quieres seguir usando este dispositivo.",
+      "action": "Cerrar sesión ahora"
+    },
     "loginTitle": "Bienvenido de nuevo",
     "loginSubtitle": "Inicia sesión para continuar tu recorrido.",
     "signupTitle": "Crea tu cuenta",

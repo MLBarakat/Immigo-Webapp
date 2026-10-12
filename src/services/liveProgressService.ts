@@ -44,30 +44,38 @@ export function computeLiveStats(rows: GradedRow[]): LiveSessionStats {
   return { answered, correct, incorrect, partial, accuracyPct, missedItemIds };
 }
 
+export function getUtcDayBounds(now = new Date()): { start: string; end: string } {
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
 /**
- * Reads this session's graded_answers directly (RLS already scopes rows to
- * the authenticated user — same Supabase client/session ChatPersistenceService
- * uses). Returns null on any failure rather than throwing: this is a "nice to
- * have, refresh often" read, never something that should break the turn loop.
+ * Reads all of the user's committed answers for the current UTC day. Since
+ * grades are stored in Supabase under the user's record, this is shared across
+ * sessions and devices and naturally rolls over at UTC midnight.
  */
-export async function fetchLiveSessionStats(sessionId: string): Promise<LiveSessionStats | null> {
-  if (!sessionId) return null;
+export async function fetchDailyProgressStats(userId: string, now = new Date()): Promise<LiveSessionStats | null> {
+  if (!userId) return null;
   try {
+    const { start, end } = getUtcDayBounds(now);
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('graded_answers')
       .select('item_id, verdict')
-      .eq('session_id', sessionId)
+      .eq('user_id', userId)
+      .gte('created_at', start)
+      .lt('created_at', end)
       .order('created_at', { ascending: false });
 
     if (error) {
-      logger.warn('[LiveProgress] graded_answers query error (non-fatal):', { error: error.message });
+      logger.warn('[LiveProgress] Daily graded_answers query error (non-fatal):', { error: error.message });
       return null;
     }
 
     return computeLiveStats((data ?? []) as GradedRow[]);
   } catch (err) {
-    logger.warn('[LiveProgress] Exception fetching live stats (non-fatal):', { error: String(err) });
+    logger.warn('[LiveProgress] Exception fetching daily progress stats (non-fatal):', { error: String(err) });
     return null;
   }
 }

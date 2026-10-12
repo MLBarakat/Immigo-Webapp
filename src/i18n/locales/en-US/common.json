@@ -69,6 +69,11 @@
       "message": "We've sent a verification link to {{email}}. Please check your email inbox and click the activation link to finish starting your journey.",
       "backToLogin": "Back to Login Screen"
     },
+    "sessionReplaced": {
+      "title": "Sign-in detected on another device",
+      "message": "Your account was signed in on another device. For your security, this session will be signed out shortly. You can sign in again here if you want to continue using this device.",
+      "action": "Sign out now"
+    },
     "loginTitle": "Welcome Back",
     "loginSubtitle": "Sign in to continue your journey.",
     "signupTitle": "Create Your Account",

@@ -20,7 +20,10 @@ export interface AuthContextType {
   profile: UserProfile | null;
   loading: boolean;
   initializationError: string | null;
+  sessionReplacementPending: boolean;
+  sessionReplacementError: string | null;
   retryInitialization: () => void;
+  logoutReplacedSession: () => Promise<void>;
   userSettings: UserSettings;
   login: (email: string, password: string) => Promise<void>;
   signUp: (payload: SignUpPayload) => Promise<void>;

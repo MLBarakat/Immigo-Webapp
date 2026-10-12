@@ -81,7 +81,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
   });
 
   it('flashes and blocks starting until the speech listener is ready', () => {
-    render(
+    const { rerender } = render(
       <VoiceHub
         status="idle"
         isModelLoading={true}
@@ -97,6 +97,20 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     expect(button.disabled).toBe(true);
     expect(button.className).toContain('animate-pulse');
     expect(button.title).toContain('42%');
+    fireEvent.mouseEnter(button);
+    expect(screen.getByText(/42%/)).toBeTruthy();
+    rerender(
+      <VoiceHub
+        status="idle"
+        isModelLoading={true}
+        isVadReady={false}
+        modelLoadingProgress={73}
+        isSessionActive={false}
+        onStartSession={mockStartSession}
+        onEndSession={mockEndSession}
+      />
+    );
+    expect(screen.getByText(/73%/)).toBeTruthy();
     fireEvent.click(button);
     expect(mockStartSession).not.toHaveBeenCalled();
   });

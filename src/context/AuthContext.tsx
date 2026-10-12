@@ -18,6 +18,8 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [sessionReplacementPending, setSessionReplacementPending] = useState(false);
+  const [sessionReplacementError, setSessionReplacementError] = useState<string | null>(null);
   const [userSettings, setUserSettings] = useState<UserSettings>(() => ({
     ...DEFAULT_USER_SETTINGS,
     font_size: getStoredFontSize(),
@@ -26,6 +28,41 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const sessionLoadGenerationRef = useRef(0);
   const settingsRealtimeGenerationRef = useRef(0);
   const profileRealtimeGenerationRef = useRef(0);
+  const replacementTimerRef = useRef<number | null>(null);
+  const replacementHandledRef = useRef(false);
+  const activeDeviceIdRef = useRef<string | null>(null);
+  const ownershipCheckInProgressRef = useRef(false);
+
+  const logoutReplacedSession = useCallback(async (): Promise<void> => {
+    if (!supabase) throw new Error('Supabase client not initialized.');
+    if (replacementTimerRef.current !== null) {
+      window.clearTimeout(replacementTimerRef.current);
+      replacementTimerRef.current = null;
+    }
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) {
+      setSessionReplacementError('Sign-out could not be completed. Please try again.');
+      logger.error('Could not sign out a replaced device session.', { error: error.message });
+      throw error;
+    }
+    replacementHandledRef.current = false;
+    setSessionReplacementPending(false);
+    setSessionReplacementError(null);
+    analytics.track('user_logout', { reason: 'concurrent_device_login' });
+  }, [supabase]);
+
+  const handleSessionReplacement = useCallback(() => {
+    if (replacementHandledRef.current) return;
+    replacementHandledRef.current = true;
+    setSessionReplacementError(null);
+    setSessionReplacementPending(true);
+    logger.warn('A different device claimed the active user session; signing out this device shortly.');
+    replacementTimerRef.current = window.setTimeout(() => {
+      void logoutReplacedSession().catch(() => {
+        setSessionReplacementError('Sign-out could not be completed. Please try again.');
+      });
+    }, 6_000);
+  }, [logoutReplacedSession]);
 
   useEffect(() => {
     applyFontSize(userSettings.font_size);
@@ -238,6 +275,126 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     };
   }, [supabase, user?.id]);
 
+  useEffect(() => {
+    if (!supabase || !user?.id) {
+      activeDeviceIdRef.current = null;
+      replacementHandledRef.current = false;
+      if (replacementTimerRef.current !== null) {
+        window.clearTimeout(replacementTimerRef.current);
+        replacementTimerRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+    const deviceStorageKey = 'immigo_active_device_id';
+    let deviceId: string;
+    try {
+      const storedDeviceId = localStorage.getItem(deviceStorageKey);
+      deviceId = storedDeviceId || crypto.randomUUID();
+      if (!storedDeviceId) localStorage.setItem(deviceStorageKey, deviceId);
+      activeDeviceIdRef.current = deviceId;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Unable to establish a persistent device identifier for session enforcement.', {
+        userId: user.id,
+        error: message,
+      });
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setInitializationError('This device could not be verified for secure sign-in. Please enable local storage and try again.');
+        void supabase.auth.signOut({ scope: 'local' }).then(({ error: signOutError }) => {
+          if (signOutError) {
+            logger.error('Could not sign out after device verification failed.', {
+              userId: user.id,
+              error: signOutError.message,
+            });
+          }
+        }).catch((signOutError: unknown) => {
+          logger.error('Could not sign out after device verification failed.', {
+            userId: user.id,
+            error: signOutError instanceof Error ? signOutError.message : String(signOutError),
+          });
+        });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const checkOwnership = async (claim: boolean): Promise<void> => {
+      if (ownershipCheckInProgressRef.current || cancelled) return;
+      ownershipCheckInProgressRef.current = true;
+      try {
+        if (claim) {
+          const { error: claimError } = await supabase
+            .from('active_user_sessions')
+            .upsert(
+              { user_id: user.id, device_id: deviceId, updated_at: new Date().toISOString() },
+              { onConflict: 'user_id' },
+            );
+          if (claimError) throw claimError;
+        }
+
+        const { data, error } = await supabase
+          .from('active_user_sessions')
+          .select('device_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (error) throw error;
+        if (!cancelled && data?.device_id !== deviceId) handleSessionReplacement();
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Active device session ownership could not be verified.', {
+          userId: user.id,
+          error: message,
+        });
+        setInitializationError('Secure session verification failed. Please sign out and try again.');
+      } finally {
+        ownershipCheckInProgressRef.current = false;
+      }
+    };
+
+    const channel = supabase
+      .channel(`active-user-session-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'active_user_sessions', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const replacementDeviceId = (payload.new as { device_id?: unknown } | null)?.device_id;
+          if (typeof replacementDeviceId === 'string' && replacementDeviceId !== deviceId) {
+            handleSessionReplacement();
+          }
+        },
+      )
+      .subscribe((status, error) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          logger.error('Active device session realtime monitoring failed; periodic ownership checks remain enabled.', {
+            userId: user.id,
+            status,
+            error: error?.message,
+          });
+        }
+      });
+
+    void checkOwnership(true);
+    const ownershipTimer = window.setInterval(() => {
+      if (!document.hidden) void checkOwnership(false);
+    }, 20_000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void checkOwnership(false);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(ownershipTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, user?.id, handleSessionReplacement]);
+
   const login = useCallback(async (email: string, password: string): Promise<void> => {
     if (!supabase) throw new Error("Supabase client not initialized.");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -371,7 +528,10 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     profile,
     loading,
     initializationError,
+    sessionReplacementPending,
+    sessionReplacementError,
     retryInitialization,
+    logoutReplacedSession,
     userSettings,
     login,
     signUp,
@@ -380,7 +540,11 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     updatePassword,
     updateUserSettings,
     updateUserLanguage,
-  }), [session, user, profile, loading, initializationError, retryInitialization, userSettings, login, signUp, logout, updateProfile, updatePassword, updateUserSettings, updateUserLanguage]);
+  }), [session, user, profile, loading, initializationError, sessionReplacementPending, sessionReplacementError, retryInitialization, logoutReplacedSession, userSettings, login, signUp, logout, updateProfile, updatePassword, updateUserSettings, updateUserLanguage]);
+
+  useEffect(() => () => {
+    if (replacementTimerRef.current !== null) window.clearTimeout(replacementTimerRef.current);
+  }, []);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

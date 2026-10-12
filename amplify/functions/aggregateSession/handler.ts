@@ -186,12 +186,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log(`[Aggregator-Execution] [${traceId}] Processing session aggregation for session: ${sessionId}, user: ${userId}`);
 
-    // 1. Fetch Session Messages
+    const today = new Date().toISOString().split('T')[0];
+    const dayStart = `${today}T00:00:00.000Z`;
+    const nextDay = new Date(Date.parse(dayStart) + 24 * 60 * 60 * 1000).toISOString();
+
+    // A daily report combines all of this user's activity across sessions and
+    // devices in the UTC day, rather than replacing it with the last session.
     const { data: sessionMessages, error: msgError } = await supabase
       .from('messages')
       .select('role, content, created_at')
-      .eq('session_id', sessionId)
       .eq('user_id', userId)
+      .gte('created_at', dayStart)
+      .lt('created_at', nextDay)
       .order('created_at', { ascending: true });
 
     if (msgError) {
@@ -202,14 +208,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       .map(m => `${m.role.toUpperCase()}: ${m.content}`)
       .join('\n');
 
-    // 2. Fetch Previous Progress Report
-    const today = new Date().toISOString().split('T')[0];
+    // 2. Fetch the previous day's report for context, not today's report that
+    // this invocation is about to replace.
     let previousReportMarkdown = 'No previous progress report recorded.';
 
     const { data: latestReport } = await supabase
       .from('daily_progress_reports')
       .select('report_markdown')
       .eq('user_id', userId)
+      .lt('date', today)
       .order('date', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -218,12 +225,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       previousReportMarkdown = latestReport.report_markdown;
     }
 
-    // 2b. Fetch authoritative per-answer verdicts for this session (grounded scoring).
+    // 2b. Fetch authoritative per-answer verdicts for the full UTC day.
     const { data: gradedRows, error: gradedErr } = await supabase
       .from('graded_answers')
-      .select('item_id, verdict')
-      .eq('session_id', sessionId)
-      .eq('user_id', userId);
+      .select('item_id, verdict, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', dayStart)
+      .lt('created_at', nextDay);
 
     if (gradedErr) {
       console.warn(`[Aggregator-Grade] [${traceId}] graded_answers query error: ${gradedErr.message}`);
@@ -252,22 +260,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const scoreFacts = answered > 0
       ? [
           'AUTHORITATIVE GRADING FACTS (computed from recorded verdicts — do NOT alter):',
-          `- Questions graded this session: ${answered}`,
+          `- Questions graded today: ${answered}`,
           `- Correct: ${correct}`,
           `- Partial: ${partial}`,
           `- Incorrect: ${incorrect}`,
           `- Accuracy: ${accuracyPct}% (correct / graded)`,
           missed.length
             ? `- Missed or partial questions:\n${missed.join('\n')}`
-            : '- No missed questions this session.',
+            : '- No missed questions today.',
         ].join('\n')
-      : 'AUTHORITATIVE GRADING FACTS: No civics questions were graded this session (e.g., the user only asked progress/assist questions). Do not report new numeric scores; inherit the previous report and note that no questions were practiced.';
+      : 'AUTHORITATIVE GRADING FACTS: No civics questions were graded today (e.g., the user only asked progress/assist questions). Do not report new numeric scores; inherit the previous report and note that no questions were practiced today.';
 
     console.log(`[Aggregator-Grade] [${traceId}] answered=${answered} correct=${correct} partial=${partial} incorrect=${incorrect} accuracy=${accuracyPct}%`);
 
     // 3. Build Bedrock Evaluation Prompt
     const evaluationSystemPrompt = `You are an expert USCIS N-400 Naturalization Exam Evaluator.
-Your task is to analyze the candidate's oral interview session transcript and generate/update their Daily Progress Report in Markdown format.
+Your task is to analyze the candidate's civics practice transcript and generate/update their UTC Daily Progress Report in Markdown format.
 
 USCIS N-400 Examination Categories:
 1. American Government (Principles of Democracy, System of Government, Rights and Responsibilities)
@@ -278,8 +286,8 @@ Instructions:
 - The "AUTHORITATIVE GRADING FACTS" block (computed from recorded per-answer verdicts) is the source of truth for this session's accuracy, counts, and which questions were missed. Report those numbers and the missed-question list EXACTLY; never override them with your own judgment of the transcript.
 - These authoritative facts include every committed answer from Standard Interview, Practice, and Study modes. Treat them as one combined measure of civics-question progress; do not omit or discount a mode.
 - Some questions require a current answer and are intentionally ungraded until an authoritative current answer is available. Do not infer a score for those turns from the transcript.
-- Evaluate the candidate's performance in practiced categories during this session.
-- For categories NOT practiced in this session, inherit the previous scores and feedback from the Previous Progress Report.
+- Evaluate the candidate's performance in categories practiced today, across all of today's sessions.
+- For categories NOT practiced today, inherit the previous scores and feedback from the Previous Progress Report.
 - Output a clean, structured Markdown report including:
   - Overall Session Summary
   - Category Breakdown & Scores (e.g. American Government: 85/100, American History: 70/100, Integrated Civics: 90/100)
@@ -298,7 +306,7 @@ Instructions:
           content: [
             {
               type: 'text',
-              text: `Previous Progress Report:\n${previousReportMarkdown}\n\n${scoreFacts}\n\nCurrent Session Transcript (for qualitative context only):\n${sessionTranscript}\n\nPlease generate the updated Living Daily Progress Report for date ${today}. Report the authoritative accuracy and counts EXACTLY as given, and list the missed questions exactly. Do not invent numbers that contradict the authoritative facts.`
+              text: `Previous Progress Report:\n${previousReportMarkdown}\n\n${scoreFacts}\n\nToday's Conversation Transcript (for qualitative context only):\n${sessionTranscript}\n\nPlease generate the updated Living Daily Progress Report for UTC date ${today}. Report the authoritative accuracy and counts EXACTLY as given, and list the missed questions exactly. Do not invent numbers that contradict the authoritative facts.`
             }
           ]
         }

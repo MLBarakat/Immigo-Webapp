@@ -7,7 +7,7 @@ import { ConversationProvider } from '../../context/ConversationContext';
 import { useWhisper } from '../useWhisper';
 import { ApiClient, ApiError } from '../../services/apiClient';
 import { ChatPersistenceService } from '../../services/chatPersistenceService';
-import { fetchLiveSessionStats } from '../../services/liveProgressService';
+import { fetchDailyProgressStats } from '../../services/liveProgressService';
 import { analytics } from '../../analytics';
 
 vi.mock('../useWhisper', () => ({
@@ -21,7 +21,7 @@ vi.mock('../../analytics', () => ({
 }));
 
 vi.mock('../../services/liveProgressService', () => ({
-  fetchLiveSessionStats: vi.fn().mockResolvedValue(null),
+  fetchDailyProgressStats: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../logger', () => ({
@@ -222,6 +222,15 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   it('generates and displays a committed progress report after every ten graded answers', async () => {
     mockContextValue.state.sessionId = 'report-session';
+    let statsReadCount = 0;
+    vi.mocked(fetchDailyProgressStats).mockImplementation(async () => ({
+      answered: Math.max(0, statsReadCount++),
+      correct: Math.max(0, statsReadCount - 1),
+      incorrect: 0,
+      partial: 0,
+      accuracyPct: 100,
+      missedItemIds: [],
+    }));
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Correct. Next question.',
       audioData: new ArrayBuffer(0),
@@ -236,7 +245,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         {children}
       </ConversationContext.Provider>
     );
-    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient, userId: 'user-1' }), { wrapper });
 
     for (let answer = 0; answer < 10; answer += 1) {
       await act(async () => {
@@ -257,6 +266,15 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   it('creates a reportable analytics session for text-only graded answers', async () => {
     vi.mocked(ChatPersistenceService.createSession).mockResolvedValue('text-session');
+    let statsReadCount = 0;
+    vi.mocked(fetchDailyProgressStats).mockImplementation(async () => ({
+      answered: Math.max(0, statsReadCount++),
+      correct: Math.max(0, statsReadCount - 1),
+      incorrect: 0,
+      partial: 0,
+      accuracyPct: 100,
+      missedItemIds: [],
+    }));
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Correct. Next question.',
       audioData: new ArrayBuffer(0),
@@ -287,7 +305,16 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       false,
       expect.any(Object),
     );
-    expect(fetchLiveSessionStats).toHaveBeenCalledWith('text-session');
+    expect(fetchDailyProgressStats).toHaveBeenCalledWith('user-1');
+    expect(mockApiClient.postTranscript).toHaveBeenNthCalledWith(
+      1,
+      'Text answer 1',
+      expect.any(Array),
+      'text-session',
+      null,
+      false,
+      expect.objectContaining({ openingResponse: true }),
+    );
     expect(analytics.track).toHaveBeenCalledWith('session_started', { mode: 'text' });
     await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledWith('text-session'));
     expect(mockStartRecording).not.toHaveBeenCalled();

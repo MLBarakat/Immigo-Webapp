@@ -69,6 +69,11 @@
       "message": "Nous avons envoyé un lien de vérification à {{email}}. Vérifiez votre boîte de réception et cliquez sur le lien d'activation pour commencer votre parcours.",
       "backToLogin": "Retour à l'écran de connexion"
     },
+    "sessionReplaced": {
+      "title": "Connexion détectée sur un autre appareil",
+      "message": "Votre compte a été utilisé pour se connecter sur un autre appareil. Pour votre sécurité, cette session sera bientôt déconnectée. Vous pourrez vous reconnecter ici pour continuer à utiliser cet appareil.",
+      "action": "Me déconnecter maintenant"
+    },
     "loginTitle": "Bon retour",
     "loginSubtitle": "Connectez-vous pour poursuivre votre parcours.",
     "signupTitle": "Créez votre compte",

@@ -96,14 +96,31 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
   useEffect(() => {
     if (!userId || isGeneratingProgressReport) return;
     let isMounted = true;
-    void fetchProgressReports(userId).then(data => {
-      if (isMounted) setReports(data);
-    }).catch(() => {
-      if (isMounted) setReportsError(t('workspace.left.reportsLoadError'));
-    }).finally(() => {
-      if (isMounted) setReportsLoading(false);
-    });
-    return () => { isMounted = false; };
+    const refreshReports = async () => {
+      try {
+        const data = await fetchProgressReports(userId);
+        if (isMounted) {
+          setReports(data);
+          setReportsError(null);
+        }
+      } catch {
+        if (isMounted) setReportsError(t('workspace.left.reportsLoadError'));
+      } finally {
+        if (isMounted) setReportsLoading(false);
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void refreshReports();
+    };
+
+    void refreshReports();
+    const refreshTimer = window.setInterval(() => void refreshReports(), 30_000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      isMounted = false;
+      window.clearInterval(refreshTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [userId, isGeneratingProgressReport, t]);
 
   const printReport = (report: ProgressReport) => {
@@ -290,7 +307,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                   </span>
                 </div>
 
-                {conversationLength === 0 || !liveStats ? (
+                {!liveStats || (conversationLength === 0 && liveStats.answered === 0) ? (
                   <p className="text-[11px] text-immigo-gray-400 italic px-1 py-2">{t('workspace.left.metricsStart')}</p>
                 ) : (
                   <div className="space-y-1.5">
