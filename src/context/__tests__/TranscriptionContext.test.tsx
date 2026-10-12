@@ -63,7 +63,7 @@ describe('FSM Context Registry Validation: TranscriptionContext', () => {
       result.current.actions.whisperComplete('System core operational parameters functional.', 150);
     });
 
-    expect(result.current.state.fsm).toBe('COMMITTED');
+    expect(result.current.state.fsm).toBe('LISTENING');
     expect(result.current.state.committedText).toBe('System core operational parameters functional.');
     expect(result.current.state.speculativeText).toBe('');
   });
@@ -89,5 +89,49 @@ describe('FSM Context Registry Validation: TranscriptionContext', () => {
     expect(result.current.state.fsm).toBe('IDLE');
     expect(result.current.state.speculativeText).toBe('');
     expect(result.current.state.activeTraceId).toBeNull();
+  });
+
+  it('returns to listening after an inference failure so the next utterance can be captured', () => {
+    const { result } = renderTranscriptionContextHook();
+
+    act(() => {
+      result.current.actions.startSession();
+      result.current.actions.speechOnset('trace-failed-inference');
+      result.current.actions.whisperSend();
+      result.current.actions.inferenceFailed('WASM backend unavailable');
+      result.current.actions.recoveryStart();
+      result.current.actions.recoveryComplete();
+    });
+
+    expect(result.current.state.fsm).toBe('LISTENING');
+    expect(result.current.state.consecutiveFailures).toBe(1);
+    expect(result.current.state.errorMessage).toBeNull();
+
+    act(() => {
+      result.current.actions.speechOnset('trace-recovered-inference');
+    });
+
+    expect(result.current.state.fsm).toBe('SPECULATIVE');
+    expect(result.current.state.activeTraceId).toBe('trace-recovered-inference');
+  });
+
+  it('commits browser speech fallback without moving the transcription state backward', () => {
+    const { result } = renderTranscriptionContextHook();
+
+    act(() => {
+      result.current.actions.startSession();
+      result.current.actions.speechOnset('trace-browser-fallback');
+      result.current.actions.nativeTranscript('Fallback transcript.');
+    });
+
+    expect(result.current.state.fsm).toBe('LISTENING');
+    expect(result.current.state.committedText).toBe('Fallback transcript.');
+    expect(result.current.state.speculativeText).toBe('');
+
+    act(() => {
+      result.current.actions.speechOnset('trace-after-browser-fallback');
+    });
+
+    expect(result.current.state.fsm).toBe('SPECULATIVE');
   });
 });

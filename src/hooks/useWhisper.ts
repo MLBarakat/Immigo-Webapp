@@ -55,6 +55,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   const [modelReadyState, setModelReadyState] = useState<boolean>(true);
 
   const workerRef = useRef<Worker | null>(null);
+  const workerUnavailableRef = useRef(false);
   const vadRef = useRef<MicVAD | null>(null);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,6 +69,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   const activeTraceIdRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
   const speechActiveRef = useRef<boolean>(false);
+  const nativeFinalTranscriptRef = useRef('');
   const tabIdRef = useRef<string>('');
   const isLeaderRef = useRef<boolean>(true);
   const leaderChannelRef = useRef<BroadcastChannel | null>(null);
@@ -126,6 +128,18 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     const minSamplesLimit = remoteFeatureFlags.current.emptyHandoffSamplesMin;
 
     if (sampleLength > minSamplesLimit) {
+      if (workerUnavailableRef.current) {
+        actionsRef.current.whisperCancel();
+        return;
+      }
+      if (nativeFinalTranscriptRef.current) return;
+      if (stateRef.current.fsm !== 'SPECULATIVE') {
+        logger.debug('Skipping a local transcription segment that no longer has an active speech state.', {
+          reason,
+          transcriptionState: stateRef.current.fsm,
+        });
+        return;
+      }
       actionsRef.current.whisperSend(); // Safely advance FSM context directly to 'VERIFYING'
 
       if (workerRef.current) {
@@ -183,6 +197,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         setLoadingProgressPercent(payload.progress || 0);
         break;
       case 'INIT_COMPLETED':
+        workerUnavailableRef.current = false;
         setModelReadyState(false);
         setLoadingProgressPercent(100);
         logger.info(`Whisper worker initialized on tier: ${payload.tier || 'unknown'}`);
@@ -219,8 +234,19 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         break;
       }
       case 'ERROR':
-        logger.error('Background worker thread exception caught in orchestration hook.', { error: payload.error });
-        actionsRef.current.inferenceFailed(payload.error || 'Unknown web worker inference crash exception.');
+        workerUnavailableRef.current = true;
+        setModelReadyState(false);
+        logger.error('Background worker thread exception caught in orchestration hook.', {
+          error: payload.error,
+          stage: payload.stage || 'runtime',
+        });
+        if (stateRef.current.fsm !== 'FAILED') {
+          actionsRef.current.inferenceFailed(payload.error || 'Unknown web worker inference crash exception.');
+        }
+        if (isRecordingRef.current) {
+          if (stateRef.current.fsm !== 'RECOVERING') actionsRef.current.recoveryStart();
+          actionsRef.current.recoveryComplete();
+        }
         break;
     }
   }, [hasSpeechQuality]);
@@ -305,9 +331,14 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
         const cleanedCommittedText = committedSequence.replace(/\s+/g, ' ').trim();
         if (cleanedCommittedText) {
-          const currentState = stateRef.current.fsm;
-          if (currentState === 'SPECULATIVE' || currentState === 'VERIFYING') {
-            actionsRef.current.whisperComplete(cleanedCommittedText, 0);
+          nativeFinalTranscriptRef.current += `${nativeFinalTranscriptRef.current ? ' ' : ''}${cleanedCommittedText}`;
+          if (workerUnavailableRef.current) {
+            actionsRef.current.nativeTranscript(cleanedCommittedText);
+          } else {
+            const currentState = stateRef.current.fsm;
+            if (currentState === 'SPECULATIVE' || currentState === 'VERIFYING') {
+              actionsRef.current.whisperComplete(cleanedCommittedText, 0);
+            }
           }
         }
 
@@ -331,7 +362,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     MicVAD.new({
       // Asset directory served from public/ — the library resolves the .onnx model and worklet bundle relative to this path
       baseAssetPath: '/',
-      onnxWASMBasePath: '/',
+      onnxWASMBasePath: '/assets/js/',
       model: 'legacy',
       startOnLoad: false,
       // Use browser hardware echo cancellation so Polly playback is suppressed
@@ -360,6 +391,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       onSpeechStart: () => {
         if (!isRecordingRef.current || !isLeaderRef.current) return;
         activeTraceIdRef.current = generateLocalTraceId();
+        nativeFinalTranscriptRef.current = '';
         speechActiveRef.current = true;
         onSpeechStartRef.current?.();
         segmentSampleCountRef.current = 0;

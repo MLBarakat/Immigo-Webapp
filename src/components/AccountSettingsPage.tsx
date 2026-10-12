@@ -5,6 +5,7 @@ import { ArrowLeft, User, Lock, Share2, AlertTriangle, X, Eye, EyeOff } from 'lu
 import { useAuth } from '../hooks/useAuth';
 import amplifyOutputs from '../../amplify_outputs.json';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
 
 interface AccountSettingsPageProps {
   onNavigateBack: () => void;
@@ -17,6 +18,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
   const { t } = useTranslation();
   const [activeView, setActiveView] = useState<SettingsView>('profile');
   const modalRef = useFocusTrap(true);
+  const { handlePointerDown, handlePointerMove, handlePointerUp } = useDraggableOverlay<HTMLDivElement>(modalRef);
   const { user, profile, session, logout, updateProfile, updatePassword } = useAuth();
   const [fullName, setFullName] = useState(() => profile?.full_name || (user?.user_metadata?.full_name as string) || '');
   const [profileSaving, setProfileSaving] = useState(false);
@@ -265,7 +267,13 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
   return (
     <div className={containerClasses}>
       <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="account-settings-title" className={`${contentClasses} outline-none`}>
-        <header className={headerClasses}>
+        <header
+          onPointerDown={isDesktop ? handlePointerDown : undefined}
+          onPointerMove={isDesktop ? handlePointerMove : undefined}
+          onPointerUp={isDesktop ? handlePointerUp : undefined}
+          onPointerCancel={isDesktop ? handlePointerUp : undefined}
+          className={`${headerClasses} ${isDesktop ? 'cursor-grab active:cursor-grabbing touch-none select-none' : ''}`}
+        >
           {!isDesktop && (
             <button onClick={onNavigateBack} aria-label={t('account.close')} className="p-2 rounded-full hover:bg-immigo-gray-100 text-immigo-gray-600">
               <ArrowLeft className="w-6 h-6 rtl:rotate-180" />

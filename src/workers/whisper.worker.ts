@@ -35,6 +35,7 @@ interface WorkerResponseMessage {
       vramUsageBytes: number;
       fragmentation: number;
     };
+    stage?: 'initialization' | 'transcription' | 'runtime';
   };
   inferenceId?: number;
 }
@@ -182,7 +183,7 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runtimeEnv = env as any;
   if (runtimeEnv.backends?.onnx?.wasm) {
-    runtimeEnv.backends.onnx.wasm.wasmPaths = '/';
+    runtimeEnv.backends.onnx.wasm.wasmPaths = '/assets/js/';
   }
 
   const useWebGpu = tier === 'webgpu';
@@ -212,7 +213,7 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
         postMessageToMain({
           status: 'ERROR',
           correlationId,
-          payload: { error: `FR-006 Context lost alert: WebGPU device unallocated. Reason: ${info?.message || 'unknown'}`, tier },
+          payload: { error: `FR-006 Context lost alert: WebGPU device unallocated. Reason: ${info?.message || 'unknown'}`, tier, stage: 'runtime' },
         });
         // Clear cached instances to force a clean runtime graph rebuild on the next pass
         transcriberInstance = null;
@@ -283,25 +284,40 @@ async function handleInit(message: WorkerRequestMessage): Promise<void> {
   const tier = requestedTier ?? (
     message.payload?.config?.useWebGPU === true && webGpuAvailable ? 'webgpu' : 'wasm-simd'
   );
+  const fallbackTiers: RuntimeTier[] = tier === 'webgpu'
+    ? ['wasm-simd', 'quantized-tiny']
+    : tier === 'wasm-simd'
+      ? ['quantized-tiny']
+      : [];
+  const failures: string[] = [];
+
   try {
     await warmUp(message.correlationId, tier);
     postMessageToMain({ status: 'INIT_COMPLETED', correlationId: message.correlationId, payload: { tier } });
+    return;
   } catch (error) {
-    const fallbackTier: RuntimeTier = tier === 'webgpu' ? 'wasm-simd' : 'quantized-tiny';
+    failures.push(`Primary (${tier}): ${normalizeError(error)}`);
+  }
+
+  for (const fallbackTier of fallbackTiers) {
     try {
       await warmUp(message.correlationId, fallbackTier);
       postMessageToMain({ status: 'INIT_COMPLETED', correlationId: message.correlationId, payload: { tier: fallbackTier } });
+      return;
     } catch (fallbackError) {
-      postMessageToMain({
-        status: 'ERROR',
-        correlationId: message.correlationId,
-        payload: {
-          error: `Worker initialization failed on both tiers. Primary (${tier}): ${normalizeError(error)} | Fallback (${fallbackTier}): ${normalizeError(fallbackError)}`,
-          tier: fallbackTier,
-        },
-      });
+      failures.push(`Fallback (${fallbackTier}): ${normalizeError(fallbackError)}`);
     }
   }
+
+  postMessageToMain({
+    status: 'ERROR',
+    correlationId: message.correlationId,
+    payload: {
+      error: `Worker initialization failed on all configured tiers. ${failures.join(' | ')}`,
+      tier,
+      stage: 'initialization',
+    },
+  });
 }
 
 async function handleTranscribe(message: WorkerRequestMessage): Promise<void> {
@@ -381,7 +397,7 @@ async function handleTranscribe(message: WorkerRequestMessage): Promise<void> {
     postMessageToMain({
       status: 'ERROR',
       correlationId: message.correlationId,
-      payload: { error: `Transcription processing failure: ${normalizeError(error)}`, tier },
+      payload: { error: `Transcription processing failure: ${normalizeError(error)}`, tier, stage: 'transcription' },
     });
   }
 }
@@ -414,7 +430,7 @@ self.addEventListener('error', (event) => {
   postMessageToMain({
     status: 'ERROR',
     correlationId: lastTrackedCorrelationId,
-    payload: { error: event.message, tier: activeTier },
+    payload: { error: event.message, tier: activeTier, stage: 'runtime' },
   });
 });
 
@@ -423,6 +439,6 @@ self.addEventListener('error', (event) => {
   postMessageToMain({
     status: 'ERROR',
     correlationId: lastTrackedCorrelationId,
-    payload: { error: normalizeError(event.reason), tier: activeTier },
+    payload: { error: normalizeError(event.reason), tier: activeTier, stage: 'runtime' },
   });
 });

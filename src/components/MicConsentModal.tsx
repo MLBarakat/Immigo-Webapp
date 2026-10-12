@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Mic, X } from 'lucide-react';
+import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
 
 interface MicConsentModalProps {
   onAccept: () => void;
@@ -11,10 +12,17 @@ interface MicConsentModalProps {
 
 export const MicConsentModal: React.FC<MicConsentModalProps> = ({ onAccept, onCancel, error }) => {
   const { t } = useTranslation('conversation');
+  const { overlayRef, handlePointerDown, handlePointerMove, handlePointerUp } = useDraggableOverlay<HTMLDivElement>();
   return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
-      <div role="dialog" aria-modal="true" aria-labelledby="mic-consent-title" className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in">
-        <header className="flex items-center justify-between p-6 border-b border-immigo-gray-200 flex-shrink-0">
+      <div ref={overlayRef} role="dialog" aria-modal="true" aria-labelledby="mic-consent-title" className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in">
+        <header
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="flex items-center justify-between p-6 border-b border-immigo-gray-200 flex-shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
+        >
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-art-blue-50">
               <Mic className="w-5 h-5 text-art-blue-600" aria-hidden="true" />

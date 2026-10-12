@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { WelcomeModal } from '../WelcomeModal';
 
@@ -42,6 +42,47 @@ describe('WelcomeModal Component', () => {
     const closeBtn = screen.getByRole('button', { name: /close welcome message|close/i });
     fireEvent.click(closeBtn);
 
+    expect(handleClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('drags the dialog by its header without blocking the close button', async () => {
+    const handleClose = vi.fn();
+    render(<WelcomeModal userName="Alex" onClose={handleClose} />);
+
+    const dialog = screen.getByText('Welcome, Alex!').closest('.bg-star-white') as HTMLDivElement;
+    const header = screen.getByText('Welcome, Alex!').closest('header') as HTMLElement;
+    const closeButton = screen.getByRole('button', { name: /close welcome message|close/i });
+    vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue({
+      x: 100, y: 100, left: 100, top: 100, right: 400, bottom: 300, width: 300, height: 200,
+      toJSON: () => ({}),
+    });
+    header.setPointerCapture = vi.fn();
+    header.hasPointerCapture = vi.fn().mockReturnValue(true);
+    header.releasePointerCapture = vi.fn();
+
+    class TestPointerEvent extends MouseEvent {
+      pointerId: number;
+      isPrimary: boolean;
+
+      constructor(type: string, init: MouseEventInit & { pointerId?: number; isPrimary?: boolean } = {}) {
+        super(type, init);
+        this.pointerId = init.pointerId ?? 1;
+        this.isPrimary = init.isPrimary ?? true;
+      }
+    }
+    Object.defineProperty(window, 'PointerEvent', { configurable: true, value: TestPointerEvent });
+
+    const dispatchPointerEvent = (type: string, properties: Record<string, number | boolean>) => {
+      const event = new window.PointerEvent(type, { bubbles: true, ...properties } as PointerEventInit);
+      fireEvent(header, event);
+    };
+    dispatchPointerEvent('pointerdown', { pointerId: 1, isPrimary: true, button: 0, clientX: 150, clientY: 150 });
+    dispatchPointerEvent('pointermove', { pointerId: 1, clientX: 190, clientY: 180 });
+
+    expect(header.setPointerCapture).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(dialog.style.translate).toBe('40px 30px'));
+    dispatchPointerEvent('pointerup', { pointerId: 1 });
+    fireEvent.click(closeButton);
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 });

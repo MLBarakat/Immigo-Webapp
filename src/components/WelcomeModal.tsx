@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Hand, Mic, MessageSquare, Zap, ArrowRight, X } from 'lucide-react';
+import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
 
 interface WelcomeModalProps {
   userName: string;
@@ -13,13 +14,20 @@ const STEP_ICONS = [Mic, MessageSquare, Zap];
 export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose }) => {
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
+  const { overlayRef, handlePointerDown, handlePointerMove, handlePointerUp } = useDraggableOverlay<HTMLDivElement>();
   const StepIcon = STEP_ICONS[step];
   const stepKey = STEP_KEYS[step];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
-      <div className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in">
-        <header className="flex items-center justify-between p-4 border-b border-immigo-gray-200">
+      <div ref={overlayRef} className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in">
+        <header
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="flex items-center justify-between p-4 border-b border-immigo-gray-200 cursor-grab active:cursor-grabbing touch-none select-none"
+        >
             <div className="flex items-center gap-3">
                 <Hand className="w-6 h-6 text-art-blue-600" />
                 <h2 className="text-xl font-bold text-deep-navy font-display">{t('welcome.title', { name: userName })}</h2>

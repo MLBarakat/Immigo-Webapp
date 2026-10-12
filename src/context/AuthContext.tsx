@@ -247,19 +247,12 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
 
   const signUp = useCallback(async ({ email, password, fullName, language, termsAcceptedAt, termsVersion, privacyVersion }: SignUpPayload): Promise<void> => {
     if (!supabase) throw new Error("Supabase client not initialized.");
-    const { data: signUpData, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName, language, terms_accepted_at: termsAcceptedAt, terms_version: termsVersion, privacy_version: privacyVersion } },
     });
     if (error) throw error;
-
-    // Create the user_settings row immediately with defaults so it exists
-    // before the user ever logs in. Fire-and-forget; auth flow is not blocked.
-    if (signUpData.user) {
-      void UserSettingsService.createDefaultSettings(supabase, signUpData.user.id, { language });
-      logger.info('Default user_settings row created after sign-up.', { userId: signUpData.user.id });
-    }
 
     analytics.track('user_signup', { method: 'email', language });
   }, [supabase]);

@@ -44,8 +44,10 @@ export type TranscriptionAction =
     | { type: 'SPECULATIVE_UPDATE'; payload: { text: string } }
     | { type: 'WHISPER_SEND' }
     | { type: 'WHISPER_COMPLETE'; payload: { text: string; latencyMs: number } }
+    | { type: 'NATIVE_TRANSCRIPT'; payload: { text: string } }
     | { type: 'WHISPER_CANCEL' }
     | { type: 'INFERENCE_FAILED'; payload: { error: string } }
+    | { type: 'RECOVERY_START' }
     | { type: 'RECOVERY_COMPLETE' }
     | { type: 'TIER_DOWNSCALE' }
     | { type: 'CLEAR_TRANSCRIPT' };
@@ -166,6 +168,22 @@ function transcriptionReducer(
             };
         }
 
+        case 'NATIVE_TRANSCRIPT': {
+            const addition = action.payload.text.trim();
+            if (!addition || state.fsm === 'IDLE') return state;
+
+            const accumulatedHistory = state.committedText.trim()
+                ? `${state.committedText} ${addition}`.replace(/\s+/g, ' ').trim()
+                : addition;
+            return {
+                ...state,
+                fsm: state.fsm === 'SPECULATIVE' || state.fsm === 'VERIFYING' ? 'LISTENING' : state.fsm,
+                committedText: accumulatedHistory,
+                speculativeText: '',
+                lastLatencyMs: 0,
+            };
+        }
+
         case 'WHISPER_CANCEL': {
             if (state.fsm !== 'VERIFYING' && state.fsm !== 'SPECULATIVE') return state;
             return { 
@@ -176,6 +194,13 @@ function transcriptionReducer(
         }
 
         case 'INFERENCE_FAILED': {
+            if (state.fsm === 'FAILED') {
+                return {
+                    ...state,
+                    consecutiveFailures: state.consecutiveFailures + 1,
+                    errorMessage: action.payload.error
+                };
+            }
             if (!isValidTransition(state.fsm, 'FAILED')) return state;
             return {
                 ...state,
@@ -185,11 +210,17 @@ function transcriptionReducer(
             };
         }
 
+        case 'RECOVERY_START': {
+            if (!isValidTransition(state.fsm, 'RECOVERING')) return state;
+            return { ...state, fsm: 'RECOVERING' };
+        }
+
         case 'RECOVERY_COMPLETE': {
             if (!isValidTransition(state.fsm, 'LISTENING')) return state;
             return { 
                 ...state, 
                 fsm: 'LISTENING', 
+                speculativeText: '',
                 errorMessage: null 
             };
         }
@@ -224,8 +255,10 @@ interface TranscriptionContextValue {
         speculativeUpdate: (text: string) => void;
         whisperSend: () => void;
         whisperComplete: (text: string, latencyMs: number) => void;
+        nativeTranscript: (text: string) => void;
         whisperCancel: () => void;
         inferenceFailed: (error: string) => void;
+        recoveryStart: () => void;
         recoveryComplete: () => void;
         tierDownscale: () => void;
         clearTranscript: () => void;
@@ -248,9 +281,12 @@ export function TranscriptionProvider({ children }: { children: React.ReactNode 
     const whisperSend = useCallback(() => dispatch({ type: 'WHISPER_SEND' }), []);
     const whisperComplete = useCallback((text: string, latencyMs: number) => 
         dispatch({ type: 'WHISPER_COMPLETE', payload: { text, latencyMs } }), []);
+    const nativeTranscript = useCallback((text: string) =>
+        dispatch({ type: 'NATIVE_TRANSCRIPT', payload: { text } }), []);
     const whisperCancel = useCallback(() => dispatch({ type: 'WHISPER_CANCEL' }), []);
     const inferenceFailed = useCallback((error: string) => 
         dispatch({ type: 'INFERENCE_FAILED', payload: { error } }), []);
+    const recoveryStart = useCallback(() => dispatch({ type: 'RECOVERY_START' }), []);
     const recoveryComplete = useCallback(() => dispatch({ type: 'RECOVERY_COMPLETE' }), []);
     const tierDownscale = useCallback(() => dispatch({ type: 'TIER_DOWNSCALE' }), []);
     const clearTranscript = useCallback(() => dispatch({ type: 'CLEAR_TRANSCRIPT' }), []);
@@ -262,8 +298,10 @@ export function TranscriptionProvider({ children }: { children: React.ReactNode 
         speculativeUpdate,
         whisperSend,
         whisperComplete,
+        nativeTranscript,
         whisperCancel,
         inferenceFailed,
+        recoveryStart,
         recoveryComplete,
         tierDownscale,
         clearTranscript,
@@ -274,8 +312,10 @@ export function TranscriptionProvider({ children }: { children: React.ReactNode 
         speculativeUpdate,
         whisperSend,
         whisperComplete,
+        nativeTranscript,
         whisperCancel,
         inferenceFailed,
+        recoveryStart,
         recoveryComplete,
         tierDownscale,
         clearTranscript,

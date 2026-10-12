@@ -5,6 +5,7 @@ import type { UserSettings, ThemeOption } from '../types/settings';
 import { FONT_SIZES, FONT_SIZE_LABELS, normalizeFontSize, type CanonicalFontSize } from '../utils/fontSize';
 import { applyTheme, normalizeTheme } from '../utils/theme';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
 
 interface Voice {
   id: string;
@@ -56,6 +57,7 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const modalRef = useFocusTrap(isOpen);
+  const { handlePointerDown, handlePointerMove, handlePointerUp } = useDraggableOverlay<HTMLDivElement>(modalRef);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (isOpen) { setDraft({ ...defaults, ...settings, theme: normalizeTheme(settings.theme ?? defaults.theme) }); } }, [isOpen, settings, defaults]);
@@ -98,7 +100,13 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
   return (
     <div className={`fixed inset-0 bg-black bg-opacity-60 flex ${isDesktop ? 'items-center justify-center' : 'items-start'} z-50 p-4`}>
       <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="application-settings-title" className={`bg-star-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${isDesktop ? 'max-w-2xl' : 'max-h-full h-full'} flex flex-col ${isDesktop ? 'max-h-[85vh] overflow-hidden' : ''} outline-none`}>
-        <header className="flex items-center justify-between p-6 border-b border-immigo-gray-200 dark:border-gray-700">
+        <header
+          onPointerDown={isDesktop ? handlePointerDown : undefined}
+          onPointerMove={isDesktop ? handlePointerMove : undefined}
+          onPointerUp={isDesktop ? handlePointerUp : undefined}
+          onPointerCancel={isDesktop ? handlePointerUp : undefined}
+          className={`flex items-center justify-between p-6 border-b border-immigo-gray-200 dark:border-gray-700 ${isDesktop ? 'cursor-grab active:cursor-grabbing touch-none select-none' : ''}`}
+        >
           <h2 id="application-settings-title" className="text-2xl font-bold text-deep-navy dark:text-gray-100 font-display">{t('title')}</h2>
           <button onClick={handleClose} aria-label={t('close')} className="p-2 rounded-full hover:bg-immigo-gray-100 dark:hover:bg-gray-700">
             <X className="w-6 h-6 text-immigo-gray-600 dark:text-gray-300" />

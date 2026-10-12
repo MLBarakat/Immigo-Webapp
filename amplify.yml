@@ -35,8 +35,8 @@ frontend:
         - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm public/
         - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm public/
 
-        # 4. ONNX Runtime MJS/WASM siblings also in assets/js/ so onnxruntime-web's
-        #    internal dynamic loader (which resolves relative to its own bundle URL) finds them
+        # 4. Keep the matching ONNX Runtime MJS/WASM files in assets/js/, the
+        #    shared path configured for the VAD and transcription workers.
         - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm public/assets/js/
         - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm public/assets/js/
         - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs public/assets/js/
