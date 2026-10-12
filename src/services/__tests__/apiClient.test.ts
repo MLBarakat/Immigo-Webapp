@@ -32,13 +32,14 @@ describe('ApiClient active route contracts', () => {
       'session-1',
       'q-1',
       false,
-      { simulationMode: 'study', preferredLanguage: 'es-ES' }
+      { simulationMode: 'study', preferredLanguage: 'es-ES', openingResponse: true }
     );
 
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(JSON.parse(String(request.body))).toMatchObject({
       simulationMode: 'study',
       preferredLanguage: 'es-ES',
+      openingResponse: true,
     });
   });
 
@@ -86,6 +87,44 @@ describe('ApiClient active route contracts', () => {
       sessionStart: true,
       simulationMode: 'practice',
       preferredLanguage: 'fr-FR',
+    });
+  });
+
+  it('accepts a silent session start that only selects the first question', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      responseText: '',
+      audioData: '',
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: 'q-1',
+      nextQuestion: 'Question one?',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await new ApiClient('token', 'https://api.example.test').postSessionStart('session-1');
+
+    expect(result.responseText).toBe('');
+    expect(result.audioData.byteLength).toBe(0);
+    expect(result.nextItemId).toBe('q-1');
+  });
+
+  it('requests a spoken reminder without fabricating a user transcript', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      responseText: 'Take your time.',
+      audioData: '',
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: 'q-1',
+      nextQuestion: 'Question one?',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await new ApiClient('token', 'https://api.example.test').postSilenceNudge('session-1', 'q-1');
+
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toMatchObject({
+      silenceNudge: true,
+      sessionId: 'session-1',
+      currentItemId: 'q-1',
     });
   });
 

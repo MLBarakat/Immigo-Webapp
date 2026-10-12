@@ -56,7 +56,8 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     expect(screen.queryByText('00:00')).toBeNull();
   });
 
-  it('should block manual user selection triggers when backend processing loops are running', () => {
+  it('keeps pause available while voice mode is processing', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(100);
     render(
       <VoiceHub
         status="processing"
@@ -67,17 +68,16 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    const interactiveButton = screen.getByRole('button', { name: /stop voice recording session/i }) as HTMLButtonElement;
+    const interactiveButton = screen.getByRole('button', { name: 'Pause' }) as HTMLButtonElement;
     
-    // Assert structural lock states are correctly registered by the browser DOM layer
-    expect(interactiveButton.disabled).toBe(true);
-    expect(interactiveButton.getAttribute('aria-busy')).toBe('true');
+    expect(interactiveButton.disabled).toBe(false);
+    expect(interactiveButton.title).toBe('Pause');
+    expect(interactiveButton.getAttribute('aria-busy')).toBe('false');
     expect(screen.queryByRole('status')).toBeNull();
 
-    // Verify interaction inputs are dropped when clicked during an active inference lock
     fireEvent.click(interactiveButton);
     expect(mockStartSession).not.toHaveBeenCalled();
-    expect(mockEndSession).not.toHaveBeenCalled();
+    expect(mockEndSession).toHaveBeenCalledOnce();
   });
 
   it('flashes and blocks starting until the speech listener is ready', () => {

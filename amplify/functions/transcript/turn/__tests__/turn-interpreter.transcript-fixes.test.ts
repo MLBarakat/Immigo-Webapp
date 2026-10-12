@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { buildTurnPrompt } from '../turn-interpreter';
+import { buildOpeningResponsePrompt, buildTurnPrompt } from '../turn-interpreter';
 import type { CivicsItem } from '../types';
 
 const q: CivicsItem = {
@@ -9,6 +9,20 @@ const q: CivicsItem = {
   kind: 'static',
   acceptableAnswers: ['Battle of Gettysburg', 'Emancipation Proclamation', 'surrender at Appomattox'],
 };
+
+describe('buildOpeningResponsePrompt', () => {
+  it('treats the first spoken comment as a response to the welcome, not an answer to the hidden civics question', () => {
+    const { system, user } = buildOpeningResponsePrompt(
+      'I am doing well, thank you.',
+      [{ role: 'assistant', content: 'Welcome back. We can focus on history today.' }],
+    );
+    expect(system).toContain('NOT an answer to a civics question');
+    expect(system).toContain('application will then ask its current official civics question');
+    expect(system).toContain('Do not ask a follow-up question');
+    expect(user).toContain('I am doing well, thank you.');
+    expect(user).toContain('We can focus on history today.');
+  });
+});
 
 describe('buildTurnPrompt — issue 2: incorrect-verdict reply must never invite a retry', () => {
   it('instructs that an incorrect reply is a STATEMENT, not a question, since a new question always follows immediately', () => {

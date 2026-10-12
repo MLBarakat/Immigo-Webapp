@@ -65,15 +65,12 @@ interface RequestBody {
   sessionId?: string;
   currentItemId?: string;
   confirmationRetry?: boolean;
+  openingResponse?: boolean;
   simulationMode?: SimulationMode;
   preferredLanguage?: 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA';
-  /**
-   * True for a proactive, client-initiated session-start call (item 6): fired
-   * automatically the moment a session begins, before any user speech, so the
-   * greeting can speak first instead of waiting for a garbled first utterance
-   * to trigger it implicitly.
-   */
+  /** True when the client needs the first question selected before listening. */
   sessionStart?: boolean;
+  silenceNudge?: boolean;
   /**
    * True for the on-screen (TEXT ONLY, never spoken) welcome banner fetched
    * when the app loads, independent of starting a practice session. Returns
@@ -660,7 +657,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // A proactive session-start call (item 6) legitimately has no transcript —
     // only the empty-guard for a REAL turn with nothing to process should fire.
-    if (!cleanedTranscript && parsedBody.sessionStart !== true) {
+    if (!cleanedTranscript && parsedBody.sessionStart !== true && parsedBody.silenceNudge !== true) {
       console.log(`[Lambda-Execution] [${traceId}] Empty transcript received. Returning 200 empty payload.`);
       return {
         statusCode: 200,
@@ -681,23 +678,42 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const askedItem = getItem(parsedBody.currentItemId);
 
     if (parsedBody.sessionStart === true) {
-      // ---- EXPLICIT session start (item 6): fires proactively before any
-      // real user speech, so the first question is established and spoken
-      // immediately. The personalized narrative welcome now lives in the
-      // separate, text-only welcomeBanner path above — this just needs to
-      // pick + announce the first question, so no LLM call is needed here
-      // at all (faster and one less thing that can fail). ----
-      console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; picking first question (no narrative LLM call).`);
+      // Establish the first question without speaking over the existing
+      // welcome/session-opening message. The user gets the first turn.
+      console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; selecting the first question without a spoken response.`);
       const first = selectNextQuestion();
-      const explanation = simulationMode === 'study'
-        ? await turnInterpreter.explainStudyQuestion(first, preferredLanguage)
-        : '';
-      generatedAssistantText = simulationMode === 'study'
-        ? formatStudyQuestion(first, explanation, preferredLanguage)
-        : `Let's begin. ${first.question}`;
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify({
+          responseText: '',
+          audioData: '',
+          verdict: null,
+          needsConfirmation: false,
+          nextItemId: first.id,
+          nextQuestion: first.question,
+        }),
+      };
+    } else if (parsedBody.silenceNudge === true) {
+      const focusedItem = askedItem ?? selectNextQuestion();
+      generatedAssistantText = `Take your time. Let's return to the question: ${focusedItem.question}`;
+      nextItemId = focusedItem.id;
+      nextQuestionText = focusedItem.question;
+    } else if (parsedBody.openingResponse === true) {
+      const first = askedItem ?? selectNextQuestion();
+      const acknowledgement = await turnInterpreter.respondToOpening(
+        cleanedTranscript,
+        getRecentTurns(parsedBody.conversationWindow),
+        simulationMode === 'study' ? preferredLanguage : undefined,
+      );
+      if (simulationMode === 'study') {
+        const explanation = await turnInterpreter.explainStudyQuestion(first, preferredLanguage);
+        generatedAssistantText = `${acknowledgement} ${formatStudyQuestion(first, explanation, preferredLanguage)}`;
+      } else {
+        generatedAssistantText = `${acknowledgement} The first question is: ${first.question}`;
+      }
       nextItemId = first.id;
       nextQuestionText = first.question;
-
     } else if (cleanedTranscript && isRagQuery(cleanedTranscript)) {
       // ---- ASSIST / progress path (grounded in the user's own reports) ----
       console.log(`[Lambda-RAG] [${traceId}] Progress intent detected.`);
@@ -724,7 +740,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         : '';
       generatedAssistantText = simulationMode === 'study'
         ? formatStudyQuestion(first, explanation, preferredLanguage)
-        : `Let's begin. ${first.question}`;
+        : first.question;
       nextItemId = first.id;
       nextQuestionText = first.question;
 
@@ -787,6 +803,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             : outcome.safeReply;
         const turnReply = simulationMode === 'study' && outcome.effectiveIntent === 'repeat'
           ? ''
+          : outcome.effectiveIntent === 'unclear'
+          ? `${safeReply} Let's come back to this question: ${askedItem.question}`
           : outcome.useModelReply
           ? (interp?.reply || safeReply)
           : safeReply;

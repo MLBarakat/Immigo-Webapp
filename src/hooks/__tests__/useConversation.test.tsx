@@ -78,6 +78,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockApiClient = {
       postTranscript: vi.fn(),
       postSessionStart: vi.fn(),
+      postSilenceNudge: vi.fn(),
       completeSession: vi.fn().mockResolvedValue(undefined),
     } as unknown as Mocked<ApiClient>;
 
@@ -131,6 +132,89 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
     });
+  });
+
+  it('opens the microphone without playing another opening response', async () => {
+    mockApiClient.postSessionStart.mockResolvedValue({
+      responseText: '',
+      audioData: new ArrayBuffer(0),
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: 'q-1',
+      nextQuestion: 'Question one?',
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    expect(mockAudioInstance.play).not.toHaveBeenCalled();
+    expect(mockStartRecording).toHaveBeenCalledOnce();
+    expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_STATUS', payload: 'listening' });
+  });
+
+  it('ignores recognized Polly echo but stops playback for actual barging-in speech', async () => {
+    const responseText = "Let's begin. How can people become United States citizens?";
+    mockApiClient.postSessionStart.mockResolvedValue({
+      responseText,
+      audioData: new ArrayBuffer(8),
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: 'q-1',
+      nextQuestion: 'How can people become United States citizens?',
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result, rerender } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, bargeIn: 'balanced' }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    (useWhisper as any).mockReturnValue({
+      currentState: 'SPECULATIVE',
+      displayTranscript: "Let's begin. How can people",
+      finalTranscript: '',
+      isModelLoading: false,
+      isVadReady: true,
+      modelLoadingProgress: 100,
+      isTranscribing: false,
+      startRecording: mockStartRecording,
+      stopRecording: mockStopRecording,
+    });
+    const echoSpeechStart = (useWhisper as any).mock.calls.at(-1)[0].onSpeechStart;
+    act(() => echoSpeechStart());
+    rerender();
+    await act(async () => new Promise(resolve => setTimeout(resolve, 250)));
+    expect(mockAudioInstance.pause).not.toHaveBeenCalled();
+
+    (useWhisper as any).mockReturnValue({
+      currentState: 'SPECULATIVE',
+      displayTranscript: 'Wait, can you explain that?',
+      finalTranscript: '',
+      isModelLoading: false,
+      isVadReady: true,
+      modelLoadingProgress: 100,
+      isTranscribing: false,
+      startRecording: mockStartRecording,
+      stopRecording: mockStopRecording,
+    });
+    const userSpeechStart = (useWhisper as any).mock.calls.at(-1)[0].onSpeechStart;
+    act(() => userSpeechStart());
+    rerender();
+    await waitFor(() => expect(mockAudioInstance.pause).toHaveBeenCalledOnce());
   });
 
   it('cancels an in-flight text response when the user sends an interrupting message', async () => {

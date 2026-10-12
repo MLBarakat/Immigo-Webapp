@@ -46,13 +46,13 @@ export function VoiceHub({
     const currentTimestamp = performance.now();
     const durationSinceLastClick = currentTimestamp - lastInteractionTimestampRef.current;
 
-    if (durationSinceLastClick < DEBOUNCE_DELAY_MS) {
+    if (!isSessionActive && durationSinceLastClick < DEBOUNCE_DELAY_MS) {
       logger.warn('Adversarial interaction guard engaged: user button click spamming intercepted. Suppressing event.');
       return;
     }
 
     // Lock interaction loops while the background neural worker is executing matrix splits
-    if (status === 'processing' || isListenerLoading) {
+    if (!isSessionActive && (status === 'processing' || isListenerLoading)) {
       logger.warn('Interaction locked: pipeline is verifying truth ledger audio chunks. Disabling toggle.');
       return;
     }
@@ -93,7 +93,7 @@ export function VoiceHub({
   }, [onMicConsent, onStartSession, isListenerLoading]);
 
   const isProcessingActive = status === 'processing';
-  const isButtonDisabled = isProcessingActive || (isListenerLoading && !isSessionActive);
+  const isButtonDisabled = !isSessionActive && (isProcessingActive || isListenerLoading);
 
   return (
     <>
@@ -115,10 +115,14 @@ export function VoiceHub({
         } ${
           isListenerLoading && !isSessionActive ? 'animate-pulse ring-2 ring-art-blue-400 ring-offset-2' : ''
         }`} 
-        aria-label={t(isSessionActive ? 'workspace.voice.stop' : 'workspace.voice.start')}
+        aria-label={t(isSessionActive ? 'workspace.voice.pause' : 'workspace.voice.start')}
         aria-busy={isButtonDisabled || (isListenerLoading && isSessionActive)}
         aria-live="polite"
-        title={isListenerLoading ? t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) }) : undefined}
+        title={isSessionActive
+          ? t('workspace.voice.pause')
+          : isListenerLoading
+            ? t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })
+            : t('workspace.voice.start')}
       >
         <AnimatedStatusButton status={status} />
       </button>

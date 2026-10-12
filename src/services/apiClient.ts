@@ -128,9 +128,7 @@ export class ApiClient {
     }
   }
 
-  /** Shared request/response handling for /transcript, used by both a normal
-   * turn (postTranscript) and the proactive session-start call
-   * (postSessionStart) — same response shape, different request body. */
+  /** Shared request/response handling for /transcript calls. */
   private async sendTranscriptRequest(
     body: Record<string, unknown>,
     options: { headers?: Record<string, string>; signal?: AbortSignal } = {}
@@ -225,8 +223,8 @@ export class ApiClient {
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     currentItemId?: string | null,
-    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string },
-    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
+    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean },
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -258,18 +256,14 @@ export class ApiClient {
         confirmationRetry,
         simulationMode: effectiveOptions.simulationMode ?? 'standard',
         preferredLanguage: effectiveOptions.preferredLanguage ?? 'en-US',
+        ...(effectiveOptions.openingResponse ? { openingResponse: true } : {}),
         ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {})
       },
       effectiveOptions
     );
   }
 
-  /**
-   * Proactive session-start call (item 6): fired automatically the moment a
-   * session begins, BEFORE any user speech, so the personalized greeting
-   * speaks first instead of waiting for a garbled first utterance to trigger
-   * it implicitly. No transcript required.
-   */
+  /** Select the first interview question without speaking before user input. */
   async postSessionStart(
     sessionId?: string | null,
     options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
@@ -288,6 +282,29 @@ export class ApiClient {
       simulationMode: options.simulationMode ?? 'standard',
       preferredLanguage: options.preferredLanguage ?? 'en-US',
       ...(options.voiceId ? { voiceId: options.voiceId } : {})
+    }, options);
+  }
+
+  async postSilenceNudge(
+    sessionId: string | null,
+    currentItemId: string | null,
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
+  ): Promise<{
+    responseText: string;
+    audioData: ArrayBuffer;
+    verdict: 'correct' | 'incorrect' | 'partial' | null;
+    needsConfirmation: boolean;
+    nextItemId: string | null;
+    nextQuestion: string | null;
+  }> {
+    logger.info('[ApiClient] Dispatching postSilenceNudge request:', { sessionId, currentItemId });
+    return this.sendTranscriptRequest({
+      silenceNudge: true,
+      sessionId,
+      currentItemId,
+      simulationMode: options.simulationMode ?? 'standard',
+      preferredLanguage: options.preferredLanguage ?? 'en-US',
+      ...(options.voiceId ? { voiceId: options.voiceId } : {}),
     }, options);
   }
 

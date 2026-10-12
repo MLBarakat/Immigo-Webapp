@@ -10,7 +10,12 @@ import { useWhisper } from './useWhisper';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
 import type { BargeIn } from '../types/settings';
-import { getBargeInHoldDurationMs } from '../utils/bargeIn';
+import {
+  getBargeInHoldDurationMs,
+  hasEnoughBargeInSpeech,
+  isExplicitBargeInCommand,
+  isPlaybackEchoTranscript,
+} from '../utils/bargeIn';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
@@ -27,6 +32,8 @@ interface AssistantReveal {
   timerId: number;
   audioNode: HTMLAudioElement | null;
 }
+
+const SILENCE_NUDGE_DELAY_MS = 15_000;
 
 export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', preferredLanguage = 'en-US', bargeIn = 'balanced' }: UseConversationManagerProps) {
   const { t, i18n } = useTranslation('conversation');
@@ -65,6 +72,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // Tracks which bank question the server last asked, so the next answer is
   // graded against the correct item (server-owned grounded grading).
   const currentItemIdRef = useRef<string | null>(null);
+  const openingResponseRef = useRef(false);
   const hydratedHistoryUserIdRef = useRef<string | null>(null);
   const skipNextHistoryCacheWriteRef = useRef(false);
   const historyChangedBeforeHydrationRef = useRef(false);
@@ -89,9 +97,15 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // True while Polly audio is actively playing; paired with the playback node
   // to constrain interruption handling to audible assistant speech.
   const isPollyPlayingRef = useRef<boolean>(false);
+  const isAssistantAudioActiveRef = useRef(false);
   // Timer handle for the post-playback AEC settle window (clears on unmount).
   const pollyMuteGateTimerRef = useRef<number | null>(null);
   const interruptionTimerRef = useRef<number | null>(null);
+  const silenceNudgeTimerRef = useRef<number | null>(null);
+  const silenceNudgeControllerRef = useRef<AbortController | null>(null);
+  const hasSentSilenceNudgeRef = useRef(false);
+  const activePollyTextRef = useRef('');
+  const speechStartedDuringPollyRef = useRef(false);
   const assistantRevealRef = useRef<AssistantReveal | null>(null);
 
   const stopAssistantReveal = useCallback((complete = false) => {
@@ -186,6 +200,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
 
     isPollyPlayingRef.current = false;
+    isAssistantAudioActiveRef.current = false;
   }, [stopAssistantReveal]);
 
   // Dual-Track Speculative Merger orchestration hook
@@ -202,18 +217,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     clearTranscript
   } = useWhisper({
     onSpeechStart: () => {
-      const activePlayback = audioPlaybackRef.current;
-      if (!activePlayback) return;
-      // Let a short stretch of speech confirm an interruption, reducing false
-      // triggers from residual speaker echo while still allowing real barging-in.
-      if (interruptionTimerRef.current !== null) window.clearTimeout(interruptionTimerRef.current);
-      interruptionTimerRef.current = window.setTimeout(() => {
-        interruptionTimerRef.current = null;
-        if (audioPlaybackRef.current !== activePlayback || !isPollyPlayingRef.current) return;
-        clearAudioPlayback();
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
-      }, getBargeInHoldDurationMs(bargeInRef.current));
-    }
+      speechStartedDuringPollyRef.current = isAssistantAudioActiveRef.current;
+    },
   });
 
   useEffect(() => {
@@ -227,6 +232,30 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   useEffect(() => {
     dispatch({ type: 'SET_INTERIM_TRANSCRIPT', payload: displayTranscript });
   }, [displayTranscript, dispatch]);
+
+  useEffect(() => {
+    const activePlayback = audioPlaybackRef.current;
+    const recognizedSpeech = displayTranscript.trim();
+    if (!activePlayback || !isAssistantAudioActiveRef.current || !recognizedSpeech) return;
+
+    if (!hasEnoughBargeInSpeech(recognizedSpeech)) return;
+    if (!isExplicitBargeInCommand(recognizedSpeech)
+      && isPlaybackEchoTranscript(recognizedSpeech, activePollyTextRef.current)) {
+      if (interruptionTimerRef.current !== null) {
+        window.clearTimeout(interruptionTimerRef.current);
+        interruptionTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (interruptionTimerRef.current !== null) return;
+    interruptionTimerRef.current = window.setTimeout(() => {
+      interruptionTimerRef.current = null;
+      if (audioPlaybackRef.current !== activePlayback || !isAssistantAudioActiveRef.current) return;
+      clearAudioPlayback();
+      dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+    }, getBargeInHoldDurationMs(bargeInRef.current));
+  }, [displayTranscript, dispatch, clearAudioPlayback]);
 
   // Restore this tab's latest conversation immediately; fetch the database
   // history when no local snapshot exists, or to retain its pagination cursor.
@@ -350,6 +379,15 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const sendTextMessage = useCallback(async (text: string) => {
     const validatedText = text.replace(/\s+/g, ' ').trim();
     if (!validatedText) return;
+    const isOpeningResponse = openingResponseRef.current;
+    openingResponseRef.current = false;
+    silenceNudgeControllerRef.current?.abort();
+    silenceNudgeControllerRef.current = null;
+    if (silenceNudgeTimerRef.current !== null) {
+      window.clearTimeout(silenceNudgeTimerRef.current);
+      silenceNudgeTimerRef.current = null;
+    }
+    hasSentSilenceNudgeRef.current = false;
     historyChangedBeforeHydrationRef.current = true;
 
     const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
@@ -435,7 +473,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
             activeSessionId,
             currentItemIdRef.current,
             isConfirmationRetry,
-              { headers: { 'x-correlation-trace-id': traceId }, signal: turnController.signal, voiceId: voiceIdRef.current ?? undefined, simulationMode: simulationModeRef.current, preferredLanguage: preferredLanguageRef.current }
+              { headers: { 'x-correlation-trace-id': traceId }, signal: turnController.signal, voiceId: voiceIdRef.current ?? undefined, simulationMode: simulationModeRef.current, preferredLanguage: preferredLanguageRef.current, openingResponse: isOpeningResponse }
           );
           responseText = res.responseText;
           audioData = res.audioData;
@@ -519,6 +557,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
       audioPlaybackRef.current = audioPlaybackNode;
       audioPlaybackUrlRef.current = audioBlobUrl;
+      activePollyTextRef.current = responseText;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
       startAssistantReveal(secureAssistantMessageId, responseText, audioPlaybackNode);
 
@@ -526,6 +565,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // interruption; browser echo cancellation and the barge-in holdoff
       // suppress speaker bleed.
       isPollyPlayingRef.current = true;
+      isAssistantAudioActiveRef.current = true;
       startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
@@ -553,6 +593,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       audioPlaybackNode.onended = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        isAssistantAudioActiveRef.current = false;
         stopAssistantReveal(true);
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
         clearAudioPlayback();
@@ -570,6 +611,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     } catch (error: unknown) {
       if (turnController.signal.aborted || turnGeneration !== turnGenerationRef.current) return;
+      if (isOpeningResponse) openingResponseRef.current = true;
       activeAssistantMessageIdRef.current = null;
       const parsedErrorMessage = error instanceof Error ? error.message : 'Failed to synchronize conversation transactions.';
       
@@ -598,6 +640,111 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal]);
 
+  const requestSilenceNudge = useCallback(async () => {
+    const currentItemId = currentItemIdRef.current;
+    const activeSessionId = sessionIdRef.current || conversationState.sessionId;
+    if (!apiClient || !currentItemId || !voiceSessionRef.current) return;
+
+    const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const assistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const controller = new AbortController();
+    silenceNudgeControllerRef.current = controller;
+    try {
+      const response = await apiClient.postSilenceNudge(activeSessionId, currentItemId, {
+        headers: { 'x-correlation-trace-id': traceId },
+        signal: controller.signal,
+        voiceId: voiceIdRef.current ?? undefined,
+        simulationMode: simulationModeRef.current,
+        preferredLanguage: preferredLanguageRef.current,
+      });
+      if (controller.signal.aborted) return;
+      if (!voiceSessionRef.current || !response.responseText || response.audioData.byteLength === 0) return;
+
+      openingResponseRef.current = false;
+      currentItemIdRef.current = response.nextItemId ?? currentItemId;
+      if (userId && activeSessionId) {
+        void ChatPersistenceService.persistMessage(activeSessionId, userId, 'assistant', response.responseText);
+      }
+
+      const audioUrl = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
+      const audioNode = new Audio(audioUrl);
+      const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      audioPlaybackRef.current = audioNode;
+      audioPlaybackUrlRef.current = audioUrl;
+      activePollyTextRef.current = response.responseText;
+      dispatch({ type: 'SET_STATUS', payload: 'speaking' });
+      startAssistantReveal(assistantMessageId, response.responseText, audioNode);
+      isPollyPlayingRef.current = true;
+      isAssistantAudioActiveRef.current = true;
+      startRecording();
+      audioNode.onended = () => {
+        if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        isAssistantAudioActiveRef.current = false;
+        stopAssistantReveal(true);
+        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        clearAudioPlayback();
+        pollyMuteGateTimerRef.current = window.setTimeout(() => {
+          isPollyPlayingRef.current = false;
+          pollyMuteGateTimerRef.current = null;
+        }, 300);
+      };
+      audioNode.play().catch((error: unknown) => {
+        if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        logger.error('Silence reminder audio playback failed.', undefined, {
+          error: error instanceof Error ? error.message : String(error),
+          traceId,
+        });
+        clearAudioPlayback();
+        dispatch({ type: 'SET_STATUS', payload: 'listening' });
+        startRecording();
+      });
+    } catch (error: unknown) {
+      if (controller.signal.aborted) return;
+      logger.error('Unable to return the conversation to its current question after silence.', undefined, {
+        error: error instanceof Error ? error.message : String(error),
+        traceId,
+      });
+      if (voiceSessionRef.current) dispatch({ type: 'SET_STATUS', payload: 'error' });
+    } finally {
+      if (silenceNudgeControllerRef.current === controller) silenceNudgeControllerRef.current = null;
+    }
+  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, clearAudioPlayback]);
+
+  useEffect(() => {
+    if (displayTranscript.trim()) {
+      silenceNudgeControllerRef.current?.abort();
+      silenceNudgeControllerRef.current = null;
+      hasSentSilenceNudgeRef.current = false;
+      return;
+    }
+    if (!conversationState.isSessionActive
+      || !isVoiceSessionActive
+      || !currentItemIdRef.current
+      || conversationState.appStatus === 'processing'
+      || conversationState.appStatus === 'speaking'
+      || conversationState.appStatus === 'error'
+      || hasSentSilenceNudgeRef.current) {
+      if (silenceNudgeTimerRef.current !== null) {
+        window.clearTimeout(silenceNudgeTimerRef.current);
+        silenceNudgeTimerRef.current = null;
+      }
+      return;
+    }
+
+    silenceNudgeTimerRef.current = window.setTimeout(() => {
+      silenceNudgeTimerRef.current = null;
+      hasSentSilenceNudgeRef.current = true;
+      void requestSilenceNudge();
+    }, SILENCE_NUDGE_DELAY_MS);
+
+    return () => {
+      if (silenceNudgeTimerRef.current !== null) {
+        window.clearTimeout(silenceNudgeTimerRef.current);
+        silenceNudgeTimerRef.current = null;
+      }
+    };
+  }, [conversationState.isSessionActive, conversationState.appStatus, isVoiceSessionActive, displayTranscript, requestSilenceNudge]);
+
   // Word-boundary comparison for live audio transcription handoff
   useEffect(() => {
     // A new recording starts with an empty committed transcript. Clear the
@@ -625,7 +772,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
 
       if (freshUtteranceChunk) {
-        void sendTextMessage(freshUtteranceChunk);
+        const isEchoFromPlayback = speechStartedDuringPollyRef.current
+          && !isExplicitBargeInCommand(freshUtteranceChunk)
+          && isPlaybackEchoTranscript(freshUtteranceChunk, activePollyTextRef.current);
+        speechStartedDuringPollyRef.current = false;
+        if (!isEchoFromPlayback) void sendTextMessage(freshUtteranceChunk);
       }
       processedTranscriptRef.current = activeConfirmedString;
     }
@@ -642,19 +793,28 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     currentItemIdRef.current = null;
     awaitingConfirmationRef.current = null;
     answeredCountRef.current = 0;
+    openingResponseRef.current = true;
 
     let newSessionId: string | null = null;
     if (userId) {
       newSessionId = await ChatPersistenceService.createSession(userId);
+      if (!voiceSessionRef.current) {
+        if (newSessionId) {
+          await ChatPersistenceService.closeSession(newSessionId).catch((error: unknown) => {
+            logger.error('Closing a session that was paused during startup failed.', undefined, {
+              sessionId: newSessionId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        }
+        return;
+      }
       sessionIdRef.current = newSessionId;
       dispatch({ type: 'SET_SESSION_ID', payload: newSessionId });
     }
 
-    // Item 6: proactively fetch the personalized greeting BEFORE recording
-    // begins, instead of waiting for a (often garbled) first utterance to
-    // implicitly trigger it. This also means currentItemIdRef is set from a
-    // real server response before the mic ever opens for real user input —
-    // the first answer is graded against the right question from the start.
+    // Select the current question before opening the microphone, but leave
+    // the first response to the user rather than speaking another opener.
     if (!apiClient) {
       startRecording();
       return;
@@ -686,27 +846,36 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     try {
       const res = await attemptSessionStart();
+      if (!voiceSessionRef.current) return;
 
       currentItemIdRef.current = res.nextItemId;
       awaitingConfirmationRef.current = res.needsConfirmation ? res.nextItemId : null;
+
+      if (!res.responseText && res.audioData.byteLength === 0) {
+        dispatch({ type: 'SET_STATUS', payload: 'listening' });
+        startRecording();
+        return;
+      }
 
       if (userId && newSessionId) {
         void ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', res.responseText);
       }
 
       // Keep capture active during playback for barge-in. The assistant bubble
-      // is created with its first word only after the greeting is ready.
+      // is created with its first word only after the response is ready.
       const audioBlob = new Blob([res.audioData], { type: 'audio/mpeg' });
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
       audioPlaybackRef.current = audioPlaybackNode;
       audioPlaybackUrlRef.current = audioBlobUrl;
+      activePollyTextRef.current = res.responseText;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
       activeAssistantMessageIdRef.current = secureAssistantMessageId;
       startAssistantReveal(secureAssistantMessageId, res.responseText, audioPlaybackNode);
 
       isPollyPlayingRef.current = true;
+      isAssistantAudioActiveRef.current = true;
       startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
@@ -725,6 +894,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       audioPlaybackNode.onended = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        isAssistantAudioActiveRef.current = false;
         stopAssistantReveal(true);
         dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
         clearAudioPlayback();
@@ -734,48 +904,32 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         }, 300);
       };
     } catch (error: unknown) {
-      // Both attempts failed. Previously this was completely silent — no
-      // spoken or visual feedback at all, which is exactly what produced "I
-      // opened the app and got no greeting" for a brand new account. Instead:
-      // show AND speak a local, non-personalized fallback (no further server
-      // dependency, since the server call is what just failed twice), then
-      // proceed to recording. currentItemId stays null, so the user's first
-      // real utterance correctly falls through to the server's legacy
-      // greeting path (already tested to be robust even if its own LLM call
-      // fails) and the conversation still starts properly from there.
-      logger.error('Proactive session-start greeting failed after retry; using local fallback.', undefined, {
+      if (!voiceSessionRef.current) return;
+      logger.error('Silent session question setup failed after retry; continuing to listen without a startup response.', undefined, {
         error: error instanceof Error ? error.message : String(error),
         traceId,
       });
-
-      const fallbackText = "Welcome! Let's get started with today's civics practice — go ahead whenever you're ready.";
-      dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: secureAssistantMessageId, content: fallbackText } });
-
-      const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
-      if (canSpeak) {
-        try {
-          isPollyPlayingRef.current = true;
-          const utterance = new SpeechSynthesisUtterance(fallbackText);
-          const resume = () => {
-            isPollyPlayingRef.current = false;
-            startRecording();
-          };
-          utterance.onend = resume;
-          utterance.onerror = resume;
-          window.speechSynthesis.speak(utterance);
-          return;
-        } catch (speechError) {
-          logger.warn('Local fallback speech synthesis failed; proceeding silently to recording.', { error: String(speechError) });
-          isPollyPlayingRef.current = false;
-        }
-      }
-      // No speech synthesis available (or it failed) — the text is still
-      // visible in chat; proceed straight to recording.
+      dispatch({ type: 'SET_STATUS', payload: 'listening' });
       startRecording();
     }
   }, [userId, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal]);
 
   const terminateSession = useCallback(async () => {
+    if (silenceNudgeTimerRef.current !== null) {
+      window.clearTimeout(silenceNudgeTimerRef.current);
+      silenceNudgeTimerRef.current = null;
+    }
+    silenceNudgeControllerRef.current?.abort();
+    silenceNudgeControllerRef.current = null;
+    activeTurnControllerRef.current?.abort();
+    activeTurnControllerRef.current = null;
+    if (activeAssistantMessageIdRef.current) {
+      dispatch({
+        type: 'REMOVE_PENDING_ASSISTANT_MESSAGE',
+        payload: { assistantMessageId: activeAssistantMessageIdRef.current },
+      });
+      activeAssistantMessageIdRef.current = null;
+    }
     clearAudioPlayback();
     stopRecording();
     const activeSessionId = sessionIdRef.current || conversationState.sessionId;
@@ -783,6 +937,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     dispatch({ type: 'END_SESSION' });
     sessionIdRef.current = null;
     currentItemIdRef.current = null;
+    openingResponseRef.current = false;
     voiceSessionRef.current = false;
     setIsVoiceSessionActive(false);
     awaitingConfirmationRef.current = null;
@@ -859,6 +1014,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
   useEffect(() => {
     return () => {
+      if (silenceNudgeTimerRef.current !== null) window.clearTimeout(silenceNudgeTimerRef.current);
+      silenceNudgeControllerRef.current?.abort();
       clearAudioPlayback();
       stopRecordingRef.current();
     };
@@ -875,6 +1032,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ type: 'END_SESSION' });
       sessionIdRef.current = null;
       currentItemIdRef.current = null;
+      openingResponseRef.current = false;
       voiceSessionRef.current = false;
       setIsVoiceSessionActive(false);
       awaitingConfirmationRef.current = null;
