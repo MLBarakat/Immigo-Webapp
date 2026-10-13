@@ -32,11 +32,16 @@ interface ProcessEnvContainer {
   readonly VITE_API_KEY?: string;
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
+  readonly VITE_WHISPER_MODEL_BASE_PATH?: string;
   readonly [key: string]: string | undefined;
 }
 
 // Extend the global globalThis namespace declaration to support polyfilled shims safely
 declare global {
+  interface ImportMetaEnv {
+    readonly VITE_WHISPER_MODEL_BASE_PATH?: string;
+  }
+
   /**
    * Structural polyfill mapping legacy environment variable hooks cleanly.
    * Prevents third-party neural runtimes from triggering fatal ReferenceErrors in standard client scopes.

@@ -42,7 +42,21 @@ frontend:
         - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs public/assets/js/
         - cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs public/assets/js/
 
-        # 5. Run Vite production build (Vite auto-copies public/ → dist/)
+        # 5. Bundle the Whisper repositories from this Amplify environment's
+        #    generated Storage bucket into the same-origin frontend artifact.
+        - |
+          MODEL_BUCKET=$(node -e "const outputs = JSON.parse(require('fs').readFileSync('amplify_outputs.json', 'utf8')); if (!outputs.storage || !outputs.storage.bucket_name) throw new Error('Amplify Storage bucket is missing from amplify_outputs.json'); process.stdout.write(outputs.storage.bucket_name)")
+          MODEL_BASE_PATH="${VITE_WHISPER_MODEL_BASE_PATH:-/models/}"
+          MODEL_PUBLIC_PATH="public/${MODEL_BASE_PATH#/}"
+          MODEL_PUBLIC_PATH="${MODEL_PUBLIC_PATH%/}"
+          mkdir -p "${MODEL_PUBLIC_PATH}"
+          aws s3 sync "s3://${MODEL_BUCKET}/public/models/" "${MODEL_PUBLIC_PATH}/" --only-show-errors
+          if [ -z "$(find "${MODEL_PUBLIC_PATH}" -type f -print -quit)" ]; then
+            echo "No Whisper model files found at s3://${MODEL_BUCKET}/public/models/." >&2
+            exit 1
+          fi
+
+        # 6. Run Vite production build (Vite auto-copies public/ → dist/)
         - npm run build
   artifacts:
     baseDirectory: dist

@@ -146,7 +146,44 @@ eval/stt/                    Speech-to-text evaluation runner and scoring tools
 
 ## Deployment
 
-The repository's Amplify build configuration is in `amplify.yml`. It installs frontend and function dependencies, copies VAD and ONNX runtime assets, builds the Vite application, and deploys the Amplify backend for the configured branch.
+The repository's Amplify build configuration is in `amplify.yml`. It installs frontend and function dependencies, copies VAD and ONNX runtime assets, syncs Whisper models from the configured Amplify Storage bucket into `public/models/`, builds the Vite application, and deploys the Amplify backend for the configured branch.
+
+### Hosting Whisper models with Amplify
+
+Upload the complete Transformers.js model repositories, preserving their directory structure, to the Amplify Storage bucket under:
+
+```text
+public/models/Xenova/whisper-small/
+public/models/Xenova/whisper-base/
+public/models/Xenova/whisper-tiny/
+```
+
+The frontend build reads the bucket name from the generated `amplify_outputs.json`, copies `public/models/` from S3 to the build's local `public/models/` directory, and fails if that prefix contains no files. Amplify Hosting then serves the models from the app's own origin, avoiding cross-origin requests to Hugging Face. The Amplify Hosting build role needs read access to that prefix; the guest-read permission in Amplify Storage does not grant S3 access to the build role. Add a policy like this to the Hosting build role for each branch environment, replacing `<BUCKET_NAME>` with that branch's generated Storage bucket:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::<BUCKET_NAME>",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": ["public/models/", "public/models/*"]
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::<BUCKET_NAME>/public/models/*"
+    }
+  ]
+}
+```
+
+The worker defaults to `/models/`, matching the Amplify build output. To change the served base path, set `VITE_WHISPER_MODEL_BASE_PATH` in the Amplify branch's frontend environment variables to the corresponding same-origin URL path, including its leading slash (for example, `/models/`). The sync destination and the configured path must refer to the same published directory.
 
 Before deploying:
 

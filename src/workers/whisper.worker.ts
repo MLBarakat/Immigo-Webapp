@@ -178,7 +178,8 @@ function queryVramTelemetry(): { vramUsageBytes: number; fragmentation: number }
 async function createTranscriber(correlationId: string, tier: RuntimeTier): Promise<Transcriber> {
   env.allowLocalModels = true;
   env.allowRemoteModels = true;
-  env.localModelPath = '/models/';
+  const modelBasePath = import.meta.env.VITE_WHISPER_MODEL_BASE_PATH?.trim() || '/models/';
+  env.localModelPath = modelBasePath.endsWith('/') ? modelBasePath : `${modelBasePath}/`;
   // Keep the ONNX WASM runtime on same-origin assets shipped in public/.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runtimeEnv = env as any;
