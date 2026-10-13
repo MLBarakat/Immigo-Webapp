@@ -44,17 +44,61 @@ frontend:
 
         # 5. Bundle the Whisper repositories from this Amplify environment's
         #    generated Storage bucket into the same-origin frontend artifact.
+        #
+        #    IMPORTANT: only the exact ONNX files each tier's `dtype` setting
+        #    in whisper.worker.ts actually loads are synced — not every
+        #    quantization variant in each repo. transformers.js maps dtype to
+        #    a filename suffix (fp32 -> no suffix, q8 -> "_quantized"), and
+        #    hardcodes encoder-decoder models (Whisper included) to the
+        #    MERGED decoder, never the separate decoder_model/
+        #    decoder_with_past_model family. Syncing full repos previously
+        #    pulled in every unused variant (fp16/int8/uint8/q4/q4f16/bnb4)
+        #    PLUS an entire unused decoder architecture, which is what pushed
+        #    the build artifact over Amplify Hosting's hard 5GB ceiling.
+        #    `.onnx_data` sidecars are included defensively in case any of
+        #    these files are large enough to need one — if it doesn't exist,
+        #    the include pattern simply matches nothing extra, at zero cost.
         - |
           MODEL_BUCKET=$(node -e "const outputs = JSON.parse(require('fs').readFileSync('amplify_outputs.json', 'utf8')); if (!outputs.storage || !outputs.storage.bucket_name) throw new Error('Amplify Storage bucket is missing from amplify_outputs.json'); process.stdout.write(outputs.storage.bucket_name)")
           MODEL_BASE_PATH="${VITE_WHISPER_MODEL_BASE_PATH:-/models/}"
           MODEL_PUBLIC_PATH="public/${MODEL_BASE_PATH#/}"
           MODEL_PUBLIC_PATH="${MODEL_PUBLIC_PATH%/}"
           mkdir -p "${MODEL_PUBLIC_PATH}"
-          aws s3 sync "s3://${MODEL_BUCKET}/public/models/" "${MODEL_PUBLIC_PATH}/" --only-show-errors
-          if [ -z "$(find "${MODEL_PUBLIC_PATH}" -type f -print -quit)" ]; then
-            echo "No Whisper model files found at s3://${MODEL_BUCKET}/public/models/." >&2
-            exit 1
-          fi
+          aws s3 sync "s3://${MODEL_BUCKET}/public/models/" "${MODEL_PUBLIC_PATH}/" \
+            --only-show-errors \
+            --exclude "*.onnx" \
+            --exclude "*.onnx_data" \
+            --include "Xenova/whisper-small/onnx/encoder_model.onnx" \
+            --include "Xenova/whisper-small/onnx/encoder_model.onnx_data" \
+            --include "Xenova/whisper-small/onnx/decoder_model_merged.onnx" \
+            --include "Xenova/whisper-small/onnx/decoder_model_merged.onnx_data" \
+            --include "Xenova/whisper-base/onnx/encoder_model.onnx" \
+            --include "Xenova/whisper-base/onnx/encoder_model.onnx_data" \
+            --include "Xenova/whisper-base/onnx/decoder_model_merged.onnx" \
+            --include "Xenova/whisper-base/onnx/decoder_model_merged.onnx_data" \
+            --include "Xenova/whisper-tiny/onnx/encoder_model_quantized.onnx" \
+            --include "Xenova/whisper-tiny/onnx/encoder_model_quantized.onnx_data" \
+            --include "Xenova/whisper-tiny/onnx/decoder_model_merged_quantized.onnx" \
+            --include "Xenova/whisper-tiny/onnx/decoder_model_merged_quantized.onnx_data"
+
+          echo "Synced model payload size:"
+          du -sh "${MODEL_PUBLIC_PATH}"
+
+          # Verify each tier's two required files specifically landed — not
+          # just "some file exists somewhere", which could pass even if one
+          # entire tier silently failed.
+          for required_file in \
+            "Xenova/whisper-small/onnx/encoder_model.onnx" \
+            "Xenova/whisper-small/onnx/decoder_model_merged.onnx" \
+            "Xenova/whisper-base/onnx/encoder_model.onnx" \
+            "Xenova/whisper-base/onnx/decoder_model_merged.onnx" \
+            "Xenova/whisper-tiny/onnx/encoder_model_quantized.onnx" \
+            "Xenova/whisper-tiny/onnx/decoder_model_merged_quantized.onnx"; do
+            if [ ! -s "${MODEL_PUBLIC_PATH}/${required_file}" ]; then
+              echo "Missing required model file: ${MODEL_PUBLIC_PATH}/${required_file}" >&2
+              exit 1
+            fi
+          done
 
         # 6. Run Vite production build (Vite auto-copies public/ → dist/)
         - npm run build
