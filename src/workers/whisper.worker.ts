@@ -79,10 +79,10 @@ const DECODE_TUNING = {
   condition_on_previous_text: false,
 };
 
-const MODEL_LOCAL_PATHS: Record<RuntimeTier, string> = {
-  webgpu: '/models/Xenova/whisper-small',
-  'wasm-simd': '/models/Xenova/whisper-base',
-  'quantized-tiny': '/models/Xenova/whisper-tiny',
+const MODEL_REPO_IDS: Record<RuntimeTier, string> = {
+  webgpu: 'Xenova/whisper-small',
+  'wasm-simd': 'Xenova/whisper-base',
+  'quantized-tiny': 'Xenova/whisper-tiny',
 };
 
 let activeTier: RuntimeTier = 'wasm-simd';
@@ -200,7 +200,7 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
     },
   };
 
-  const transcriber = await pipeline('automatic-speech-recognition', MODEL_LOCAL_PATHS[tier], options);
+  const transcriber = await pipeline('automatic-speech-recognition', MODEL_REPO_IDS[tier], options);
   
   // Connect explicit hardware context-loss observers if WebGPU target is elected
   if (useWebGpu && typeof navigator !== 'undefined' && 'gpu' in navigator) {
