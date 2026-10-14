@@ -42,7 +42,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    const interactiveButton = screen.getByRole('button', { name: /start voice recording session/i }) as HTMLButtonElement;
+    const interactiveButton = screen.getByRole('button', { name: /start voice/i }) as HTMLButtonElement;
     expect(interactiveButton).not.toBeNull();
     expect(interactiveButton.disabled).toBe(false);
     
@@ -80,6 +80,23 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     expect(mockEndSession).toHaveBeenCalledOnce();
   });
 
+  it('keeps mic button idle during text mode when voice mode is not active', async () => {
+    const { AnimatedStatusButton } = await import('../AnimatedStatusButton');
+    render(
+      <VoiceHub
+        status="processing"
+        isSessionActive={false}
+        onStartSession={mockStartSession}
+        onEndSession={mockEndSession}
+      />
+    );
+
+    expect(AnimatedStatusButton).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'idle' }),
+      expect.anything()
+    );
+  });
+
   it('flashes and blocks starting until the speech listener is ready', () => {
     const { rerender } = render(
       <VoiceHub
@@ -93,12 +110,12 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    const button = screen.getByRole('button', { name: /start voice recording session/i }) as HTMLButtonElement;
+    const button = screen.getByRole('button', { name: /start voice/i }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(button.className).toContain('animate-pulse');
     expect(button.title).toContain('42%');
     fireEvent.mouseEnter(button);
-    expect(screen.getByText(/42%/)).toBeTruthy();
+    expect(screen.getAllByText(/42%/).length).toBeGreaterThan(0);
     rerender(
       <VoiceHub
         status="idle"
@@ -110,7 +127,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
         onEndSession={mockEndSession}
       />
     );
-    expect(screen.getByText(/73%/)).toBeTruthy();
+    expect(screen.getAllByText(/73%/).length).toBeGreaterThan(0);
     fireEvent.click(button);
     expect(mockStartSession).not.toHaveBeenCalled();
   });
@@ -130,7 +147,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    const interactiveButton = screen.getByRole('button', { name: /start voice recording session/i });
+    const interactiveButton = screen.getByRole('button', { name: /start voice/i });
 
     // Simulate rapid, consecutive user click inputs
     fireEvent.click(interactiveButton);
@@ -163,7 +180,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /start voice recording session/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start voice/i }));
     expect(mockStartSession).not.toHaveBeenCalled();
 
     const dialog = screen.getByRole('dialog', { name: 'Microphone & voice' });
@@ -190,7 +207,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /start voice recording session/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start voice/i }));
     expect(screen.queryByText(/I understand — start/i)).toBeNull();
     expect(mockStartSession).toHaveBeenCalledTimes(1);
   });
@@ -206,7 +223,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /start voice recording session/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start voice/i }));
     fireEvent.click(screen.getByRole('button', { name: 'I understand — start' }));
 
     expect((await screen.findByRole('alert')).textContent).toContain('Could not save consent.');

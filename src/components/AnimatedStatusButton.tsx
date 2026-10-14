@@ -3,6 +3,7 @@ import { AppStatus } from '../context/conversationContextTypes';
 
 interface AnimatedStatusButtonProps {
   readonly status: AppStatus;
+  readonly isPulsing?: boolean;
 }
 
 // Sub-components for each animation state
@@ -15,9 +16,9 @@ const BaseMicIcon = ({ className }: { readonly className?: string }) => (
   </svg>
 );
 
-function IdleAnimation() {
+function IdleAnimation({ isPulsing = false }: { readonly isPulsing?: boolean }) {
   return (
-    <div className="w-full h-full text-art-blue-400 flex items-center justify-center">
+    <div className={`w-full h-full text-art-blue-400 flex items-center justify-center ${isPulsing ? 'animate-pulse' : ''}`}>
       <div className="w-3/4 h-3/4 relative">
         <svg className="absolute w-full h-full" viewBox="0 0 24 24">
           <defs>
@@ -128,8 +129,10 @@ const STATUS_MAP: Record<AppStatus, { component: JSX.Element; color: string }> =
 };
 
 
-export function AnimatedStatusButton({ status }: AnimatedStatusButtonProps): JSX.Element {
-    const { component, color } = STATUS_MAP[status] ?? STATUS_MAP['idle'];
+export function AnimatedStatusButton({ status, isPulsing = false }: AnimatedStatusButtonProps): JSX.Element {
+    const statusConfig = STATUS_MAP[status] ?? STATUS_MAP['idle'];
+    const component = status === 'idle' ? <IdleAnimation isPulsing={isPulsing} /> : statusConfig.component;
+    const color = statusConfig.color;
 
     return (
         <div
@@ -140,9 +143,10 @@ export function AnimatedStatusButton({ status }: AnimatedStatusButtonProps): JSX
                 shadow-md
                 transition-colors duration-500
                 p-1
+                ${isPulsing ? 'animate-pulse' : ''}
             `}
         >
-            <div className="w-full h-full status-enter-active">{component}</div>
+            <div className={`w-full h-full status-enter-active ${isPulsing ? 'animate-pulse' : ''}`}>{component}</div>
         </div>
     );
 }

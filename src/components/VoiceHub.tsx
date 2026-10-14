@@ -27,8 +27,8 @@ export function VoiceHub({
   isModelLoading = false,
   isVadReady = true,
   modelLoadingProgress = 0,
-  isModelUpgrading = false,
-  modelUpgradeProgress = 0,
+  isModelUpgrading: _isModelUpgrading = false,
+  modelUpgradeProgress: _modelUpgradeProgress = 0,
   isSessionActive, 
   onStartSession, 
   onEndSession,
@@ -46,10 +46,6 @@ export function VoiceHub({
   const [showLoadingProgress, setShowLoadingProgress] = useState(false);
   const DEBOUNCE_DELAY_MS = 800; // Rigid interaction safety threshold window
   const isListenerLoading = isModelLoading || !isVadReady;
-  // The background upgrade never blocks the button — isListenerLoading
-  // already covers the one phase that should. This is purely informational,
-  // so it only applies once the button is actually usable.
-  const isBackgroundUpgrading = isModelUpgrading && !isListenerLoading;
 
   const handleButtonClick = useCallback(() => {
     const currentTimestamp = performance.now();
@@ -103,6 +99,8 @@ export function VoiceHub({
 
   const isProcessingActive = status === 'processing';
   const isButtonDisabled = !isSessionActive && (isProcessingActive || isListenerLoading);
+  const isPulsing = isListenerLoading && !isSessionActive;
+  const visualStatus = isSessionActive ? status : 'idle';
 
   return (
     <>
@@ -116,50 +114,45 @@ export function VoiceHub({
         </span>
       )}
       {micAccessError && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{micAccessError}</p>}
-      <button 
-        onClick={handleButtonClick} 
+      <div
+        className={`relative inline-flex items-center justify-center ${isButtonDisabled ? 'cursor-not-allowed' : ''}`}
         onMouseEnter={() => setShowLoadingProgress(true)}
         onMouseLeave={() => setShowLoadingProgress(false)}
         onFocus={() => setShowLoadingProgress(true)}
         onBlur={() => setShowLoadingProgress(false)}
-        disabled={isButtonDisabled}
-        className={`relative w-11 h-11 flex items-center justify-center rounded-full transition-transform active:scale-95 duration-200 ${
-          isButtonDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-        } ${
-          isListenerLoading && !isSessionActive ? 'animate-pulse ring-2 ring-art-blue-400 ring-offset-2' : ''
-        }`} 
-        aria-label={t(isSessionActive ? 'workspace.voice.pause' : 'workspace.voice.start')}
-        aria-busy={isButtonDisabled || (isListenerLoading && isSessionActive)}
-        aria-live="polite"
-        title={isSessionActive
-          ? t('workspace.voice.pause')
-          : isListenerLoading
-            ? t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })
-            : isBackgroundUpgrading
-              ? t('workspace.voice.upgrading', { progress: Math.round(modelUpgradeProgress) })
-              : t('workspace.voice.start')}
       >
-        <AnimatedStatusButton status={status} />
-        {isBackgroundUpgrading && !isSessionActive && (
-          // Deliberately subtler than the blocking-load ring above: the mic is
-          // fully usable right now, this is just letting a curious user know
-          // a better model is still settling in behind the scenes.
+        <button 
+          onClick={handleButtonClick} 
+          onMouseEnter={() => setShowLoadingProgress(true)}
+          onMouseLeave={() => setShowLoadingProgress(false)}
+          onFocus={() => setShowLoadingProgress(true)}
+          onBlur={() => setShowLoadingProgress(false)}
+          disabled={isButtonDisabled}
+          className={`relative w-11 h-11 flex items-center justify-center rounded-full transition-transform active:scale-95 duration-200 ${
+            isButtonDisabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+          } ${
+            isPulsing ? 'animate-pulse ring-2 ring-art-blue-400 ring-offset-2' : ''
+          }`} 
+          aria-label={t(isSessionActive ? 'workspace.voice.pause' : 'workspace.voice.start')}
+          aria-busy={isButtonDisabled || (isListenerLoading && isSessionActive)}
+          aria-live="polite"
+          title={isSessionActive
+            ? t('workspace.voice.pause')
+            : isListenerLoading
+              ? t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })
+              : t('workspace.voice.start')}
+        >
+          <AnimatedStatusButton status={visualStatus} isPulsing={isPulsing} />
+        </button>
+        {isListenerLoading && !isSessionActive && showLoadingProgress && (
           <span
             aria-hidden="true"
-            className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-art-blue-400 ring-1 ring-white animate-pulse"
-          />
+            className="pointer-events-none absolute bottom-full right-0 z-20 mb-2 whitespace-nowrap rounded-md bg-deep-navy px-2.5 py-1.5 text-xs font-semibold text-star-white shadow-lg"
+          >
+            {t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })}
+          </span>
         )}
-      </button>
-      {(isListenerLoading || isBackgroundUpgrading) && !isSessionActive && showLoadingProgress && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute bottom-full right-0 z-20 mb-2 whitespace-nowrap rounded-md bg-deep-navy px-2.5 py-1.5 text-xs font-semibold text-star-white shadow-lg"
-        >
-          {isListenerLoading
-            ? t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })
-            : t('workspace.voice.upgrading', { progress: Math.round(modelUpgradeProgress) })}
-        </span>
-      )}
+      </div>
     </div>
     </>
   );
