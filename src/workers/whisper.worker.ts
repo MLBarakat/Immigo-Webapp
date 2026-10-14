@@ -1,7 +1,14 @@
 import { env, pipeline } from '@huggingface/transformers';
 
 type WorkerAction = 'INIT' | 'TRANSCRIBE' | 'RESET';
-type WorkerStatus = 'INIT_COMPLETED' | 'PROGRESS' | 'COMPLETED' | 'ERROR' | 'UPDATE';
+// INIT_COMPLETED now fires as soon as the fast quantized-tiny tier is ready —
+// that's what the mic button waits on. UPGRADE_READY fires once the better
+// (device-appropriate) tier has finished loading and warming up in the
+// background and has been hot-swapped in; UPGRADE_FAILED fires if that
+// background attempt fails, so the UI can clear its "upgrading" indicator
+// without treating it as a real error — the app is already fully usable on
+// quantized-tiny at that point.
+type WorkerStatus = 'INIT_COMPLETED' | 'PROGRESS' | 'COMPLETED' | 'ERROR' | 'UPDATE' | 'UPGRADE_READY' | 'UPGRADE_FAILED';
 type RuntimeTier = 'webgpu' | 'wasm-simd' | 'quantized-tiny';
 
 interface WorkerRequestMessage {
@@ -31,6 +38,7 @@ interface WorkerResponseMessage {
     realTimeFactor?: number;
     progress?: number;
     tier?: RuntimeTier;
+    upgradeError?: string;
     telemetry?: {
       vramUsageBytes: number;
       fragmentation: number;
@@ -79,11 +87,37 @@ const DECODE_TUNING = {
   condition_on_previous_text: false,
 };
 
-const MODEL_REPO_IDS: Record<RuntimeTier, string> = {
+const MODEL_BY_TIER: Record<RuntimeTier, string> = {
   webgpu: 'Xenova/whisper-small',
   'wasm-simd': 'Xenova/whisper-base',
   'quantized-tiny': 'Xenova/whisper-tiny',
 };
+
+// transformers.js caches every model's fetched files in one shared Cache
+// Storage bucket regardless of tier — there is no per-tier bucket to scope
+// automatically. Before this fix, useBrowserCache was left at its default
+// (true) for every tier, so earlier sessions may have already written large,
+// size-unstable whisper-small/whisper-base entries into this same bucket.
+// Those stale entries count against the same quota quantized-tiny needs, so
+// a one-time, best-effort sweep clears them before the first load each
+// session — this never touches quantized-tiny's own entries.
+const TRANSFORMERS_CACHE_NAME = 'transformers-cache';
+const LARGE_TIER_MODEL_IDS = [MODEL_BY_TIER.webgpu, MODEL_BY_TIER['wasm-simd']];
+
+async function evictStaleLargeTierCacheEntries(): Promise<void> {
+  try {
+    if (typeof caches === 'undefined') return;
+    const cache = await caches.open(TRANSFORMERS_CACHE_NAME);
+    const requests = await cache.keys();
+    await Promise.all(
+      requests
+        .filter((request) => LARGE_TIER_MODEL_IDS.some((modelId) => request.url.includes(modelId)))
+        .map((request) => cache.delete(request))
+    );
+  } catch {
+    // Best-effort only — never let a Cache API quirk block model loading.
+  }
+}
 
 let activeTier: RuntimeTier = 'wasm-simd';
 let transcriberInstance: Transcriber | null = null;
@@ -180,6 +214,12 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
   env.allowRemoteModels = true;
   const modelBasePath = import.meta.env.VITE_WHISPER_MODEL_BASE_PATH?.trim() || '/models/';
   env.localModelPath = modelBasePath.endsWith('/') ? modelBasePath : `${modelBasePath}/`;
+  // Only the small, fast-loading tiny tier is cached across reloads. The
+  // larger tiers are re-fetched from same-origin storage every time instead —
+  // caching them too previously filled the browser's Cache Storage quota and
+  // produced silent, unrecoverable cache-write failures (QuotaExceededError
+  // and an unrelated internal Cache API error) for every tier, tiny included.
+  env.useBrowserCache = tier === 'quantized-tiny';
   // Keep the ONNX WASM runtime on same-origin assets shipped in public/.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runtimeEnv = env as any;
@@ -200,7 +240,7 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
     },
   };
 
-  const transcriber = await pipeline('automatic-speech-recognition', MODEL_REPO_IDS[tier], options);
+  const transcriber = await pipeline('automatic-speech-recognition', MODEL_BY_TIER[tier], options);
   
   // Connect explicit hardware context-loss observers if WebGPU target is elected
   if (useWebGpu && typeof navigator !== 'undefined' && 'gpu' in navigator) {
@@ -279,46 +319,93 @@ async function warmUp(correlationId: string, tier: RuntimeTier): Promise<void> {
   disposeDeep(result);
 }
 
-async function handleInit(message: WorkerRequestMessage): Promise<void> {
+function computePreferredTier(message: WorkerRequestMessage): RuntimeTier {
   const requestedTier = message.payload?.config?.tier;
   const webGpuAvailable = typeof navigator !== 'undefined' && 'gpu' in navigator;
-  const tier = requestedTier ?? (
+  return requestedTier ?? (
     message.payload?.config?.useWebGPU === true && webGpuAvailable ? 'webgpu' : 'wasm-simd'
   );
-  const fallbackTiers: RuntimeTier[] = tier === 'webgpu'
-    ? ['wasm-simd', 'quantized-tiny']
-    : tier === 'wasm-simd'
-      ? ['quantized-tiny']
-      : [];
-  const failures: string[] = [];
+}
 
-  try {
-    await warmUp(message.correlationId, tier);
-    postMessageToMain({ status: 'INIT_COMPLETED', correlationId: message.correlationId, payload: { tier } });
-    return;
-  } catch (error) {
-    failures.push(`Primary (${tier}): ${normalizeError(error)}`);
-  }
-
-  for (const fallbackTier of fallbackTiers) {
-    try {
-      await warmUp(message.correlationId, fallbackTier);
-      postMessageToMain({ status: 'INIT_COMPLETED', correlationId: message.correlationId, payload: { tier: fallbackTier } });
-      return;
-    } catch (fallbackError) {
-      failures.push(`Fallback (${fallbackTier}): ${normalizeError(fallbackError)}`);
-    }
-  }
-
-  postMessageToMain({
-    status: 'ERROR',
-    correlationId: message.correlationId,
-    payload: {
-      error: `Worker initialization failed on all configured tiers. ${failures.join(' | ')}`,
-      tier,
-      stage: 'initialization',
-    },
+/**
+ * Loads and warms up a tier WITHOUT going through getTranscriber()'s shared
+ * activeTier/transcriberInstance bookkeeping. That bookkeeping flips
+ * activeTier as soon as a load STARTS, not when it finishes — fine for the
+ * very first load, but wrong for a background upgrade: if a transcription
+ * request arrived mid-upgrade, it would read the (already-flipped) activeTier
+ * and block on the still-loading upgrade instead of using the tiny tier that
+ * is actually ready right now. This function only touches the shared state
+ * once the upgrade is fully warmed up and ready to serve requests, so an
+ * in-flight or newly-arriving request is never made to wait on it.
+ */
+async function loadAndWarmupIndependently(correlationId: string, tier: RuntimeTier): Promise<Transcriber> {
+  const pipeline = await createTranscriber(correlationId, tier);
+  const warmupAudio = new Float32Array(Math.floor(SAMPLE_RATE * 0.5));
+  const result = await pipeline(warmupAudio, {
+    chunk_length_s: 20,
+    stride_length_s: 1,
+    language: 'en',
+    task: 'transcribe',
+    ...DECODE_TUNING,
   });
+  disposeDeep(result);
+  return pipeline;
+}
+
+async function handleInit(message: WorkerRequestMessage): Promise<void> {
+  const preferredTier = computePreferredTier(message);
+
+  await evictStaleLargeTierCacheEntries();
+
+  // Progressive loading: quantized-tiny has no GPU dependency and by far the
+  // smallest payload, so it always loads first — that's what the mic button
+  // waits on, regardless of device or connection speed. A genuine failure
+  // here is a real error: there is no smaller/safer tier left to fall back
+  // to, so the app has nothing usable to offer.
+  try {
+    await warmUp(message.correlationId, 'quantized-tiny');
+  } catch (error) {
+    postMessageToMain({
+      status: 'ERROR',
+      correlationId: message.correlationId,
+      payload: {
+        error: `Primary (quantized-tiny): ${normalizeError(error)}`,
+        tier: 'quantized-tiny',
+        stage: 'initialization',
+      },
+    });
+    return;
+  }
+
+  postMessageToMain({ status: 'INIT_COMPLETED', correlationId: message.correlationId, payload: { tier: 'quantized-tiny' } });
+
+  if (preferredTier === 'quantized-tiny') {
+    // Device evaluation decided tiny is already the best available tier —
+    // nothing to upgrade to. Report the upgrade phase as settled immediately
+    // so the UI never shows an "upgrading" state that has nothing to resolve.
+    postMessageToMain({ status: 'UPGRADE_READY', correlationId: message.correlationId, payload: { tier: 'quantized-tiny' } });
+    return;
+  }
+
+  // Deliberately sequential, not concurrent with the tiny load above (which
+  // has already finished by this point) or with anything else: downloading
+  // two models at once would make both slower on a constrained connection,
+  // for no benefit, since the mic is already usable on tiny.
+  try {
+    const upgradedPipeline = await loadAndWarmupIndependently(message.correlationId, preferredTier);
+    // Atomic swap — only now does the tier serving live transcriptions change.
+    transcriberInstance = upgradedPipeline;
+    activeTier = preferredTier;
+    postMessageToMain({ status: 'UPGRADE_READY', correlationId: message.correlationId, payload: { tier: preferredTier } });
+  } catch (error) {
+    // Non-fatal: the app is already fully usable on quantized-tiny. Stay on
+    // it for this session rather than surface this as a user-facing error.
+    postMessageToMain({
+      status: 'UPGRADE_FAILED',
+      correlationId: message.correlationId,
+      payload: { tier: preferredTier, upgradeError: normalizeError(error) },
+    });
+  }
 }
 
 async function handleTranscribe(message: WorkerRequestMessage): Promise<void> {

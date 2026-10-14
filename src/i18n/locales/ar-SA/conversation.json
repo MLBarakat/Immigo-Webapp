@@ -24,15 +24,36 @@
       "knowledgeBank": "بنك معارف USCIS",
       "studyBank": "مواد الدراسة من USCIS",
       "materials": {
-        "civics2008": { "title": "اختبار التربية المدنية لعام 2008 (100 سؤال)", "subtitle": "بنك أسئلة USCIS الرسمي", "badge": "PDF" },
-        "civics2025": { "title": "اختبار التربية المدنية لعام 2025 (128 سؤالًا)", "subtitle": "مواد الدراسة وبنك الأسئلة الرسمي من USCIS", "badge": "USCIS" },
-        "studyGuides": { "title": "أدلة القراءة والكتابة والدراسة", "subtitle": "مواد الدراسة الرسمية من USCIS", "badge": "USCIS" }
+        "civics2008": {
+          "title": "اختبار التربية المدنية لعام 2008 (100 سؤال)",
+          "subtitle": "بنك أسئلة USCIS الرسمي",
+          "badge": "PDF"
+        },
+        "civics2025": {
+          "title": "اختبار التربية المدنية لعام 2025 (128 سؤالًا)",
+          "subtitle": "مواد الدراسة وبنك الأسئلة الرسمي من USCIS",
+          "badge": "USCIS"
+        },
+        "studyGuides": {
+          "title": "أدلة القراءة والكتابة والدراسة",
+          "subtitle": "مواد الدراسة الرسمية من USCIS",
+          "badge": "USCIS"
+        }
       },
       "officialMedia": "وسائط USCIS الرسمية",
       "media": {
-        "education": { "title": "موارد تعليم المواطنة", "type": "أدلة ومقاطع فيديو" },
-        "studyMaterials": { "title": "العثور على مواد الدراسة", "type": "USCIS الرسمي" },
-        "resourceCenter": { "title": "مركز موارد المواطنة لدى USCIS", "type": "الموقع الرسمي" }
+        "education": {
+          "title": "موارد تعليم المواطنة",
+          "type": "أدلة ومقاطع فيديو"
+        },
+        "studyMaterials": {
+          "title": "العثور على مواد الدراسة",
+          "type": "USCIS الرسمي"
+        },
+        "resourceCenter": {
+          "title": "مركز موارد المواطنة لدى USCIS",
+          "type": "الموقع الرسمي"
+        }
       },
       "performance": "الأداء والتصدير",
       "analytics": "تحليلات الجلسة",
@@ -89,6 +110,7 @@
       "stop": "إيقاف التفاعل بالصوت",
       "pause": "إيقاف مؤقت",
       "loading": "جارٍ تجهيز مستمع الصوت… {{progress}}٪",
+      "upgrading": "جارٍ تحسين الدقة في الخلفية… {{progress}}٪",
       "systemError": "خطأ في النظام",
       "consentTitle": "الميكروفون والصوت",
       "consentDescription": "للتدرب بصوت عالٍ، يستخدم ImmiGO الميكروفون. يُحوّل كلامك إلى نص",
@@ -111,9 +133,18 @@
       "downloadTitle": "تنزيل نص المقابلة",
       "simulationModes": "أوضاع المحاكاة",
       "modeLegend": "وضع محاكاة المقابلة",
-      "standard": { "label": "مقابلة عادية", "description": "تجربة مقابلة واقعية لدى USCIS" },
-      "practice": { "label": "وضع التدريب", "description": "السماح بإعادة المحاولة والتلميحات" },
-      "study": { "label": "وضع الدراسة", "description": "شرح كل سؤال وخلفيته" },
+      "standard": {
+        "label": "مقابلة عادية",
+        "description": "تجربة مقابلة واقعية لدى USCIS"
+      },
+      "practice": {
+        "label": "وضع التدريب",
+        "description": "السماح بإعادة المحاولة والتلميحات"
+      },
+      "study": {
+        "label": "وضع الدراسة",
+        "description": "شرح كل سؤال وخلفيته"
+      },
       "utilities": "أدوات الجلسة",
       "clear": "مسح الجلسة",
       "clearConfirmTitle": "هل تريد مسح الجلسة؟",

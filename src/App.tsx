@@ -225,6 +225,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               isModelLoading={manager.isModelLoading}
               isVadReady={manager.isVadReady}
               modelLoadingProgress={manager.modelLoadingProgress}
+              isModelUpgrading={manager.isModelUpgrading}
+              modelUpgradeProgress={manager.modelUpgradeProgress}
               isSessionActive={manager.isSessionActive}
               isVoiceSessionActive={manager.isVoiceSessionActive}
               sessionTime={manager.sessionTime}
@@ -361,6 +363,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           isModelLoading={manager.isModelLoading}
           isVadReady={manager.isVadReady}
           modelLoadingProgress={manager.modelLoadingProgress}
+          isModelUpgrading={manager.isModelUpgrading}
+          modelUpgradeProgress={manager.modelUpgradeProgress}
           isSessionActive={manager.isSessionActive}
           isVoiceSessionActive={manager.isVoiceSessionActive}
           sessionTime={manager.sessionTime}

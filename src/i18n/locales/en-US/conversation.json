@@ -24,15 +24,36 @@
       "knowledgeBank": "USCIS Knowledge Bank",
       "studyBank": "USCIS Study Bank",
       "materials": {
-        "civics2008": { "title": "2008 Civics Test (100 questions)", "subtitle": "Official USCIS question bank", "badge": "PDF" },
-        "civics2025": { "title": "2025 Civics Test (128 questions)", "subtitle": "Official USCIS study materials and question bank", "badge": "USCIS" },
-        "studyGuides": { "title": "Reading, writing & study guides", "subtitle": "Official USCIS study materials", "badge": "USCIS" }
+        "civics2008": {
+          "title": "2008 Civics Test (100 questions)",
+          "subtitle": "Official USCIS question bank",
+          "badge": "PDF"
+        },
+        "civics2025": {
+          "title": "2025 Civics Test (128 questions)",
+          "subtitle": "Official USCIS study materials and question bank",
+          "badge": "USCIS"
+        },
+        "studyGuides": {
+          "title": "Reading, writing & study guides",
+          "subtitle": "Official USCIS study materials",
+          "badge": "USCIS"
+        }
       },
       "officialMedia": "Official USCIS Media",
       "media": {
-        "education": { "title": "Citizenship education resources", "type": "Guides & videos" },
-        "studyMaterials": { "title": "Find study materials", "type": "Official USCIS" },
-        "resourceCenter": { "title": "USCIS Citizenship Resource Center", "type": "Official website" }
+        "education": {
+          "title": "Citizenship education resources",
+          "type": "Guides & videos"
+        },
+        "studyMaterials": {
+          "title": "Find study materials",
+          "type": "Official USCIS"
+        },
+        "resourceCenter": {
+          "title": "USCIS Citizenship Resource Center",
+          "type": "Official website"
+        }
       },
       "performance": "Performance & Exports",
       "analytics": "Session Analytics",
@@ -89,6 +110,7 @@
       "stop": "Stop Voice Mode",
       "pause": "Pause",
       "loading": "Preparing voice listener… {{progress}}%",
+      "upgrading": "Enhancing accuracy in the background… {{progress}}%",
       "systemError": "System Error",
       "consentTitle": "Microphone & voice",
       "consentDescription": "To practice out loud, ImmiGO uses your microphone. Your speech is transcribed to text",
@@ -111,9 +133,18 @@
       "downloadTitle": "Download Transcript",
       "simulationModes": "Simulation Modes",
       "modeLegend": "Interview simulation mode",
-      "standard": { "label": "Standard Interview", "description": "Real USCIS interview experience" },
-      "practice": { "label": "Practice Mode", "description": "Allow retries & hints" },
-      "study": { "label": "Study Mode", "description": "Explain each question & background" },
+      "standard": {
+        "label": "Standard Interview",
+        "description": "Real USCIS interview experience"
+      },
+      "practice": {
+        "label": "Practice Mode",
+        "description": "Allow retries & hints"
+      },
+      "study": {
+        "label": "Study Mode",
+        "description": "Explain each question & background"
+      },
       "utilities": "Session Utilities",
       "clear": "Clear Session",
       "clearConfirmTitle": "Clear session?",

@@ -11,6 +11,8 @@ interface VoiceHubProps {
   readonly isModelLoading?: boolean;
   readonly isVadReady?: boolean;
   readonly modelLoadingProgress?: number;
+  readonly isModelUpgrading?: boolean;
+  readonly modelUpgradeProgress?: number;
   readonly isSessionActive: boolean;
   readonly onStartSession: () => void;
   readonly onEndSession: () => void;
@@ -25,6 +27,8 @@ export function VoiceHub({
   isModelLoading = false,
   isVadReady = true,
   modelLoadingProgress = 0,
+  isModelUpgrading = false,
+  modelUpgradeProgress = 0,
   isSessionActive, 
   onStartSession, 
   onEndSession,
@@ -42,6 +46,10 @@ export function VoiceHub({
   const [showLoadingProgress, setShowLoadingProgress] = useState(false);
   const DEBOUNCE_DELAY_MS = 800; // Rigid interaction safety threshold window
   const isListenerLoading = isModelLoading || !isVadReady;
+  // The background upgrade never blocks the button — isListenerLoading
+  // already covers the one phase that should. This is purely informational,
+  // so it only applies once the button is actually usable.
+  const isBackgroundUpgrading = isModelUpgrading && !isListenerLoading;
 
   const handleButtonClick = useCallback(() => {
     const currentTimestamp = performance.now();
@@ -115,7 +123,7 @@ export function VoiceHub({
         onFocus={() => setShowLoadingProgress(true)}
         onBlur={() => setShowLoadingProgress(false)}
         disabled={isButtonDisabled}
-        className={`w-11 h-11 flex items-center justify-center rounded-full transition-transform active:scale-95 duration-200 ${
+        className={`relative w-11 h-11 flex items-center justify-center rounded-full transition-transform active:scale-95 duration-200 ${
           isButtonDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
         } ${
           isListenerLoading && !isSessionActive ? 'animate-pulse ring-2 ring-art-blue-400 ring-offset-2' : ''
@@ -127,16 +135,29 @@ export function VoiceHub({
           ? t('workspace.voice.pause')
           : isListenerLoading
             ? t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })
-            : t('workspace.voice.start')}
+            : isBackgroundUpgrading
+              ? t('workspace.voice.upgrading', { progress: Math.round(modelUpgradeProgress) })
+              : t('workspace.voice.start')}
       >
         <AnimatedStatusButton status={status} />
+        {isBackgroundUpgrading && !isSessionActive && (
+          // Deliberately subtler than the blocking-load ring above: the mic is
+          // fully usable right now, this is just letting a curious user know
+          // a better model is still settling in behind the scenes.
+          <span
+            aria-hidden="true"
+            className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-art-blue-400 ring-1 ring-white animate-pulse"
+          />
+        )}
       </button>
-      {isListenerLoading && !isSessionActive && showLoadingProgress && (
+      {(isListenerLoading || isBackgroundUpgrading) && !isSessionActive && showLoadingProgress && (
         <span
           aria-hidden="true"
           className="pointer-events-none absolute bottom-full right-0 z-20 mb-2 whitespace-nowrap rounded-md bg-deep-navy px-2.5 py-1.5 text-xs font-semibold text-star-white shadow-lg"
         >
-          {t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })}
+          {isListenerLoading
+            ? t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })
+            : t('workspace.voice.upgrading', { progress: Math.round(modelUpgradeProgress) })}
         </span>
       )}
     </div>

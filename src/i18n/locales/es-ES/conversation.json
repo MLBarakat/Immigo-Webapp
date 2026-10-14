@@ -24,15 +24,36 @@
       "knowledgeBank": "Banco de conocimientos de USCIS",
       "studyBank": "Banco de estudio de USCIS",
       "materials": {
-        "civics2008": { "title": "Examen cívico de 2008 (100 preguntas)", "subtitle": "Banco oficial de preguntas de USCIS", "badge": "PDF" },
-        "civics2025": { "title": "Examen cívico de 2025 (128 preguntas)", "subtitle": "Materiales de estudio y banco de preguntas oficiales de USCIS", "badge": "USCIS" },
-        "studyGuides": { "title": "Lectura, escritura y guías de estudio", "subtitle": "Materiales oficiales de estudio de USCIS", "badge": "USCIS" }
+        "civics2008": {
+          "title": "Examen cívico de 2008 (100 preguntas)",
+          "subtitle": "Banco oficial de preguntas de USCIS",
+          "badge": "PDF"
+        },
+        "civics2025": {
+          "title": "Examen cívico de 2025 (128 preguntas)",
+          "subtitle": "Materiales de estudio y banco de preguntas oficiales de USCIS",
+          "badge": "USCIS"
+        },
+        "studyGuides": {
+          "title": "Lectura, escritura y guías de estudio",
+          "subtitle": "Materiales oficiales de estudio de USCIS",
+          "badge": "USCIS"
+        }
       },
       "officialMedia": "Contenido oficial de USCIS",
       "media": {
-        "education": { "title": "Recursos educativos sobre ciudadanía", "type": "Guías y videos" },
-        "studyMaterials": { "title": "Buscar materiales de estudio", "type": "USCIS oficial" },
-        "resourceCenter": { "title": "Centro de recursos de ciudadanía de USCIS", "type": "Sitio web oficial" }
+        "education": {
+          "title": "Recursos educativos sobre ciudadanía",
+          "type": "Guías y videos"
+        },
+        "studyMaterials": {
+          "title": "Buscar materiales de estudio",
+          "type": "USCIS oficial"
+        },
+        "resourceCenter": {
+          "title": "Centro de recursos de ciudadanía de USCIS",
+          "type": "Sitio web oficial"
+        }
       },
       "performance": "Rendimiento y exportaciones",
       "analytics": "Análisis de sesión",
@@ -89,6 +110,7 @@
       "stop": "Detener modo de voz",
       "pause": "Pausar",
       "loading": "Preparando el reconocimiento de voz… {{progress}}%",
+      "upgrading": "Mejorando la precisión en segundo plano… {{progress}}%",
       "systemError": "Error del sistema",
       "consentTitle": "Micrófono y voz",
       "consentDescription": "Para practicar en voz alta, ImmiGO utiliza tu micrófono. Tu voz se transcribe a texto",
@@ -111,9 +133,18 @@
       "downloadTitle": "Descargar transcripción",
       "simulationModes": "Modos de simulación",
       "modeLegend": "Modo de simulación de entrevista",
-      "standard": { "label": "Entrevista estándar", "description": "Experiencia realista de entrevista de USCIS" },
-      "practice": { "label": "Modo práctica", "description": "Permite reintentos y pistas" },
-      "study": { "label": "Modo estudio", "description": "Explica cada pregunta y su contexto" },
+      "standard": {
+        "label": "Entrevista estándar",
+        "description": "Experiencia realista de entrevista de USCIS"
+      },
+      "practice": {
+        "label": "Modo práctica",
+        "description": "Permite reintentos y pistas"
+      },
+      "study": {
+        "label": "Modo estudio",
+        "description": "Explica cada pregunta y su contexto"
+      },
       "utilities": "Herramientas de sesión",
       "clear": "Borrar sesión",
       "clearConfirmTitle": "¿Borrar la sesión?",
