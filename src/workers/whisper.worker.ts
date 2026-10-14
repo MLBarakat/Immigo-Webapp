@@ -132,6 +132,19 @@ let activeInferenceId = 0;
 // Central Mutex Lock to prevent initialization race conditions across parallel thread events
 let isInitializationMutexLocked = false;
 
+// INIT dedup: concurrent INIT messages (e.g. double-mounted hook creating two
+// Workers, or a re-sent INIT) must share one network load, not each fetch the
+// same model files in parallel. initInFlight is non-null while a runInit is
+// in progress; initSettled replays the settled outcome for late attachers
+// without any fetch. upgradeInFlight shares one warming promise per tier.
+// initGeneration is bumped by RESET so a late upgrade can never swap in after
+// a reset cleared the state.
+let initInFlight: Promise<void> | null = null;
+let initSettled: { upgradedTier: RuntimeTier | null; upgradeError?: string } | null = null;
+let startupEvictDone = false;
+let initGeneration = 0;
+const upgradeInFlight = new Map<RuntimeTier, Promise<Transcriber>>();
+
 function postMessageToMain(message: WorkerResponseMessage): void {
   self.postMessage(message);
 }
@@ -346,23 +359,83 @@ function computePreferredTier(message: WorkerRequestMessage): RuntimeTier {
  * in-flight or newly-arriving request is never made to wait on it.
  */
 async function loadAndWarmupIndependently(correlationId: string, tier: RuntimeTier): Promise<Transcriber> {
-  const pipeline = await createTranscriber(correlationId, tier);
-  const warmupAudio = new Float32Array(Math.floor(SAMPLE_RATE * 0.5));
-  const result = await pipeline(warmupAudio, {
-    chunk_length_s: 20,
-    stride_length_s: 1,
-    language: 'en',
-    task: 'transcribe',
-    ...DECODE_TUNING,
+  // Share one warming promise per tier so concurrent INITs attach to the same
+  // network load instead of each downloading the same files. This map is only
+  // ever consulted here — getTranscriber()/handleTranscribe() never touch it,
+  // so transcribes keep using the ready tiny tier mid-upgrade. Entries are
+  // removed on settle so a later INIT re-evaluates fresh state.
+  const existing = upgradeInFlight.get(tier);
+  if (existing) return existing;
+  const promise = (async () => {
+    const pipeline = await createTranscriber(correlationId, tier);
+    const warmupAudio = new Float32Array(Math.floor(SAMPLE_RATE * 0.5));
+    const result = await pipeline(warmupAudio, {
+      chunk_length_s: 20,
+      stride_length_s: 1,
+      language: 'en',
+      task: 'transcribe',
+      ...DECODE_TUNING,
+    });
+    disposeDeep(result);
+    return pipeline;
+  })().finally(() => {
+    if (upgradeInFlight.get(tier) === promise) upgradeInFlight.delete(tier);
   });
-  disposeDeep(result);
-  return pipeline;
+  upgradeInFlight.set(tier, promise);
+  return promise;
 }
 
 async function handleInit(message: WorkerRequestMessage): Promise<void> {
+  // Dedupe concurrent INITs: the second attaches to the first's single network
+  // load and gets the settled outcome replayed for its own correlationId.
+  // This never blocks TRANSCRIBE — that is a separate message branch using the
+  // already-ready tiny instance — and never flips activeTier early.
+  if (initInFlight) {
+    try {
+      await initInFlight;
+    } catch {
+      // runInit never throws (it posts ERROR itself), so reaching here with no
+      // settled success means the first run failed before tiny was ready:
+      // fall through to a fresh attempt below.
+    }
+    if (initSettled) {
+      const preferredTier = computePreferredTier(message);
+      postMessageToMain({ status: 'INIT_COMPLETED', correlationId: message.correlationId, payload: { tier: 'quantized-tiny' } });
+      if (preferredTier === 'quantized-tiny' || initSettled.upgradedTier === preferredTier) {
+        if (initSettled.upgradedTier) {
+          postMessageToMain({ status: 'UPGRADE_READY', correlationId: message.correlationId, payload: { tier: initSettled.upgradedTier } });
+        } else if (initSettled.upgradeError) {
+          postMessageToMain({
+            status: 'UPGRADE_FAILED',
+            correlationId: message.correlationId,
+            payload: { tier: preferredTier, upgradeError: initSettled.upgradeError },
+          });
+        } else {
+          postMessageToMain({ status: 'UPGRADE_READY', correlationId: message.correlationId, payload: { tier: 'quantized-tiny' } });
+        }
+        return;
+      }
+      // A different upgrade tier was requested than the one that settled:
+      // fall through and run only the missing upgrade (tiny is already ready).
+    }
+  }
+  initInFlight = runInit(message).finally(() => {
+    initInFlight = null;
+  });
+  await initInFlight;
+}
+
+async function runInit(message: WorkerRequestMessage): Promise<void> {
+  const generationAtStart = initGeneration;
   const preferredTier = computePreferredTier(message);
 
-  await evictStaleLargeTierCacheEntries();
+  // Run the startup eviction exactly once per worker lifetime. Per-INIT
+  // eviction raced with concurrent loads (run B deleting files run A had just
+  // cached, forcing re-fetch duplicates). Post-upgrade eviction below is kept.
+  if (!startupEvictDone) {
+    startupEvictDone = true;
+    await evictStaleLargeTierCacheEntries();
+  }
 
   // Progressive loading: quantized-tiny has no GPU dependency and by far the
   // smallest payload, so it always loads first — that's what the mic button
@@ -372,6 +445,7 @@ async function handleInit(message: WorkerRequestMessage): Promise<void> {
   try {
     await warmUp(message.correlationId, 'quantized-tiny');
   } catch (error) {
+    // Leave initSettled null so a later INIT retries instead of replaying this.
     postMessageToMain({
       status: 'ERROR',
       correlationId: message.correlationId,
@@ -390,6 +464,7 @@ async function handleInit(message: WorkerRequestMessage): Promise<void> {
     // Device evaluation decided tiny is already the best available tier —
     // nothing to upgrade to. Report the upgrade phase as settled immediately
     // so the UI never shows an "upgrading" state that has nothing to resolve.
+    initSettled = { upgradedTier: null };
     postMessageToMain({ status: 'UPGRADE_READY', correlationId: message.correlationId, payload: { tier: 'quantized-tiny' } });
     return;
   }
@@ -400,13 +475,24 @@ async function handleInit(message: WorkerRequestMessage): Promise<void> {
   // for no benefit, since the mic is already usable on tiny.
   try {
     const upgradedPipeline = await loadAndWarmupIndependently(message.correlationId, preferredTier);
+    // A RESET during the upgrade clears the state; a late success must never
+    // swap in after it. Dispose and stay silent (RESET already settled the UI).
+    if (generationAtStart !== initGeneration) {
+      disposeDeep(upgradedPipeline);
+      return;
+    }
     // Atomic swap — only now does the tier serving live transcriptions change.
+    // Transcribes arriving mid-upgrade used tiny (activeTier was still tiny);
+    // only this line flips them to the upgraded tier, and only on success.
     transcriberInstance = upgradedPipeline;
     activeTier = preferredTier;
+    initSettled = { upgradedTier: preferredTier };
     postMessageToMain({ status: 'UPGRADE_READY', correlationId: message.correlationId, payload: { tier: preferredTier } });
   } catch (error) {
+    if (generationAtStart !== initGeneration) return;
     // Non-fatal: the app is already fully usable on quantized-tiny. Stay on
     // it for this session rather than surface this as a user-facing error.
+    initSettled = { upgradedTier: null, upgradeError: normalizeError(error) };
     postMessageToMain({
       status: 'UPGRADE_FAILED',
       correlationId: message.correlationId,
@@ -521,6 +607,11 @@ self.addEventListener('message', (event: MessageEvent<WorkerRequestMessage>) => 
   }
 
   if (message.action === 'RESET') {
+    // Invalidate any in-flight init/upgrade so a late success can never swap
+    // in after the reset. Transcribe path and posted protocol are unchanged.
+    initGeneration++;
+    upgradeInFlight.clear();
+    initSettled = null;
     transcriberInstance = null;
     activeLoadingPromise = null;
     isInitializationMutexLocked = false;

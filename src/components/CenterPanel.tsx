@@ -13,9 +13,6 @@ interface CenterPanelProps {
   appStatus: AppStatus;
   isModelLoading: boolean;
   isVadReady: boolean;
-  modelLoadingProgress: number;
-  isModelUpgrading?: boolean;
-  modelUpgradeProgress?: number;
   isSessionActive: boolean;
   isVoiceSessionActive: boolean;
   sessionTime: number;
@@ -64,9 +61,6 @@ export function CenterPanel({
   appStatus,
   isModelLoading,
   isVadReady,
-  modelLoadingProgress,
-  isModelUpgrading,
-  modelUpgradeProgress,
   isSessionActive,
   isVoiceSessionActive,
   sessionTime,
@@ -224,9 +218,6 @@ export function CenterPanel({
                   status={appStatus}
                   isModelLoading={isModelLoading}
                   isVadReady={isVadReady}
-                  modelLoadingProgress={modelLoadingProgress}
-                  isModelUpgrading={isModelUpgrading}
-                  modelUpgradeProgress={modelUpgradeProgress}
                   isSessionActive={isSessionActive}
                   onStartSession={onStartSession}
                   onEndSession={onEndSession}

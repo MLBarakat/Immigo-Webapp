@@ -10,9 +10,6 @@ interface VoiceHubProps {
   readonly status: AppStatus;
   readonly isModelLoading?: boolean;
   readonly isVadReady?: boolean;
-  readonly modelLoadingProgress?: number;
-  readonly isModelUpgrading?: boolean;
-  readonly modelUpgradeProgress?: number;
   readonly isSessionActive: boolean;
   readonly onStartSession: () => void;
   readonly onEndSession: () => void;
@@ -26,9 +23,6 @@ export function VoiceHub({
   status, 
   isModelLoading = false,
   isVadReady = true,
-  modelLoadingProgress = 0,
-  isModelUpgrading: _isModelUpgrading = false,
-  modelUpgradeProgress: _modelUpgradeProgress = 0,
   isSessionActive, 
   onStartSession, 
   onEndSession,
@@ -110,7 +104,7 @@ export function VoiceHub({
     <div className="relative flex flex-col items-center justify-center gap-1" role="region" aria-label={t('workspace.voice.region')}>
       {isListenerLoading && !isSessionActive && (
         <span className="absolute sr-only" role="status">
-          {t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })}
+          {t('workspace.voice.loading')}
         </span>
       )}
       {micAccessError && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{micAccessError}</p>}
@@ -139,7 +133,7 @@ export function VoiceHub({
           title={isSessionActive
             ? t('workspace.voice.pause')
             : isListenerLoading
-              ? t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })
+              ? t('workspace.voice.loading')
               : t('workspace.voice.start')}
         >
           <AnimatedStatusButton status={visualStatus} isPulsing={isPulsing} />
@@ -149,7 +143,7 @@ export function VoiceHub({
             aria-hidden="true"
             className="pointer-events-none absolute bottom-full right-0 z-20 mb-2 whitespace-nowrap rounded-md bg-deep-navy px-2.5 py-1.5 text-xs font-semibold text-star-white shadow-lg"
           >
-            {t('workspace.voice.loading', { progress: Math.round(modelLoadingProgress) })}
+            {t('workspace.voice.loading')}
           </span>
         )}
       </div>

@@ -12,8 +12,6 @@ export interface AudioRecorderProps {
     vadReady: boolean;
     /** Whether the Whisper model is loading */
     isModelLoading: boolean;
-    /** Whisper model load progress 0-100 */
-    modelLoadingProgress: number;
     /** Current FSM state label for ARIA and UI feedback */
     fsmState: TranscriptionState;
     /** Whether the background worker is currently executing a matrix inference split */
@@ -35,7 +33,6 @@ export function AudioRecorder({
     isSessionActive,
     vadReady,
     isModelLoading,
-    modelLoadingProgress,
     fsmState,
     isTranscribing,
     onStart,
@@ -77,26 +74,6 @@ export function AudioRecorder({
 
     return (
         <div className="audio-recorder" role="region" aria-label="Speech Transcription UI Window">
-            {/* Model loading progress indicator */}
-            {isModelLoading && (
-                <div
-                    className="model-loading-bar"
-                    role="progressbar"
-                    aria-valuenow={Math.round(modelLoadingProgress)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label="Loading local Whisper model asset graph"
-                >
-                    <div
-                        className="model-loading-fill"
-                        style={{ width: `${modelLoadingProgress}%` }}
-                    />
-                    <span className="model-loading-label">
-                        Loading localized intelligence layers… {Math.round(modelLoadingProgress)}%
-                    </span>
-                </div>
-            )}
-
             {/* Record toggle interaction button container */}
             <button
                 id="audio-recorder-toggle"
@@ -234,27 +211,6 @@ export function AudioRecorder({
                     background: var(--color-error, #ef4444);
                     color: white;
                     border-color: var(--color-error, #ef4444);
-                }
-                .model-loading-bar {
-                    position: relative;
-                    height: 6px;
-                    background: var(--color-border, #e5e7eb);
-                    border-radius: 3px;
-                    margin-bottom: 1rem;
-                    overflow: hidden;
-                }
-                .model-loading-fill {
-                    height: 100%;
-                    background: var(--color-accent, #6366f1);
-                    transition: width 200ms ease;
-                }
-                .model-loading-label {
-                    position: absolute;
-                    top: 10px;
-                    left: 0;
-                    font-size: 0.75rem;
-                    font-weight: 500;
-                    color: var(--color-muted, #6b7280);
                 }
                 .sr-only {
                     position: absolute;

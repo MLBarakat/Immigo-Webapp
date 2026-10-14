@@ -3,10 +3,9 @@ import React from 'react';
 
 interface AppLoadingOverlayProps {
     isLoading: boolean;
-    modelLoadingProgress: number;
 }
 
-const AppLoadingOverlay: React.FC<AppLoadingOverlayProps> = ({ isLoading, modelLoadingProgress }) => {
+const AppLoadingOverlay: React.FC<AppLoadingOverlayProps> = ({ isLoading }) => {
     if (!isLoading) {
         return null;
     }
@@ -20,12 +19,10 @@ const AppLoadingOverlay: React.FC<AppLoadingOverlayProps> = ({ isLoading, modelL
             {/* Waveform Animation */}
             <div className="flex items-center justify-center space-x-2 h-10">
                 {bars.map((_, i) => {
-                    const threshold = (i + 1) * 20; // Each bar represents 20%
-                    const barColor = modelLoadingProgress >= threshold ? 'bg-blue-500' : 'bg-gray-600';
                     return (
                         <div
                             key={i}
-                            className={`w-2 rounded-full ${barColor}`}
+                            className="w-2 rounded-full bg-blue-500"
                             style={{
                                 height: '100%',
                                 animation: `wave 1.2s ease-in-out infinite`,
@@ -36,8 +33,6 @@ const AppLoadingOverlay: React.FC<AppLoadingOverlayProps> = ({ isLoading, modelL
                 })}
             </div>
 
-            {/* Progress Text */}
-            <div className="text-white text-lg mt-4">{Math.round(modelLoadingProgress)}%</div>
             <div className="text-gray-400 text-sm mt-2">Please wait, this may take a moment on your first visit.</div>
         </div>
     );

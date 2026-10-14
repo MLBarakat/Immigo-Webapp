@@ -103,7 +103,6 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
         status="idle"
         isModelLoading={true}
         isVadReady={false}
-        modelLoadingProgress={42}
         isSessionActive={false}
         onStartSession={mockStartSession}
         onEndSession={mockEndSession}
@@ -113,21 +112,20 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     const button = screen.getByRole('button', { name: /start voice/i }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(button.className).toContain('animate-pulse');
-    expect(button.title).toContain('42%');
+    expect(button.title).toContain('Preparing voice listener');
     fireEvent.mouseEnter(button);
-    expect(screen.getAllByText(/42%/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Preparing voice listener/).length).toBeGreaterThan(0);
     rerender(
       <VoiceHub
         status="idle"
         isModelLoading={true}
         isVadReady={false}
-        modelLoadingProgress={73}
         isSessionActive={false}
         onStartSession={mockStartSession}
         onEndSession={mockEndSession}
       />
     );
-    expect(screen.getAllByText(/73%/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Preparing voice listener/).length).toBeGreaterThan(0);
     fireEvent.click(button);
     expect(mockStartSession).not.toHaveBeenCalled();
   });
