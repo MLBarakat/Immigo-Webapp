@@ -94,13 +94,17 @@ const MODEL_BY_TIER: Record<RuntimeTier, string> = {
 };
 
 // transformers.js caches every model's fetched files in one shared Cache
-// Storage bucket regardless of tier — there is no per-tier bucket to scope
-// automatically. Before this fix, useBrowserCache was left at its default
-// (true) for every tier, so earlier sessions may have already written large,
-// size-unstable whisper-small/whisper-base entries into this same bucket.
-// Those stale entries count against the same quota quantized-tiny needs, so
-// a one-time, best-effort sweep clears them before the first load each
-// session — this never touches quantized-tiny's own entries.
+// Storage bucket regardless of tier. quantized-tiny MUST always be cached
+// (fast load on page reload); whisper-small / whisper-base are allowed to
+// cache within a session (so the tokenizer isn't re-fetched on every warmup
+// inference call) but their entries are evicted right after warmup completes
+// so they never consume quota between sessions and can never displace the
+// tiny model's entries.
+//
+// evictStaleLargeTierCacheEntries() is therefore called TWICE per session:
+//   1. At startup — clears any leftover entries from a previous session.
+//   2. After the upgrade tier finishes warming up — immediately frees the
+//      quota those entries just consumed, leaving only tiny in the cache.
 const TRANSFORMERS_CACHE_NAME = 'transformers-cache';
 const LARGE_TIER_MODEL_IDS = [MODEL_BY_TIER.webgpu, MODEL_BY_TIER['wasm-simd']];
 
@@ -214,12 +218,15 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
   env.allowRemoteModels = true;
   const modelBasePath = import.meta.env.VITE_WHISPER_MODEL_BASE_PATH?.trim() || '/models/';
   env.localModelPath = modelBasePath.endsWith('/') ? modelBasePath : `${modelBasePath}/`;
-  // Only the small, fast-loading tiny tier is cached across reloads. The
-  // larger tiers are re-fetched from same-origin storage every time instead —
-  // caching them too previously filled the browser's Cache Storage quota and
-  // produced silent, unrecoverable cache-write failures (QuotaExceededError
-  // and an unrelated internal Cache API error) for every tier, tiny included.
-  env.useBrowserCache = tier === 'quantized-tiny';
+  // Enable browser cache for all tiers within a session. Stale large-tier
+  // entries (whisper-small, whisper-base) are evicted at startup by
+  // evictStaleLargeTierCacheEntries() before the first load, so there is no
+  // risk of serving outdated weights or overflowing quota. Without this,
+  // transformers.js re-fetches the tokenizer and processor config files on
+  // every inference call (including the warmup pass), producing a visible
+  // triple-download of all metadata files in the network tab. With caching
+  // enabled, those files are cached after the first fetch and reused.
+  env.useBrowserCache = true;
   // Keep the ONNX WASM runtime on same-origin assets shipped in public/.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runtimeEnv = env as any;
@@ -405,6 +412,13 @@ async function handleInit(message: WorkerRequestMessage): Promise<void> {
       correlationId: message.correlationId,
       payload: { tier: preferredTier, upgradeError: normalizeError(error) },
     });
+  } finally {
+    // Phase-2 cache hygiene: evict whatever the large tier wrote to Cache
+    // Storage during this session. quantized-tiny's entries are untouched
+    // (its model ID is not in LARGE_TIER_MODEL_IDS). This guarantees tiny
+    // is the only model that persists in the cache between reloads and can
+    // never be displaced by quota pressure from the larger models.
+    void evictStaleLargeTierCacheEntries();
   }
 }
 
