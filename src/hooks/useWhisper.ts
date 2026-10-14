@@ -12,12 +12,6 @@ export interface WhisperHook {
   finalTranscript: string;
   isModelLoading: boolean;
   isVadReady: boolean;
-  modelLoadingProgress: number;
-  // True from the moment the fast tier is ready until the background upgrade
-  // to a better tier settles (either way — success or failure). The mic is
-  // already fully usable while this is true; it's purely informational.
-  isModelUpgrading: boolean;
-  modelUpgradeProgress: number;
   isTranscribing: boolean;
   startRecording: () => void;
   stopRecording: () => void;
@@ -54,19 +48,9 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   // Connect directly to the authoritative global state context to prevent split-brain states
   const { state, actions } = useTranscription();
   
-  // Local state tracking targets to drive initialization progress indicators smoothly
+  // Local readiness flags for the VAD and Whisper model worker.
   const [vadInitializedState, setVadInitializedState] = useState<boolean>(false);
-  const [loadingProgressPercent, setLoadingProgressPercent] = useState<number>(0);
   const [modelReadyState, setModelReadyState] = useState<boolean>(true);
-  const [isModelUpgrading, setIsModelUpgrading] = useState<boolean>(false);
-  const [upgradeProgressPercent, setUpgradeProgressPercent] = useState<number>(0);
-
-  // The worker loads tiers strictly sequentially (tiny, then the background
-  // upgrade) and only ever posts PROGRESS for whichever one is currently
-  // loading, so which phase a given PROGRESS message belongs to is exactly
-  // "has the fast tier finished yet" — tracked here as a ref so the message
-  // handler always reads the latest value without re-binding on every render.
-  const hasInitCompletedRef = useRef(false);
 
   const workerRef = useRef<Worker | null>(null);
   const workerUnavailableRef = useRef(false);
@@ -194,7 +178,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     const correlationId: string = data.correlationId || '';
 
     // For transcription responses, validate that the correlationId matches the active trace.
-    // INIT_COMPLETED and PROGRESS messages are broadcast-level and should never be filtered.
+    // INIT_COMPLETED messages are broadcast-level and should never be filtered.
     const isTranscriptionResponse = status === 'COMPLETED' || status === 'UPDATE';
     if (isTranscriptionResponse && correlationId && correlationId !== activeTraceIdRef.current) {
       logger.warn('Correlation ID mismatch in worker message callback. Discarding stale transcription block.', {
@@ -205,33 +189,19 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     }
 
     // Process incoming worker thread signaling states using the mirror ref to protect render stability.
-    // Worker protocol: INIT_COMPLETED | PROGRESS | UPDATE | COMPLETED | ERROR
+    // Worker protocol: INIT_COMPLETED | UPDATE | COMPLETED | ERROR
     switch (status) {
-      case 'PROGRESS':
-        if (hasInitCompletedRef.current) {
-          setUpgradeProgressPercent(payload.progress || 0);
-        } else {
-          setLoadingProgressPercent(payload.progress || 0);
-        }
-        break;
       case 'INIT_COMPLETED':
-        hasInitCompletedRef.current = true;
         workerUnavailableRef.current = false;
         setModelReadyState(false);
-        setLoadingProgressPercent(100);
-        setIsModelUpgrading(true);
-        setUpgradeProgressPercent(0);
         logger.info(`Whisper worker initialized on tier: ${payload.tier || 'unknown'}`);
         // Model is ready — the FSM will be advanced to LISTENING via startRecording() calls.
         // We do NOT call startSession() here because the user has not yet pressed Start.
         break;
       case 'UPGRADE_READY':
-        setIsModelUpgrading(false);
-        setUpgradeProgressPercent(100);
         logger.info(`Whisper worker upgraded to tier: ${payload.tier || 'unknown'}`);
         break;
       case 'UPGRADE_FAILED':
-        setIsModelUpgrading(false);
         logger.warn('Background model upgrade failed; continuing on the fast-loading tier.', {
           tier: payload.tier,
           error: payload.upgradeError,
@@ -580,9 +550,6 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     finalTranscript: state.committedText,
     isModelLoading: modelReadyState,
     isVadReady: vadInitializedState,
-    modelLoadingProgress: loadingProgressPercent,
-    isModelUpgrading,
-    modelUpgradeProgress: upgradeProgressPercent,
     isTranscribing: state.fsm === 'VERIFYING',
     startRecording, // FIXED: Successfully returned functions back into the object literal instance
     stopRecording, // FIXED: Successfully returned functions back into the object literal instance

@@ -8,7 +8,7 @@ type WorkerAction = 'INIT' | 'TRANSCRIBE' | 'RESET';
 // background attempt fails, so the UI can clear its "upgrading" indicator
 // without treating it as a real error — the app is already fully usable on
 // quantized-tiny at that point.
-type WorkerStatus = 'INIT_COMPLETED' | 'PROGRESS' | 'COMPLETED' | 'ERROR' | 'UPDATE' | 'UPGRADE_READY' | 'UPGRADE_FAILED';
+type WorkerStatus = 'INIT_COMPLETED' | 'COMPLETED' | 'ERROR' | 'UPDATE' | 'UPGRADE_READY' | 'UPGRADE_FAILED';
 type RuntimeTier = 'webgpu' | 'wasm-simd' | 'quantized-tiny';
 
 interface WorkerRequestMessage {
@@ -49,17 +49,8 @@ interface WorkerResponseMessage {
 }
 
 interface PipelineOptions {
-  progress_callback?: (progress: ProgressMessage) => void;
   device?: 'webgpu' | 'wasm';
   dtype?: 'fp32' | 'q8';
-}
-
-interface ProgressMessage {
-  status?: string;
-  progress?: number;
-  loaded?: number;
-  total?: number;
-  file?: string;
 }
 
 interface TranscriberResult {
@@ -188,14 +179,6 @@ function disposeDeep(value: unknown, seen = new Set<unknown>()): void {
   }
 }
 
-function calculateProgress(progress: ProgressMessage): number {
-  if (typeof progress.progress === 'number') return progress.progress;
-  if (typeof progress.loaded === 'number' && typeof progress.total === 'number' && progress.total > 0) {
-    return Math.round((progress.loaded / progress.total) * 100);
-  }
-  return 0;
-}
-
 /**
  * Queries and profiles local WebGPU memory metrics natively from the browser context
  * to feed our operational monitoring dashboards.
@@ -251,13 +234,6 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
   const options: PipelineOptions = {
     device: useWebGpu ? 'webgpu' : 'wasm',
     dtype: tier === 'quantized-tiny' ? 'q8' : 'fp32',
-    progress_callback: (progress) => {
-      postMessageToMain({
-        status: 'PROGRESS',
-        correlationId,
-        payload: { progress: calculateProgress(progress), tier },
-      });
-    },
   };
 
   const transcriber = await pipeline('automatic-speech-recognition', MODEL_BY_TIER[tier], options);
