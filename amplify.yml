@@ -72,10 +72,18 @@ frontend:
             --include "Xenova/whisper-small/onnx/encoder_model.onnx_data" \
             --include "Xenova/whisper-small/onnx/decoder_model_merged.onnx" \
             --include "Xenova/whisper-small/onnx/decoder_model_merged.onnx_data" \
+            --include "Xenova/whisper-small/onnx/encoder_model_quantized.onnx" \
+            --include "Xenova/whisper-small/onnx/encoder_model_quantized.onnx_data" \
+            --include "Xenova/whisper-small/onnx/decoder_model_merged_quantized.onnx" \
+            --include "Xenova/whisper-small/onnx/decoder_model_merged_quantized.onnx_data" \
             --include "Xenova/whisper-base/onnx/encoder_model.onnx" \
             --include "Xenova/whisper-base/onnx/encoder_model.onnx_data" \
             --include "Xenova/whisper-base/onnx/decoder_model_merged.onnx" \
             --include "Xenova/whisper-base/onnx/decoder_model_merged.onnx_data" \
+            --include "Xenova/whisper-base/onnx/encoder_model_quantized.onnx" \
+            --include "Xenova/whisper-base/onnx/encoder_model_quantized.onnx_data" \
+            --include "Xenova/whisper-base/onnx/decoder_model_merged_quantized.onnx" \
+            --include "Xenova/whisper-base/onnx/decoder_model_merged_quantized.onnx_data" \
             --include "Xenova/whisper-tiny/onnx/encoder_model_quantized.onnx" \
             --include "Xenova/whisper-tiny/onnx/encoder_model_quantized.onnx_data" \
             --include "Xenova/whisper-tiny/onnx/decoder_model_merged_quantized.onnx" \
@@ -90,8 +98,12 @@ frontend:
           for required_file in \
             "Xenova/whisper-small/onnx/encoder_model.onnx" \
             "Xenova/whisper-small/onnx/decoder_model_merged.onnx" \
+            "Xenova/whisper-small/onnx/encoder_model_quantized.onnx" \
+            "Xenova/whisper-small/onnx/decoder_model_merged_quantized.onnx" \
             "Xenova/whisper-base/onnx/encoder_model.onnx" \
             "Xenova/whisper-base/onnx/decoder_model_merged.onnx" \
+            "Xenova/whisper-base/onnx/encoder_model_quantized.onnx" \
+            "Xenova/whisper-base/onnx/decoder_model_merged_quantized.onnx" \
             "Xenova/whisper-tiny/onnx/encoder_model_quantized.onnx" \
             "Xenova/whisper-tiny/onnx/decoder_model_merged_quantized.onnx"; do
             if [ ! -s "${MODEL_PUBLIC_PATH}/${required_file}" ]; then

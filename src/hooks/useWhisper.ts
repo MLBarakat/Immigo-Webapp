@@ -199,7 +199,11 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         // We do NOT call startSession() here because the user has not yet pressed Start.
         break;
       case 'UPGRADE_READY':
-        logger.info(`Whisper worker upgraded to tier: ${payload.tier || 'unknown'}`);
+        if (payload.upgradeNote) {
+          logger.info(`Whisper worker upgraded to tier: ${payload.tier || 'unknown'}`, { reason: payload.upgradeNote });
+        } else {
+          logger.info(`Whisper worker upgraded to tier: ${payload.tier || 'unknown'}`);
+        }
         break;
       case 'UPGRADE_FAILED':
         logger.warn('Background model upgrade failed; continuing on the fast-loading tier.', {
