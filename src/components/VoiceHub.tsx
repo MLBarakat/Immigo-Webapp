@@ -5,6 +5,7 @@ import { AnimatedStatusButton } from './AnimatedStatusButton';
 import { logger } from '../logger';
 import { MicConsentModal } from './MicConsentModal';
 import { hasMicConsent } from '../utils/micConsent';
+import { unlockAudioPlayback } from '../utils/audioUtils';
 
 interface VoiceHubProps {
   readonly status: AppStatus;
@@ -75,6 +76,8 @@ export function VoiceHub({
   }, [isSessionActive, status, isListenerLoading, onStartSession, onEndSession, micConsentVersion, onClearMicAccessError]);
 
   const handleMicConsentAccept = useCallback(async () => {
+    // Unlock audible playback while still inside the consent-accept tap.
+    unlockAudioPlayback();
     if (!onMicConsent) {
       setConsentError('Unable to save microphone consent. Please try again.');
       logger.error('Microphone consent cannot be accepted because persistence is unavailable.');

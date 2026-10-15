@@ -50,6 +50,48 @@ export async function createMicrophoneStream(options: MicrophoneStreamOptions = 
 }
 
 /**
+ * Shared playback AudioContext, created once inside a user gesture.
+ * Reused across unlock calls so repeated taps never leak contexts.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let sharedPlaybackContext: any = null;
+
+/**
+ * Unlocks audible playback for mobile browsers. Must be called synchronously
+ * inside a genuine user gesture (button tap) — iOS Safari and Chrome Android
+ * block audible play() calls that arrive after an async gap unless the page's
+ * audio stack was previously unlocked by a gesture. Safe to call on every
+ * tap: after the first unlock the context stays running and this is a no-op.
+ * Never throws.
+ */
+export function unlockAudioPlayback(): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!sharedPlaybackContext) {
+      sharedPlaybackContext = new AudioContextClass({ latencyHint: 'interactive' });
+    }
+    const context = sharedPlaybackContext;
+    if (context.state === 'suspended') {
+      // The audible-path render must originate inside the gesture (iOS).
+      try {
+        const buffer = context.createBuffer(1, 1, context.sampleRate);
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        source.start(0);
+      } catch {
+        // Silent-buffer render is best-effort only.
+      }
+      context.resume().catch(() => undefined);
+    }
+  } catch {
+    // Unlock must never throw into gesture handlers.
+  }
+}
+
+/**
  * Instantiates and returns a cross-platform safe AudioContext profile.
  * Handles browser auto-play suspension states gracefully.
  */

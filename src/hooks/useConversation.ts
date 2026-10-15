@@ -16,6 +16,7 @@ import {
   isExplicitBargeInCommand,
   isPlaybackEchoTranscript,
 } from '../utils/bargeIn';
+import { unlockAudioPlayback } from '../utils/audioUtils';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
@@ -201,6 +202,22 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     isPollyPlayingRef.current = false;
     isAssistantAudioActiveRef.current = false;
   }, [stopAssistantReveal]);
+
+  /**
+   * Completes an assistant turn as text-only when mobile autoplay policy
+   * blocks audible playback (NotAllowedError). This is not a turn failure:
+   * the text response is already revealed, so flush it fully and settle the
+   * FSM exactly as a natural playback end would — without any user-facing
+   * error. No audio ever played, so no AEC settle window is needed.
+   */
+  const completeBlockedAudioTurnAsText = useCallback((traceId: string) => {
+    logger.warn('Assistant audio blocked by autoplay policy; completing turn as text.', { traceId });
+    isAssistantAudioActiveRef.current = false;
+    isPollyPlayingRef.current = false;
+    stopAssistantReveal(true);
+    dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+    clearAudioPlayback();
+  }, [dispatch, stopAssistantReveal, clearAudioPlayback]);
 
   // Dual-Track Speculative Merger orchestration hook
   const {
@@ -439,6 +456,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [apiClient, dispatch, i18n.language]);
 
   const sendTextMessage = useCallback(async (text: string) => {
+    // Unlock audible playback while still inside the user gesture — play()
+    // calls below happen after an async gap where the gesture is long gone.
+    unlockAudioPlayback();
     const validatedText = text.replace(/\s+/g, ' ').trim();
     if (!validatedText) return;
     pendingTranscriptClearRef.current = true;
@@ -647,6 +667,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       audioPlaybackNode.play().catch((error: unknown) => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        // Mobile autoplay policy block — not a turn failure. Complete as text.
+        if (error instanceof Error && error.name === 'NotAllowedError') {
+          completeBlockedAudioTurnAsText(traceId);
+          return;
+        }
         logger.error('Audio node hardware playback initialization failure exceptions handled:', undefined, { 
           errorMessage: error instanceof Error ? error.message : String(error),
           traceId
@@ -711,7 +736,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         activeTurnControllerRef.current = null;
       }
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, generatePeriodicProgressReport]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, generatePeriodicProgressReport, completeBlockedAudioTurnAsText]);
 
   const requestSilenceNudge = useCallback(async () => {
     const currentItemId = currentItemIdRef.current;
@@ -763,6 +788,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       };
       audioNode.play().catch((error: unknown) => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        // Mobile autoplay policy block — not a turn failure. Complete as text.
+        if (error instanceof Error && error.name === 'NotAllowedError') {
+          completeBlockedAudioTurnAsText(traceId);
+          return;
+        }
         logger.error('Silence reminder audio playback failed.', undefined, {
           error: error instanceof Error ? error.message : String(error),
           traceId,
@@ -781,7 +811,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     } finally {
       if (silenceNudgeControllerRef.current === controller) silenceNudgeControllerRef.current = null;
     }
-  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, clearAudioPlayback]);
+  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, clearAudioPlayback, completeBlockedAudioTurnAsText]);
 
   useEffect(() => {
     if (displayTranscript.trim()) {
@@ -856,6 +886,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [finalTranscript, sendTextMessage]);
 
   const initiateSession = useCallback(async () => {
+    // Unlock audible playback while still inside the Start-tap gesture.
+    unlockAudioPlayback();
     historyChangedBeforeHydrationRef.current = true;
     const existingSessionId = sessionIdRef.current || conversationState.sessionId;
     const continuingTextSession = Boolean(existingSessionId && !conversationState.isSessionActive);
@@ -967,6 +999,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       audioPlaybackNode.play().catch((error: unknown) => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        // Mobile autoplay policy block — not a turn failure. Complete as text.
+        if (error instanceof Error && error.name === 'NotAllowedError') {
+          completeBlockedAudioTurnAsText(traceId);
+          return;
+        }
         logger.error('Greeting audio playback initialization failure:', undefined, {
           errorMessage: error instanceof Error ? error.message : String(error),
           traceId,
@@ -995,7 +1032,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ type: 'SET_STATUS', payload: 'listening' });
       startRecording();
     }
-  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal]);
+  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, completeBlockedAudioTurnAsText]);
 
   const terminateSession = useCallback(async () => {
     if (silenceNudgeTimerRef.current !== null) {
