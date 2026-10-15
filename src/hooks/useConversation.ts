@@ -204,14 +204,16 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [stopAssistantReveal]);
 
   /**
-   * Completes an assistant turn as text-only when mobile autoplay policy
-   * blocks audible playback (NotAllowedError). This is not a turn failure:
-   * the text response is already revealed, so flush it fully and settle the
-   * FSM exactly as a natural playback end would — without any user-facing
-   * error. No audio ever played, so no AEC settle window is needed.
+   * Completes an assistant turn as text-only when its audio cannot be heard
+   * (mobile autoplay block or media decode failure). This is not a turn
+   * failure: the text response is already revealed, so flush it fully and
+   * settle the FSM exactly as a natural playback end would — without any
+   * user-facing error. No audio ever played, so no AEC settle window needed.
    */
-  const completeBlockedAudioTurnAsText = useCallback((traceId: string) => {
-    logger.warn('Assistant audio blocked by autoplay policy; completing turn as text.', { traceId });
+  const completeBlockedAudioTurnAsText = useCallback((traceId: string, error: unknown) => {
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.warn('Assistant audio unavailable; completing turn as text.', { traceId, errorName, errorMessage });
     isAssistantAudioActiveRef.current = false;
     isPollyPlayingRef.current = false;
     stopAssistantReveal(true);
@@ -458,7 +460,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const sendTextMessage = useCallback(async (text: string) => {
     // Unlock audible playback while still inside the user gesture — play()
     // calls below happen after an async gap where the gesture is long gone.
-    unlockAudioPlayback();
+    // Text-only turns never create audio, so skip the unlock there.
+    if (voiceSessionRef.current || conversationState.isSessionActive) unlockAudioPlayback();
     const validatedText = text.replace(/\s+/g, ' ').trim();
     if (!validatedText) return;
     pendingTranscriptClearRef.current = true;
@@ -648,6 +651,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      audioPlaybackNode.onerror = () => {
+        if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioPlaybackNode.error?.code ?? 'unknown'})`));
+      };
       audioPlaybackRef.current = audioPlaybackNode;
       audioPlaybackUrlRef.current = audioBlobUrl;
       activePollyTextRef.current = responseText;
@@ -669,7 +676,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         // Mobile autoplay policy block — not a turn failure. Complete as text.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          completeBlockedAudioTurnAsText(traceId);
+          completeBlockedAudioTurnAsText(traceId, error);
           return;
         }
         logger.error('Audio node hardware playback initialization failure exceptions handled:', undefined, { 
@@ -767,6 +774,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const audioUrl = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
       const audioNode = new Audio(audioUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      audioNode.onerror = () => {
+        if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioNode.error?.code ?? 'unknown'})`));
+      };
       audioPlaybackRef.current = audioNode;
       audioPlaybackUrlRef.current = audioUrl;
       activePollyTextRef.current = response.responseText;
@@ -790,7 +801,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         // Mobile autoplay policy block — not a turn failure. Complete as text.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          completeBlockedAudioTurnAsText(traceId);
+          completeBlockedAudioTurnAsText(traceId, error);
           return;
         }
         logger.error('Silence reminder audio playback failed.', undefined, {
@@ -982,6 +993,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      audioPlaybackNode.onerror = () => {
+        if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+        completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioPlaybackNode.error?.code ?? 'unknown'})`));
+      };
       audioPlaybackRef.current = audioPlaybackNode;
       audioPlaybackUrlRef.current = audioBlobUrl;
       activePollyTextRef.current = res.responseText;
@@ -1001,7 +1016,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         // Mobile autoplay policy block — not a turn failure. Complete as text.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          completeBlockedAudioTurnAsText(traceId);
+          completeBlockedAudioTurnAsText(traceId, error);
           return;
         }
         logger.error('Greeting audio playback initialization failure:', undefined, {

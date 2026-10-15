@@ -57,6 +57,83 @@ export async function createMicrophoneStream(options: MicrophoneStreamOptions = 
 let sharedPlaybackContext: any = null;
 
 /**
+ * Object URL of a synthesized 100ms silent WAV, built once. A runtime-built
+ * blob is used instead of a hardcoded data URI so validity never depends on
+ * a hand-typed base64 payload.
+ */
+let silentWavUrl: string | null = null;
+
+function getSilentWavUrl(): string | null {
+  try {
+    if (silentWavUrl) return silentWavUrl;
+    const sampleRate = 8000;
+    const samples = 800; // 100ms of digital silence
+    const buffer = new ArrayBuffer(44 + samples * 2);
+    const view = new DataView(buffer);
+    const writeAscii = (offset: number, text: string) => {
+      for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    };
+    writeAscii(0, 'RIFF');
+    view.setUint32(4, 36 + samples * 2, true);
+    writeAscii(8, 'WAVE');
+    writeAscii(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeAscii(36, 'data');
+    view.setUint32(40, samples * 2, true);
+    silentWavUrl = URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+    return silentWavUrl;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Shared media-element used only for autoplay-policy unlock. A WebAudio
+ * silent render alone does not unlock the HTMLAudioElement path on iOS, so a
+ * real (silent) media play must also originate inside the gesture.
+ */
+let sharedUnlockAudio: HTMLAudioElement | null = null;
+
+function playSilentMediaUnlock(): void {
+  try {
+    const url = getSilentWavUrl();
+    if (!url || typeof document === 'undefined' || typeof document.createElement !== 'function') return;
+    if (!sharedUnlockAudio) {
+      // document.createElement (not `new Audio()`) so test doubles for the
+      // global Audio constructor never intercept the silent unlock element.
+      const element = document.createElement('audio');
+      element.src = url;
+      element.preload = 'auto';
+      sharedUnlockAudio = element;
+    }
+    const element = sharedUnlockAudio;
+    if (element.src !== url) element.src = url;
+    // play() must be invoked synchronously inside the gesture; pause as soon
+    // as it starts so nothing is ever heard. The promise guard covers engines
+    // where play() returns undefined instead of a promise.
+    const playResult = element.play();
+    if (playResult && typeof playResult.then === 'function') {
+      playResult.then(() => {
+        try {
+          element.pause();
+          element.currentTime = 0;
+        } catch {
+          // Best-effort only.
+        }
+      }).catch(() => undefined);
+    }
+  } catch {
+    // Best-effort only.
+  }
+}
+
+/**
  * Unlocks audible playback for mobile browsers. Must be called synchronously
  * inside a genuine user gesture (button tap) — iOS Safari and Chrome Android
  * block audible play() calls that arrive after an async gap unless the page's
@@ -66,6 +143,9 @@ let sharedPlaybackContext: any = null;
  */
 export function unlockAudioPlayback(): void {
   try {
+    // Media-element unlock first: iOS requires a real media play inside the
+    // gesture, which a WebAudio render alone does not satisfy.
+    playSilentMediaUnlock();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) return;
