@@ -279,10 +279,10 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   }, []);
 
   /**
-   * Lazy, shared, retryable init. Called from Start tap (user gesture) only —
-   * never on page load. Concurrent taps share one promise. Mic is NOT
-   * requested here for VAD model load (startOnLoad:false); it is requested
-   * later inside vad.start() within the same gesture chain.
+   * Lazy, shared, retryable init. Model download + compile starts on mount
+   * (background preload, no mic: startOnLoad:false so getUserMedia is NOT
+   * called). Mic is requested later inside vad.start() on the Start tap
+   * gesture. Concurrent callers share one promise.
    */
   const ensureInitialized = useCallback((): Promise<boolean> => {
     if (initStatusRef.current === 'ready' && vadRef.current && workerRef.current) {
@@ -304,12 +304,17 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
           const worker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
           worker.addEventListener('message', handleWorkerMessage);
           workerRef.current = worker;
+          // WebGPU probe must never block init: requestAdapter() hangs on
+          // some mobile Chrome builds. Race with a timeout, default WASM.
           let supportsWebGpu = false;
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const gpu = (navigator as any).gpu;
             if (gpu && typeof gpu.requestAdapter === 'function') {
-              const adapter = await gpu.requestAdapter();
+              const adapter = await Promise.race([
+                gpu.requestAdapter(),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+              ]);
               supportsWebGpu = adapter != null;
             }
           } catch (probeError) {
@@ -326,7 +331,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
         // VAD model load only (no getUserMedia until vad.start()).
         if (!vadRef.current) {
-          console.info('[VAD-MOUNT]', { instanceId, phase: 'init-start' });
+          console.info(`[VAD-MOUNT] ${JSON.stringify({ instanceId, tabId: tabIdRef.current, phase: 'init-start' })}`);
           const initializedVad = await MicVAD.new({
             baseAssetPath: '/',
             onnxWASMBasePath: '/assets/js/',
@@ -405,7 +410,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
           }
           vadRef.current = initializedVad;
           try { vadRef.current.pause(); } catch { /* ignore */ }
-          console.info('[VAD-MOUNT]', { instanceId, phase: 'init-ready' });
+          console.info(`[VAD-MOUNT] ${JSON.stringify({ instanceId, tabId: tabIdRef.current, phase: 'init-ready' })}`);
         }
 
         setVadInitializedState(true);
@@ -553,10 +558,17 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     document.addEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
     window.addEventListener('pageshow', handlePageShowBfcacheRestoration);
     const mountedInstanceId = instanceId;
-    console.info('[VAD-MOUNT]', { instanceId: mountedInstanceId, phase: 'mount' });
+    const mountedTabId = tabIdRef.current;
+    console.info(`[VAD-MOUNT] ${JSON.stringify({ instanceId: mountedInstanceId, tabId: mountedTabId, phase: 'mount' })}`);
+
+    // Background preload (confirmed behavior): download + compile Tiny +
+    // VAD model on page load with NO mic request (startOnLoad:false).
+    // Mic fires only inside the Start-tap gesture via vad.start().
+    // Text chat stays usable while this runs; voice tap is blocked meanwhile.
+    void ensureInitialized().catch(() => undefined);
 
     return () => {
-      console.info('[VAD-MOUNT]', { instanceId: mountedInstanceId, phase: 'unmount' });
+      console.info(`[VAD-MOUNT] ${JSON.stringify({ instanceId: mountedInstanceId, tabId: mountedTabId, phase: 'unmount' })}`);
       unmountedRef.current = true;
       initGenerationRef.current += 1;
       document.removeEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
@@ -586,7 +598,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       setModelReadyState(false);
       setInitStatusBoth('idle');
     };
-  }, [handleWorkerMessage, setInitStatusBoth, instanceId]);
+  }, [handleWorkerMessage, setInitStatusBoth, instanceId, ensureInitialized]);
 
   const beginCapture = useCallback(() => {
     actionsRef.current.clearTranscript();
@@ -604,12 +616,18 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   const startRecordingRef = useRef<() => void>(() => undefined);
   const startRecording = useCallback(() => {
     if (!isLeaderRef.current) return;
-    // First tap initializes (shared promise); second tap attaches to same init.
+    // Background preload runs on mount. A tap during preload is blocked by
+    // the UI (pulsating); guard here ignores it. A tap after an init error
+    // retries once via the shared promise.
     if (initStatusRef.current !== 'ready' || !vadRef.current) {
-      const runner = startRecordingRef.current;
-      void ensureInitialized().then((ok) => {
-        if (ok && !unmountedRef.current) runner();
-      });
+      if (initStatusRef.current === 'error') {
+        const runner = startRecordingRef.current;
+        void ensureInitialized().then((ok) => {
+          if (ok && !unmountedRef.current) runner();
+        });
+      } else {
+        logger.info('Voice init still in background; tap ignored until ready.');
+      }
       return;
     }
 

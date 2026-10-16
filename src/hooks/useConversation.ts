@@ -357,17 +357,32 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         content: m.content,
         timestamp: m.created_at,
       }));
-      dispatch({
-        type: 'LOAD_HISTORICAL_MESSAGES',
-        payload: {
-          messages: cachedMessages !== null || historyClearedBeforeHydrationRef.current
-            ? []
-            : formattedMessages,
-          hasMore: payload.hasMore,
-          oldestCursor: payload.oldestCursor,
-          replace: cachedMessages === null && !historyChangedBeforeHydrationRef.current
+      // Merge DB results with the instant cache snapshot instead of
+      // discarding either side: an empty/stale per-tab cache must never
+      // poison hydration, and DB rows must not wipe just-received live turns.
+      if (cachedMessages === null && !historyChangedBeforeHydrationRef.current && !historyClearedBeforeHydrationRef.current) {
+        const seen = new Set<string>();
+        const merged: Message[] = [];
+        for (const m of [...(cachedMessages ?? []), ...formattedMessages]) {
+          if (seen.has(m.id)) continue;
+          seen.add(m.id);
+          merged.push(m);
         }
-      });
+        merged.sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp));
+        dispatch({
+          type: 'LOAD_HISTORICAL_MESSAGES',
+          payload: { messages: merged, hasMore: payload.hasMore, oldestCursor: payload.oldestCursor, replace: true },
+        });
+      } else {
+        // Cache already painted instantly (or live turns arrived first):
+        // prepend only genuinely new DB rows, never replace.
+        const existingIds = new Set(latestConversationHistoryRef.current.map(m => m.id));
+        const fresh = formattedMessages.filter(m => !existingIds.has(m.id));
+        dispatch({
+          type: 'LOAD_HISTORICAL_MESSAGES',
+          payload: { messages: fresh, hasMore: payload.hasMore, oldestCursor: payload.oldestCursor, replace: false },
+        });
+      }
     }).catch(err => {
       logger.error('Failed to hydrate chat history:', undefined, { error: String(err) });
     });

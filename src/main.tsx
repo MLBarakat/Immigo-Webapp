@@ -13,20 +13,20 @@ const bootId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
   : `boot-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 try {
   const navType = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-  console.info('[BOOT]', {
+  console.info(`[BOOT] ${JSON.stringify({
     bootId,
     time: new Date().toISOString(),
     visibility: document.visibilityState,
     navigationType: navType?.type ?? 'unknown',
-  });
+  })}`);
 } catch {
-  console.info('[BOOT]', { bootId });
+  console.info(`[BOOT] ${JSON.stringify({ bootId })}`);
 }
 window.addEventListener('pagehide', (event) => {
-  console.info('[PAGEHIDE]', { bootId, persisted: event.persisted, time: Date.now() });
+  console.info(`[PAGEHIDE] ${JSON.stringify({ bootId, persisted: event.persisted, time: Date.now() })}`);
 });
 window.addEventListener('pageshow', (event) => {
-  console.info('[PAGESHOW]', { bootId, persisted: event.persisted, time: Date.now() });
+  console.info(`[PAGESHOW] ${JSON.stringify({ bootId, persisted: event.persisted, time: Date.now() })}`);
 });
 // --- End diagnostics ---
 

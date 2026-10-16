@@ -23,19 +23,31 @@ export function ConversationHistory({
   const conversationRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const previousLastMessageRef = useRef<{ id: string; content: string } | null>(null);
+  const previousFirstIdRef = useRef<string | null>(null);
+  const previousHeightRef = useRef<number>(0);
   const lastMessage = messages.at(-1) ?? null;
+  const firstMessage = messages.at(0) ?? null;
 
   useLayoutEffect(() => {
+    const viewport = conversationRef.current;
     const hasNewLatestMessage = lastMessage?.id !== previousLastMessageRef.current?.id
       || lastMessage?.content !== previousLastMessageRef.current?.content;
+    const prependedOlder = firstMessage && previousFirstIdRef.current !== null
+      && firstMessage.id !== previousFirstIdRef.current
+      && !hasNewLatestMessage;
+    if (viewport && prependedOlder) {
+      // Infinite-scroll prepend: keep the user's viewport anchored instead
+      // of yanking content down. User controls scrolling.
+      viewport.scrollTop += viewport.scrollHeight - previousHeightRef.current;
+    } else if (hasNewLatestMessage || interimTranscript) {
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
+    }
     previousLastMessageRef.current = lastMessage
       ? { id: lastMessage.id, content: lastMessage.content }
       : null;
-    if (hasNewLatestMessage || interimTranscript) {
-      const viewport = conversationRef.current;
-      if (viewport) viewport.scrollTop = viewport.scrollHeight;
-    }
-  }, [lastMessage, interimTranscript]);
+    previousFirstIdRef.current = firstMessage?.id ?? null;
+    if (viewport) previousHeightRef.current = viewport.scrollHeight;
+  }, [lastMessage, firstMessage, interimTranscript]);
 
   useEffect(() => {
     if (!onLoadOlder || !hasMore || !topSentinelRef.current) return;

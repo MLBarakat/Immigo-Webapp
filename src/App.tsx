@@ -62,10 +62,10 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     applyTheme(activeTheme);
   }, [previewTheme, userSettings.theme]);
 
-  // Microphone is requested lazily inside the Start-tap gesture via
-  // useWhisper.ensureInitialized(). No pre-gesture getUserMedia here:
-  // on iOS a background permission prompt backgrounds the tab and
-  // triggers the visibilitychange pause/destroy churn.
+  // Model preload runs on mount (background, no mic). Microphone is
+  // requested lazily inside the Start-tap gesture via vad.start().
+  // No pre-gesture getUserMedia here: on iOS a background permission
+  // prompt backgrounds the tab and triggers visibilitychange churn.
 
   const activeVoiceId = normalizeVoiceId(
     userSettings.ai_voice_id ?? getDefaultVoiceId(userSettings.language || profile?.language)
