@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useId } from 'react';
 import { logger } from '../logger';
 import { MicVAD } from '@ricky0123/vad-web';
 import { useTranscription, TranscriptionState } from '../context/TranscriptionContext';
@@ -54,11 +54,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   const { state, actions } = useTranscription();
 
   type InitStatus = 'idle' | 'initializing' | 'ready' | 'error';
-  const instanceIdRef = useRef<string>(
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `vad-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
-  );
+  const instanceId = useId();
   const unmountedRef = useRef(false);
   const initGenerationRef = useRef(0);
 
@@ -330,7 +326,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
         // VAD model load only (no getUserMedia until vad.start()).
         if (!vadRef.current) {
-          console.info('[VAD-MOUNT]', { instanceId: instanceIdRef.current, phase: 'init-start' });
+          console.info('[VAD-MOUNT]', { instanceId, phase: 'init-start' });
           const initializedVad = await MicVAD.new({
             baseAssetPath: '/',
             onnxWASMBasePath: '/assets/js/',
@@ -409,7 +405,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
           }
           vadRef.current = initializedVad;
           try { vadRef.current.pause(); } catch { /* ignore */ }
-          console.info('[VAD-MOUNT]', { instanceId: instanceIdRef.current, phase: 'init-ready' });
+          console.info('[VAD-MOUNT]', { instanceId, phase: 'init-ready' });
         }
 
         setVadInitializedState(true);
@@ -434,7 +430,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     })();
     initPromiseRef.current = promise;
     return promise;
-  }, [handleWorkerMessage, flushActiveSegment, setInitStatusBoth]);
+  }, [handleWorkerMessage, flushActiveSegment, setInitStatusBoth, instanceId]);
 
   useEffect(() => {
     tabIdRef.current = `tab_id_${performance.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -556,47 +552,43 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
     document.addEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
     window.addEventListener('pageshow', handlePageShowBfcacheRestoration);
-    console.info('[VAD-MOUNT]', { instanceId: instanceIdRef.current, phase: 'mount' });
+    const mountedInstanceId = instanceId;
+    console.info('[VAD-MOUNT]', { instanceId: mountedInstanceId, phase: 'mount' });
 
     return () => {
-      console.info('[VAD-MOUNT]', { instanceId: instanceIdRef.current, phase: 'unmount' });
+      console.info('[VAD-MOUNT]', { instanceId: mountedInstanceId, phase: 'unmount' });
       unmountedRef.current = true;
-      initGenerationRef.current++;
+      initGenerationRef.current += 1;
       document.removeEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
       window.removeEventListener('pageshow', handlePageShowBfcacheRestoration);
 
-      if (leaderChannelRef.current) {
-        leaderChannelRef.current.close();
+      const leaderChannel = leaderChannelRef.current;
+      if (leaderChannel) {
+        leaderChannel.close();
+        leaderChannelRef.current = null;
       }
 
       // Full cleanup only on actual unmount — never on backgrounding.
       try { vadRef.current?.destroy(); } catch { /* ignore */ }
       vadRef.current = null;
-      microphoneStreamRef.current?.getTracks().forEach((track) => track.stop());
+      const micStream = microphoneStreamRef.current;
+      micStream?.getTracks().forEach((track) => track.stop());
       microphoneStreamRef.current = null;
       try { nativeRecognizerRef.current?.abort(); } catch { /* ignore */ }
 
-      if (workerRef.current) {
-        workerRef.current.removeEventListener('message', handleWorkerMessage);
-        workerRef.current.terminate();
+      const worker = workerRef.current;
+      if (worker) {
+        worker.removeEventListener('message', handleWorkerMessage);
+        worker.terminate();
         workerRef.current = null;
       }
       setVadInitializedState(false);
       setModelReadyState(false);
       setInitStatusBoth('idle');
     };
-  }, [handleWorkerMessage]);
+  }, [handleWorkerMessage, setInitStatusBoth, instanceId]);
 
-  const startRecording = useCallback(() => {
-    if (!isLeaderRef.current) return;
-    // First tap initializes (shared promise); second tap attaches to same init.
-    if (initStatusRef.current !== 'ready' || !vadRef.current) {
-      void ensureInitialized().then((ok) => {
-        if (ok && !unmountedRef.current) startRecording();
-      });
-      return;
-    }
-
+  const beginCapture = useCallback(() => {
     actionsRef.current.clearTranscript();
     audioFrameAccumulatorRef.current = [];
     isRecordingRef.current = true;
@@ -605,9 +597,28 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     actionsRef.current.startSession();
 
     // Mic is requested here, inside the gesture chain, via getStream.
-    try { vadRef.current.start(); } catch { /* ignore */ }
+    try { vadRef.current?.start(); } catch { /* ignore */ }
     logger.info('Authoritative dual-track orchestration loops successfully initialized.');
-  }, [ensureInitialized]);
+  }, []);
+
+  const startRecordingRef = useRef<() => void>(() => undefined);
+  const startRecording = useCallback(() => {
+    if (!isLeaderRef.current) return;
+    // First tap initializes (shared promise); second tap attaches to same init.
+    if (initStatusRef.current !== 'ready' || !vadRef.current) {
+      const runner = startRecordingRef.current;
+      void ensureInitialized().then((ok) => {
+        if (ok && !unmountedRef.current) runner();
+      });
+      return;
+    }
+
+    beginCapture();
+  }, [ensureInitialized, beginCapture]);
+
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+  }, [startRecording]);
 
   const stopRecording = useCallback(() => {
     if (!vadRef.current) return;
