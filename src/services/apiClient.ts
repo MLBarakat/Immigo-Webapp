@@ -3,7 +3,10 @@ import { logger } from '../logger';
 import type { SimulationMode } from '../context/conversationContextTypes';
 
 const API_BASE_URL = (amplifyOutputs as { custom?: { apiBaseUrl?: string; API_URL?: string } }).custom?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || '';
-const API_KEY = import.meta.env.VITE_API_KEY;
+// NOTE: no VITE_API_KEY here by design. A key baked into the web bundle is
+// public to anyone who downloads the JS, so it cannot serve as a secret.
+// The backend does not validate X-API-Key; requests authenticate with the
+// short-lived Bearer session token instead.
 
 export interface ApiRequestOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
@@ -13,6 +16,22 @@ interface ApiErrorPayload {
   error?: string;
   message?: string;
   [key: string]: unknown;
+}
+
+/**
+ * Reduces unknown server payloads to shape metadata for logs. Full bodies
+ * can echo user transcripts or PII and must never reach the console.
+ */
+function summarizePayloadForLog(value: unknown): Record<string, unknown> {
+  try {
+    if (value && typeof value === 'object') {
+      const keys = Object.keys(value as Record<string, unknown>);
+      return { keys, size: JSON.stringify(value)?.length ?? 0 };
+    }
+    return { type: typeof value };
+  } catch {
+    return { type: typeof value };
+  }
 }
 
 export class ApiError extends Error {
@@ -67,10 +86,6 @@ export class ApiClient {
     headersInstance.set('Authorization', `Bearer ${this.token}`);
     headersInstance.set('Content-Type', 'application/json');
 
-    if (API_KEY) {
-      headersInstance.set('X-API-Key', API_KEY);
-    }
-
     if (options.headers) {
       const headerKeys = Object.keys(options.headers);
       for (let i = 0; i < headerKeys.length; i++) {
@@ -111,7 +126,7 @@ export class ApiClient {
 
       logger.error(`API Error Response: ${response.status} captured on request to ${fullUrl}`, undefined, {
         status: response.status,
-        responseData: errorData,
+        responseShape: summarizePayloadForLog(errorData),
       });
 
       throw new ApiError(errorMessage, response.status, errorData);
@@ -176,13 +191,13 @@ export class ApiClient {
       logger.error('[ApiClient] transcript endpoint error response from server:', undefined, {
         status: response.status,
         error: errMessage,
-        payload: data
+        payloadShape: summarizePayloadForLog(data)
       });
       throw new ApiError(`Server Error (${response.status}): ${errMessage}`, response.status, data);
     }
 
     if (!parsedPayload || typeof parsedPayload.responseText !== 'string' || typeof parsedPayload.audioData !== 'string') {
-      logger.error('[ApiClient] Structural Exception in transcript endpoint payload shape:', undefined, { data });
+      logger.error('[ApiClient] Structural Exception in transcript endpoint payload shape:', undefined, { shape: summarizePayloadForLog(data) });
       throw new ApiError('Structural Exception: Invalid response template signature returned from transcript endpoint.', 500, data);
     }
 
@@ -340,10 +355,6 @@ export class ApiClient {
       headersInstance.set('Authorization', `Bearer ${this.token}`);
       headersInstance.set('Content-Type', 'application/json');
 
-      if (API_KEY) {
-        headersInstance.set('X-API-Key', API_KEY);
-      }
-
       const res = await fetch(fullUrl, {
         method: 'POST',
         headers: headersInstance,
@@ -362,7 +373,7 @@ export class ApiClient {
 
         logger.error(`[ApiClient] completeSession error response from server for ${sessionId}:`, undefined, {
           status: res.status,
-          responseData: errorData,
+          responseShape: summarizePayloadForLog(errorData),
         });
         throw new ApiError('Session completion failed.', res.status, errorData);
       }

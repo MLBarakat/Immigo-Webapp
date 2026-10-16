@@ -29,7 +29,7 @@ declare module '*.wasm' {
 interface ProcessEnvContainer {
   readonly NODE_ENV?: 'development' | 'production' | 'test';
   readonly VITE_API_BASE_URL?: string;
-  readonly VITE_API_KEY?: string;
+  // No VITE_API_KEY: secrets must never be baked into the public web bundle.
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
   readonly VITE_WHISPER_MODEL_BASE_PATH?: string;
