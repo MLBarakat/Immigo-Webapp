@@ -13,6 +13,11 @@ export interface WhisperHook {
   isModelLoading: boolean;
   isVadReady: boolean;
   isTranscribing: boolean;
+  /** True while lazy init is in flight. Start button shows progress, second tap attaches. */
+  isInitializing?: boolean;
+  /** Last init failure, retryable on next tap. Never includes mic data. */
+  initError?: string | null;
+  ensureInitialized?: () => Promise<boolean>;
   startRecording: () => void;
   stopRecording: () => void;
   clearTranscript: () => void;
@@ -47,10 +52,24 @@ export function buildCloudSocketStartMessage(correlationId: string, language = '
 export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook => {
   // Connect directly to the authoritative global state context to prevent split-brain states
   const { state, actions } = useTranscription();
-  
+
+  type InitStatus = 'idle' | 'initializing' | 'ready' | 'error';
+  const instanceIdRef = useRef<string>(
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `vad-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
+  );
+  const unmountedRef = useRef(false);
+  const initGenerationRef = useRef(0);
+
   // Local readiness flags for the VAD and Whisper model worker.
+  // idle = nothing loaded yet (no mic, no WASM). First Start tap initializes.
+  const [initStatus, setInitStatus] = useState<InitStatus>('idle');
+  const [initError, setInitError] = useState<string | null>(null);
   const [vadInitializedState, setVadInitializedState] = useState<boolean>(false);
-  const [modelReadyState, setModelReadyState] = useState<boolean>(true);
+  const [modelReadyState, setModelReadyState] = useState<boolean>(false);
+  const initStatusRef = useRef<InitStatus>('idle');
+  const initPromiseRef = useRef<Promise<boolean> | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
   const workerUnavailableRef = useRef(false);
@@ -258,6 +277,165 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     }
   }, [hasSpeechQuality]);
 
+  const setInitStatusBoth = useCallback((s: InitStatus) => {
+    initStatusRef.current = s;
+    setInitStatus(s);
+  }, []);
+
+  /**
+   * Lazy, shared, retryable init. Called from Start tap (user gesture) only —
+   * never on page load. Concurrent taps share one promise. Mic is NOT
+   * requested here for VAD model load (startOnLoad:false); it is requested
+   * later inside vad.start() within the same gesture chain.
+   */
+  const ensureInitialized = useCallback((): Promise<boolean> => {
+    if (initStatusRef.current === 'ready' && vadRef.current && workerRef.current) {
+      return Promise.resolve(true);
+    }
+    if (initStatusRef.current === 'initializing' && initPromiseRef.current) {
+      return initPromiseRef.current;
+    }
+    const generation = ++initGenerationRef.current;
+    setInitStatusBoth('initializing');
+    setInitError(null);
+    // Worker shows busy until INIT_COMPLETED arrives.
+    setModelReadyState(true);
+
+    const promise = (async (): Promise<boolean> => {
+      try {
+        // Worker (tiny-only on mobile; see selectUpgradeTier).
+        if (!workerRef.current) {
+          const worker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
+          worker.addEventListener('message', handleWorkerMessage);
+          workerRef.current = worker;
+          let supportsWebGpu = false;
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const gpu = (navigator as any).gpu;
+            if (gpu && typeof gpu.requestAdapter === 'function') {
+              const adapter = await gpu.requestAdapter();
+              supportsWebGpu = adapter != null;
+            }
+          } catch (probeError) {
+            logger.warn('WebGPU adapter probe failed; falling back to WASM tier.', { error: String(probeError) });
+            supportsWebGpu = false;
+          }
+          if (unmountedRef.current || generation !== initGenerationRef.current) return false;
+          worker.postMessage({
+            action: 'INIT',
+            correlationId: `init-${Date.now()}`,
+            payload: { config: { useWebGPU: supportsWebGpu } },
+          });
+        }
+
+        // VAD model load only (no getUserMedia until vad.start()).
+        if (!vadRef.current) {
+          console.info('[VAD-MOUNT]', { instanceId: instanceIdRef.current, phase: 'init-start' });
+          const initializedVad = await MicVAD.new({
+            baseAssetPath: '/',
+            onnxWASMBasePath: '/assets/js/',
+            model: 'legacy',
+            startOnLoad: false,
+            getStream: async () => {
+              const stream = await createMicrophoneStream({
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+              });
+              microphoneStreamRef.current = stream;
+              return stream;
+            },
+            pauseStream: async (stream) => {
+              stream.getAudioTracks().forEach((track) => { track.enabled = false; });
+            },
+            resumeStream: async (stream) => {
+              stream.getAudioTracks().forEach((track) => { track.enabled = true; });
+              return stream;
+            },
+            positiveSpeechThreshold: 0.7,
+            negativeSpeechThreshold: 0.65,
+            preSpeechPadMs: 500,
+            minSpeechMs: 200,
+            redemptionMs: 500,
+            onSpeechStart: () => {
+              if (!isRecordingRef.current || !isLeaderRef.current) return;
+              activeTraceIdRef.current = generateLocalTraceId();
+              nativeFinalTranscriptRef.current = '';
+              speechActiveRef.current = true;
+              onSpeechStartRef.current?.();
+              segmentSampleCountRef.current = 0;
+              segmentEnergySumRef.current = 0;
+              segmentSpeechProbabilitySumRef.current = 0;
+              segmentFrameCountRef.current = 0;
+              actionsRef.current.speechOnset(activeTraceIdRef.current);
+              try { nativeRecognizerRef.current.start(); } catch { /* ignore */ }
+            },
+            onSpeechEnd: () => {
+              if (!isRecordingRef.current) return;
+              speechActiveRef.current = false;
+              flushActiveSegment('silence');
+            },
+            onVADMisfire: () => {
+              speechActiveRef.current = false;
+              actionsRef.current.whisperCancel();
+            },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onFrameProcessed: (probabilities: any, frame: Float32Array) => {
+              if (!isRecordingRef.current || !speechActiveRef.current || !isLeaderRef.current) return;
+              audioFrameAccumulatorRef.current.push(frame);
+              let frameEnergy = 0;
+              for (let i = 0; i < frame.length; i++) frameEnergy += frame[i] * frame[i];
+              segmentSampleCountRef.current += frame.length;
+              segmentEnergySumRef.current += frameEnergy;
+              segmentSpeechProbabilitySumRef.current += Number(probabilities?.isSpeech || 0);
+              segmentFrameCountRef.current += 1;
+              const currentSamplesCount = audioFrameAccumulatorRef.current.reduce((acc, f) => acc + f.length, 0);
+              const liveSeconds = currentSamplesCount / 16000;
+              const physicalMemoryBytes = currentSamplesCount * 4;
+              if (liveSeconds >= remoteFeatureFlags.current.infiniteSpeakerCeilingS) {
+                logger.info('Infinite Speaker Guard Engaged: Hard 20-second continuous duration ceiling split pass forced.');
+                flushActiveSegment('time-chop');
+                activeTraceIdRef.current = generateLocalTraceId();
+                speechActiveRef.current = true;
+              } else if (physicalMemoryBytes >= remoteFeatureFlags.current.forcedBufferBoundsBytes) {
+                logger.warn('Forced Buffer Bounds Fence Engaged: Ingestion memory pool weight limit breached. Flushing arena.');
+                flushActiveSegment('capacity');
+              }
+            }
+          });
+          if (unmountedRef.current || generation !== initGenerationRef.current) {
+            try { initializedVad.destroy(); } catch { /* ignore */ }
+            return false;
+          }
+          vadRef.current = initializedVad;
+          try { vadRef.current.pause(); } catch { /* ignore */ }
+          console.info('[VAD-MOUNT]', { instanceId: instanceIdRef.current, phase: 'init-ready' });
+        }
+
+        setVadInitializedState(true);
+        setInitStatusBoth('ready');
+        return true;
+      } catch (err) {
+        if (generation !== initGenerationRef.current) return false;
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error('Voice init failed (retryable on next tap).', undefined, { error: message });
+        setInitError(message);
+        setInitStatusBoth('error');
+        setModelReadyState(false);
+        // Allow retry: drop failed worker so next tap rebuilds.
+        try { workerRef.current?.terminate(); } catch { /* ignore */ }
+        workerRef.current = null;
+        vadRef.current = null;
+        setVadInitializedState(false);
+        return false;
+      } finally {
+        initPromiseRef.current = null;
+      }
+    })();
+    initPromiseRef.current = promise;
+    return promise;
+  }, [handleWorkerMessage, flushActiveSegment, setInitStatusBoth]);
+
   useEffect(() => {
     tabIdRef.current = `tab_id_${performance.now()}_${Math.random().toString(36).substr(2, 5)}`;
     
@@ -274,43 +452,8 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       };
     }
 
-    // Initialize accelerated machine learning background worker.
-    // Worker expects action: 'INIT' (uppercase) with a correlationId field.
-    //
-    // IMPORTANT: only request the WebGPU tier if we can ACTUALLY obtain a
-    // working GPU adapter — not merely if the API exists. `'gpu' in navigator`
-    // can be true in environments that expose the API surface but cannot
-    // deliver a real backend (disabled flags, software rendering, locked-down
-    // sandboxes), which previously surfaced as
-    // "Worker initialization failed: ... [webgpu] backend not found." — and
-    // because ONNX Runtime Web's backend registration can share state across
-    // attempts in the same page, a failed WebGPU attempt risked destabilizing
-    // the WASM fallback too, not just failing to add speed. Probing for a real
-    // adapter first means we simply never attempt WebGPU unless it will work.
-    const initCorrelationId = `init-${Date.now()}`;
-    workerRef.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
-    workerRef.current.addEventListener('message', handleWorkerMessage);
-
-    (async () => {
-      let supportsWebGpu = false;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const gpu = (navigator as any).gpu;
-        if (gpu && typeof gpu.requestAdapter === 'function') {
-          const adapter = await gpu.requestAdapter();
-          supportsWebGpu = adapter != null;
-        }
-      } catch (probeError) {
-        logger.warn('WebGPU adapter probe failed; falling back to WASM tier.', { error: String(probeError) });
-        supportsWebGpu = false;
-      }
-
-      workerRef.current?.postMessage({
-        action: 'INIT',
-        correlationId: initCorrelationId,
-        payload: { config: { useWebGPU: supportsWebGpu } },
-      });
-    })();
+    // Heavy ML init (Worker + VAD model) is lazy via ensureInitialized(),
+    // called from the Start-tap gesture. Nothing loads on page mount.
 
     // Initialize native browser Web Speech API (Optimistic UI Track)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -365,101 +508,33 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       nativeRecognizerRef.current = recognizer;
     }
 
-    // Initialize Voice Activity Detection (VAD) audio processor infrastructure node lanes using millisecond-based options
-    MicVAD.new({
-      // Asset directory served from public/ — the library resolves the .onnx model and worklet bundle relative to this path
-      baseAssetPath: '/',
-      onnxWASMBasePath: '/assets/js/',
-      model: 'legacy',
-      startOnLoad: false,
-      // Use browser hardware echo cancellation so Polly playback is suppressed
-      // before it reaches the VAD and interruption recognizer.
-      getStream: async () => {
-        const stream = await createMicrophoneStream({
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        });
-        microphoneStreamRef.current = stream;
-        return stream;
-      },
-      pauseStream: async (stream) => {
-        stream.getAudioTracks().forEach((track) => { track.enabled = false; });
-      },
-      resumeStream: async (stream) => {
-        stream.getAudioTracks().forEach((track) => { track.enabled = true; });
-        return stream;
-      },
-      positiveSpeechThreshold: 0.7,
-      negativeSpeechThreshold: 0.65,
-      preSpeechPadMs: 500,  // FIXED: Converted from frame indexes to millisecond bounds
-      minSpeechMs: 200,     // FIXED: Converted from frame indexes to millisecond bounds
-      redemptionMs: 500,
-      onSpeechStart: () => {
-        if (!isRecordingRef.current || !isLeaderRef.current) return;
-        activeTraceIdRef.current = generateLocalTraceId();
-        nativeFinalTranscriptRef.current = '';
-        speechActiveRef.current = true;
-        onSpeechStartRef.current?.();
-        segmentSampleCountRef.current = 0;
-        segmentEnergySumRef.current = 0;
-        segmentSpeechProbabilitySumRef.current = 0;
-        segmentFrameCountRef.current = 0;
-        
-        actionsRef.current.speechOnset(activeTraceIdRef.current); // Advance authoritative FSM to 'SPECULATIVE'
-        try { nativeRecognizerRef.current.start(); } catch { /* Shield duplicate invoke exceptions */ }
-      },
-      onSpeechEnd: () => {
-        if (!isRecordingRef.current) return;
-        speechActiveRef.current = false;
-        flushActiveSegment('silence');
-      },
-      onVADMisfire: () => {
-        speechActiveRef.current = false;
-        actionsRef.current.whisperCancel();
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onFrameProcessed: (probabilities: any, frame: Float32Array) => {
-        if (!isRecordingRef.current || !speechActiveRef.current || !isLeaderRef.current) return;
-        audioFrameAccumulatorRef.current.push(frame);
+    // VAD + Worker are created lazily in ensureInitialized() on Start tap.
 
-        let frameEnergy = 0;
-        for (let i = 0; i < frame.length; i++) frameEnergy += frame[i] * frame[i];
-        segmentSampleCountRef.current += frame.length;
-        segmentEnergySumRef.current += frameEnergy;
-        segmentSpeechProbabilitySumRef.current += Number(probabilities?.isSpeech || 0);
-        segmentFrameCountRef.current += 1;
-
-        const currentSamplesCount = audioFrameAccumulatorRef.current.reduce((acc, f) => acc + f.length, 0);
-        const liveSeconds = currentSamplesCount / 16000;
-        const physicalMemoryBytes = currentSamplesCount * 4;
-
-        // Strict Operational Guard Gates: Time-Chop Guard & Forced Memory Fence checked inline
-        if (liveSeconds >= remoteFeatureFlags.current.infiniteSpeakerCeilingS) {
-          logger.info('Infinite Speaker Guard Engaged: Hard 20-second continuous duration ceiling split pass forced.');
-          // flushActiveSegment sends the audio via TRANSCRIBE — no separate signal needed.
-          flushActiveSegment('time-chop');
-          activeTraceIdRef.current = generateLocalTraceId();
-          speechActiveRef.current = true;
-        } else if (physicalMemoryBytes >= remoteFeatureFlags.current.forcedBufferBoundsBytes) {
-          logger.warn('Forced Buffer Bounds Fence Engaged: Ingestion memory pool weight limit breached. Flushing arena.');
-          flushActiveSegment('capacity');
-        }
-      }
-    }).then((initializedVad) => {
-      vadRef.current = initializedVad;
-      setVadInitializedState(true);
-      try { vadRef.current.pause(); } catch { /* ignore */ }
-    }).catch((err) => {
-      logger.error('Failed to parse and initialize native VAD capture hooks:', undefined, { error: String(err) });
-    });
+    const isStreamUsable = () => {
+      const s = microphoneStreamRef.current;
+      if (!s) return false;
+      const tracks = s.getAudioTracks();
+      return tracks.length > 0 && tracks.some((t) => t.readyState === 'live' && t.enabled);
+    };
 
     const handleBrowserLifecycleVisibilityShift = () => {
+      // Pause-only on background. Never destroy/terminate here: iOS GC is
+      // not instantaneous and recreating immediately spikes memory.
       if (document.hidden) {
         logger.info('Mobile Lifecycle Suspension Event: Tab contextual backgrounding detected. Freezing hardware channels.');
         try { vadRef.current?.pause(); } catch { /* ignore */ }
         try { nativeRecognizerRef.current?.stop(); } catch { /* ignore */ }
-      } else if (isRecordingRef.current && isLeaderRef.current) {
+      } else if (isRecordingRef.current && isLeaderRef.current && vadRef.current) {
+        // Revalidate before resume: stream may have ended while suspended.
+        const ctx = (vadRef.current as unknown as { _audioContext?: AudioContext })._audioContext;
+        if (microphoneStreamRef.current && !isStreamUsable()) {
+          logger.warn('Mic stream ended during suspension; awaiting next Start tap to recover.');
+          return;
+        }
+        if (ctx && ctx.state === 'closed') {
+          logger.warn('AudioContext closed during suspension; awaiting next Start tap to recover.');
+          return;
+        }
         logger.info('Mobile Lifecycle Resumption Event: Tab focus restored. Awakening streaming configurations.');
         try { vadRef.current?.start(); } catch { /* ignore */ }
         try { nativeRecognizerRef.current?.start(); } catch { /* ignore */ }
@@ -468,9 +543,11 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
     const handlePageShowBfcacheRestoration = (event: PageTransitionEvent) => {
       if (event.persisted) {
+        // Do not RESET the worker: if it survived, discarding the loaded
+        // model forces a costly reload. Clear stale audio only.
         logger.warn('BFCache Re-activation Core Event Intercepted: Purging old data arrays and clearing state counters.');
         audioFrameAccumulatorRef.current = [];
-        workerRef.current?.postMessage({ action: 'RESET', correlationId: `bfcache_${Date.now()}` });
+        if (!workerRef.current || !vadRef.current) return;
         if (isRecordingRef.current && isLeaderRef.current) {
           try { nativeRecognizerRef.current?.start(); } catch { /* ignore */ }
         }
@@ -479,46 +556,58 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
     document.addEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
     window.addEventListener('pageshow', handlePageShowBfcacheRestoration);
+    console.info('[VAD-MOUNT]', { instanceId: instanceIdRef.current, phase: 'mount' });
 
     return () => {
+      console.info('[VAD-MOUNT]', { instanceId: instanceIdRef.current, phase: 'unmount' });
+      unmountedRef.current = true;
+      initGenerationRef.current++;
       document.removeEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
       window.removeEventListener('pageshow', handlePageShowBfcacheRestoration);
-      
+
       if (leaderChannelRef.current) {
         leaderChannelRef.current.close();
       }
-      
+
+      // Full cleanup only on actual unmount — never on backgrounding.
       try { vadRef.current?.destroy(); } catch { /* ignore */ }
+      vadRef.current = null;
       microphoneStreamRef.current?.getTracks().forEach((track) => track.stop());
       microphoneStreamRef.current = null;
       try { nativeRecognizerRef.current?.abort(); } catch { /* ignore */ }
-      
+
       if (workerRef.current) {
         workerRef.current.removeEventListener('message', handleWorkerMessage);
         workerRef.current.terminate();
+        workerRef.current = null;
       }
+      setVadInitializedState(false);
+      setModelReadyState(false);
+      setInitStatusBoth('idle');
     };
-  }, [handleWorkerMessage, flushActiveSegment, compileAudioPayload]);
+  }, [handleWorkerMessage]);
 
   const startRecording = useCallback(() => {
-    // nativeRecognizerRef is the optional "optimistic UI" speculative track — not a hard prerequisite.
-    // VAD + Whisper must still run even when Web Speech API is unavailable.
-    if (!vadInitializedState || !vadRef.current || !isLeaderRef.current) return;
-    
+    if (!isLeaderRef.current) return;
+    // First tap initializes (shared promise); second tap attaches to same init.
+    if (initStatusRef.current !== 'ready' || !vadRef.current) {
+      void ensureInitialized().then((ok) => {
+        if (ok && !unmountedRef.current) startRecording();
+      });
+      return;
+    }
+
     actionsRef.current.clearTranscript();
     audioFrameAccumulatorRef.current = [];
     isRecordingRef.current = true;
 
     // Advance the FSM from IDLE → LISTENING on every recording start.
-    // The first session is started by the worker 'ready' message, but all
-    // subsequent sessions (after stopRecording resets the FSM to IDLE) must
-    // re-enter LISTENING here — otherwise SPEECH_ONSET fires from IDLE and
-    // the gatekeeper blocks every transition, producing no transcription output.
     actionsRef.current.startSession();
-    
+
+    // Mic is requested here, inside the gesture chain, via getStream.
     try { vadRef.current.start(); } catch { /* ignore */ }
     logger.info('Authoritative dual-track orchestration loops successfully initialized.');
-  }, [vadInitializedState]);
+  }, [ensureInitialized]);
 
   const stopRecording = useCallback(() => {
     if (!vadRef.current) return;
@@ -552,11 +641,14 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     currentState: state.fsm,
     displayTranscript: state.fsm === 'IDLE' ? state.committedText : (state.committedText + ' ' + state.speculativeText).trim(),
     finalTranscript: state.committedText,
-    isModelLoading: modelReadyState,
-    isVadReady: vadInitializedState,
+    isModelLoading: initStatus === 'initializing' || (initStatus === 'ready' && modelReadyState),
+    isVadReady: initStatus === 'ready' && vadInitializedState,
     isTranscribing: state.fsm === 'VERIFYING',
-    startRecording, // FIXED: Successfully returned functions back into the object literal instance
-    stopRecording, // FIXED: Successfully returned functions back into the object literal instance
+    isInitializing: initStatus === 'initializing',
+    initError,
+    ensureInitialized,
+    startRecording,
+    stopRecording,
     clearTranscript: () => actionsRef.current.clearTranscript()
   };
 };

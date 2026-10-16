@@ -347,9 +347,7 @@ interface DeviceCapabilities {
   cacheQuotaBytes: number | null;
 }
 
-// Minimum Cache-API quota required before attempting any background upgrade.
-// Below this the download risks the QuotaExceededError seen on phones.
-const MIN_UPGRADE_CACHE_QUOTA_BYTES = 1024 * 1024 * 1024;
+// Minimum Cache-API quota kept for future upgrades (mobile is tiny-only for now).
 
 /**
  * Probes device limits before a single model byte is downloaded. Every read
@@ -400,33 +398,16 @@ interface UpgradeSelection {
 
 /**
  * Chooses the background upgrade tier from probed capabilities. Desktop is
- * untouched (preferred tier as-is). Mobile steps down to quantized builds:
- * base-q8 (~77 MB) by default, small-q8 (~249 MB) only on 8 GB+ devices on
- * fast connections, tiny-only when the device explicitly cannot afford more.
+ * untouched (preferred tier as-is). Mobile stays on quantized-tiny for the
+ * stabilization release: background upgrades add a second concurrent model
+ * download plus peak memory with tiny still resident, which exceeds phone
+ * tab limits. Re-enable per-tier upgrades only after lazy init + lifecycle
+ * fixes are verified on device.
  * Upgrade failure stays non-fatal — the app remains fully usable on tiny.
  */
 function selectUpgradeTier(preferredTier: RuntimeTier, caps: DeviceCapabilities): UpgradeSelection {
   if (!caps.isMobile) return { tier: preferredTier, reason: 'desktop: full tier' };
-  if (preferredTier === 'quantized-tiny') return { tier: 'quantized-tiny', reason: 'tiny already best' };
-  if (caps.saveData) return { tier: 'quantized-tiny', reason: 'save-data enabled' };
-  if (caps.effectiveType === 'slow-2g' || caps.effectiveType === '2g') {
-    return { tier: 'quantized-tiny', reason: `slow connection (${caps.effectiveType})` };
-  }
-  if (caps.cacheQuotaBytes !== null && caps.cacheQuotaBytes < MIN_UPGRADE_CACHE_QUOTA_BYTES) {
-    return { tier: 'quantized-tiny', reason: 'low cache quota' };
-  }
-  if (caps.deviceMemoryGB !== null) {
-    if (caps.deviceMemoryGB >= 8 && (caps.effectiveType === '4g' || caps.effectiveType === null)) {
-      return { tier: 'mobile-small-q8', reason: `deviceMemory=${caps.deviceMemoryGB}GB` };
-    }
-    if (caps.deviceMemoryGB >= 4) {
-      return { tier: 'mobile-base-q8', reason: `deviceMemory=${caps.deviceMemoryGB}GB` };
-    }
-    return { tier: 'quantized-tiny', reason: `deviceMemory=${caps.deviceMemoryGB}GB` };
-  }
-  // iOS and other unprobed mobiles: base-q8 is ~2x tiny's payload and the
-  // largest upgrade with a realistic phone-tab memory margin.
-  return { tier: 'mobile-base-q8', reason: 'mobile default' };
+  return { tier: 'quantized-tiny', reason: 'mobile stabilization: tiny-only' };
 }
 
 /**

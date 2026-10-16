@@ -221,7 +221,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     clearAudioPlayback();
   }, [dispatch, stopAssistantReveal, clearAudioPlayback]);
 
-  // Dual-Track Speculative Merger orchestration hook
+  // Dual-Track Speculative Merger orchestration hook (lazy init on Start tap).
   const {
     currentState,
     displayTranscript,
@@ -229,6 +229,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     isModelLoading,
     isVadReady,
     isTranscribing,
+    isInitializing,
+    initError,
+    ensureInitialized,
     startRecording,
     stopRecording,
     clearTranscript
@@ -1124,22 +1127,44 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // so there must be nothing (not even an empty bubble) before it.
   useEffect(() => {
     if (!apiClient || !userId || hasFetchedWelcomeBannerRef.current || conversationState.conversationHistory.length > 0) return;
+    const storageKey = `welcome-banner-requested:${userId}`;
+    try {
+      if (sessionStorage.getItem(storageKey) === 'done') {
+        hasFetchedWelcomeBannerRef.current = true;
+        return;
+      }
+    } catch {
+      // Storage unavailable — fall through to in-memory guard only.
+    }
     hasFetchedWelcomeBannerRef.current = true;
 
+    let cancelled = false;
     void (async () => {
       try {
         const { message } = await apiClient.fetchWelcomeBanner();
+        if (cancelled) return;
         if (latestConversationHistoryRef.current.length > 0) return;
         const assistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId, content: message } });
+        try {
+          sessionStorage.setItem(storageKey, 'done');
+        } catch {
+          // Best-effort only.
+        }
       } catch (error: unknown) {
+        if (cancelled) return;
         // Non-fatal: the welcome banner is a nice-to-have, not required to
         // start practicing. Log and move on; no user-facing error needed.
+        // Do not mark done so a later mount can retry.
+        hasFetchedWelcomeBannerRef.current = false;
         logger.error('Welcome banner fetch failed (non-fatal).', undefined, {
           error: error instanceof Error ? error.message : String(error),
         });
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [apiClient, userId, dispatch, conversationState.conversationHistory.length]);
 
   const stopRecordingRef = useRef(stopRecording);
@@ -1239,6 +1264,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     isModelLoading,
     isVadReady,
     isTranscribing,
+    isInitializing: isInitializing ?? false,
+    initError: initError ?? null,
+    ensureVoiceInitialized: ensureInitialized,
     startSession: initiateSession,
     endSession: terminateSession,
     sendTextMessage,

@@ -29,6 +29,7 @@ interface CenterPanelProps {
   onMicConsent?: () => Promise<void>;
   micAccessError?: string | null;
   onClearMicAccessError?: () => void;
+  initError?: string | null;
 }
 
 function formatTime(seconds: number): string {
@@ -77,6 +78,7 @@ export function CenterPanel({
   onMicConsent,
   micAccessError,
   onClearMicAccessError,
+  initError,
 }: CenterPanelProps) {
   const [message, setMessage] = useState('');
   const { t } = useTranslation('conversation');
@@ -225,6 +227,7 @@ export function CenterPanel({
                   onMicConsent={onMicConsent}
                   micAccessError={micAccessError}
                   onClearMicAccessError={onClearMicAccessError}
+                  initError={initError}
                 />
               </div>
             </div>

@@ -18,6 +18,7 @@ interface VoiceHubProps {
   readonly onMicConsent?: () => Promise<void>;
   readonly micAccessError?: string | null;
   readonly onClearMicAccessError?: () => void;
+  readonly initError?: string | null;
 }
 
 export function VoiceHub({ 
@@ -31,6 +32,7 @@ export function VoiceHub({
   onMicConsent,
   micAccessError = null,
   onClearMicAccessError,
+  initError = null,
 }: VoiceHubProps): JSX.Element {
   const { t } = useTranslation('conversation');
   
@@ -40,7 +42,10 @@ export function VoiceHub({
   const [consentError, setConsentError] = useState<string | null>(null);
   const [showLoadingProgress, setShowLoadingProgress] = useState(false);
   const DEBOUNCE_DELAY_MS = 800; // Rigid interaction safety threshold window
-  const isListenerLoading = isModelLoading || !isVadReady;
+  // Lazy init: idle (no model yet) must allow the first tap to initialize.
+  // Only block while init is actually in flight or a turn is processing.
+  const isListenerLoading = isModelLoading;
+  const isIdleUninitialized = !isVadReady && !isModelLoading && !isSessionActive;
 
   const handleButtonClick = useCallback(() => {
     const currentTimestamp = performance.now();
@@ -111,6 +116,7 @@ export function VoiceHub({
         </span>
       )}
       {micAccessError && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{micAccessError}</p>}
+      {initError && !isSessionActive && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{initError}</p>}
       <div
         className={`relative inline-flex items-center justify-center ${isButtonDisabled ? 'cursor-not-allowed' : ''}`}
         onMouseEnter={() => setShowLoadingProgress(true)}
@@ -137,7 +143,9 @@ export function VoiceHub({
             ? t('workspace.voice.pause')
             : isListenerLoading
               ? t('workspace.voice.loading')
-              : t('workspace.voice.start')}
+              : isIdleUninitialized
+                ? t('workspace.voice.start')
+                : t('workspace.voice.start')}
         >
           <AnimatedStatusButton status={visualStatus} isPulsing={isPulsing} />
         </button>

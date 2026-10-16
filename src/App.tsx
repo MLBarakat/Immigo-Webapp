@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { BookOpen, MessageSquare, SlidersHorizontal } from 'lucide-react';
 import { Amplify } from 'aws-amplify';
 import { useTranslation } from 'react-i18next';
@@ -28,8 +28,7 @@ import { DisplayUser } from './types/user';
 import { UserSettings, FontSize, ThemeOption } from './types/settings';
 import { applyFontSize } from './utils/fontSize';
 import { applyTheme } from './utils/theme';
-import { MIC_CONSENT_VERSION, hasMicConsent } from './utils/micConsent';
-import { createMicrophoneStream } from './utils/audioUtils';
+import { MIC_CONSENT_VERSION } from './utils/micConsent';
 import { logger } from './logger';
 import useMediaQuery from './hooks/useMediaQuery';
 import { normalizeAppLanguage } from './i18n';
@@ -50,48 +49,23 @@ interface ConversationWorkspaceProps {
 }
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
-  const { user, profile, logout, loading: authLoading, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
+  const { user, profile, logout, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
   const { t: tConversation } = useTranslation('conversation');
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [simulationMode, setSimulationMode] = useState<SimulationMode>('standard');
   const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
   const [previewTheme, setPreviewTheme] = useState<ThemeOption | null>(null);
   const [micAccessError, setMicAccessError] = useState<string | null>(null);
-  const microphoneAccessAttemptedForUserRef = useRef<string | null>(null);
 
   useEffect(() => {
     const activeTheme = previewTheme ?? userSettings.theme;
     applyTheme(activeTheme);
   }, [previewTheme, userSettings.theme]);
 
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user?.id) {
-      microphoneAccessAttemptedForUserRef.current = null;
-      return;
-    }
-    if (microphoneAccessAttemptedForUserRef.current === user.id) return;
-
-    microphoneAccessAttemptedForUserRef.current = user.id;
-    if (!hasMicConsent(userSettings.mic_consent_version)) return;
-
-    let cancelled = false;
-    void createMicrophoneStream()
-      .then((stream) => stream.getTracks().forEach((track) => track.stop()))
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error('Startup microphone access attempt failed after saved user consent.', {
-          userId: user.id,
-          error: message,
-        });
-        setMicAccessError(message);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, user?.id, userSettings.mic_consent_version]);
+  // Microphone is requested lazily inside the Start-tap gesture via
+  // useWhisper.ensureInitialized(). No pre-gesture getUserMedia here:
+  // on iOS a background permission prompt backgrounds the tab and
+  // triggers the visibilitychange pause/destroy churn.
 
   const activeVoiceId = normalizeVoiceId(
     userSettings.ai_voice_id ?? getDefaultVoiceId(userSettings.language || profile?.language)
@@ -104,6 +78,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     preferredLanguage: currentLanguageCode,
     bargeIn: userSettings.barge_in,
   });
+  const managerInitError = (manager as { initError?: string | null }).initError ?? null;
 
   // ── UI State ──
   const hasSeenWelcome = Boolean(
@@ -236,6 +211,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
               micAccessError={micAccessError}
               onClearMicAccessError={() => setMicAccessError(null)}
+              initError={managerInitError}
               onLoadOlder={manager.loadOlderMessages}
               onClearError={manager.clearError}
             />
@@ -371,6 +347,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
           micAccessError={micAccessError}
           onClearMicAccessError={() => setMicAccessError(null)}
+          initError={managerInitError}
           onLoadOlder={manager.loadOlderMessages}
           onClearError={manager.clearError}
           onToggleFocus={toggleFocusMode}

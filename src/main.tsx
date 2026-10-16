@@ -6,6 +6,30 @@ import './i18n';
 import { logger } from './logger';
 import { ErrorBoundary } from './ErrorBoundary';
 
+// --- Temporary mobile reload diagnostics (no mic data, tokens, or PII) ---
+// Distinguishes browser reload (new bootId) from React remount (same bootId).
+const bootId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+  ? crypto.randomUUID()
+  : `boot-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+try {
+  const navType = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  console.info('[BOOT]', {
+    bootId,
+    time: new Date().toISOString(),
+    visibility: document.visibilityState,
+    navigationType: navType?.type ?? 'unknown',
+  });
+} catch {
+  console.info('[BOOT]', { bootId });
+}
+window.addEventListener('pagehide', (event) => {
+  console.info('[PAGEHIDE]', { bootId, persisted: event.persisted, time: Date.now() });
+});
+window.addEventListener('pageshow', (event) => {
+  console.info('[PAGESHOW]', { bootId, persisted: event.persisted, time: Date.now() });
+});
+// --- End diagnostics ---
+
 // --- Global Error Handling ---
 // This acts as a last-resort catch-all for errors not caught by other means.
 

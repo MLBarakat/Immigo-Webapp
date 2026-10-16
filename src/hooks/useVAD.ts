@@ -31,6 +31,10 @@ export interface VADCallbacks {
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
+// DEPRECATED: do not mount alongside useWhisper. useWhisper.ensureInitialized()
+// is the single authoritative VAD owner (lazy, shared promise). Mounting this
+// second hook loads a second Silero ORT session + AudioContext and reproduces
+// the iOS double-VAD OOM. Kept only for isolated tests.
 
 export function useVAD(callbacks: VADCallbacks = {}): VADHook {
     const [vadReady, setVadReady] = useState<boolean>(false);
