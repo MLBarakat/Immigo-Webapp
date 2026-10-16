@@ -29,6 +29,24 @@ interface WhisperOptions {
 
 const LEADER_CHANNEL_NAME = 'immigo-transcription-leader';
 
+type SharedInitStatus = 'idle' | 'initializing' | 'ready' | 'error';
+
+/**
+ * Module-level shared voice runtime. Survives ConversationWorkspace
+ * remounts (auth settle re-renders): a remount attaches to the in-flight
+ * preload promise instead of cancelling it and restarting the Tiny
+ * download from zero — which previously left the mic dead until the
+ * second download finished. Never holds mic streams (those stay per-mount
+ * via getStream); only the compiled model + worker.
+ */
+const sharedRuntime: {
+  status: SharedInitStatus;
+  promise: Promise<boolean> | null;
+  worker: Worker | null;
+  vad: MicVAD | null;
+  error: string | null;
+} = { status: 'idle', promise: null, worker: null, vad: null, error: null };
+
 /**
  * Generates a high-precision, cryptographically secure Trace ID token for distributed tracking.
  * Complies with FR-015 distributed tracing requirements.
@@ -56,16 +74,15 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   type InitStatus = 'idle' | 'initializing' | 'ready' | 'error';
   const instanceId = useId();
   const unmountedRef = useRef(false);
-  const initGenerationRef = useRef(0);
 
-  // Local readiness flags for the VAD and Whisper model worker.
-  // idle = nothing loaded yet (no mic, no WASM). First Start tap initializes.
-  const [initStatus, setInitStatus] = useState<InitStatus>('idle');
-  const [initError, setInitError] = useState<string | null>(null);
-  const [vadInitializedState, setVadInitializedState] = useState<boolean>(false);
-  const [modelReadyState, setModelReadyState] = useState<boolean>(false);
-  const initStatusRef = useRef<InitStatus>('idle');
-  const initPromiseRef = useRef<Promise<boolean> | null>(null);
+  // Local readiness mirrors the module-shared runtime (which survives
+  // remounts). Initialized from shared state so remounts never flash
+  // stale idle/error or trigger cascading renders in the mount effect.
+  const [initStatus, setInitStatus] = useState<InitStatus>(sharedRuntime.status);
+  const [initError, setInitError] = useState<string | null>(sharedRuntime.error);
+  const [vadInitializedState, setVadInitializedState] = useState<boolean>(sharedRuntime.status === 'ready');
+  const [modelReadyState, setModelReadyState] = useState<boolean>(sharedRuntime.status === 'initializing');
+  const initStatusRef = useRef<InitStatus>(sharedRuntime.status);
 
   const workerRef = useRef<Worker | null>(null);
   const workerUnavailableRef = useRef(false);
@@ -279,19 +296,31 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   }, []);
 
   /**
-   * Lazy, shared, retryable init. Model download + compile starts on mount
+   * Shared, retryable init. Model download + compile starts on mount
    * (background preload, no mic: startOnLoad:false so getUserMedia is NOT
    * called). Mic is requested later inside vad.start() on the Start tap
-   * gesture. Concurrent callers share one promise.
+   * gesture. The runtime is module-shared: a remount attaches to the
+   * in-flight promise instead of cancelling the Tiny download and
+   * restarting from zero (which previously left the mic dead). Only the
+   * starter mount creates worker/VAD; every mount attaches its own worker
+   * message listener and mirrors shared state locally.
    */
   const ensureInitialized = useCallback((): Promise<boolean> => {
-    if (initStatusRef.current === 'ready' && vadRef.current && workerRef.current) {
+    // Attach to shared ready state (e.g. remount after preload finished).
+    if (sharedRuntime.status === 'ready' && sharedRuntime.vad && sharedRuntime.worker) {
+      vadRef.current = sharedRuntime.vad;
+      workerRef.current = sharedRuntime.worker;
+      if (initStatusRef.current !== 'ready') {
+        setVadInitializedState(true);
+        setInitStatusBoth('ready');
+      }
       return Promise.resolve(true);
     }
-    if (initStatusRef.current === 'initializing' && initPromiseRef.current) {
-      return initPromiseRef.current;
+    if (sharedRuntime.status === 'initializing' && sharedRuntime.promise) {
+      return sharedRuntime.promise;
     }
-    const generation = ++initGenerationRef.current;
+    sharedRuntime.status = 'initializing';
+    sharedRuntime.error = null;
     setInitStatusBoth('initializing');
     setInitError(null);
     // Worker shows busy until INIT_COMPLETED arrives.
@@ -300,9 +329,10 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     const promise = (async (): Promise<boolean> => {
       try {
         // Worker (tiny-only on mobile; see selectUpgradeTier).
-        if (!workerRef.current) {
+        if (!sharedRuntime.worker) {
           const worker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
           worker.addEventListener('message', handleWorkerMessage);
+          sharedRuntime.worker = worker;
           workerRef.current = worker;
           // WebGPU probe must never block init: requestAdapter() hangs on
           // some mobile Chrome builds. Race with a timeout, default WASM.
@@ -321,16 +351,20 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             logger.warn('WebGPU adapter probe failed; falling back to WASM tier.', { error: String(probeError) });
             supportsWebGpu = false;
           }
-          if (unmountedRef.current || generation !== initGenerationRef.current) return false;
           worker.postMessage({
             action: 'INIT',
             correlationId: `init-${Date.now()}`,
             payload: { config: { useWebGPU: supportsWebGpu } },
           });
+        } else if (!workerRef.current) {
+          workerRef.current = sharedRuntime.worker;
         }
 
         // VAD model load only (no getUserMedia until vad.start()).
-        if (!vadRef.current) {
+        // Created once by the starter mount; remounts reuse sharedRuntime.vad.
+        // Callbacks close over the starter mount's refs; TranscriptionContext
+        // actions are memoized so they stay valid across remounts.
+        if (!sharedRuntime.vad) {
           console.info(`[VAD-MOUNT] ${JSON.stringify({ instanceId, tabId: tabIdRef.current, phase: 'init-start' })}`);
           const initializedVad = await MicVAD.new({
             baseAssetPath: '/',
@@ -404,36 +438,45 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
               }
             }
           });
-          if (unmountedRef.current || generation !== initGenerationRef.current) {
-            try { initializedVad.destroy(); } catch { /* ignore */ }
-            return false;
-          }
           vadRef.current = initializedVad;
-          try { vadRef.current.pause(); } catch { /* ignore */ }
+          sharedRuntime.vad = initializedVad;
+          try { initializedVad.pause(); } catch { /* ignore */ }
           console.info(`[VAD-MOUNT] ${JSON.stringify({ instanceId, tabId: tabIdRef.current, phase: 'init-ready' })}`);
+        } else if (!vadRef.current) {
+          vadRef.current = sharedRuntime.vad;
         }
 
+        sharedRuntime.status = 'ready';
+        sharedRuntime.error = null;
         setVadInitializedState(true);
         setInitStatusBoth('ready');
         return true;
       } catch (err) {
-        if (generation !== initGenerationRef.current) return false;
         const message = err instanceof Error ? err.message : String(err);
         logger.error('Voice init failed (retryable on next tap).', undefined, { error: message });
+        sharedRuntime.status = 'error';
+        sharedRuntime.error = message;
         setInitError(message);
         setInitStatusBoth('error');
         setModelReadyState(false);
-        // Allow retry: drop failed worker so next tap rebuilds.
-        try { workerRef.current?.terminate(); } catch { /* ignore */ }
+        // Allow retry: drop failed shared resources so next attempt rebuilds.
+        if (sharedRuntime.worker) {
+          try { sharedRuntime.worker.terminate(); } catch { /* ignore */ }
+        }
+        sharedRuntime.worker = null;
+        sharedRuntime.vad = null;
         workerRef.current = null;
         vadRef.current = null;
         setVadInitializedState(false);
         return false;
       } finally {
-        initPromiseRef.current = null;
+        // Only one init runs at a time (status check-then-set is
+        // synchronous), so unconditional clear is safe: attachers already
+        // hold the promise object.
+        sharedRuntime.promise = null;
       }
     })();
-    initPromiseRef.current = promise;
+    sharedRuntime.promise = promise;
     return promise;
   }, [handleWorkerMessage, flushActiveSegment, setInitStatusBoth, instanceId]);
 
@@ -453,8 +496,8 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       };
     }
 
-    // Heavy ML init (Worker + VAD model) is lazy via ensureInitialized(),
-    // called from the Start-tap gesture. Nothing loads on page mount.
+    // Background preload runs on mount (shared runtime); mic stays
+    // gesture-gated. Nothing requests microphone on page mount.
 
     // Initialize native browser Web Speech API (Optimistic UI Track)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -509,7 +552,8 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       nativeRecognizerRef.current = recognizer;
     }
 
-    // VAD + Worker are created lazily in ensureInitialized() on Start tap.
+    // VAD + Worker are created once in ensureInitialized() (background
+    // preload on mount) and shared across remounts.
 
     const isStreamUsable = () => {
       const s = microphoneStreamRef.current;
@@ -555,6 +599,19 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       }
     };
 
+    // Attach to the shared runtime when it already exists (remount during
+    // preload, or preload finished): mirror refs and listen for worker
+    // messages on this mount's handler. Local useState already mirrors
+    // shared status via initializers above. The starter mount creates
+    // the worker inside ensureInitialized() below.
+    if (sharedRuntime.worker) {
+      sharedRuntime.worker.addEventListener('message', handleWorkerMessage);
+      workerRef.current = sharedRuntime.worker;
+    }
+    if (sharedRuntime.status === 'ready' && sharedRuntime.vad) {
+      vadRef.current = sharedRuntime.vad;
+    }
+
     document.addEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
     window.addEventListener('pageshow', handlePageShowBfcacheRestoration);
     const mountedInstanceId = instanceId;
@@ -565,12 +622,16 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     // VAD model on page load with NO mic request (startOnLoad:false).
     // Mic fires only inside the Start-tap gesture via vad.start().
     // Text chat stays usable while this runs; voice tap is blocked meanwhile.
-    void ensureInitialized().catch(() => undefined);
+    // Shared runtime: remounts attach to the in-flight promise, never restart.
+    // Deferred past mount paint so first paint never waits on model load.
+    const preloadTimer = window.setTimeout(() => {
+      void ensureInitialized().catch(() => undefined);
+    }, 0);
 
     return () => {
+      window.clearTimeout(preloadTimer);
       console.info(`[VAD-MOUNT] ${JSON.stringify({ instanceId: mountedInstanceId, tabId: mountedTabId, phase: 'unmount' })}`);
       unmountedRef.current = true;
-      initGenerationRef.current += 1;
       document.removeEventListener('visibilitychange', handleBrowserLifecycleVisibilityShift);
       window.removeEventListener('pageshow', handlePageShowBfcacheRestoration);
 
@@ -580,9 +641,9 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         leaderChannelRef.current = null;
       }
 
-      // Full cleanup only on actual unmount — never on backgrounding.
-      try { vadRef.current?.destroy(); } catch { /* ignore */ }
-      vadRef.current = null;
+      // Detach this mount's worker listener only — the shared worker/VAD
+      // survive remounts by design. Per-mount mic streams are stopped.
+      try { vadRef.current?.pause(); } catch { /* ignore */ }
       const micStream = microphoneStreamRef.current;
       micStream?.getTracks().forEach((track) => track.stop());
       microphoneStreamRef.current = null;
@@ -591,12 +652,9 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       const worker = workerRef.current;
       if (worker) {
         worker.removeEventListener('message', handleWorkerMessage);
-        worker.terminate();
         workerRef.current = null;
       }
-      setVadInitializedState(false);
-      setModelReadyState(false);
-      setInitStatusBoth('idle');
+      vadRef.current = null;
     };
   }, [handleWorkerMessage, setInitStatusBoth, instanceId, ensureInitialized]);
 
