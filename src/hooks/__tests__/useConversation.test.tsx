@@ -89,6 +89,8 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       isTranscribing: false,
       startRecording: mockStartRecording,
       stopRecording: mockStopRecording,
+      pauseVAD: vi.fn(),
+      resumeVAD: vi.fn(),
     });
 
     // Construct a type-safe mock API Client instance mirror

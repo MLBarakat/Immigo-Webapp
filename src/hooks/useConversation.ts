@@ -16,7 +16,11 @@ import {
   isExplicitBargeInCommand,
   isPlaybackEchoTranscript,
 } from '../utils/bargeIn';
-import { unlockAudioPlayback } from '../utils/audioUtils';
+import {
+  unlockAudioPlayback,
+  createPlaybackNode,
+  AudioPlaybackHandle,
+} from '../utils/audioUtils';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
@@ -31,7 +35,7 @@ interface AssistantReveal {
   words: string[];
   revealedWords: number;
   timerId: number;
-  audioNode: HTMLAudioElement | null;
+  audioNode: AudioPlaybackHandle | null;
 }
 
 const SILENCE_NUDGE_DELAY_MS = 15_000;
@@ -63,7 +67,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [bargeIn]);
 
   const intervalRef = useRef<number | null>(null);
-  const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
+  const audioPlaybackRef = useRef<AudioPlaybackHandle | null>(null);
   const audioPlaybackUrlRef = useRef<string | null>(null);
   const audioPlaybackGenerationRef = useRef(0);
   const processedTranscriptRef = useRef<string>('');
@@ -121,7 +125,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     assistantRevealRef.current = null;
   }, [dispatch]);
 
-  const startAssistantReveal = useCallback((messageId: string, content: string, audioNode: HTMLAudioElement | null = null) => {
+  const startAssistantReveal = useCallback((messageId: string, content: string, audioNode: AudioPlaybackHandle | null = null) => {
     stopAssistantReveal();
     const words = content.trim().split(/\s+/).filter(Boolean);
     if (words.length === 0) return;
@@ -190,7 +194,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       audioPlayback.onended = null;
       audioPlayback.onerror = null;
       audioPlayback.pause();
-      audioPlayback.currentTime = 0;
+      audioPlayback.cleanup?.();
     }
     audioPlaybackRef.current = null;
 
@@ -667,16 +671,19 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         return;
       }
 
-      const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
-      const audioBlobUrl = URL.createObjectURL(audioBlob);
-      const audioPlaybackNode = new Audio(audioBlobUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      const audioPlaybackNode = await createPlaybackNode(audioData);
+      if (playbackGeneration !== audioPlaybackGenerationRef.current) {
+        audioPlaybackNode.pause();
+        audioPlaybackNode.cleanup?.();
+        return;
+      }
       audioPlaybackNode.onerror = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
-        completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioPlaybackNode.error?.code ?? 'unknown'})`));
+        completeBlockedAudioTurnAsText(traceId, new Error('media decode failure'));
       };
       audioPlaybackRef.current = audioPlaybackNode;
-      audioPlaybackUrlRef.current = audioBlobUrl;
+      audioPlaybackUrlRef.current = audioPlaybackNode.blobUrl ?? null;
       activePollyTextRef.current = responseText;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
       startAssistantReveal(secureAssistantMessageId, responseText, audioPlaybackNode);
@@ -689,7 +696,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // Pause VAD during AI audio playback to prevent VAD from detecting its own
       // output as user speech. This prevents the crash cycle of repeated VAD
       // detections, correlation ID mismatches, and worker OOM on mobile.
-      pauseVAD();
+      pauseVAD?.();
       startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
@@ -734,7 +741,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           isPollyPlayingRef.current = false;
           pollyMuteGateTimerRef.current = null;
           // Re-enable VAD listening so user can speak after AI response ends
-          resumeVAD();
+          resumeVAD?.();
         }, 300); // 300 ms AEC settle window
       };
       activeTurnControllerRef.current = null;
@@ -797,15 +804,19 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         void ChatPersistenceService.persistMessage(activeSessionId, userId, 'assistant', response.responseText);
       }
 
-      const audioUrl = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
-      const audioNode = new Audio(audioUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      const audioNode = await createPlaybackNode(response.audioData);
+      if (playbackGeneration !== audioPlaybackGenerationRef.current) {
+        audioNode.pause();
+        audioNode.cleanup?.();
+        return;
+      }
       audioNode.onerror = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
-        completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioNode.error?.code ?? 'unknown'})`));
+        completeBlockedAudioTurnAsText(traceId, new Error('media decode failure'));
       };
       audioPlaybackRef.current = audioNode;
-      audioPlaybackUrlRef.current = audioUrl;
+      audioPlaybackUrlRef.current = audioNode.blobUrl ?? null;
       activePollyTextRef.current = response.responseText;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
       startAssistantReveal(assistantMessageId, response.responseText, audioNode);
@@ -1015,16 +1026,19 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       // Keep capture active during playback for barge-in. The assistant bubble
       // is created with its first word only after the response is ready.
-      const audioBlob = new Blob([res.audioData], { type: 'audio/mpeg' });
-      const audioBlobUrl = URL.createObjectURL(audioBlob);
-      const audioPlaybackNode = new Audio(audioBlobUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      const audioPlaybackNode = await createPlaybackNode(res.audioData);
+      if (playbackGeneration !== audioPlaybackGenerationRef.current) {
+        audioPlaybackNode.pause();
+        audioPlaybackNode.cleanup?.();
+        return;
+      }
       audioPlaybackNode.onerror = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
-        completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioPlaybackNode.error?.code ?? 'unknown'})`));
+        completeBlockedAudioTurnAsText(traceId, new Error('media decode failure'));
       };
       audioPlaybackRef.current = audioPlaybackNode;
-      audioPlaybackUrlRef.current = audioBlobUrl;
+      audioPlaybackUrlRef.current = audioPlaybackNode.blobUrl ?? null;
       activePollyTextRef.current = res.responseText;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
       activeAssistantMessageIdRef.current = secureAssistantMessageId;
@@ -1035,7 +1049,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // Pause VAD during AI audio playback to prevent VAD from detecting its own
       // output as user speech. This prevents the crash cycle of repeated VAD
       // detections, correlation ID mismatches, and worker OOM on mobile.
-      pauseVAD();
+      pauseVAD?.();
       startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
@@ -1067,7 +1081,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           isPollyPlayingRef.current = false;
           pollyMuteGateTimerRef.current = null;
           // Re-enable VAD listening so user can speak after AI response ends
-          resumeVAD();
+          resumeVAD?.();
         }, 300);
       };
     } catch (error: unknown) {

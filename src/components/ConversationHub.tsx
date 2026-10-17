@@ -2,6 +2,7 @@ import { Download, Trash2, Sparkles } from 'lucide-react';
 import { AppStatus } from '../context/conversationContextTypes';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
 import { UserSettings } from '../types/settings';
+import { unlockAudioPlayback } from '../utils/audioUtils';
 
 interface ConversationHubProps {
   readonly status: AppStatus;
@@ -56,6 +57,7 @@ export function ConversationHub({
     if (isSessionActive) {
       onEndSession();
     } else {
+      unlockAudioPlayback();
       onStartSession();
     }
   };

@@ -70,6 +70,8 @@ export function VoiceHub({
       logger.info('VoiceHub: manual user intervention captured. Discontinuing speech session recording.');
       onEndSession();
     } else {
+      // Synchronously unlock audio playback within the user's initial interaction gesture
+      unlockAudioPlayback();
       // One-time microphone/voice disclosure before the first recording (E2 consent).
       if (!hasMicConsent(micConsentVersion)) {
         setShowMicConsent(true);
