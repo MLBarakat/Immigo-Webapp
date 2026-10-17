@@ -748,6 +748,8 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     ensureInitialized,
     startRecording,
     stopRecording,
+    pauseVAD,
+    resumeVAD,
     clearTranscript: () => actionsRef.current.clearTranscript()
   };
 };
