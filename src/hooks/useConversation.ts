@@ -234,6 +234,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     ensureInitialized,
     startRecording,
     stopRecording,
+    pauseVAD,
+    resumeVAD,
     clearTranscript
   } = useWhisper({
     onSpeechStart: () => {
@@ -687,7 +689,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // Pause VAD during AI audio playback to prevent VAD from detecting its own
       // output as user speech. This prevents the crash cycle of repeated VAD
       // detections, correlation ID mismatches, and worker OOM on mobile.
-      vadRef.current?.pause();
+      pauseVAD();
       startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
@@ -732,7 +734,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           isPollyPlayingRef.current = false;
           pollyMuteGateTimerRef.current = null;
           // Re-enable VAD listening so user can speak after AI response ends
-          vadRef.current?.resume();
+          resumeVAD();
         }, 300); // 300 ms AEC settle window
       };
       activeTurnControllerRef.current = null;
@@ -1033,7 +1035,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // Pause VAD during AI audio playback to prevent VAD from detecting its own
       // output as user speech. This prevents the crash cycle of repeated VAD
       // detections, correlation ID mismatches, and worker OOM on mobile.
-      vadRef.current?.pause();
+      pauseVAD();
       startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
@@ -1065,7 +1067,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           isPollyPlayingRef.current = false;
           pollyMuteGateTimerRef.current = null;
           // Re-enable VAD listening so user can speak after AI response ends
-          vadRef.current?.resume();
+          resumeVAD();
         }, 300);
       };
     } catch (error: unknown) {

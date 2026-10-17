@@ -21,6 +21,10 @@ export interface WhisperHook {
   startRecording: () => void;
   stopRecording: () => void;
   clearTranscript: () => void;
+  /** Pause the VAD (e.g. during AI audio playback to prevent self-detection) */
+  pauseVAD: () => void;
+  /** Resume the VAD (e.g. after AI audio completes + AEC settle window) */
+  resumeVAD: () => void;
 }
 
 interface WhisperOptions {
@@ -723,6 +727,14 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     if (!hasPendingSpeech) actionsRef.current.endSession();
     logger.info('Authoritative dual-track orchestration loops successfully wound down.');
   }, [flushActiveSegment, hasSpeechQuality]);
+
+  const pauseVAD = useCallback(() => {
+    try { vadRef.current?.pause(); } catch { /* ignore */ }
+  }, []);
+
+  const resumeVAD = useCallback(() => {
+    try { vadRef.current?.start(); } catch { /* ignore */ }
+  }, []);
 
   return {
     currentState: state.fsm,

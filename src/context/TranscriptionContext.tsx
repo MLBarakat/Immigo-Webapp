@@ -149,12 +149,55 @@ function transcriptionReducer(
         case 'WHISPER_COMPLETE': {
             if (!isValidTransition(state.fsm, 'COMMITTED')) return state;
             
-            // FIXED: Accumulate historical transcript payload sentences to safeguard conversational context
-            const addition = action.payload.text.trim();
+            // MERGE browser speculative text with Whisper final text for immediate
+            // first-word display while preserving full accuracy in committed history.
+            // - Browser STT provides fast interim results (~200ms)
+            // - Whisper provides accurate final transcription (~800ms-1s delay)
+            // - Merge removes exact word duplicates at the boundary, keeps both portions
+            const whisperText = action.payload.text.trim();
+            const browserText = state.speculativeText.trim();
+            
+            let combinedText: string;
+            if (!browserText) {
+              combinedText = whisperText;
+            } else if (!whisperText) {
+              combinedText = browserText;
+            } else {
+              // Boundary-aware deduplication: remove overlapping prefix (max 3 words)
+              const browserWords = browserText.trim().split(/\s+/);
+              const whisperWords = whisperText.trim().split(/\s+/);
+              
+              let overlapLen = 0;
+              const maxOverlap = Math.min(browserWords.length, whisperWords.length, 3);
+              
+              for (let i = 1; i <= maxOverlap; i++) {
+                const browserTail = browserWords.slice(-i).join(' ').toLowerCase().replace(/[.,;:!?]/g, '');
+                const whisperHead = whisperWords.slice(0, i).join(' ').toLowerCase().replace(/[.,;:!?]/g, '');
+                if (browserTail === whisperHead) {
+                  overlapLen = i;
+                } else {
+                  break;
+                }
+              }
+              
+              if (overlapLen > 0) {
+                // Remove overlapped portion from Whisper, keep browser text + rest of Whisper
+                const nonOverlappingWhisper = whisperWords.slice(overlapLen).join(' ');
+                combinedText = `${browserText} ${nonOverlappingWhisper}`.trim();
+              } else {
+                // No overlap - concatenate browser first words + Whisper rest
+                combinedText = `${browserText} ${whisperText}`.trim();
+              }
+            }
+            
+            // FIXED: Accumulate historical transcript payload sentences to safeguard
+            // conversational context, using the merged text so user sees first words
+            // immediately rather than waiting for full Whisper inference.
+            const addition = combinedText;
             const accumulatedHistory = state.committedText.trim()
                 ? `${state.committedText} ${addition}`.replace(/\s+/g, ' ').trim()
                 : addition;
-
+            
             // Immediately return to LISTENING so the next SPEECH_ONSET is accepted mid-session.
             // Without this, the FSM strands in COMMITTED and blocks all subsequent utterances.
             return {
