@@ -163,30 +163,39 @@ function transcriptionReducer(
             } else if (!whisperText) {
               combinedText = browserText;
             } else {
-              // Boundary-aware deduplication: remove overlapping prefix (max 3 words)
-              const browserWords = browserText.trim().split(/\s+/);
-              const whisperWords = whisperText.trim().split(/\s+/);
-              
-              let overlapLen = 0;
-              const maxOverlap = Math.min(browserWords.length, whisperWords.length, 3);
-              
-              for (let i = 1; i <= maxOverlap; i++) {
-                const browserTail = browserWords.slice(-i).join(' ').toLowerCase().replace(/[.,;:!?]/g, '');
-                const whisperHead = whisperWords.slice(0, i).join(' ').toLowerCase().replace(/[.,;:!?]/g, '');
-                if (browserTail === whisperHead) {
-                  overlapLen = i;
-                } else {
-                  break;
-                }
-              }
-              
-              if (overlapLen > 0) {
-                // Remove overlapped portion from Whisper, keep browser text + rest of Whisper
-                const nonOverlappingWhisper = whisperWords.slice(overlapLen).join(' ');
-                combinedText = `${browserText} ${nonOverlappingWhisper}`.trim();
+              // First check: if entire browser text is a prefix of whisper text,
+              // just use whisper text (it already contains everything browser said + more)
+              const browserLower = browserText.toLowerCase().replace(/[.,;:!?]/g, '');
+              const whisperLower = whisperText.toLowerCase().replace(/[.,;:!?]/g, '');
+              if (whisperLower.startsWith(browserLower)) {
+                // Browser text is fully contained at the start of whisper text
+                combinedText = whisperText;
               } else {
-                // No overlap - concatenate browser first words + Whisper rest
-                combinedText = `${browserText} ${whisperText}`.trim();
+                // Boundary-aware deduplication: remove overlapping prefix (max 3 words)
+                const browserWords = browserText.trim().split(/\s+/);
+                const whisperWords = whisperText.trim().split(/\s+/);
+                
+                let overlapLen = 0;
+                const maxOverlap = Math.min(browserWords.length, whisperWords.length, 3);
+                
+                for (let i = 1; i <= maxOverlap; i++) {
+                  const browserTail = browserWords.slice(-i).join(' ').toLowerCase().replace(/[.,;:!?]/g, '');
+                  const whisperHead = whisperWords.slice(0, i).join(' ').toLowerCase().replace(/[.,;:!?]/g, '');
+                  if (browserTail === whisperHead) {
+                    overlapLen = i;
+                  } else {
+                    break;
+                  }
+                }
+                
+                if (overlapLen > 0) {
+                  // Remove overlapped portion from Whisper, keep browser text + rest of Whisper
+                  const nonOverlappingWhisper = whisperWords.slice(overlapLen).join(' ');
+                  combinedText = `${browserText} ${nonOverlappingWhisper}`.trim();
+                } else {
+                  // No overlap - concatenate browser first words + Whisper rest
+                  combinedText = `${browserText} ${whisperText}`.trim();
+                }
               }
             }
             
