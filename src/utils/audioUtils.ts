@@ -100,6 +100,64 @@ function getSilentWavUrl(): string | null {
  */
 let sharedUnlockAudio: HTMLAudioElement | null = null;
 
+// ── Temporary AUDIO-DIAG instrumentation ────────────────────────────────────
+// Used to pin down mobile-only Polly playback blocks (NotAllowedError).
+// Every entry is prefixed [AUDIO-DIAG] so it is easy to grep in a remote
+// console capture. Safe to strip once the mobile autoplay issue is resolved.
+
+/** Timestamp of the most recent real user gesture seen by the page. */
+let lastUserGestureAtMs = 0;
+let gestureTrackersInstalled = false;
+
+/**
+ * Installs capture-phase gesture listeners (passive, no side effects) so
+ * diagnostics can report how long ago the last real user interaction was
+ * relative to unlock/play attempts. This distinguishes "unlock never ran
+ * inside a gesture" from "unlock ran in a gesture but did not stick".
+ */
+function installGestureTrackers(): void {
+  if (gestureTrackersInstalled || typeof window === 'undefined') return;
+  gestureTrackersInstalled = true;
+  const mark = () => { lastUserGestureAtMs = performance.now(); };
+  for (const type of ['pointerdown', 'touchstart', 'click', 'keydown'] as const) {
+    window.addEventListener(type, mark, { capture: true, passive: true });
+  }
+}
+
+if (typeof window !== 'undefined') installGestureTrackers();
+
+/**
+ * Snapshot of every autoplay-relevant signal available at call time.
+ * Logged before/after unlock and play() attempts so the failing device's
+ * console shows exactly which activation/policy condition blocked audio.
+ */
+export function describeAudioEnvironment(): Record<string, unknown> {
+  try {
+    const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+    const doc = typeof document !== 'undefined' ? document : undefined;
+    // userActivation is the decisive signal: hasBeenActive=false at play()
+    // time means the browser does not consider this document activated.
+    const activation = nav
+      ? (nav as Navigator & { userActivation?: { hasBeenActive: boolean; isActive: boolean } }).userActivation
+      : undefined;
+    return {
+      userAgent: nav?.userAgent,
+      visibility: doc?.visibilityState,
+      hasFocus: typeof doc?.hasFocus === 'function' ? doc.hasFocus() : undefined,
+      hasBeenActive: activation?.hasBeenActive,
+      isActive: activation?.isActive,
+      msSinceLastUserGesture: lastUserGestureAtMs > 0
+        ? Math.round(performance.now() - lastUserGestureAtMs)
+        : null,
+      sharedAudioContextState: sharedPlaybackContext
+        ? (sharedPlaybackContext as AudioContext).state
+        : 'never-created',
+    };
+  } catch (error) {
+    return { diagnosticsError: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 function playSilentMediaUnlock(): void {
   try {
     const url = getSilentWavUrl();
@@ -120,16 +178,34 @@ function playSilentMediaUnlock(): void {
     const playResult = element.play();
     if (playResult && typeof playResult.then === 'function') {
       playResult.then(() => {
+        logger.info('[AUDIO-DIAG] Silent-unlock media play() RESOLVED — media-element playback unlocked for this document.');
         try {
           element.pause();
           element.currentTime = 0;
         } catch {
           // Best-effort only.
         }
-      }).catch(() => undefined);
+      }).catch((error: unknown) => {
+        // This is the most likely root cause of mobile-only Polly silence:
+        // if the unlock play is rejected, every later new Audio().play()
+        // (which happens ~10-15s after the tap, with no gesture) is doomed.
+        logger.warn('[AUDIO-DIAG] Silent-unlock media play() REJECTED — media-element unlock FAILED. Later Polly play() calls will very likely be blocked.', {
+          errorName: error instanceof Error ? error.name : 'Unknown',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          ...describeAudioEnvironment(),
+        });
+      });
+    } else {
+      logger.info('[AUDIO-DIAG] Silent-unlock media play() returned no promise (engine treated as unlocked).');
     }
-  } catch {
-    // Best-effort only.
+  } catch (error: unknown) {
+    // Best-effort only, but record it: a throwing unlock path explains a
+    // fully silent mobile session.
+    logger.warn('[AUDIO-DIAG] playSilentMediaUnlock threw before play() completed.', {
+      errorName: error instanceof Error ? error.name : 'Unknown',
+      errorMessage: error instanceof Error ? error.message : String(error),
+      ...describeAudioEnvironment(),
+    });
   }
 }
 
@@ -143,12 +219,16 @@ function playSilentMediaUnlock(): void {
  */
 export function unlockAudioPlayback(): void {
   try {
+    logger.info('[AUDIO-DIAG] unlockAudioPlayback() invoked.', describeAudioEnvironment());
     // Media-element unlock first: iOS requires a real media play inside the
     // gesture, which a WebAudio render alone does not satisfy.
     playSilentMediaUnlock();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
+    if (!AudioContextClass) {
+      logger.warn('[AUDIO-DIAG] No AudioContext constructor available; WebAudio half of unlock skipped.');
+      return;
+    }
     if (!sharedPlaybackContext) {
       sharedPlaybackContext = new AudioContextClass({ latencyHint: 'interactive' });
     }
@@ -164,7 +244,17 @@ export function unlockAudioPlayback(): void {
       } catch {
         // Silent-buffer render is best-effort only.
       }
-      context.resume().catch(() => undefined);
+      context.resume().then(() => {
+        logger.info('[AUDIO-DIAG] Shared AudioContext resume() resolved.', { audioContextState: context.state });
+      }).catch((error: unknown) => {
+        logger.warn('[AUDIO-DIAG] Shared AudioContext resume() rejected.', {
+          errorName: error instanceof Error ? error.name : 'Unknown',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          audioContextState: context.state,
+        });
+      });
+    } else {
+      logger.info('[AUDIO-DIAG] Shared AudioContext already unlocked.', { audioContextState: context.state });
     }
   } catch {
     // Unlock must never throw into gesture handlers.

@@ -16,7 +16,7 @@ import {
   isExplicitBargeInCommand,
   isPlaybackEchoTranscript,
 } from '../utils/bargeIn';
-import { unlockAudioPlayback } from '../utils/audioUtils';
+import { unlockAudioPlayback, describeAudioEnvironment } from '../utils/audioUtils';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
@@ -204,6 +204,30 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [stopAssistantReveal]);
 
   /**
+   * Logs a Polly playback readiness snapshot: payload size + the exact
+   * autoplay/policy signals (userActivation, gesture recency, visibility,
+   * element state). Temporary [AUDIO-DIAG] instrumentation for the
+   * mobile-only NotAllowedError investigation.
+   */
+  const describePollyPlayback = useCallback((
+    scope: string,
+    traceId: string,
+    node: HTMLAudioElement,
+    audioByteLength: number,
+    responseTextLength: number,
+  ) => {
+    logger.info(`[AUDIO-DIAG] ${scope}: audio element created; payload ready for playback.`, {
+      traceId,
+      audioByteLength,
+      responseTextLength,
+      elementReadyState: node.readyState,
+      elementNetworkState: node.networkState,
+      elementCurrentSrc: node.currentSrc || '(none yet)',
+      ...describeAudioEnvironment(),
+    });
+  }, []);
+
+  /**
    * Completes an assistant turn as text-only when its audio cannot be heard
    * (mobile autoplay block or media decode failure). This is not a turn
    * failure: the text response is already revealed, so flush it fully and
@@ -213,7 +237,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const completeBlockedAudioTurnAsText = useCallback((traceId: string, error: unknown) => {
     const errorName = error instanceof Error ? error.name : 'UnknownError';
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.warn('Assistant audio unavailable; completing turn as text.', { traceId, errorName, errorMessage });
+    logger.warn('Assistant audio unavailable; completing turn as text.', {
+      traceId,
+      errorName,
+      errorMessage,
+      ...describeAudioEnvironment(),
+    });
     isAssistantAudioActiveRef.current = false;
     isPollyPlayingRef.current = false;
     stopAssistantReveal(true);
@@ -671,6 +700,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      describePollyPlayback('Turn response', traceId, audioPlaybackNode, audioData.byteLength, responseText.length);
       audioPlaybackNode.onerror = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioPlaybackNode.error?.code ?? 'unknown'})`));
@@ -696,7 +726,19 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         pollyMuteGateTimerRef.current = null;
       }
 
-      audioPlaybackNode.play().catch((error: unknown) => {
+      logger.info('[AUDIO-DIAG] Turn response: calling audio.play().', { traceId, ...describeAudioEnvironment() });
+      audioPlaybackNode.play().then(() => {
+        logger.info('[AUDIO-DIAG] Turn response: audio.play() RESOLVED — audible playback started.', {
+          traceId,
+          ...describeAudioEnvironment(),
+        });
+      }).catch((error: unknown) => {
+        logger.warn('[AUDIO-DIAG] Turn response: audio.play() REJECTED.', {
+          traceId,
+          errorName: error instanceof Error ? error.name : 'Unknown',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          ...describeAudioEnvironment(),
+        });
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         // Mobile autoplay policy block — not a turn failure. Complete as text.
         if (error instanceof Error && error.name === 'NotAllowedError') {
@@ -769,7 +811,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         activeTurnControllerRef.current = null;
       }
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, generatePeriodicProgressReport, completeBlockedAudioTurnAsText]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, generatePeriodicProgressReport, completeBlockedAudioTurnAsText, describePollyPlayback]);
 
   const requestSilenceNudge = useCallback(async () => {
     const currentItemId = currentItemIdRef.current;
@@ -800,6 +842,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const audioUrl = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
       const audioNode = new Audio(audioUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      describePollyPlayback('Silence nudge', traceId, audioNode, response.audioData.byteLength, response.responseText.length);
       audioNode.onerror = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioNode.error?.code ?? 'unknown'})`));
@@ -823,7 +866,19 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           pollyMuteGateTimerRef.current = null;
         }, 300);
       };
-      audioNode.play().catch((error: unknown) => {
+      logger.info('[AUDIO-DIAG] Silence nudge: calling audio.play().', { traceId, ...describeAudioEnvironment() });
+      audioNode.play().then(() => {
+        logger.info('[AUDIO-DIAG] Silence nudge: audio.play() RESOLVED — audible playback started.', {
+          traceId,
+          ...describeAudioEnvironment(),
+        });
+      }).catch((error: unknown) => {
+        logger.warn('[AUDIO-DIAG] Silence nudge: audio.play() REJECTED.', {
+          traceId,
+          errorName: error instanceof Error ? error.name : 'Unknown',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          ...describeAudioEnvironment(),
+        });
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         // Mobile autoplay policy block — not a turn failure. Complete as text.
         if (error instanceof Error && error.name === 'NotAllowedError') {
@@ -848,7 +903,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     } finally {
       if (silenceNudgeControllerRef.current === controller) silenceNudgeControllerRef.current = null;
     }
-  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, clearAudioPlayback, completeBlockedAudioTurnAsText]);
+  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, clearAudioPlayback, completeBlockedAudioTurnAsText, describePollyPlayback]);
 
   useEffect(() => {
     if (displayTranscript.trim()) {
@@ -1004,6 +1059,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       awaitingConfirmationRef.current = res.needsConfirmation ? res.nextItemId : null;
 
       if (!res.responseText && res.audioData.byteLength === 0) {
+        logger.info('[AUDIO-DIAG] Session start returned no greeting audio; skipping greeting playback.', {
+          traceId,
+          audioByteLength: res.audioData.byteLength,
+          responseTextLength: res.responseText?.length ?? 0,
+          ...describeAudioEnvironment(),
+        });
         dispatch({ type: 'SET_STATUS', payload: 'listening' });
         startRecording();
         return;
@@ -1019,6 +1080,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       const audioPlaybackNode = new Audio(audioBlobUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
+      describePollyPlayback('Greeting', traceId, audioPlaybackNode, res.audioData.byteLength, res.responseText.length);
       audioPlaybackNode.onerror = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioPlaybackNode.error?.code ?? 'unknown'})`));
@@ -1042,7 +1104,19 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         pollyMuteGateTimerRef.current = null;
       }
 
-      audioPlaybackNode.play().catch((error: unknown) => {
+      logger.info('[AUDIO-DIAG] Greeting: calling audio.play().', { traceId, ...describeAudioEnvironment() });
+      audioPlaybackNode.play().then(() => {
+        logger.info('[AUDIO-DIAG] Greeting: audio.play() RESOLVED — audible playback started.', {
+          traceId,
+          ...describeAudioEnvironment(),
+        });
+      }).catch((error: unknown) => {
+        logger.warn('[AUDIO-DIAG] Greeting: audio.play() REJECTED.', {
+          traceId,
+          errorName: error instanceof Error ? error.name : 'Unknown',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          ...describeAudioEnvironment(),
+        });
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         // Mobile autoplay policy block — not a turn failure. Complete as text.
         if (error instanceof Error && error.name === 'NotAllowedError') {
@@ -1079,7 +1153,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ type: 'SET_STATUS', payload: 'listening' });
       startRecording();
     }
-  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, completeBlockedAudioTurnAsText]);
+  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, completeBlockedAudioTurnAsText, describePollyPlayback]);
 
   const terminateSession = useCallback(async () => {
     if (silenceNudgeTimerRef.current !== null) {
