@@ -102,7 +102,6 @@ let sharedUnlockAudio: HTMLAudioElement | null = null;
 
 function playSilentMediaUnlock(): void {
   try {
-    if (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent)) return;
     const url = getSilentWavUrl();
     if (!url || typeof document === 'undefined' || typeof document.createElement !== 'function') return;
     if (!sharedUnlockAudio) {
@@ -135,32 +134,6 @@ function playSilentMediaUnlock(): void {
 }
 
 /**
- * Returns the singleton shared playback AudioContext, creating it if needed.
- */
-export function getSharedPlaybackContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-  if (!AudioContextClass) return null;
-  if (!sharedPlaybackContext) {
-    try {
-      sharedPlaybackContext = new AudioContextClass({ latencyHint: 'interactive' });
-    } catch {
-      return null;
-    }
-  }
-  return sharedPlaybackContext;
-}
-
-/**
- * Reset shared context for test isolations.
- */
-export function resetSharedPlaybackContextForTesting(): void {
-  sharedPlaybackContext = null;
-  sharedUnlockAudio = null;
-}
-
-/**
  * Unlocks audible playback for mobile browsers. Must be called synchronously
  * inside a genuine user gesture (button tap) — iOS Safari and Chrome Android
  * block audible play() calls that arrive after an async gap unless the page's
@@ -173,8 +146,13 @@ export function unlockAudioPlayback(): void {
     // Media-element unlock first: iOS requires a real media play inside the
     // gesture, which a WebAudio render alone does not satisfy.
     playSilentMediaUnlock();
-    const context = getSharedPlaybackContext();
-    if (!context) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!sharedPlaybackContext) {
+      sharedPlaybackContext = new AudioContextClass({ latencyHint: 'interactive' });
+    }
+    const context = sharedPlaybackContext;
     if (context.state === 'suspended') {
       // The audible-path render must originate inside the gesture (iOS).
       try {
@@ -191,162 +169,6 @@ export function unlockAudioPlayback(): void {
   } catch {
     // Unlock must never throw into gesture handlers.
   }
-}
-
-export interface AudioPlaybackHandle {
-  readonly duration: number;
-  readonly currentTime: number;
-  readonly blobUrl?: string;
-  play(): Promise<void>;
-  pause(): void;
-  onended: (() => void) | null;
-  onerror: (() => void) | null;
-  cleanup?(): void;
-}
-
-export class WebAudioPlaybackNode implements AudioPlaybackHandle {
-  private readonly context: AudioContext;
-  private readonly audioBuffer: AudioBuffer;
-  private source: AudioBufferSourceNode | null = null;
-  private startTime: number = 0;
-  private isPaused: boolean = false;
-  private isEnded: boolean = false;
-  public onended: (() => void) | null = null;
-  public onerror: (() => void) | null = null;
-
-  constructor(context: AudioContext, audioBuffer: AudioBuffer) {
-    this.context = context;
-    this.audioBuffer = audioBuffer;
-  }
-
-  get duration(): number {
-    return this.audioBuffer.duration;
-  }
-
-  get currentTime(): number {
-    if (this.isPaused || this.startTime === 0) return 0;
-    const elapsed = this.context.currentTime - this.startTime;
-    return Math.max(0, Math.min(this.duration, elapsed));
-  }
-
-  async play(): Promise<void> {
-    if (this.context.state === 'suspended') {
-      await this.context.resume().catch(() => undefined);
-    }
-    const source = this.context.createBufferSource();
-    source.buffer = this.audioBuffer;
-    source.connect(this.context.destination);
-
-    source.onended = () => {
-      if (this.isEnded) return;
-      this.isEnded = true;
-      this.onended?.();
-    };
-
-    this.startTime = this.context.currentTime;
-    source.start(0);
-    this.source = source;
-  }
-
-  pause(): void {
-    if (this.isEnded) return;
-    this.isEnded = true;
-    this.isPaused = true;
-    if (this.source) {
-      try {
-        this.source.stop(0);
-        this.source.disconnect();
-      } catch {
-        // Source might already have finished or stopped.
-      }
-      this.source = null;
-    }
-  }
-
-  cleanup(): void {
-    this.onended = null;
-    this.onerror = null;
-  }
-}
-
-export class HtmlAudioPlaybackNode implements AudioPlaybackHandle {
-  public readonly element: HTMLAudioElement;
-  public readonly blobUrl?: string;
-
-  constructor(element: HTMLAudioElement, blobUrl?: string) {
-    this.element = element;
-    this.blobUrl = blobUrl;
-  }
-
-  get duration(): number {
-    return this.element.duration;
-  }
-
-  get currentTime(): number {
-    return this.element.currentTime;
-  }
-
-  get onended(): (() => void) | null {
-    return this.element.onended as (() => void) | null;
-  }
-  set onended(handler: (() => void) | null) {
-    this.element.onended = handler;
-  }
-
-  get onerror(): (() => void) | null {
-    return this.element.onerror as (() => void) | null;
-  }
-  set onerror(handler: (() => void) | null) {
-    this.element.onerror = handler;
-  }
-
-  play(): Promise<void> {
-    return this.element.play();
-  }
-
-  pause(): void {
-    this.element.pause();
-    this.element.currentTime = 0;
-  }
-
-  cleanup(): void {
-    this.element.onended = null;
-    this.element.onerror = null;
-  }
-}
-
-/**
- * Creates an audio playback handle for Polly speech audio.
- * On mobile devices, plays via Web Audio API using the pre-unlocked AudioContext
- * so audio plays automatically without requiring additional user gestures.
- * Falls back to HTMLAudioElement in environments where Web Audio is unavailable.
- */
-export async function createPlaybackNode(audioData: ArrayBuffer): Promise<AudioPlaybackHandle> {
-  const context = getSharedPlaybackContext();
-  if (context && typeof context.decodeAudioData === 'function') {
-    try {
-      if (context.state === 'suspended') {
-        await context.resume().catch(() => undefined);
-      }
-      const copy = audioData.slice(0);
-      const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
-        const promise = context.decodeAudioData(copy, resolve, reject);
-        if (promise && typeof promise.then === 'function') {
-          promise.then(resolve).catch(reject);
-        }
-      });
-      return new WebAudioPlaybackNode(context, audioBuffer);
-    } catch (err) {
-      logger.warn('WebAudio decode failed; falling back to HTMLAudioElement.', {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
-  const audioBlobUrl = URL.createObjectURL(audioBlob);
-  const element = new Audio(audioBlobUrl);
-  return new HtmlAudioPlaybackNode(element, audioBlobUrl);
 }
 
 /**
