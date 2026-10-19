@@ -77,7 +77,10 @@ export function ConversationHub({
           </div>
 
           <div className="flex flex-col items-center space-y-4">
-              <button onClick={handleButtonClick} disabled={isButtonDisabled} className="w-32 h-32 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
+              {/* The stop control must stay tappable while a session is stuck
+                  setting up (mic permission pending/denied): the status may
+                  only ever read 'processing' when no capture is running. */}
+              <button onClick={handleButtonClick} disabled={!isSessionActive && status === 'processing'} className="w-32 h-32 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
                   <AnimatedStatusButton status={status} />
               </button>
               <div className="text-center">
