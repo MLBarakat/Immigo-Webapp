@@ -166,6 +166,34 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     expect(mockStartSession).toHaveBeenCalledTimes(2);
   });
 
+  it('surfaces the tap-to-hear banner while a blocked audio turn is parked', () => {
+    render(
+      <VoiceHub
+        status="speaking"
+        isSessionActive={true}
+        onStartSession={mockStartSession}
+        onEndSession={mockEndSession}
+        isAudioRetryPending={true}
+      />
+    );
+
+    expect(screen.getByText('Tap anywhere to hear the answer')).toBeTruthy();
+  });
+
+  it('shows no audio-retry banner during normal playback', () => {
+    render(
+      <VoiceHub
+        status="speaking"
+        isSessionActive={true}
+        onStartSession={mockStartSession}
+        onEndSession={mockEndSession}
+        isAudioRetryPending={false}
+      />
+    );
+
+    expect(screen.queryByText('Tap anywhere to hear the answer')).toBeNull();
+  });
+
   it('waits for explicit consent before starting the first microphone session', async () => {
     const onMicConsent = vi.fn().mockResolvedValue(undefined);
     render(

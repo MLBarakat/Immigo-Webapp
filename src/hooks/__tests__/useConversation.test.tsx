@@ -153,9 +153,11 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     // 2. FIXED: Assert absolute execution alignment matching echo suppression gates
     expect(mockStopRecording).not.toHaveBeenCalled();
     expect(mockAudioInstance.play).not.toHaveBeenCalled();
+    // Text-mode reveal advances one word per 80ms interval; allow generous
+    // headroom so a loaded CI machine cannot time out the chain spuriously.
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
-    });
+    }, { timeout: 4000 });
   });
 
   it('opens the microphone without playing another opening response', async () => {
@@ -781,5 +783,149 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(mockAudioInstance.play).toHaveBeenCalledTimes(2);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-stream-url');
     expect(mockAudioInstance.pause).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers a parked autoplay-blocked turn when the gesture replay succeeds', async () => {
+    mockContextValue.state.isSessionActive = true;
+    const autoplayBlocked = new Error('autoplay blocked');
+    autoplayBlocked.name = 'NotAllowedError';
+    mockAudioInstance.play
+      .mockRejectedValueOnce(autoplayBlocked)
+      .mockResolvedValueOnce(undefined);
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Speech response',
+      audioData: new ArrayBuffer(8),
+      verdict: null,
+      nextItemId: null,
+      nextQuestion: null,
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+    await act(async () => {
+      await result.current.sendTextMessage('Start parked recovery test.');
+    });
+
+    await waitFor(() => expect(result.current.isAudioRetryPending).toBe(true));
+
+    // A real user gesture replays the parked audio inside the gesture and the
+    // turn is RECOVERED — it must not degrade to text or revoke the audio.
+    await act(async () => {
+      fireEvent.pointerUp(document);
+    });
+    await waitFor(() => expect(result.current.isAudioRetryPending).toBe(false));
+    expect(mockAudioInstance.play).toHaveBeenCalledTimes(2);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('dismisses a parked turn on session end so a later gesture cannot replay it', async () => {
+    mockContextValue.state.isSessionActive = true;
+    const autoplayBlocked = new Error('autoplay blocked');
+    autoplayBlocked.name = 'NotAllowedError';
+    mockAudioInstance.play.mockRejectedValueOnce(autoplayBlocked);
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Speech response',
+      audioData: new ArrayBuffer(8),
+      verdict: null,
+      nextItemId: null,
+      nextQuestion: null,
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+    await act(async () => {
+      await result.current.sendTextMessage('Start parked dismissal test.');
+    });
+    await waitFor(() => expect(result.current.isAudioRetryPending).toBe(true));
+
+    // Barge-in / session teardown dismisses the parked turn first.
+    await act(async () => {
+      await result.current.endSession();
+    });
+    expect(result.current.isAudioRetryPending).toBe(false);
+
+    // A stale gesture arriving after teardown must NOT resurrect playback.
+    const playCallsAfterEnd = mockAudioInstance.play.mock.calls.length;
+    await act(async () => {
+      fireEvent.pointerUp(document);
+    });
+    expect(mockAudioInstance.play.mock.calls.length).toBe(playCallsAfterEnd);
+  });
+
+  it('degrades a parked turn to text when no gesture arrives before the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      mockContextValue.state.isSessionActive = true;
+      const autoplayBlocked = new Error('autoplay blocked');
+      autoplayBlocked.name = 'NotAllowedError';
+      mockAudioInstance.play.mockRejectedValueOnce(autoplayBlocked);
+      mockApiClient.postTranscript.mockResolvedValue({
+        responseText: 'Speech response',
+        audioData: new ArrayBuffer(8),
+        verdict: null,
+        nextItemId: null,
+        nextQuestion: null,
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <ConversationContext.Provider value={mockContextValue}>
+          {children}
+        </ConversationContext.Provider>
+      );
+
+      const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+      await act(async () => {
+        await result.current.sendTextMessage('Start parked timeout test.');
+      });
+      expect(result.current.isAudioRetryPending).toBe(true);
+
+      // Never-worse-than-before contract: after the retry window the turn
+      // falls back to the previous text-only completion.
+      await act(async () => {
+        vi.advanceTimersByTime(20_000);
+      });
+      expect(result.current.isAudioRetryPending).toBe(false);
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-stream-url');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not park a playback failure that is not an autoplay block', async () => {
+    // Desktop-shape failure: a generic media error must take the immediate
+    // cleanup path, never the gesture-retry parking flow.
+    mockContextValue.state.isSessionActive = true;
+    mockAudioInstance.play.mockRejectedValueOnce(new Error('decode failure'));
+    mockApiClient.postTranscript.mockResolvedValue({
+      responseText: 'Speech response',
+      audioData: new ArrayBuffer(8),
+      verdict: null,
+      nextItemId: null,
+      nextQuestion: null,
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+    await act(async () => {
+      await result.current.sendTextMessage('Start non-autoplay failure test.');
+    });
+
+    expect(result.current.isAudioRetryPending).toBe(false);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-stream-url');
   });
 });

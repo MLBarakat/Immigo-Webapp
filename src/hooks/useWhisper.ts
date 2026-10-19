@@ -47,9 +47,11 @@ const sharedRuntime: {
   status: SharedInitStatus;
   promise: Promise<boolean> | null;
   worker: Worker | null;
+  /** True once the current worker has reported INIT_COMPLETED. */
+  workerReady: boolean;
   vad: MicVAD | null;
   error: string | null;
-} = { status: 'idle', promise: null, worker: null, vad: null, error: null };
+} = { status: 'idle', promise: null, worker: null, workerReady: false, vad: null, error: null };
 
 /**
  * Generates a high-precision, cryptographically secure Trace ID token for distributed tracking.
@@ -228,7 +230,12 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     // Worker protocol: INIT_COMPLETED | UPDATE | COMPLETED | ERROR
     switch (status) {
       case 'INIT_COMPLETED':
+        // Shared flag: later mounts adopting this worker must be able to tell
+        // whether INIT_COMPLETED already fired before they attached.
+        sharedRuntime.workerReady = true;
         workerUnavailableRef.current = false;
+        // modelReadyState is the BUSY flag (true = compiling): completion
+        // clears it so isModelLoading drops and the start control unblocks.
         setModelReadyState(false);
         logger.info(`Whisper worker initialized on tier: ${payload.tier || 'unknown'}`);
         // Model is ready — the FSM will be advanced to LISTENING via startRecording() calls.
@@ -277,6 +284,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         break;
       }
       case 'ERROR':
+        sharedRuntime.workerReady = false;
         workerUnavailableRef.current = true;
         setModelReadyState(false);
         logger.error('Background worker thread exception caught in orchestration hook.', {
@@ -300,6 +308,32 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   }, []);
 
   /**
+   * Mirrors the module-shared init outcome onto THIS mount. Every mount owns
+   * its own useState flags, so a mount that merely attached to the shared
+   * promise (remount during preload) would otherwise keep initStatus
+   * 'initializing' and a stale busy flag forever — permanently blocking the
+   * start control and transcription dispatch for that mount. Safe to call
+   * repeatedly; React bails out when values are unchanged.
+   */
+  const mirrorSharedInitState = useCallback(() => {
+    if (unmountedRef.current) return;
+    if (sharedRuntime.worker) workerRef.current = sharedRuntime.worker;
+    if (sharedRuntime.vad) vadRef.current = sharedRuntime.vad;
+    if (sharedRuntime.status === 'ready') {
+      setModelReadyState(!sharedRuntime.workerReady);
+      if (initStatusRef.current !== 'ready') {
+        setVadInitializedState(true);
+        setInitStatusBoth('ready');
+      }
+    } else if (sharedRuntime.status === 'error' && initStatusRef.current !== 'error') {
+      setVadInitializedState(false);
+      setInitError(sharedRuntime.error);
+      setInitStatusBoth('error');
+      setModelReadyState(false);
+    }
+  }, [setInitStatusBoth]);
+
+  /**
    * Shared, retryable init. Model download + compile starts on mount
    * (background preload, no mic: startOnLoad:false so getUserMedia is NOT
    * called). Mic is requested later inside vad.start() on the Start tap
@@ -312,16 +346,25 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   const ensureInitialized = useCallback((): Promise<boolean> => {
     // Attach to shared ready state (e.g. remount after preload finished).
     if (sharedRuntime.status === 'ready' && sharedRuntime.vad && sharedRuntime.worker) {
-      vadRef.current = sharedRuntime.vad;
-      workerRef.current = sharedRuntime.worker;
-      if (initStatusRef.current !== 'ready') {
-        setVadInitializedState(true);
-        setInitStatusBoth('ready');
-      }
+      // Adopt this mount's worker listener (no-op when already attached) and
+      // mirror shared readiness: a fresh mount's useState initializer cannot
+      // know whether the worker has already reported INIT_COMPLETED.
+      sharedRuntime.worker.addEventListener('message', handleWorkerMessage);
+      mirrorSharedInitState();
       return Promise.resolve(true);
     }
     if (sharedRuntime.status === 'initializing' && sharedRuntime.promise) {
-      return sharedRuntime.promise;
+      // Reuse the in-flight init instead of restarting it. Adopt the worker
+      // listener now — it may have been created after this mount's effect
+      // ran, and a missed INIT_COMPLETED/COMPLETED would strand this mount —
+      // then mirror the shared outcome once the init settles.
+      if (sharedRuntime.worker) {
+        sharedRuntime.worker.addEventListener('message', handleWorkerMessage);
+      }
+      return sharedRuntime.promise.then((ok) => {
+        mirrorSharedInitState();
+        return ok;
+      });
     }
     sharedRuntime.status = 'initializing';
     sharedRuntime.error = null;
@@ -337,6 +380,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
           const worker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
           worker.addEventListener('message', handleWorkerMessage);
           sharedRuntime.worker = worker;
+          sharedRuntime.workerReady = false;
           workerRef.current = worker;
           // WebGPU probe must never block init: requestAdapter() hangs on
           // some mobile Chrome builds. Race with a timeout, default WASM.
@@ -468,6 +512,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
           try { sharedRuntime.worker.terminate(); } catch { /* ignore */ }
         }
         sharedRuntime.worker = null;
+        sharedRuntime.workerReady = false;
         sharedRuntime.vad = null;
         workerRef.current = null;
         vadRef.current = null;
@@ -482,7 +527,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     })();
     sharedRuntime.promise = promise;
     return promise;
-  }, [handleWorkerMessage, flushActiveSegment, setInitStatusBoth, instanceId]);
+  }, [handleWorkerMessage, flushActiveSegment, setInitStatusBoth, mirrorSharedInitState, instanceId]);
 
   useEffect(() => {
     tabIdRef.current = `tab_id_${performance.now()}_${Math.random().toString(36).substr(2, 5)}`;
