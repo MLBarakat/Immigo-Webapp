@@ -80,11 +80,15 @@ export const initialState: ConversationState = {
 export const conversationReducer = (state: ConversationState, action: ConversationAction): ConversationState => {
   switch (action.type) {
     case 'START_SESSION':
+      // 'listening' is microphone-gated: starting a session must not advertise
+      // listening before the mic has actually been acquired (see
+      // useConversation.startListeningWithMicGate). Until capture is
+      // confirmed the session is merely setting up — 'processing'.
       return { 
         ...state, 
         isSessionActive: true, 
         sessionTime: 0, 
-        appStatus: 'listening', 
+        appStatus: 'processing', 
         errorMessage: null, 
         interimTranscript: '',
         liveStats: null

@@ -406,12 +406,43 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     stopRecording,
     pauseVAD,
     resumeVAD,
-    clearTranscript
+    clearTranscript,
+    micError,
+    clearMicError
   } = useWhisper({
     onSpeechStart: () => {
       speechStartedDuringPollyRef.current = isAssistantAudioActiveRef.current;
     },
   });
+
+  /**
+   * Microphone-gated transition into 'listening'. The conversation status may
+   * only advertise listening after capture has provably started — the mic was
+   * acquired inside the gesture chain and the VAD is running on a live
+   * stream. A failed acquisition surfaces the mic error and parks the session
+   * in 'error' instead of pretending to listen on a dead mic.
+   */
+  const startListeningWithMicGate = useCallback(async () => {
+    const started = await startRecording();
+    if (started) {
+      dispatch({ type: 'SET_STATUS', payload: 'listening' });
+    } else if (voiceSessionRef.current) {
+      dispatch({ type: 'SET_STATUS', payload: 'error' });
+    }
+  }, [startRecording, dispatch]);
+
+  /**
+   * Invariant enforcement: 'listening' must never stand while the microphone
+   * is known to be unavailable. Reducer paths that settle a turn (e.g.
+   * FINISH_ASSISTANT_RESPONSE during a text-only fallback) restore listening
+   * unconditionally; if mic acquisition has since failed, demote to error so
+   * the UI can explain why nothing is being heard.
+   */
+  useEffect(() => {
+    if (micError && conversationState.appStatus === 'listening') {
+      dispatch({ type: 'SET_STATUS', payload: 'error' });
+    }
+  }, [micError, conversationState.appStatus, dispatch]);
 
   useEffect(() => {
     sessionIdRef.current = conversationState.sessionId;
@@ -861,7 +892,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // output as user speech. This prevents the crash cycle of repeated VAD
       // detections, correlation ID mismatches, and worker OOM on mobile.
       pauseVAD();
-      startRecording();
+      void startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
         pollyMuteGateTimerRef.current = null;
@@ -901,7 +932,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
             assistantMessageId: secureAssistantMessageId
           } 
         });
-        startRecording();
+        void startRecording();
       });
 
       audioPlaybackNode.onended = () => {
@@ -946,7 +977,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       });
       
       if (conversationState.isSessionActive && voiceSessionRef.current) {
-        startRecording();
+        void startRecording();
       }
     } finally {
       if (activeTurnControllerRef.current === turnController) {
@@ -996,7 +1027,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       startAssistantReveal(assistantMessageId, response.responseText, audioNode);
       isPollyPlayingRef.current = true;
       isAssistantAudioActiveRef.current = true;
-      startRecording();
+      void startRecording();
       audioNode.onended = () => {
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         isAssistantAudioActiveRef.current = false;
@@ -1033,8 +1064,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           traceId,
         });
         clearAudioPlayback();
-        dispatch({ type: 'SET_STATUS', payload: 'listening' });
-        startRecording();
+        void startListeningWithMicGate();
       });
     } catch (error: unknown) {
       if (controller.signal.aborted) return;
@@ -1046,7 +1076,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     } finally {
       if (silenceNudgeControllerRef.current === controller) silenceNudgeControllerRef.current = null;
     }
-  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, clearAudioPlayback, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry]);
+  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, startListeningWithMicGate, clearAudioPlayback, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry]);
 
   useEffect(() => {
     if (displayTranscript.trim()) {
@@ -1158,15 +1188,14 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
 
     if (continuingTextSession && currentItemIdRef.current) {
-      dispatch({ type: 'SET_STATUS', payload: 'listening' });
-      startRecording();
+      await startListeningWithMicGate();
       return;
     }
 
     // Select the current question before opening the microphone, but leave
     // the first response to the user rather than speaking another opener.
     if (!apiClient) {
-      startRecording();
+      await startListeningWithMicGate();
       return;
     }
 
@@ -1208,8 +1237,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           responseTextLength: res.responseText?.length ?? 0,
           ...describeAudioEnvironment(),
         });
-        dispatch({ type: 'SET_STATUS', payload: 'listening' });
-        startRecording();
+        await startListeningWithMicGate();
         return;
       }
 
@@ -1241,7 +1269,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // output as user speech. This prevents the crash cycle of repeated VAD
       // detections, correlation ID mismatches, and worker OOM on mobile.
       pauseVAD();
-      startRecording();
+      void startRecording();
       if (pollyMuteGateTimerRef.current !== null) {
         window.clearTimeout(pollyMuteGateTimerRef.current);
         pollyMuteGateTimerRef.current = null;
@@ -1272,7 +1300,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           traceId,
         });
         clearAudioPlayback();
-        startRecording();
+        void startRecording();
       });
 
       audioPlaybackNode.onended = () => {
@@ -1294,10 +1322,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         error: error instanceof Error ? error.message : String(error),
         traceId,
       });
-      dispatch({ type: 'SET_STATUS', payload: 'listening' });
-      startRecording();
+      await startListeningWithMicGate();
     }
-  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry]);
+  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry]);
 
   const terminateSession = useCallback(async () => {
     if (silenceNudgeTimerRef.current !== null) {
@@ -1514,6 +1541,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     isTranscribing,
     isInitializing: isInitializing ?? false,
     initError: initError ?? null,
+    micError: micError ?? null,
+    clearMicError,
     ensureVoiceInitialized: ensureInitialized,
     startSession: initiateSession,
     endSession: terminateSession,

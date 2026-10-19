@@ -66,7 +66,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         mockContextValue.state = { ...mockContextValue.state, interimTranscript: '' };
       }
     });
-    mockStartRecording = vi.fn();
+    mockStartRecording = vi.fn().mockResolvedValue(true);
     mockStopRecording = vi.fn();
 
     mockContextValue = {
@@ -127,6 +127,36 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     vi.clearAllMocks();
   });
 
+  it('demotes a listening status to error once a mic failure is known', async () => {
+    // Reducer paths that settle a turn restore 'listening'; that restoration
+    // must not stand while the mic is known to be unavailable.
+    mockContextValue.state = { ...mockContextValue.state, appStatus: 'listening', isSessionActive: true };
+    (useWhisper as any).mockReturnValue({
+      currentState: 'IDLE',
+      displayTranscript: '',
+      finalTranscript: '',
+      isModelLoading: false,
+      isVadReady: true,
+      isTranscribing: false,
+      startRecording: mockStartRecording,
+      stopRecording: mockStopRecording,
+      pauseVAD: vi.fn(),
+      resumeVAD: vi.fn(),
+      clearTranscript: vi.fn(),
+      micError: 'Microphone access is needed for voice practice.',
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_STATUS', payload: 'error' });
+    });
+  });
+
   it('should keep text-mode responses silent', async () => {
     const syntheticBuffer = new ArrayBuffer(8);
     mockApiClient.postTranscript.mockResolvedValue({
@@ -183,6 +213,34 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(mockAudioInstance.play).not.toHaveBeenCalled();
     expect(mockStartRecording).toHaveBeenCalledOnce();
     expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_STATUS', payload: 'listening' });
+  });
+
+  it('does not report listening when the microphone cannot be acquired', async () => {
+    // The mic is never guaranteed on this attempt (permission denied / dead
+    // device). The conversation status must NOT flip to listening.
+    mockStartRecording.mockResolvedValueOnce(false);
+    mockApiClient.postSessionStart.mockResolvedValue({
+      responseText: '',
+      audioData: new ArrayBuffer(0),
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: 'q-1',
+      nextQuestion: 'Question one?',
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    expect(mockStartRecording).toHaveBeenCalledOnce();
+    expect(mockDispatch).not.toHaveBeenCalledWith({ type: 'SET_STATUS', payload: 'listening' });
+    expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_STATUS', payload: 'error' });
   });
 
   it('keeps a recognized user bubble visible across empty interim-transcript pauses', async () => {

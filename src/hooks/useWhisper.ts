@@ -18,9 +18,13 @@ export interface WhisperHook {
   /** Last init failure, retryable on next tap. Never includes mic data. */
   initError?: string | null;
   ensureInitialized?: () => Promise<boolean>;
-  startRecording: () => void;
+  /** Resolves true only once the mic is provably acquired and capture runs. */
+  startRecording: () => Promise<boolean>;
   stopRecording: () => void;
   clearTranscript: () => void;
+  /** Last mic-acquisition failure (never includes audio data). */
+  micError?: string | null;
+  clearMicError: () => void;
   /** Pause the VAD (e.g. during AI audio playback to prevent self-detection) */
   pauseVAD: () => void;
   /** Resume the VAD (e.g. after AI audio completes + AEC settle window) */
@@ -50,8 +54,10 @@ const sharedRuntime: {
   /** True once the current worker has reported INIT_COMPLETED. */
   workerReady: boolean;
   vad: MicVAD | null;
+  /** The stream the shared VAD is currently driving (module-shared so remounts can verify it). */
+  micStream: MediaStream | null;
   error: string | null;
-} = { status: 'idle', promise: null, worker: null, workerReady: false, vad: null, error: null };
+} = { status: 'idle', promise: null, worker: null, workerReady: false, vad: null, micStream: null, error: null };
 
 /**
  * Generates a high-precision, cryptographically secure Trace ID token for distributed tracking.
@@ -88,12 +94,12 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   const [initError, setInitError] = useState<string | null>(sharedRuntime.error);
   const [vadInitializedState, setVadInitializedState] = useState<boolean>(sharedRuntime.status === 'ready');
   const [modelReadyState, setModelReadyState] = useState<boolean>(sharedRuntime.status === 'initializing');
+  const [micError, setMicError] = useState<string | null>(null);
   const initStatusRef = useRef<InitStatus>(sharedRuntime.status);
 
   const workerRef = useRef<Worker | null>(null);
   const workerUnavailableRef = useRef(false);
   const vadRef = useRef<MicVAD | null>(null);
-  const microphoneStreamRef = useRef<MediaStream | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nativeRecognizerRef = useRef<any>(null);
 
@@ -104,6 +110,11 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   const segmentFrameCountRef = useRef(0);
   const activeTraceIdRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
+  // Bumped by stopRecording/teardown so an in-flight mic acquisition can
+  // never commit a 'listening' session after capture was cancelled.
+  const captureGenerationRef = useRef<number>(0);
+  // Single-flight guard: concurrent start taps share one acquisition promise.
+  const micAcquisitionRef = useRef<Promise<boolean> | null>(null);
   const speechActiveRef = useRef<boolean>(false);
   const nativeFinalTranscriptRef = useRef('');
   const tabIdRef = useRef<string>('');
@@ -370,8 +381,10 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     sharedRuntime.error = null;
     setInitStatusBoth('initializing');
     setInitError(null);
-    // Worker shows busy until INIT_COMPLETED arrives.
-    setModelReadyState(true);
+    // Worker shows busy until INIT_COMPLETED arrives — unless this init is a
+    // re-entry on an already-completed worker (VAD rebuild after a failed
+    // mic start), where busy must stay cleared or the start control latches.
+    setModelReadyState(!sharedRuntime.workerReady);
 
     const promise = (async (): Promise<boolean> => {
       try {
@@ -412,6 +425,15 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         // Created once by the starter mount; remounts reuse sharedRuntime.vad.
         // Callbacks close over the starter mount's refs; TranscriptionContext
         // actions are memoized so they stay valid across remounts.
+        const acquireMicStream = async () => {
+          const stream = await createMicrophoneStream({
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          });
+          sharedRuntime.micStream = stream;
+          return stream;
+        };
         if (!sharedRuntime.vad) {
           console.info(`[VAD-MOUNT] ${JSON.stringify({ instanceId, tabId: tabIdRef.current, phase: 'init-start' })}`);
           const initializedVad = await MicVAD.new({
@@ -419,21 +441,25 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             onnxWASMBasePath: '/assets/js/',
             model: 'legacy',
             startOnLoad: false,
-            getStream: async () => {
-              const stream = await createMicrophoneStream({
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-              });
-              microphoneStreamRef.current = stream;
-              return stream;
-            },
+            getStream: async () => acquireMicStream(),
             pauseStream: async (stream) => {
               stream.getAudioTracks().forEach((track) => { track.enabled = false; });
             },
             resumeStream: async (stream) => {
-              stream.getAudioTracks().forEach((track) => { track.enabled = true; });
-              return stream;
+              // Never silently resume a corpse: unmount cleanup and iOS
+              // suspension can END the tracks of the stream the shared VAD is
+              // still holding. Re-enabling flags on ended tracks yields a
+              // "listening" session with a dead mic and no new permission
+              // request — re-request the microphone instead.
+              const tracks = stream.getAudioTracks();
+              const hasLiveTrack = tracks.some((track) => track.readyState === 'live');
+              if (hasLiveTrack) {
+                tracks.forEach((track) => { track.enabled = true; });
+                sharedRuntime.micStream = stream;
+                return stream;
+              }
+              logger.warn('VAD resume found a dead mic stream; re-requesting microphone access.');
+              return acquireMicStream();
             },
             positiveSpeechThreshold: 0.7,
             negativeSpeechThreshold: 0.65,
@@ -605,7 +631,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     // preload on mount) and shared across remounts.
 
     const isStreamUsable = () => {
-      const s = microphoneStreamRef.current;
+      const s = sharedRuntime.micStream;
       if (!s) return false;
       const tracks = s.getAudioTracks();
       return tracks.length > 0 && tracks.some((t) => t.readyState === 'live' && t.enabled);
@@ -621,7 +647,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       } else if (isRecordingRef.current && isLeaderRef.current && vadRef.current) {
         // Revalidate before resume: stream may have ended while suspended.
         const ctx = (vadRef.current as unknown as { _audioContext?: AudioContext })._audioContext;
-        if (microphoneStreamRef.current && !isStreamUsable()) {
+        if (sharedRuntime.micStream && !isStreamUsable()) {
           logger.warn('Mic stream ended during suspension; awaiting next Start tap to recover.');
           return;
         }
@@ -630,7 +656,15 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
           return;
         }
         logger.info('Mobile Lifecycle Resumption Event: Tab focus restored. Awakening streaming configurations.');
-        try { vadRef.current?.start(); } catch { /* ignore */ }
+        // Resume may re-request the mic (dead-stream recovery); never leave an
+        // async rejection unhandled.
+        try {
+          void vadRef.current?.start().catch((error: unknown) => {
+            logger.warn('VAD resume on foregrounding failed; awaiting next Start tap.', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        } catch { /* ignore sync throw */ }
         try { nativeRecognizerRef.current?.start(); } catch { /* ignore */ }
       }
     };
@@ -691,11 +725,12 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       }
 
       // Detach this mount's worker listener only — the shared worker/VAD
-      // survive remounts by design. Per-mount mic streams are stopped.
-      try { vadRef.current?.pause(); } catch { /* ignore */ }
-      const micStream = microphoneStreamRef.current;
-      micStream?.getTracks().forEach((track) => track.stop());
-      microphoneStreamRef.current = null;
+      // survive remounts by design. The module-shared mic stream is stopped
+      // so a subsequent mount (or resume) re-requests a fresh device stream
+      // instead of driving ended tracks.
+      try { void vadRef.current?.pause(); } catch { /* ignore */ }
+      sharedRuntime.micStream?.getTracks().forEach((track) => track.stop());
+      sharedRuntime.micStream = null;
       try { nativeRecognizerRef.current?.abort(); } catch { /* ignore */ }
 
       const worker = workerRef.current;
@@ -707,38 +742,127 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     };
   }, [handleWorkerMessage, setInitStatusBoth, instanceId, ensureInitialized]);
 
-  const beginCapture = useCallback(() => {
-    actionsRef.current.clearTranscript();
-    audioFrameAccumulatorRef.current = [];
-    isRecordingRef.current = true;
-
-    // Advance the FSM from IDLE → LISTENING on every recording start.
-    actionsRef.current.startSession();
-
-    // Mic is requested here, inside the gesture chain, via getStream.
-    try { vadRef.current?.start(); } catch { /* ignore */ }
-    logger.info('Authoritative dual-track orchestration loops successfully initialized.');
+  /** True when the VAD holds a stream with a track the device is still delivering. */
+  const hasLiveMicStream = useCallback((): boolean => {
+    const stream = sharedRuntime.micStream;
+    if (!stream) return false;
+    return stream.getAudioTracks().some((track) => track.readyState === 'live');
   }, []);
 
-  const startRecordingRef = useRef<() => void>(() => undefined);
-  const startRecording = useCallback(() => {
-    if (!isLeaderRef.current) return;
+  const micAcquisitionErrorMessage =
+    'Microphone access is needed for voice practice. Allow microphone access in your browser settings, then try again.';
+
+  /**
+   * Rebuilds the module-shared VAD (reusing the loaded worker) after a
+   * capture start proved unusable — MicVAD refuses to retry once errored.
+   * Returns the fresh instance, or null if initialization failed.
+   */
+  const rebuildSharedVadForCapture = useCallback(async (): Promise<MicVAD | null> => {
+    const stale = vadRef.current;
+    sharedRuntime.vad = null;
+    vadRef.current = null;
+    try { await stale?.pause(); } catch { /* ignore */ }
+    // Drop the old device stream: the rebuilt VAD must request a fresh one.
+    sharedRuntime.micStream?.getTracks().forEach((track) => track.stop());
+    sharedRuntime.micStream = null;
+    setVadInitializedState(false);
+    const rebuilt = await ensureInitialized();
+    if (!rebuilt) return null;
+    return vadRef.current;
+  }, [ensureInitialized]);
+
+  /**
+   * Acquires the microphone FIRST and only then advances the FSM to
+   * LISTENING. This ordering is the contract on both platforms: the UI (and
+   * the conversation status) must never advertise "listening" unless mic
+   * access is guaranteed and the VAD is actually running on a live stream.
+   *
+   * Recovery: MicVAD silently no-ops every start() after one failed start
+   * ('errored' state) and can hold a dead stream after a remount/suspension.
+   * When the post-start verification fails we rebuild the shared VAD once —
+   * its fresh start() re-requests the microphone — instead of reporting a
+   * listening session with a dead mic.
+   */
+  const beginCapture = useCallback((): Promise<boolean> => {
+    // Concurrent taps share one acquisition instead of racing the VAD.
+    if (micAcquisitionRef.current) return micAcquisitionRef.current;
+    const generation = ++captureGenerationRef.current;
+
+    const acquisition = (async (): Promise<boolean> => {
+      const vad = vadRef.current;
+      if (!vad) return false;
+      try {
+        // Mic is requested here, inside the gesture chain, via getStream /
+        // resumeStream. Awaiting it guarantees access before any transition.
+        await vad.start();
+
+        if (!vad.listening || !hasLiveMicStream()) {
+          logger.warn('VAD did not come up on a live mic stream; rebuilding the shared VAD once.');
+          const rebuiltVad = await rebuildSharedVadForCapture();
+          if (!rebuiltVad) {
+            throw new Error('Voice pipeline could not reacquire the microphone.');
+          }
+          await rebuiltVad.start();
+          if (!rebuiltVad.listening || !hasLiveMicStream()) {
+            throw new Error('Microphone stream did not become active.');
+          }
+        }
+
+        // Capture was cancelled (stop tap / teardown) while the mic was
+        // being acquired: do not resurrect the tracker, and undo the start.
+        if (generation !== captureGenerationRef.current || unmountedRef.current) {
+          try { vadRef.current?.pause(); } catch { /* ignore */ }
+          isRecordingRef.current = false;
+          return false;
+        }
+
+        // Mic is guaranteed — only now announce listening.
+        actionsRef.current.clearTranscript();
+        audioFrameAccumulatorRef.current = [];
+        isRecordingRef.current = true;
+
+        // Advance the FSM from IDLE → LISTENING only after the mic is live.
+        actionsRef.current.startSession();
+        logger.info('Authoritative dual-track orchestration loops successfully initialized.');
+        return true;
+      } catch (error) {
+        isRecordingRef.current = false;
+        if (generation === captureGenerationRef.current && !unmountedRef.current) {
+          logger.warn('Microphone acquisition failed; capture will not start.', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          setMicError(micAcquisitionErrorMessage);
+        }
+        return false;
+      } finally {
+        // Single-flight: nothing else can replace this entry while we hold
+        // it (concurrent taps reuse the promise), so an unconditional clear
+        // is safe.
+        micAcquisitionRef.current = null;
+      }
+    })();
+
+    micAcquisitionRef.current = acquisition;
+    return acquisition;
+  }, [hasLiveMicStream, rebuildSharedVadForCapture]);
+
+  const startRecordingRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false));
+  const startRecording = useCallback((): Promise<boolean> => {
+    if (!isLeaderRef.current) return Promise.resolve(false);
     // Background preload runs on mount. A tap during preload is blocked by
     // the UI (pulsating); guard here ignores it. A tap after an init error
     // retries once via the shared promise.
     if (initStatusRef.current !== 'ready' || !vadRef.current) {
       if (initStatusRef.current === 'error') {
         const runner = startRecordingRef.current;
-        void ensureInitialized().then((ok) => {
-          if (ok && !unmountedRef.current) runner();
-        });
-      } else {
-        logger.info('Voice init still in background; tap ignored until ready.');
+        return ensureInitialized().then((ok) => (ok && !unmountedRef.current ? runner() : false));
       }
-      return;
+      logger.info('Voice init still in background; tap ignored until ready.');
+      return Promise.resolve(false);
     }
 
-    beginCapture();
+    setMicError(null);
+    return beginCapture();
   }, [ensureInitialized, beginCapture]);
 
   useEffect(() => {
@@ -746,6 +870,9 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   }, [startRecording]);
 
   const stopRecording = useCallback(() => {
+    // Invalidate any in-flight mic acquisition: it must not commit a
+    // listening session after the user stopped capture.
+    captureGenerationRef.current += 1;
     if (!vadRef.current) return;
 
     const hasPendingSpeech = speechActiveRef.current || stateRef.current.fsm === 'VERIFYING';
@@ -778,7 +905,15 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   }, []);
 
   const resumeVAD = useCallback(() => {
-    try { vadRef.current?.start(); } catch { /* ignore */ }
+    // Resume may re-request the mic (dead-stream recovery); never leave an
+    // async rejection unhandled.
+    try {
+      void vadRef.current?.start().catch((error: unknown) => {
+        logger.warn('VAD resume failed; awaiting next explicit start.', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    } catch { /* ignore sync throw */ }
   }, []);
 
   return {
@@ -795,6 +930,8 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     stopRecording,
     pauseVAD,
     resumeVAD,
+    micError,
+    clearMicError: () => setMicError(null),
     clearTranscript: () => actionsRef.current.clearTranscript()
   };
 };

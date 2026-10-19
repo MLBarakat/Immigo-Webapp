@@ -209,8 +209,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               onEndSession={manager.endSession}
               micConsentVersion={userSettings.mic_consent_version}
               onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
-              micAccessError={micAccessError}
-              onClearMicAccessError={() => setMicAccessError(null)}
+              micAccessError={manager.micError ?? micAccessError}
+              onClearMicAccessError={() => { setMicAccessError(null); manager.clearMicError(); }}
               initError={managerInitError}
               isAudioRetryPending={manager.isAudioRetryPending}
               onLoadOlder={manager.loadOlderMessages}
@@ -346,8 +346,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onEndSession={manager.endSession}
           micConsentVersion={userSettings.mic_consent_version}
           onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
-          micAccessError={micAccessError}
-          onClearMicAccessError={() => setMicAccessError(null)}
+          micAccessError={manager.micError ?? micAccessError}
+          onClearMicAccessError={() => { setMicAccessError(null); manager.clearMicError(); }}
           initError={managerInitError}
           isAudioRetryPending={manager.isAudioRetryPending}
           onLoadOlder={manager.loadOlderMessages}

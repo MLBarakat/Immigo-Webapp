@@ -4,7 +4,7 @@ import { renderHook, act, cleanup } from '@testing-library/react';
 import React, { type ReactNode } from 'react';
 
 /**
- * Regression suite for model-readiness propagation and speech dispatch.
+ * Regression suite for model-readiness propagation, mic gating, and speech dispatch.
  *
  * These behaviors are load-bearing on BOTH platforms:
  *  - `isModelLoading` must go FALSE once the worker reports INIT_COMPLETED,
@@ -12,6 +12,9 @@ import React, { type ReactNode } from 'react';
  *  - A mount that reuses the shared init (auth-settle remount during preload)
  *    must mirror the shared outcome onto its local state, or its
  *    `initStatus` stays 'initializing' forever and its transcripts never flow.
+ *  - Capture may only enter LISTENING AFTER the microphone stream is live —
+ *    a dead/denied stream must keep the FSM in IDLE and surface a mic error.
+ *  - A resume must re-request the mic when the held stream's tracks ended.
  *  - Completed speech segments must reach the worker as TRANSCRIBE messages.
  */
 
@@ -56,28 +59,62 @@ class MockWorker {
 }
 
 interface FakeVad {
+  listening: boolean;
   start: ReturnType<typeof vi.fn>;
   pause: ReturnType<typeof vi.fn>;
 }
 
-const makeVad = (): FakeVad => ({ start: vi.fn(), pause: vi.fn() });
+/** Minimal MediaStream double: one audio track the device is still delivering. */
+const makeLiveStream = (): MediaStream => {
+  const track = { readyState: 'live', enabled: true, stop: vi.fn() };
+  return {
+    getAudioTracks: () => [track],
+    getTracks: () => [track],
+  } as unknown as MediaStream;
+};
+
+/**
+ * MicVAD double that behaves like the real one: start() acquires the stream
+ * through the options factory and flips `listening` true only on success.
+ */
+const makeVad = (options: any): FakeVad => {
+  const vad: FakeVad = {
+    listening: false,
+    start: vi.fn(async () => {
+      await options.getStream();
+      vad.listening = true;
+    }),
+    pause: vi.fn(async () => {
+      vad.listening = false;
+    }),
+  };
+  return vad;
+};
 
 describe('Model readiness & speech dispatch: useWhisper', () => {
   let useWhisper: typeof import('../useWhisper').useWhisper;
   let TranscriptionProvider: typeof import('../../context/TranscriptionContext').TranscriptionProvider;
   let resolveVad: ((vad: FakeVad) => void) | null;
   let vadOptions: any;
+  let currentVad: FakeVad | null;
 
   const wrapper = ({ children }: { children: ReactNode }) => (
     <TranscriptionProvider>{children}</TranscriptionProvider>
   );
+
+  /** Settles the pending MicVAD load with a capture-capable VAD. */
+  const settleVadLoad = () => {
+    currentVad = makeVad(vadOptions);
+    resolveVad?.(currentVad);
+    return currentVad;
+  };
 
   /** Starts shared init and settles the VAD load, leaving the worker compiling. */
   const startInit = async (result: { current: { ensureInitialized?: () => Promise<boolean> } }) => {
     let promise: Promise<boolean> | null = null;
     await act(async () => {
       promise = result.current.ensureInitialized!();
-      resolveVad?.(makeVad());
+      settleVadLoad();
       await promise;
     });
     return promise!;
@@ -96,7 +133,13 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
     MockWorker.instances = [];
     resolveVad = null;
     vadOptions = undefined;
+    currentVad = null;
     vi.stubGlobal('Worker', MockWorker);
+    // Capture provably requires a usable device stream.
+    Object.defineProperty(window.navigator, 'mediaDevices', {
+      value: { getUserMedia: vi.fn(async () => makeLiveStream()) },
+      configurable: true,
+    });
     // Node's BroadcastChannel and jsdom's EventTarget do not interoperate in
     // the test environment; the leader-election channel only needs to exist.
     vi.stubGlobal('BroadcastChannel', class {
@@ -120,6 +163,7 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    delete (window.navigator as unknown as { mediaDevices?: unknown }).mediaDevices;
     vi.clearAllMocks();
   });
 
@@ -152,18 +196,18 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
 
     // Tap during preload: must be ignored without advancing the FSM.
     await act(async () => {
-      result.current.startRecording();
+      await result.current.startRecording();
     });
     expect(result.current.currentState).toBe('IDLE');
 
     await act(async () => {
-      resolveVad?.(makeVad());
+      settleVadLoad();
       await pending;
     });
 
     // After init settles the same tap must open the microphone session.
     await act(async () => {
-      result.current.startRecording();
+      await result.current.startRecording();
     });
     expect(result.current.currentState).toBe('LISTENING');
   });
@@ -190,7 +234,7 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
     expect(MockWorker.instances).toHaveLength(1);
 
     await act(async () => {
-      resolveVad?.(makeVad());
+      settleVadLoad();
       await Promise.all([firstPromise, secondPromise]);
     });
 
@@ -204,7 +248,7 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
 
     // And it must be able to actually capture speech.
     await act(async () => {
-      second.result.current.startRecording();
+      await second.result.current.startRecording();
     });
     expect(second.result.current.currentState).toBe('LISTENING');
   });
@@ -224,7 +268,7 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
     expect(second.result.current.initError).toBeNull();
 
     await act(async () => {
-      second.result.current.startRecording();
+      await second.result.current.startRecording();
     });
     expect(second.result.current.currentState).toBe('LISTENING');
   });
@@ -234,7 +278,7 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
     await initFully(result);
 
     await act(async () => {
-      result.current.startRecording();
+      await result.current.startRecording();
     });
     expect(result.current.currentState).toBe('LISTENING');
 
@@ -268,5 +312,118 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
       expect.any(Array),
     );
     expect(result.current.currentState).toBe('VERIFYING');
+  });
+
+  it('does not advance the FSM to LISTENING until the microphone stream is live', async () => {
+    const { result } = renderHook(() => useWhisper(), { wrapper });
+    await initFully(result);
+
+    // Hold the acquisition open as if the OS permission prompt were pending.
+    let releaseStream!: () => void;
+    const streamGate = new Promise<void>((resolve) => { releaseStream = resolve; });
+    currentVad!.start.mockImplementation(async () => {
+      await streamGate;
+      await vadOptions.getStream();
+      currentVad!.listening = true;
+    });
+
+    let pendingStart!: Promise<boolean>;
+    await act(async () => {
+      pendingStart = result.current.startRecording();
+    });
+
+    // The mic is not guaranteed yet: the UI must not advertise listening.
+    expect(result.current.currentState).toBe('IDLE');
+
+    let succeeded = false;
+    await act(async () => {
+      releaseStream();
+      succeeded = await pendingStart;
+    });
+    expect(succeeded).toBe(true);
+    expect(result.current.currentState).toBe('LISTENING');
+  });
+
+  it('stays IDLE and surfaces a mic error when the microphone request is rejected', async () => {
+    const { result } = renderHook(() => useWhisper(), { wrapper });
+    await initFully(result);
+
+    currentVad!.start.mockRejectedValue(
+      Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' }),
+    );
+
+    let succeeded = true;
+    await act(async () => {
+      succeeded = await result.current.startRecording();
+    });
+
+    // Denied access must never look like a listening session.
+    expect(succeeded).toBe(false);
+    expect(result.current.currentState).toBe('IDLE');
+    expect(result.current.micError).toBeTruthy();
+
+    // After the user grants access, the retry clears the error and listens.
+    currentVad!.start.mockImplementation(async () => {
+      await vadOptions.getStream();
+      currentVad!.listening = true;
+    });
+    await act(async () => {
+      succeeded = await result.current.startRecording();
+    });
+    expect(succeeded).toBe(true);
+    expect(result.current.micError).toBeNull();
+    expect(result.current.currentState).toBe('LISTENING');
+  });
+
+  it('re-requests the microphone on resume when the previous stream died', async () => {
+    const { result } = renderHook(() => useWhisper(), { wrapper });
+    await initFully(result);
+    const gum = vi.fn(async () => makeLiveStream());
+    (window.navigator.mediaDevices as unknown as { getUserMedia: typeof gum }).getUserMedia = gum;
+
+    // Tracks stopped by a remount/suspension: resuming must not pretend the
+    // dead stream is usable — the mic is requested again instead.
+    const deadTrack = { readyState: 'ended', enabled: true, stop: vi.fn() };
+    const deadStream = {
+      getAudioTracks: () => [deadTrack],
+      getTracks: () => [deadTrack],
+    } as unknown as MediaStream;
+    const resumedDead = await vadOptions.resumeStream(deadStream);
+    expect(gum).toHaveBeenCalledTimes(1);
+    expect(resumedDead.getAudioTracks()[0].readyState).toBe('live');
+
+    // A live paused stream is resumed in place: no redundant permission prompt.
+    const liveTrack = { readyState: 'live', enabled: false, stop: vi.fn() };
+    const liveStream = {
+      getAudioTracks: () => [liveTrack],
+      getTracks: () => [liveTrack],
+    } as unknown as MediaStream;
+    const resumedLive = await vadOptions.resumeStream(liveStream);
+    expect(gum).toHaveBeenCalledTimes(1);
+    expect(liveTrack.enabled).toBe(true);
+    expect(resumedLive).toBe(liveStream);
+  });
+
+  it('rebuilds the VAD and re-requests the mic when start() silently leaves it not listening', async () => {
+    const { result } = renderHook(() => useWhisper(), { wrapper });
+    await initFully(result);
+
+    // MicVAD permanently no-ops start() after one failed start ('errored'
+    // state) — the "tap never asks for mic access" field bug. The hook must
+    // detect the silent failure and rebuild the shared VAD once.
+    currentVad!.start = vi.fn(async () => undefined);
+
+    let succeeded = false;
+    await act(async () => {
+      const pending = result.current.startRecording();
+      await vi.waitFor(() => expect(vadNewMock).toHaveBeenCalledTimes(2));
+      settleVadLoad();
+      succeeded = await pending;
+    });
+
+    expect(succeeded).toBe(true);
+    expect(result.current.currentState).toBe('LISTENING');
+    // The rebuilt VAD really acquired a device stream.
+    expect(currentVad!.listening).toBe(true);
   });
 });

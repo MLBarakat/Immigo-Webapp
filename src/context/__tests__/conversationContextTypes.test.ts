@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { conversationReducer, initialState, type Message } from '../conversationContextTypes';
 
+describe('microphone-gated listening status', () => {
+  it('does not advertise listening when a session starts — the mic is not acquired yet', () => {
+    const started = conversationReducer(initialState, { type: 'START_SESSION' });
+
+    expect(started.isSessionActive).toBe(true);
+    // 'listening' is only set after useWhisper confirms mic access; until
+    // then the session is merely setting up.
+    expect(started.appStatus).toBe('processing');
+  });
+});
+
 describe('assistant message lifecycle', () => {
   it('retains a recognized interim transcript when an empty pause update arrives', () => {
     const recognized = conversationReducer(initialState, {
