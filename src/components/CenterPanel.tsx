@@ -42,6 +42,9 @@ function formatTime(seconds: number): string {
 
 const STATUS_COLORS: Record<AppStatus, string> = {
   idle: 'text-immigo-gray-500',
+  // 'connecting' = session starting, mic not confirmed. Renders as idle so a
+  // consent/permission prompt never looks like "Thinking".
+  connecting: 'text-immigo-gray-500',
   listening: 'text-green-600',
   processing: 'text-amber-600',
   speaking: 'text-art-blue-600',
@@ -50,6 +53,7 @@ const STATUS_COLORS: Record<AppStatus, string> = {
 
 const STATUS_DOT_COLORS: Record<AppStatus, string> = {
   idle: 'bg-immigo-gray-400',
+  connecting: 'bg-immigo-gray-400',
   listening: 'bg-green-500 animate-pulse',
   processing: 'bg-amber-500 animate-pulse',
   speaking: 'bg-art-blue-500 animate-pulse',
@@ -86,6 +90,7 @@ export function CenterPanel({
   const { t } = useTranslation('conversation');
   const statusLabelKeys: Record<AppStatus, string> = {
     idle: 'workspace.center.status.ready',
+    connecting: 'workspace.center.status.ready',
     listening: 'workspace.center.status.listening',
     processing: 'workspace.center.status.thinking',
     speaking: 'workspace.center.status.speaking',

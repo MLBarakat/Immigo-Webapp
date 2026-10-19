@@ -33,6 +33,8 @@ export function ConversationHub({
   isFeedbackDisabled,
 }: ConversationHubProps): JSX.Element {
 
+  // Only 'processing'/'speaking' lock other actions. 'connecting' (mic prompt
+  // still pending) must stay interactive so the user can cancel a stuck prompt.
   const isButtonDisabled = status === 'processing' || status === 'speaking';
 
   const formatTime = (seconds: number) => {
@@ -44,6 +46,9 @@ export function ConversationHub({
   const statusMessage = () => {
     switch (status) {
       case 'idle': return 'Ready';
+      // 'connecting' = session starting, mic not confirmed yet. Deliberately
+      // reads as idle: a consent/permission prompt is not "Thinking".
+      case 'connecting': return 'Ready';
       case 'listening': return 'Listening...';
       case 'processing': return 'Thinking...'; // Changed back from Transcribing
       case 'speaking': return 'Speaking...';
@@ -78,9 +83,10 @@ export function ConversationHub({
 
           <div className="flex flex-col items-center space-y-4">
               {/* The stop control must stay tappable while a session is stuck
-                  setting up (mic permission pending/denied): the status may
-                  only ever read 'processing' when no capture is running. */}
-              <button onClick={handleButtonClick} disabled={!isSessionActive && status === 'processing'} className="w-32 h-32 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
+                  setting up (mic permission pending/denied) so the user can
+                  always cancel and retry. 'processing'/'speaking' are genuine
+                  work states with no capture to stop, so only they disable it. */}
+              <button onClick={handleButtonClick} disabled={status === 'processing' || status === 'speaking'} className="w-32 h-32 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
                   <AnimatedStatusButton status={status} />
               </button>
               <div className="text-center">

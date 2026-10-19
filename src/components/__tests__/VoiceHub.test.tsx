@@ -180,6 +180,34 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     expect(screen.getByText('Tap anywhere to hear the answer')).toBeTruthy();
   });
 
+  it('renders idle and stays tappable while a session is only connecting to the mic', async () => {
+    const { AnimatedStatusButton } = await import('../AnimatedStatusButton');
+    vi.spyOn(performance, 'now').mockReturnValue(100);
+    render(
+      <VoiceHub
+        status="connecting"
+        isSessionActive={true}
+        onStartSession={mockStartSession}
+        onEndSession={mockEndSession}
+      />
+    );
+
+    // Visuals must read as idle: a mic-consent prompt is not work in progress.
+    expect(AnimatedStatusButton).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'idle' }),
+      expect.anything()
+    );
+
+    const interactiveButton = screen.getByRole('button', { name: 'Pause' }) as HTMLButtonElement;
+    expect(interactiveButton.disabled).toBe(false);
+    expect(interactiveButton.getAttribute('aria-busy')).toBe('false');
+
+    // The tap is the only cancel path for a hung mic prompt.
+    fireEvent.click(interactiveButton);
+    expect(mockEndSession).toHaveBeenCalledOnce();
+    expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
   it('shows no audio-retry banner during normal playback', () => {
     render(
       <VoiceHub

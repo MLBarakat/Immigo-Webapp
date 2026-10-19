@@ -6,9 +6,19 @@ describe('microphone-gated listening status', () => {
     const started = conversationReducer(initialState, { type: 'START_SESSION' });
 
     expect(started.isSessionActive).toBe(true);
-    // 'listening' is only set after useWhisper confirms mic access; until
-    // then the session is merely setting up.
-    expect(started.appStatus).toBe('processing');
+    // 'listening' is only set after useWhisper confirms mic access; until then
+    // the session is merely connecting. 'connecting' renders as idle so a
+    // consent/permission prompt never looks like "Thinking".
+    expect(started.appStatus).toBe('connecting');
+  });
+
+  it('never reports a work state while a session is only connecting', () => {
+    const started = conversationReducer(initialState, { type: 'START_SESSION' });
+
+    expect(started.appStatus).not.toBe('listening');
+    expect(started.appStatus).not.toBe('processing');
+    expect(started.appStatus).not.toBe('speaking');
+    expect(started.appStatus).not.toBe('error');
   });
 });
 

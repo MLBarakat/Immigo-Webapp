@@ -21,7 +21,7 @@ function renderCenterPanel({
 }: {
   isSessionActive?: boolean;
   isVoiceSessionActive?: boolean;
-  appStatus?: 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
+  appStatus?: 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error';
   onSendMessage?: (message: string) => void;
   onStartSession?: () => void;
 } = {}) {
@@ -72,6 +72,14 @@ describe('CenterPanel text interview flow', () => {
     const input = screen.getByRole('textbox', { name: 'Type your response' }) as HTMLTextAreaElement;
     expect(input.disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Send message' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('renders Ready, never Thinking, while a voice session is only connecting to the mic', () => {
+    renderCenterPanel({ isSessionActive: true, isVoiceSessionActive: true, appStatus: 'connecting' });
+
+    // The mic-permission / setup window must not look like work in progress.
+    expect(screen.queryByText(/Thinking/)).toBeNull();
+    expect(screen.getByText('Ready')).toBeTruthy();
   });
 
   it('does not show a text-session start button', () => {

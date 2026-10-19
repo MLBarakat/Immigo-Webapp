@@ -426,4 +426,56 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
     // The rebuilt VAD really acquired a device stream.
     expect(currentVad!.listening).toBe(true);
   });
+
+  it('fails fast when start() resolves but never produces a live mic stream', async () => {
+    // Field bug: a synchronous throw inside MicVAD's internal promise executor
+    // makes start() RESOLVE with undefined, and MicVAD's permanent 'errored'
+    // state then no-ops the rebuild. The result was a session stuck "connecting"
+    // forever with no error. Neither the first start nor the rebuild may be
+    // accepted unless the VAD is listening on a live stream.
+    const { result } = renderHook(() => useWhisper(), { wrapper });
+    await initFully(result);
+
+    currentVad!.start = vi.fn(async () => undefined); // resolves, never listens
+
+    let succeeded = true;
+    await act(async () => {
+      succeeded = await result.current.startRecording();
+    });
+
+    expect(succeeded).toBe(false);
+    expect(result.current.currentState).toBe('IDLE');
+    expect(result.current.micError).toBeTruthy();
+    expect(currentVad!.listening).toBe(false);
+  });
+
+  it('abandons the attempt instead of hanging when the VAD never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useWhisper(), { wrapper });
+      await initFully(result);
+
+      // The audio graph never comes up: start() stays pending indefinitely.
+      currentVad!.start = vi.fn(() => new Promise<void>(() => undefined));
+
+      let pendingStart!: Promise<boolean>;
+      await act(async () => {
+        pendingStart = result.current.startRecording();
+      });
+
+      let succeeded = true;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(16000);
+        succeeded = await pendingStart;
+      });
+
+      expect(succeeded).toBe(false);
+      expect(result.current.currentState).toBe('IDLE');
+      expect(result.current.micError).toBeTruthy();
+      // The half-started attempt released the mic instead of leaving it live.
+      expect(currentVad!.pause).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

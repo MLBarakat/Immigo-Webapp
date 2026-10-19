@@ -2,7 +2,11 @@ import type React from 'react';
 import { createContext } from 'react';
 
 // Synchronized directly with the Authoritative FSM state machine targets
-export type AppStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
+// 'connecting' = a session is being set up and the microphone has not been
+// confirmed yet. It renders as idle: mic consent/permission prompts must never
+// look like "Thinking", and the pill must not claim to listen before capture
+// actually runs.
+export type AppStatus = 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error';
 export type SimulationMode = 'standard' | 'practice' | 'study';
 
 export interface Message {
@@ -82,13 +86,13 @@ export const conversationReducer = (state: ConversationState, action: Conversati
     case 'START_SESSION':
       // 'listening' is microphone-gated: starting a session must not advertise
       // listening before the mic has actually been acquired (see
-      // useConversation.startListeningWithMicGate). Until capture is
-      // confirmed the session is merely setting up — 'processing'.
+      // useConversation.startListeningWithMicGate). 'connecting' renders as
+      // idle so a consent/permission prompt never looks like "Thinking".
       return { 
         ...state, 
         isSessionActive: true, 
         sessionTime: 0, 
-        appStatus: 'processing', 
+        appStatus: 'connecting', 
         errorMessage: null, 
         interimTranscript: '',
         liveStats: null

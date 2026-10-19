@@ -122,6 +122,9 @@ function ErrorAnimation() {
 
 const STATUS_MAP: Record<AppStatus, { component: JSX.Element; color: string }> = {
   idle: { component: <IdleAnimation />, color: 'border-art-blue-400' },
+  // 'connecting' = session starting, mic not confirmed. Renders as idle: a
+  // consent/permission prompt must never animate like work in progress.
+  connecting: { component: <IdleAnimation />, color: 'border-art-blue-400' },
   listening: { component: <ListeningAnimation />, color: 'border-art-blue-400' },
   processing: { component: <ProcessingAnimation />, color: 'border-art-blue-400' },
   speaking: { component: <SpeakingAnimation />, color: 'border-art-blue-400' },
@@ -131,7 +134,9 @@ const STATUS_MAP: Record<AppStatus, { component: JSX.Element; color: string }> =
 
 export function AnimatedStatusButton({ status, isPulsing = false }: AnimatedStatusButtonProps): JSX.Element {
     const statusConfig = STATUS_MAP[status] ?? STATUS_MAP['idle'];
-    const component = status === 'idle' ? <IdleAnimation isPulsing={isPulsing} /> : statusConfig.component;
+    const component = status === 'idle' || status === 'connecting'
+        ? <IdleAnimation isPulsing={isPulsing} />
+        : statusConfig.component;
     const color = statusConfig.color;
 
     return (

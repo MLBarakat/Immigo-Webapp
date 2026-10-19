@@ -58,7 +58,9 @@ export function VoiceHub({
       return;
     }
 
-    // Lock interaction loops while the background neural worker is executing matrix splits
+    // Lock interaction loops while the background neural worker is executing
+    // matrix splits. 'connecting' (mic prompt pending) is intentionally NOT
+    // locked: the tap must reach onEndSession so a hung prompt can be cancelled.
     if (!isSessionActive && (status === 'processing' || isListenerLoading)) {
       logger.warn('Interaction locked: pipeline is verifying truth ledger audio chunks. Disabling toggle.');
       return;
@@ -101,10 +103,16 @@ export function VoiceHub({
     }
   }, [onMicConsent, onStartSession, isListenerLoading]);
 
+  // 'connecting' = session starting, mic prompt pending. It must not be
+  // disabled (the tap is the only way to cancel a stuck prompt) and it must
+  // look idle, never busy — so it is excluded from both.
   const isProcessingActive = status === 'processing';
   const isButtonDisabled = !isSessionActive && (isProcessingActive || isListenerLoading);
   const isPulsing = isListenerLoading && !isSessionActive;
-  const visualStatus = isSessionActive ? status : 'idle';
+  // 'connecting' means a session exists but capture is not running yet — the
+  // mic prompt is still open. It must look exactly like idle, never like work.
+  const visualStatus: 'idle' | 'listening' | 'processing' | 'speaking' | 'error' =
+    isSessionActive && status !== 'connecting' ? status : 'idle';
 
   return (
     <>

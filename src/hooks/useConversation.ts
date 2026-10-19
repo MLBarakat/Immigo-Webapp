@@ -1088,6 +1088,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     if (!conversationState.isSessionActive
       || !isVoiceSessionActive
       || !currentItemIdRef.current
+      // 'connecting' = mic not confirmed yet; no capture is running, so there
+      // is nothing to nudge.
+      || conversationState.appStatus === 'connecting'
       || conversationState.appStatus === 'processing'
       || conversationState.appStatus === 'speaking'
       || conversationState.appStatus === 'error'

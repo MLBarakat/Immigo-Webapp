@@ -753,6 +753,54 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     'Microphone access is needed for voice practice. Allow microphone access in your browser settings, then try again.';
 
   /**
+   * Upper bound on mic acquisition. iOS may hold getUserMedia open behind its
+   * own prompt, but once the stream resolves the VAD still has to build its
+   * audio graph — and on a busy main thread (ONNX model init) that has been
+   * observed to stall indefinitely. Time out rather than leaving the caller
+   * waiting forever with the UI frozen mid-setup.
+   */
+  const MIC_ACQUISITION_TIMEOUT_MS = 15000;
+
+  /**
+   * Best-effort release of a half-started capture. `MicVAD.start()` flips
+   * `listening` and connects its audio graph *before* it can throw, so a failed
+   * start can leave a live mic and a running frame processor behind; and once
+   * MicVAD is in its permanent `errored` state it refuses to start again, so a
+   * failed attempt must not poison later taps.
+   */
+  const abandonCaptureAttempt = useCallback(async () => {
+    const vad = vadRef.current;
+    if (!vad) return;
+    try { await vad.pause(); } catch { /* ignore */ }
+    sharedRuntime.micStream?.getTracks().forEach((track) => track.stop());
+    sharedRuntime.micStream = null;
+  }, []);
+
+  /**
+   * Maps a mic-acquisition failure onto an actionable, user-facing message.
+   * Never includes device labels or audio data.
+   */
+  const describeMicFailure = useCallback((error: unknown): string => {
+    const name = (error as { name?: string } | null)?.name;
+    switch (name) {
+      case 'NotAllowedError':
+      case 'SecurityError':
+        return 'Microphone access was blocked. Allow microphone access for this site in your browser settings, then tap the mic again.';
+      case 'NotFoundError':
+      case 'DevicesNotFoundError':
+        return 'No microphone was found on this device. Connect a microphone and tap the mic again.';
+      case 'NotReadableError':
+      case 'TrackStartError':
+        return 'Your microphone is busy or unavailable — another app may be holding it. Close that app and tap the mic again.';
+      case 'AbortError':
+      case 'OverconstrainedError':
+        return 'The microphone could not be started. Check your audio input device and tap the mic again.';
+      default:
+        return micAcquisitionErrorMessage;
+    }
+  }, [micAcquisitionErrorMessage]);
+
+  /**
    * Rebuilds the module-shared VAD (reusing the loaded worker) after a
    * capture start proved unusable — MicVAD refuses to retry once errored.
    * Returns the fresh instance, or null if initialization failed.
@@ -790,19 +838,52 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
     const acquisition = (async (): Promise<boolean> => {
       const vad = vadRef.current;
-      if (!vad) return false;
+      if (!vad) {
+        setMicError(micAcquisitionErrorMessage);
+        return false;
+      }
+
+      // Guards every await on the VAD: a synchronous throw inside MicVAD's
+      // internal promise executor makes start() RESOLVE with undefined rather
+      // than reject, and a stalled audio graph never settles at all. Both are
+      // bounded here, so the caller can never hang with the UI mid-setup.
+      const startVadBounded = async (target: MicVAD): Promise<void> => {
+        const startPromise = Promise.resolve(target.start());
+        // A timeout does not cancel the underlying start(): queue one pause
+        // behind it so a late-settling start cannot flip the VAD back to
+        // listening with a stream we have already torn down.
+        const settleThenPause = () => {
+          void startPromise
+            .catch(() => undefined)
+            .then(() => { try { return target.pause(); } catch { /* ignore */ } })
+            .catch(() => undefined);
+        };
+        await Promise.race([
+          startPromise,
+          new Promise<never>((_, reject) => {
+            window.setTimeout(
+              () => { settleThenPause(); reject(new Error('Microphone setup timed out.')); },
+              MIC_ACQUISITION_TIMEOUT_MS,
+            );
+          }),
+        ]);
+      };
+
       try {
         // Mic is requested here, inside the gesture chain, via getStream /
         // resumeStream. Awaiting it guarantees access before any transition.
-        await vad.start();
+        // The `listening` flag and the live stream are both verified after —
+        // waiting on the promise alone is not proof that capture is running.
+        await startVadBounded(vad);
 
         if (!vad.listening || !hasLiveMicStream()) {
           logger.warn('VAD did not come up on a live mic stream; rebuilding the shared VAD once.');
+          await abandonCaptureAttempt();
           const rebuiltVad = await rebuildSharedVadForCapture();
           if (!rebuiltVad) {
             throw new Error('Voice pipeline could not reacquire the microphone.');
           }
-          await rebuiltVad.start();
+          await startVadBounded(rebuiltVad);
           if (!rebuiltVad.listening || !hasLiveMicStream()) {
             throw new Error('Microphone stream did not become active.');
           }
@@ -811,7 +892,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         // Capture was cancelled (stop tap / teardown) while the mic was
         // being acquired: do not resurrect the tracker, and undo the start.
         if (generation !== captureGenerationRef.current || unmountedRef.current) {
-          try { vadRef.current?.pause(); } catch { /* ignore */ }
+          await abandonCaptureAttempt();
           isRecordingRef.current = false;
           return false;
         }
@@ -827,11 +908,15 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         return true;
       } catch (error) {
         isRecordingRef.current = false;
+        // Release the mic and de-poison the VAD so the next tap can retry
+        // instead of silently failing forever.
+        await abandonCaptureAttempt();
         if (generation === captureGenerationRef.current && !unmountedRef.current) {
           logger.warn('Microphone acquisition failed; capture will not start.', {
             error: error instanceof Error ? error.message : String(error),
+            errorName: (error as { name?: string } | null)?.name,
           });
-          setMicError(micAcquisitionErrorMessage);
+          setMicError(describeMicFailure(error));
         }
         return false;
       } finally {
@@ -844,7 +929,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
     micAcquisitionRef.current = acquisition;
     return acquisition;
-  }, [hasLiveMicStream, rebuildSharedVadForCapture]);
+  }, [hasLiveMicStream, rebuildSharedVadForCapture, abandonCaptureAttempt, describeMicFailure, micAcquisitionErrorMessage]);
 
   const startRecordingRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false));
   const startRecording = useCallback((): Promise<boolean> => {
