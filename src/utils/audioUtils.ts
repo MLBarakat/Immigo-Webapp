@@ -189,6 +189,11 @@ function unlockSharedPlaybackElement(): void {
     // Test doubles are plain objects; only a real media element needs (and
     // can take) a silent in-gesture play to become unlocked.
     if (typeof HTMLMediaElement === 'undefined' || !(element instanceof HTMLMediaElement)) return;
+    // An actively playing element is by definition already unlocked. Swapping
+    // its src to the silent WAV would cut off audible turn audio (e.g. the
+    // unlock at the top of sendTextMessage while the previous turn is still
+    // speaking) — the old code never touched the playback element here.
+    if (!element.paused) return;
     const url = getSilentWavUrl();
     if (!url) return;
     element.preload = 'auto';
@@ -200,6 +205,10 @@ function unlockSharedPlaybackElement(): void {
     if (playResult && typeof playResult.then === 'function') {
       playResult.then(() => {
         logger.info('[AUDIO-DIAG] Silent-unlock media play() RESOLVED — shared playback element unlocked.');
+        // Only pause while the element is still on the silent WAV: a newer
+        // turn may already have swapped its audio onto the shared element,
+        // and pausing then would cut off audible playback.
+        if (element.src !== url) return;
         try {
           element.pause();
           element.currentTime = 0;

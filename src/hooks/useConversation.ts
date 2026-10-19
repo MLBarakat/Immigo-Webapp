@@ -282,10 +282,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     scope: string;
     traceId: string;
     node: HTMLAudioElement;
+    blobUrl: string;
     playbackGeneration: number;
     blockedError: Error;
   }) => {
-    const { scope, traceId, node, playbackGeneration, blockedError } = params;
+    const { scope, traceId, node, blobUrl, playbackGeneration, blockedError } = params;
 
     // Only one parked turn may exist at a time.
     dismissPendingAudioRetry('superseded by a newer parked turn');
@@ -338,8 +339,19 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         traceId,
         ...describeAudioEnvironment(),
       });
-      // Re-run the full unlock inside this gesture, then replay synchronously.
-      unlockAudioPlayback();
+      // Re-point the shared element at the parked blob (the silent unlock
+      // may have overwritten src) and replay synchronously inside this
+      // gesture — a play() from within the gesture IS the iOS authorization,
+      // so no separate unlock step is needed (and running it here would
+      // clobber the blob src with the silent WAV).
+      node.src = blobUrl;
+      if (typeof node.load === 'function') {
+        try {
+          node.load();
+        } catch {
+          // Best-effort; play() below is the authoritative attempt.
+        }
+      }
       node.play().then(() => {
         logger.info(`[AUDIO-DIAG] ${scope}: gesture replay RESOLVED — playback recovered.`, {
           traceId,
@@ -872,7 +884,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         // Mobile autoplay policy block (iOS) — park the turn; it replays
         // inside the user's next gesture, or degrades to text on timeout.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          parkTurnForGestureRetry({ scope: 'Turn response', traceId, node: audioPlaybackNode, playbackGeneration, blockedError: error });
+          parkTurnForGestureRetry({ scope: 'Turn response', traceId, node: audioPlaybackNode, blobUrl: audioBlobUrl, playbackGeneration, blockedError: error });
           return;
         }
         logger.error('Audio node hardware playback initialization failure exceptions handled:', undefined, { 
@@ -1013,7 +1025,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         // Mobile autoplay policy block (iOS) — park the turn; it replays
         // inside the user's next gesture, or degrades to text on timeout.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          parkTurnForGestureRetry({ scope: 'Silence nudge', traceId, node: audioNode, playbackGeneration, blockedError: error });
+          parkTurnForGestureRetry({ scope: 'Silence nudge', traceId, node: audioNode, blobUrl: audioUrl, playbackGeneration, blockedError: error });
           return;
         }
         logger.error('Silence reminder audio playback failed.', undefined, {
@@ -1252,7 +1264,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         // Mobile autoplay policy block (iOS) — park the turn; it replays
         // inside the user's next gesture, or degrades to text on timeout.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          parkTurnForGestureRetry({ scope: 'Greeting', traceId, node: audioPlaybackNode, playbackGeneration, blockedError: error });
+          parkTurnForGestureRetry({ scope: 'Greeting', traceId, node: audioPlaybackNode, blobUrl: audioBlobUrl, playbackGeneration, blockedError: error });
           return;
         }
         logger.error('Greeting audio playback initialization failure:', undefined, {
