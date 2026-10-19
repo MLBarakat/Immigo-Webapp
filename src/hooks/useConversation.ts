@@ -16,7 +16,7 @@ import {
   isExplicitBargeInCommand,
   isPlaybackEchoTranscript,
 } from '../utils/bargeIn';
-import { unlockAudioPlayback, describeAudioEnvironment } from '../utils/audioUtils';
+import { unlockAudioPlayback, describeAudioEnvironment, acquirePollyPlaybackElement } from '../utils/audioUtils';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
@@ -35,6 +35,10 @@ interface AssistantReveal {
 }
 
 const SILENCE_NUDGE_DELAY_MS = 15_000;
+// Fix 2 safety net: how long a Polly turn blocked by the iOS autoplay policy
+// may wait for a user gesture before it degrades to text-only (never worse
+// than the previous behavior).
+const GESTURE_RETRY_TIMEOUT_MS = 20_000;
 
 export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', preferredLanguage = 'en-US', bargeIn = 'balanced' }: UseConversationManagerProps) {
   const { t, i18n } = useTranslation('conversation');
@@ -83,6 +87,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const latestConversationHistoryRef = useRef(conversationState.conversationHistory);
   const voiceSessionRef = useRef(conversationState.isSessionActive);
   const [isVoiceSessionActive, setIsVoiceSessionActive] = useState(conversationState.isSessionActive);
+  // True while a Polly turn is parked waiting for a user gesture to replay it
+  // (Fix 2 safety net); drives the "tap anywhere to hear" banner.
+  const [isAudioRetryPending, setIsAudioRetryPending] = useState(false);
   // One-shot flag: set when the server asks the user to confirm/repeat an
   // answer or complete a multi-part one (turn-policy's needs_confirmation).
   // While set (and matching the current item), the next answer is sent as a
@@ -172,7 +179,20 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     assistantRevealRef.current = reveal;
   }, [dispatch, stopAssistantReveal]);
 
+  // At most one Polly turn may be parked awaiting a gesture replay; the ref
+  // holds its cancel function so any playback teardown (barge-in, session
+  // end, unmount, a newer parked turn) can dismiss it first.
+  const pendingAudioRetryRef = useRef<((reason: string) => void) | null>(null);
+
+  const dismissPendingAudioRetry = useCallback((reason: string) => {
+    const cancel = pendingAudioRetryRef.current;
+    pendingAudioRetryRef.current = null;
+    cancel?.(reason);
+  }, []);
+
   const clearAudioPlayback = useCallback(() => {
+    // A parked gesture-retry turn belongs to the playback being cleared.
+    dismissPendingAudioRetry('playback cleared');
     audioPlaybackGenerationRef.current += 1;
     stopAssistantReveal();
     if (interruptionTimerRef.current !== null) {
@@ -201,7 +221,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     isPollyPlayingRef.current = false;
     isAssistantAudioActiveRef.current = false;
-  }, [stopAssistantReveal]);
+  }, [stopAssistantReveal, dismissPendingAudioRetry]);
 
   /**
    * Logs a Polly playback readiness snapshot: payload size + the exact
@@ -249,6 +269,115 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
     clearAudioPlayback();
   }, [dispatch, stopAssistantReveal, clearAudioPlayback]);
+
+  /**
+   * Fix 2 safety net (iOS autoplay): when play() is rejected with
+   * NotAllowedError the audio is NOT lost — the turn is parked (reveal held
+   * on the first word, blob kept alive, status stays 'speaking') and a
+   * one-time capture listener replays it synchronously inside the user's next
+   * touch, which is where iOS re-authorizes media playback. Falls back to the
+   * previous text-only completion on replay failure, timeout, or dismissal.
+   */
+  const parkTurnForGestureRetry = useCallback((params: {
+    scope: string;
+    traceId: string;
+    node: HTMLAudioElement;
+    playbackGeneration: number;
+    blockedError: Error;
+  }) => {
+    const { scope, traceId, node, playbackGeneration, blockedError } = params;
+
+    // Only one parked turn may exist at a time.
+    dismissPendingAudioRetry('superseded by a newer parked turn');
+
+    logger.warn(`[AUDIO-DIAG] ${scope}: autoplay block — turn parked, awaiting next user gesture.`, {
+      traceId,
+      errorName: blockedError.name,
+      errorMessage: blockedError.message,
+      ...describeAudioEnvironment(),
+    });
+    setIsAudioRetryPending(true);
+
+    let settled = false;
+    let timeoutId: number | null = null;
+
+    function finishCleanup(): boolean {
+      if (settled) return false;
+      settled = true;
+      document.removeEventListener('pointerup', handleGesture, true);
+      document.removeEventListener('touchend', handleGesture, true);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (pendingAudioRetryRef.current === cancel) pendingAudioRetryRef.current = null;
+      setIsAudioRetryPending(false);
+      return true;
+    }
+
+    // Dismissal path (barge-in / session end / unmount / supersede): flush
+    // the parked bubble's remaining words so it never stays truncated, but
+    // leave the FSM to whoever is dismissing us (they are already settling).
+    function cancel(reason: string) {
+      if (!finishCleanup()) return;
+      stopAssistantReveal(true);
+      logger.info(`[AUDIO-DIAG] ${scope}: parked turn cancelled (${reason}).`, {
+        traceId,
+        ...describeAudioEnvironment(),
+      });
+    }
+
+    function handleGesture() {
+      if (playbackGeneration !== audioPlaybackGenerationRef.current) {
+        finishCleanup();
+        logger.info(`[AUDIO-DIAG] ${scope}: parked turn superseded by a newer turn; discarding gesture retry.`, { traceId });
+        return;
+      }
+      if (!finishCleanup()) return;
+      logger.info(`[AUDIO-DIAG] ${scope}: replaying parked audio inside user gesture.`, {
+        traceId,
+        ...describeAudioEnvironment(),
+      });
+      // Re-run the full unlock inside this gesture, then replay synchronously.
+      unlockAudioPlayback();
+      node.play().then(() => {
+        logger.info(`[AUDIO-DIAG] ${scope}: gesture replay RESOLVED — playback recovered.`, {
+          traceId,
+          ...describeAudioEnvironment(),
+        });
+      }).catch((retryError: unknown) => {
+        logger.warn(`[AUDIO-DIAG] ${scope}: gesture replay REJECTED — completing turn as text.`, {
+          traceId,
+          errorName: retryError instanceof Error ? retryError.name : 'Unknown',
+          errorMessage: retryError instanceof Error ? retryError.message : String(retryError),
+          ...describeAudioEnvironment(),
+        });
+        completeBlockedAudioTurnAsText(traceId, retryError);
+      });
+    }
+
+    document.addEventListener('pointerup', handleGesture, true);
+    document.addEventListener('touchend', handleGesture, true);
+    timeoutId = window.setTimeout(() => {
+      if (!finishCleanup()) return;
+      logger.info(`[AUDIO-DIAG] ${scope}: gesture-retry timeout — completing parked turn as text.`, {
+        traceId,
+        ...describeAudioEnvironment(),
+      });
+      completeBlockedAudioTurnAsText(traceId, blockedError);
+    }, GESTURE_RETRY_TIMEOUT_MS);
+
+    pendingAudioRetryRef.current = cancel;
+  }, [dismissPendingAudioRetry, completeBlockedAudioTurnAsText, stopAssistantReveal]);
+
+  // Never leave a parked turn (listeners, timer, banner) behind on unmount.
+  useEffect(() => {
+    return () => {
+      const cancel = pendingAudioRetryRef.current;
+      pendingAudioRetryRef.current = null;
+      cancel?.('hook unmount');
+    };
+  }, []);
 
   // Dual-Track Speculative Merger orchestration hook (lazy init on Start tap).
   const {
@@ -698,7 +827,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
       const audioBlobUrl = URL.createObjectURL(audioBlob);
-      const audioPlaybackNode = new Audio(audioBlobUrl);
+      const audioPlaybackNode = acquirePollyPlaybackElement(audioBlobUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
       describePollyPlayback('Turn response', traceId, audioPlaybackNode, audioData.byteLength, responseText.length);
       audioPlaybackNode.onerror = () => {
@@ -740,9 +869,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           ...describeAudioEnvironment(),
         });
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
-        // Mobile autoplay policy block — not a turn failure. Complete as text.
+        // Mobile autoplay policy block (iOS) — park the turn; it replays
+        // inside the user's next gesture, or degrades to text on timeout.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          completeBlockedAudioTurnAsText(traceId, error);
+          parkTurnForGestureRetry({ scope: 'Turn response', traceId, node: audioPlaybackNode, playbackGeneration, blockedError: error });
           return;
         }
         logger.error('Audio node hardware playback initialization failure exceptions handled:', undefined, { 
@@ -811,7 +941,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         activeTurnControllerRef.current = null;
       }
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, generatePeriodicProgressReport, completeBlockedAudioTurnAsText, describePollyPlayback]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, generatePeriodicProgressReport, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry]);
 
   const requestSilenceNudge = useCallback(async () => {
     const currentItemId = currentItemIdRef.current;
@@ -840,7 +970,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
 
       const audioUrl = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
-      const audioNode = new Audio(audioUrl);
+      const audioNode = acquirePollyPlaybackElement(audioUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
       describePollyPlayback('Silence nudge', traceId, audioNode, response.audioData.byteLength, response.responseText.length);
       audioNode.onerror = () => {
@@ -880,9 +1010,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           ...describeAudioEnvironment(),
         });
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
-        // Mobile autoplay policy block — not a turn failure. Complete as text.
+        // Mobile autoplay policy block (iOS) — park the turn; it replays
+        // inside the user's next gesture, or degrades to text on timeout.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          completeBlockedAudioTurnAsText(traceId, error);
+          parkTurnForGestureRetry({ scope: 'Silence nudge', traceId, node: audioNode, playbackGeneration, blockedError: error });
           return;
         }
         logger.error('Silence reminder audio playback failed.', undefined, {
@@ -903,7 +1034,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     } finally {
       if (silenceNudgeControllerRef.current === controller) silenceNudgeControllerRef.current = null;
     }
-  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, clearAudioPlayback, completeBlockedAudioTurnAsText, describePollyPlayback]);
+  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, clearAudioPlayback, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry]);
 
   useEffect(() => {
     if (displayTranscript.trim()) {
@@ -1078,7 +1209,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // is created with its first word only after the response is ready.
       const audioBlob = new Blob([res.audioData], { type: 'audio/mpeg' });
       const audioBlobUrl = URL.createObjectURL(audioBlob);
-      const audioPlaybackNode = new Audio(audioBlobUrl);
+      const audioPlaybackNode = acquirePollyPlaybackElement(audioBlobUrl);
       const playbackGeneration = ++audioPlaybackGenerationRef.current;
       describePollyPlayback('Greeting', traceId, audioPlaybackNode, res.audioData.byteLength, res.responseText.length);
       audioPlaybackNode.onerror = () => {
@@ -1118,9 +1249,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           ...describeAudioEnvironment(),
         });
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
-        // Mobile autoplay policy block — not a turn failure. Complete as text.
+        // Mobile autoplay policy block (iOS) — park the turn; it replays
+        // inside the user's next gesture, or degrades to text on timeout.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          completeBlockedAudioTurnAsText(traceId, error);
+          parkTurnForGestureRetry({ scope: 'Greeting', traceId, node: audioPlaybackNode, playbackGeneration, blockedError: error });
           return;
         }
         logger.error('Greeting audio playback initialization failure:', undefined, {
@@ -1153,7 +1285,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ type: 'SET_STATUS', payload: 'listening' });
       startRecording();
     }
-  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, completeBlockedAudioTurnAsText, describePollyPlayback]);
+  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry]);
 
   const terminateSession = useCallback(async () => {
     if (silenceNudgeTimerRef.current !== null) {
@@ -1361,6 +1493,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     ...conversationState,
     isVoiceSessionActive: conversationState.isSessionActive && isVoiceSessionActive,
     isGeneratingProgressReport,
+    isAudioRetryPending,
     currentState,
     interimTranscript: conversationState.interimTranscript || displayTranscript,
     finalTranscript,

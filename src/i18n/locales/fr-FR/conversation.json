@@ -121,7 +121,8 @@
       "ready": "Prêt",
       "listening": "Écoute",
       "thinking": "Réflexion...",
-      "speaking": "Parole"
+      "speaking": "Parole",
+      "audioRetryPending": "Touchez n'importe où pour entendre la réponse"
     },
     "right": {
       "title": "Configuration et commandes",

@@ -212,6 +212,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               micAccessError={micAccessError}
               onClearMicAccessError={() => setMicAccessError(null)}
               initError={managerInitError}
+              isAudioRetryPending={manager.isAudioRetryPending}
               onLoadOlder={manager.loadOlderMessages}
               onClearError={manager.clearError}
             />
@@ -348,6 +349,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           micAccessError={micAccessError}
           onClearMicAccessError={() => setMicAccessError(null)}
           initError={managerInitError}
+          isAudioRetryPending={manager.isAudioRetryPending}
           onLoadOlder={manager.loadOlderMessages}
           onClearError={manager.clearError}
           onToggleFocus={toggleFocusMode}

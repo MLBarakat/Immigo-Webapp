@@ -30,6 +30,7 @@ interface CenterPanelProps {
   micAccessError?: string | null;
   onClearMicAccessError?: () => void;
   initError?: string | null;
+  isAudioRetryPending?: boolean;
 }
 
 function formatTime(seconds: number): string {
@@ -79,6 +80,7 @@ export function CenterPanel({
   micAccessError,
   onClearMicAccessError,
   initError,
+  isAudioRetryPending,
 }: CenterPanelProps) {
   const [message, setMessage] = useState('');
   const { t } = useTranslation('conversation');
@@ -228,6 +230,7 @@ export function CenterPanel({
                   micAccessError={micAccessError}
                   onClearMicAccessError={onClearMicAccessError}
                   initError={initError}
+                  isAudioRetryPending={isAudioRetryPending}
                 />
               </div>
             </div>

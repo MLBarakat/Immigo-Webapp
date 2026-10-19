@@ -94,11 +94,28 @@ function getSilentWavUrl(): string | null {
 }
 
 /**
- * Shared media-element used only for autoplay-policy unlock. A WebAudio
- * silent render alone does not unlock the HTMLAudioElement path on iOS, so a
- * real (silent) media play must also originate inside the gesture.
+ * Shared, long-lived Polly playback element. iOS authorizes media playback
+ * PER ELEMENT inside a user gesture, not per document: an element created
+ * after the gesture (previously a fresh `new Audio(blobUrl)` per turn) is
+ * always blocked. The singleton is created and silent-played inside the
+ * Start-tap gesture, then reused for every turn by swapping `src` — the
+ * standard iOS workaround.
  */
-let sharedUnlockAudio: HTMLAudioElement | null = null;
+let sharedPlaybackElement: HTMLAudioElement | null = null;
+// Identity of the Audio constructor that produced the singleton. Tests re-stub
+// the global Audio between cases; recreating the element when the constructor
+// changes keeps test doubles fresh while production (stable constructor) keeps
+// one long-lived element.
+let sharedPlaybackElementCtor: unknown = null;
+
+function getOrCreateSharedPlaybackElement(): HTMLAudioElement {
+  const ctor = typeof Audio !== 'undefined' ? Audio : undefined;
+  if (!sharedPlaybackElement || sharedPlaybackElementCtor !== ctor) {
+    sharedPlaybackElement = new Audio();
+    sharedPlaybackElementCtor = ctor;
+  }
+  return sharedPlaybackElement;
+}
 
 // ── Temporary AUDIO-DIAG instrumentation ────────────────────────────────────
 // Used to pin down mobile-only Polly playback blocks (NotAllowedError).
@@ -158,19 +175,23 @@ export function describeAudioEnvironment(): Record<string, unknown> {
   }
 }
 
-function playSilentMediaUnlock(): void {
+/**
+ * Unlocks the shared playback element by playing (then immediately pausing)
+ * a synthesized silent WAV inside a genuine user gesture. On iOS this is the
+ * only thing that authorizes later play() calls on THIS element; a WebAudio
+ * silent render or a different media element does not count. Never throws.
+ */
+function unlockSharedPlaybackElement(): void {
   try {
+    // Created eagerly at unlock time so the exact element iOS authorizes
+    // inside the gesture is the same one used for every later Polly turn.
+    const element = getOrCreateSharedPlaybackElement();
+    // Test doubles are plain objects; only a real media element needs (and
+    // can take) a silent in-gesture play to become unlocked.
+    if (typeof HTMLMediaElement === 'undefined' || !(element instanceof HTMLMediaElement)) return;
     const url = getSilentWavUrl();
-    if (!url || typeof document === 'undefined' || typeof document.createElement !== 'function') return;
-    if (!sharedUnlockAudio) {
-      // document.createElement (not `new Audio()`) so test doubles for the
-      // global Audio constructor never intercept the silent unlock element.
-      const element = document.createElement('audio');
-      element.src = url;
-      element.preload = 'auto';
-      sharedUnlockAudio = element;
-    }
-    const element = sharedUnlockAudio;
+    if (!url) return;
+    element.preload = 'auto';
     if (element.src !== url) element.src = url;
     // play() must be invoked synchronously inside the gesture; pause as soon
     // as it starts so nothing is ever heard. The promise guard covers engines
@@ -178,7 +199,7 @@ function playSilentMediaUnlock(): void {
     const playResult = element.play();
     if (playResult && typeof playResult.then === 'function') {
       playResult.then(() => {
-        logger.info('[AUDIO-DIAG] Silent-unlock media play() RESOLVED — media-element playback unlocked for this document.');
+        logger.info('[AUDIO-DIAG] Silent-unlock media play() RESOLVED — shared playback element unlocked.');
         try {
           element.pause();
           element.currentTime = 0;
@@ -186,10 +207,9 @@ function playSilentMediaUnlock(): void {
           // Best-effort only.
         }
       }).catch((error: unknown) => {
-        // This is the most likely root cause of mobile-only Polly silence:
-        // if the unlock play is rejected, every later new Audio().play()
-        // (which happens ~10-15s after the tap, with no gesture) is doomed.
-        logger.warn('[AUDIO-DIAG] Silent-unlock media play() REJECTED — media-element unlock FAILED. Later Polly play() calls will very likely be blocked.', {
+        // Should be rare; if it happens, every later Polly play() will very
+        // likely be blocked — the gesture-retry safety net covers the residue.
+        logger.warn('[AUDIO-DIAG] Silent-unlock media play() REJECTED — playback element unlock FAILED. Later Polly play() calls will very likely be blocked.', {
           errorName: error instanceof Error ? error.name : 'Unknown',
           errorMessage: error instanceof Error ? error.message : String(error),
           ...describeAudioEnvironment(),
@@ -201,12 +221,36 @@ function playSilentMediaUnlock(): void {
   } catch (error: unknown) {
     // Best-effort only, but record it: a throwing unlock path explains a
     // fully silent mobile session.
-    logger.warn('[AUDIO-DIAG] playSilentMediaUnlock threw before play() completed.', {
+    logger.warn('[AUDIO-DIAG] unlockSharedPlaybackElement threw before play() completed.', {
       errorName: error instanceof Error ? error.name : 'Unknown',
       errorMessage: error instanceof Error ? error.message : String(error),
       ...describeAudioEnvironment(),
     });
   }
+}
+
+/**
+ * Returns the shared playback element with `blobUrl` as its source. Handlers
+ * are cleared before the swap so a previous turn's onended/onerror can never
+ * fire for the new audio; callers attach their own generation-guarded
+ * handlers afterwards, exactly as with a fresh Audio().
+ */
+export function acquirePollyPlaybackElement(blobUrl: string): HTMLAudioElement {
+  // If no unlock ran first (e.g. a text-mode turn in a document that was never
+  // gesture-unlocked), this is a fresh element iOS may block — the caller's
+  // gesture-retry safety net handles that case.
+  const element = getOrCreateSharedPlaybackElement();
+  element.onended = null;
+  element.onerror = null;
+  element.src = blobUrl;
+  if (typeof element.load === 'function') {
+    try {
+      element.load();
+    } catch {
+      // Best-effort prefetch hint.
+    }
+  }
+  return element;
 }
 
 /**
@@ -221,8 +265,9 @@ export function unlockAudioPlayback(): void {
   try {
     logger.info('[AUDIO-DIAG] unlockAudioPlayback() invoked.', describeAudioEnvironment());
     // Media-element unlock first: iOS requires a real media play inside the
-    // gesture, which a WebAudio render alone does not satisfy.
-    playSilentMediaUnlock();
+    // gesture, which a WebAudio render alone does not satisfy — and it must
+    // happen on the SAME element that will later play the Polly audio.
+    unlockSharedPlaybackElement();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mocked } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act, waitFor, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { useConversation } from '../useConversation';
 import { ConversationContext, conversationReducer } from '../../context/conversationContextTypes';
@@ -89,6 +89,9 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       isTranscribing: false,
       startRecording: mockStartRecording,
       stopRecording: mockStopRecording,
+      pauseVAD: vi.fn(),
+      resumeVAD: vi.fn(),
+      clearTranscript: vi.fn(),
     });
 
     // Construct a type-safe mock API Client instance mirror
@@ -738,9 +741,13 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(mockAudioInstance.onended).toBeNull();
   });
 
-  it('revokes the audio URL when playback is rejected', async () => {
+  it('parks an autoplay-blocked turn and completes it as text when the gesture retry also fails', async () => {
     mockContextValue.state.isSessionActive = true;
-    mockAudioInstance.play.mockRejectedValueOnce(new Error('autoplay blocked'));
+    const autoplayBlocked = new Error('autoplay blocked');
+    autoplayBlocked.name = 'NotAllowedError';
+    mockAudioInstance.play
+      .mockRejectedValueOnce(autoplayBlocked)
+      .mockRejectedValueOnce(autoplayBlocked);
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
       audioData: new ArrayBuffer(8),
@@ -760,7 +767,19 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       await result.current.sendTextMessage('Start rejected playback test.');
     });
 
-    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-stream-url'));
+    // The turn is parked awaiting a user gesture — not abandoned: the banner
+    // is up and the audio URL is still held.
+    await waitFor(() => expect(result.current.isAudioRetryPending).toBe(true));
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+
+    // The next user gesture replays the parked audio inside the gesture; when
+    // iOS blocks that too, the turn finally degrades to text-only.
+    await act(async () => {
+      fireEvent.pointerUp(document);
+    });
+    await waitFor(() => expect(result.current.isAudioRetryPending).toBe(false));
+    expect(mockAudioInstance.play).toHaveBeenCalledTimes(2);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-stream-url');
     expect(mockAudioInstance.pause).toHaveBeenCalledTimes(1);
   });
 });

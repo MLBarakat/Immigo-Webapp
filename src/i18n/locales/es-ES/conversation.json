@@ -121,7 +121,8 @@
       "ready": "Listo",
       "listening": "Escuchando",
       "thinking": "Pensando...",
-      "speaking": "Hablando"
+      "speaking": "Hablando",
+      "audioRetryPending": "Toca en cualquier lugar para escuchar la respuesta"
     },
     "right": {
       "title": "Configuración y controles",

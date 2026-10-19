@@ -19,6 +19,7 @@ interface VoiceHubProps {
   readonly micAccessError?: string | null;
   readonly onClearMicAccessError?: () => void;
   readonly initError?: string | null;
+  readonly isAudioRetryPending?: boolean;
 }
 
 export function VoiceHub({ 
@@ -33,6 +34,7 @@ export function VoiceHub({
   micAccessError = null,
   onClearMicAccessError,
   initError = null,
+  isAudioRetryPending = false,
 }: VoiceHubProps): JSX.Element {
   const { t } = useTranslation('conversation');
   
@@ -117,6 +119,11 @@ export function VoiceHub({
       )}
       {micAccessError && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{micAccessError}</p>}
       {initError && !isSessionActive && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{initError}</p>}
+      {isAudioRetryPending && (
+        <p className="max-w-xs text-center text-xs font-semibold text-art-blue-600" role="status">
+          {t('workspace.voice.audioRetryPending')}
+        </p>
+      )}
       <div
         className={`relative inline-flex items-center justify-center ${isButtonDisabled ? 'cursor-not-allowed' : ''}`}
         onMouseEnter={() => setShowLoadingProgress(true)}

@@ -121,7 +121,8 @@
       "ready": "جاهز",
       "listening": "يستمع",
       "thinking": "يفكّر...",
-      "speaking": "يتحدث"
+      "speaking": "يتحدث",
+      "audioRetryPending": "اضغط في أي مكان لسماع الإجابة"
     },
     "right": {
       "title": "الإعدادات وعناصر التحكم",

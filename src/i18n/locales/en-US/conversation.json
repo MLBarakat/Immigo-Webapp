@@ -121,7 +121,8 @@
       "ready": "Ready",
       "listening": "Listening",
       "thinking": "Thinking...",
-      "speaking": "Speaking"
+      "speaking": "Speaking",
+      "audioRetryPending": "Tap anywhere to hear the answer"
     },
     "right": {
       "title": "Configuration & Control",
