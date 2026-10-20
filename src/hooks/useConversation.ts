@@ -424,9 +424,13 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
    */
   const startListeningWithMicGate = useCallback(async () => {
     const started = await startRecording();
+    // Classifies "status went to error right after micVAD started" from the
+    // console alone: this line lands immediately before the dispatch.
+    logger.info('Mic gate outcome.', { started, voiceSessionActive: voiceSessionRef.current });
     if (started) {
       dispatch({ type: 'SET_STATUS', payload: 'listening' });
     } else if (voiceSessionRef.current) {
+      logger.warn('Mic gate parking the session in error: capture did not start.');
       dispatch({ type: 'SET_STATUS', payload: 'error' });
     }
   }, [startRecording, dispatch]);

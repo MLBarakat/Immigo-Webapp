@@ -56,8 +56,52 @@ const sharedRuntime: {
   vad: MicVAD | null;
   /** The stream the shared VAD is currently driving (module-shared so remounts can verify it). */
   micStream: MediaStream | null;
+  /**
+   * When the current attempt's getUserMedia resolved (0 = not granted yet).
+   * startVadBounded resets this per attempt and starts its setup budget only
+   * once it flips — time spent answering the permission prompt is user time,
+   * not setup time (the two-phase acquisition guard).
+   */
+  micGrantedAt: number;
   error: string | null;
-} = { status: 'idle', promise: null, worker: null, workerReady: false, vad: null, micStream: null, error: null };
+} = { status: 'idle', promise: null, worker: null, workerReady: false, vad: null, micStream: null, micGrantedAt: 0, error: null };
+
+/**
+ * Phase-B acquisition budget: from mic GRANT to a live, listening VAD (the
+ * audio-graph build). iOS may hold getUserMedia open behind its own prompt,
+ * and once the stream resolves the VAD still has to build its audio graph —
+ * which on a busy main thread has been observed to stall indefinitely. Time
+ * out rather than leaving the caller waiting forever with the UI mid-setup.
+ */
+export const MIC_ACQUISITION_TIMEOUT_MS = 15000;
+
+/**
+ * Phase-A hard cap: bounds an UNANSWERED permission prompt (or a
+ * getUserMedia that never settles) so the UI can never hang forever.
+ * Field case: the user's dwell on the permission prompt counted against the
+ * single 15s budget, so on desktop AND mobile the guard fired right as
+ * "started micVAD" landed — error status immediately after granting access.
+ */
+export const MIC_PERMISSION_TIMEOUT_MS = 90000;
+
+/** Grant-poll cadence for the acquisition guard's permission phase. */
+const MIC_GRANT_POLL_MS = 250;
+
+/** Permission was never granted within the phase-A hard cap. */
+export class MicPermissionTimeoutError extends Error {
+  constructor() {
+    super('Microphone permission was not granted in time.');
+    this.name = 'MicPermissionTimeoutError';
+  }
+}
+
+/** Granted, but the audio graph did not come up within the phase-B budget. */
+export class MicSetupTimeoutError extends Error {
+  constructor() {
+    super('Microphone setup timed out.');
+    this.name = 'MicSetupTimeoutError';
+  }
+}
 
 /**
  * Generates a high-precision, cryptographically secure Trace ID token for distributed tracking.
@@ -432,6 +476,9 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             autoGainControl: true,
           });
           sharedRuntime.micStream = stream;
+          // Record the grant moment: the acquisition guard starts its 15s
+          // setup budget only from here — prompt dwell is not setup time.
+          sharedRuntime.micGrantedAt = Date.now();
           return stream;
         };
         if (!sharedRuntime.vad) {
@@ -753,15 +800,6 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     'Microphone access is needed for voice practice. Allow microphone access in your browser settings, then try again.';
 
   /**
-   * Upper bound on mic acquisition. iOS may hold getUserMedia open behind its
-   * own prompt, but once the stream resolves the VAD still has to build its
-   * audio graph — and on a busy main thread (ONNX model init) that has been
-   * observed to stall indefinitely. Time out rather than leaving the caller
-   * waiting forever with the UI frozen mid-setup.
-   */
-  const MIC_ACQUISITION_TIMEOUT_MS = 15000;
-
-  /**
    * Best-effort release of a half-started capture. `MicVAD.start()` flips
    * `listening` and connects its audio graph *before* it can throw, so a failed
    * start can leave a live mic and a running frame processor behind; and once
@@ -783,6 +821,10 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   const describeMicFailure = useCallback((error: unknown): string => {
     const name = (error as { name?: string } | null)?.name;
     switch (name) {
+      case 'MicPermissionTimeoutError':
+        return 'Microphone permission was not granted in time. Allow microphone access when prompted, then tap the mic again.';
+      case 'MicSetupTimeoutError':
+        return 'The microphone took too long to start. Tap the mic again to retry.';
       case 'NotAllowedError':
       case 'SecurityError':
         return 'Microphone access was blocked. Allow microphone access for this site in your browser settings, then tap the mic again.';
@@ -847,7 +889,19 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       // internal promise executor makes start() RESOLVE with undefined rather
       // than reject, and a stalled audio graph never settles at all. Both are
       // bounded here, so the caller can never hang with the UI mid-setup.
+      //
+      // Two-phase budget (field bug: mic button flipped to error "right after
+      // micVAD started" on desktop AND mobile):
+      //  - Phase A (permission): getUserMedia sits behind the browser's
+      //    permission prompt for as long as the user needs to read it. That
+      //    dwell is NOT setup time — bounded only by a hard cap.
+      //  - Phase B (setup): once OUR getStream wrapper resolves (grant
+      //    recorded in sharedRuntime.micGrantedAt), the 15s budget applies to
+      //    the audio-graph build alone.
       const startVadBounded = async (target: MicVAD): Promise<void> => {
+        // Fresh attempt: this attempt has not been granted the mic yet, so
+        // the guard opens in phase A even if an earlier attempt was granted.
+        sharedRuntime.micGrantedAt = 0;
         const startPromise = Promise.resolve(target.start());
         // A timeout does not cancel the underlying start(): queue one pause
         // behind it so a late-settling start cannot flip the VAD back to
@@ -858,28 +912,56 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             .then(() => { try { return target.pause(); } catch { /* ignore */ } })
             .catch(() => undefined);
         };
-        let guardTimer: number | undefined;
+        let permissionTimer: number | undefined;
+        let grantPollTimer: number | undefined;
+        let setupTimer: number | undefined;
         try {
           await Promise.race([
             startPromise,
             new Promise<never>((_, reject) => {
-              guardTimer = window.setTimeout(
-                () => { settleThenPause(); reject(new Error('Microphone setup timed out.')); },
-                MIC_ACQUISITION_TIMEOUT_MS,
+              const fail = (error: Error) => {
+                settleThenPause();
+                reject(error);
+              };
+              const armSetupBudget = () => {
+                setupTimer = window.setTimeout(
+                  () => fail(new MicSetupTimeoutError()),
+                  MIC_ACQUISITION_TIMEOUT_MS,
+                );
+              };
+              // Phase A: the prompt may stay open for as long as the user
+              // needs — only the hard cap bounds it.
+              permissionTimer = window.setTimeout(
+                () => fail(new MicPermissionTimeoutError()),
+                MIC_PERMISSION_TIMEOUT_MS,
               );
+              const pollForGrant = () => {
+                if (sharedRuntime.micGrantedAt > 0) {
+                  // Granted: the setup budget starts NOW. Prompt dwell never
+                  // counts against it.
+                  window.clearTimeout(permissionTimer);
+                  armSetupBudget();
+                  return;
+                }
+                grantPollTimer = window.setTimeout(pollForGrant, MIC_GRANT_POLL_MS);
+              };
+              pollForGrant();
             }),
           ]);
         } finally {
-          // Promise.race does not cancel the losing branch: if start() won
-          // (even by milliseconds), the guard timer must never fire — its
-          // queued pause would silently kill a HEALTHY, listening VAD ~15s
-          // after a successful start, with no log line and no error state,
-          // leaving the session "listening" on a permanently muted graph.
-          // Field case: a cold-cache Silero model fetch took ~14.1s of the
-          // 15s budget; capture committed at t+14.1s, the orphaned timer
-          // paused the VAD at t+15s, and the mic button errored with zero
+          // Promise.race does not cancel the losing branches: if start() won
+          // (even by milliseconds), every guard timer must be cleared — a
+          // late-fired queued pause would silently kill a HEALTHY, listening
+          // VAD after a successful start, with no log line and no error
+          // state, leaving the session "listening" on a permanently muted
+          // graph.
+          // Field case: a cold-cache acquisition took ~14.1s of the 15s
+          // budget; capture committed at t+14.1s, the orphaned timer paused
+          // the VAD at t+15s, and the mic button errored with zero
           // WARN/ERROR logs after "started micVAD".
-          window.clearTimeout(guardTimer);
+          window.clearTimeout(permissionTimer);
+          window.clearTimeout(grantPollTimer);
+          window.clearTimeout(setupTimer);
         }
       };
 
@@ -890,7 +972,35 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         // waiting on the promise alone is not proof that capture is running.
         await startVadBounded(vad);
 
-        if (!vad.listening || !hasLiveMicStream()) {
+        // One structured line so any field report of "error right after
+        // micVAD started" can be classified from console output alone: which
+        // verification input failed, and whether the attempt was still live.
+        const streamLive = hasLiveMicStream();
+        logger.info('Mic capture post-start verification.', {
+          vadListening: vad.listening,
+          streamLive,
+          generation,
+          currentGeneration: captureGenerationRef.current,
+          unmounted: unmountedRef.current,
+          msSinceGrant: sharedRuntime.micGrantedAt > 0 ? Date.now() - sharedRuntime.micGrantedAt : null,
+        });
+
+        if (!vad.listening || !streamLive) {
+          // Cancelled or torn down while acquiring: the stream the VAD just
+          // opened belongs to a dead attempt. Release it and report the
+          // cancellation — never rebuild on an unmounted instance (its refs
+          // can no longer attach a rebuilt VAD, which used to surface as a
+          // misleading "could not reacquire the microphone" failure).
+          if (generation !== captureGenerationRef.current || unmountedRef.current) {
+            logger.warn('Mic acquisition finished after capture was cancelled; releasing without rebuild.', {
+              generation,
+              currentGeneration: captureGenerationRef.current,
+              unmounted: unmountedRef.current,
+            });
+            await abandonCaptureAttempt();
+            isRecordingRef.current = false;
+            return false;
+          }
           logger.warn('VAD did not come up on a live mic stream; rebuilding the shared VAD once.');
           await abandonCaptureAttempt();
           const rebuiltVad = await rebuildSharedVadForCapture();
@@ -905,7 +1015,13 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
         // Capture was cancelled (stop tap / teardown) while the mic was
         // being acquired: do not resurrect the tracker, and undo the start.
+        // This path used to be SILENT — an error status with zero log lines.
         if (generation !== captureGenerationRef.current || unmountedRef.current) {
+          logger.warn('Mic acquisition superseded by a stop/teardown while starting; discarding the capture.', {
+            generation,
+            currentGeneration: captureGenerationRef.current,
+            unmounted: unmountedRef.current,
+          });
           await abandonCaptureAttempt();
           isRecordingRef.current = false;
           return false;

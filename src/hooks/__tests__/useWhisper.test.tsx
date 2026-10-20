@@ -93,6 +93,7 @@ const makeVad = (options: any): FakeVad => {
 
 describe('Model readiness & speech dispatch: useWhisper', () => {
   let useWhisper: typeof import('../useWhisper').useWhisper;
+  let whisperModule: typeof import('../useWhisper');
   let TranscriptionProvider: typeof import('../../context/TranscriptionContext').TranscriptionProvider;
   let resolveVad: ((vad: FakeVad) => void) | null;
   let vadOptions: any;
@@ -156,7 +157,8 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
         resolveVad = resolve;
       });
     });
-    ({ useWhisper } = await import('../useWhisper'));
+    whisperModule = await import('../useWhisper');
+    ({ useWhisper } = whisperModule);
     ({ TranscriptionProvider } = await import('../../context/TranscriptionContext'));
   });
 
@@ -463,7 +465,8 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
       const { result } = renderHook(() => useWhisper(), { wrapper });
       await initFully(result);
 
-      // The audio graph never comes up: start() stays pending indefinitely.
+      // Permission is never granted (start() never even reaches getStream):
+      // only the phase-A hard cap may end the attempt.
       currentVad!.start = vi.fn(() => new Promise<void>(() => undefined));
 
       let pendingStart!: Promise<boolean>;
@@ -473,13 +476,15 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
 
       let succeeded = true;
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(16000);
+        await vi.advanceTimersByTimeAsync(whisperModule.MIC_PERMISSION_TIMEOUT_MS + 1000);
         succeeded = await pendingStart;
       });
 
       expect(succeeded).toBe(false);
       expect(result.current.currentState).toBe('IDLE');
-      expect(result.current.micError).toBeTruthy();
+      expect(result.current.micError).toBe(
+        'Microphone permission was not granted in time. Allow microphone access when prompted, then tap the mic again.',
+      );
       // The half-started attempt released the mic instead of leaving it live.
       expect(currentVad!.pause).toHaveBeenCalled();
     } finally {
@@ -530,6 +535,93 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
       expect(currentVad!.pause.mock.calls.length).toBe(pauseCallsAfterInit);
       expect(result.current.micError).toBeNull();
       expect(result.current.currentState).toBe('LISTENING');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not burn the setup budget while the user answers the permission prompt', async () => {
+    // Field regression (BOTH desktop and mobile): getUserMedia sits behind
+    // the permission prompt, and the user's dwell on that prompt used to
+    // count against the single 15s acquisition budget. On cold/first runs
+    // the guard fired at t+15s — dispatching the error status and queueing a
+    // pause — moments AFTER "started micVAD" appeared in the console, i.e.
+    // exactly when the user granted access. Prompt dwell must be free: only
+    // after the grant does the 15s setup budget start.
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useWhisper(), { wrapper });
+      await initFully(result);
+
+      // 20s on the prompt (past the old 15s total budget), then instant grant.
+      currentVad!.start = vi.fn(async () => {
+        await new Promise((resolve) => { window.setTimeout(resolve, 20000); });
+        await vadOptions.getStream();
+        currentVad!.listening = true;
+      });
+      // The hook pauses the VAD once at init; only LATER pauses are bugs.
+      const pauseCallsAfterInit = currentVad!.pause.mock.calls.length;
+
+      let succeeded = false;
+      await act(async () => {
+        const pending = result.current.startRecording();
+        await vi.advanceTimersByTimeAsync(20100);
+        succeeded = await pending;
+      });
+
+      expect(succeeded).toBe(true);
+      expect(result.current.currentState).toBe('LISTENING');
+      expect(result.current.micError).toBeNull();
+
+      // Well past the old guard mark: nothing may pause the healthy VAD.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000);
+      });
+
+      expect(currentVad!.listening).toBe(true);
+      expect(currentVad!.pause.mock.calls.length).toBe(pauseCallsAfterInit);
+      expect(result.current.micError).toBeNull();
+      expect(result.current.currentState).toBe('LISTENING');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('measures the setup budget from the mic grant, not from the tap', async () => {
+    // The flip side of the two-phase guard: once permission IS granted, a
+    // graph that never comes up must still time out — reported as a SETUP
+    // timeout counted from the grant, never as a permission failure, and
+    // never silently.
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useWhisper(), { wrapper });
+      await initFully(result);
+
+      currentVad!.start = vi.fn(async () => {
+        await new Promise((resolve) => { window.setTimeout(resolve, 2000); });
+        await vadOptions.getStream();
+        await new Promise<void>(() => undefined); // granted, then the graph stalls
+      });
+
+      let pendingStart!: Promise<boolean>;
+      await act(async () => {
+        pendingStart = result.current.startRecording();
+      });
+
+      let succeeded = true;
+      await act(async () => {
+        // 2s to the grant + 15s setup budget + grant-poll granularity (250ms).
+        await vi.advanceTimersByTimeAsync(2000 + whisperModule.MIC_ACQUISITION_TIMEOUT_MS + 1000);
+        succeeded = await pendingStart;
+      });
+
+      expect(succeeded).toBe(false);
+      expect(result.current.currentState).toBe('IDLE');
+      expect(result.current.micError).toBe(
+        'The microphone took too long to start. Tap the mic again to retry.',
+      );
+      // The half-started attempt released the mic instead of leaving it live.
+      expect(currentVad!.pause).toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
