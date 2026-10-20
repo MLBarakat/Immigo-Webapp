@@ -858,15 +858,29 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             .then(() => { try { return target.pause(); } catch { /* ignore */ } })
             .catch(() => undefined);
         };
-        await Promise.race([
-          startPromise,
-          new Promise<never>((_, reject) => {
-            window.setTimeout(
-              () => { settleThenPause(); reject(new Error('Microphone setup timed out.')); },
-              MIC_ACQUISITION_TIMEOUT_MS,
-            );
-          }),
-        ]);
+        let guardTimer: number | undefined;
+        try {
+          await Promise.race([
+            startPromise,
+            new Promise<never>((_, reject) => {
+              guardTimer = window.setTimeout(
+                () => { settleThenPause(); reject(new Error('Microphone setup timed out.')); },
+                MIC_ACQUISITION_TIMEOUT_MS,
+              );
+            }),
+          ]);
+        } finally {
+          // Promise.race does not cancel the losing branch: if start() won
+          // (even by milliseconds), the guard timer must never fire — its
+          // queued pause would silently kill a HEALTHY, listening VAD ~15s
+          // after a successful start, with no log line and no error state,
+          // leaving the session "listening" on a permanently muted graph.
+          // Field case: a cold-cache Silero model fetch took ~14.1s of the
+          // 15s budget; capture committed at t+14.1s, the orphaned timer
+          // paused the VAD at t+15s, and the mic button errored with zero
+          // WARN/ERROR logs after "started micVAD".
+          window.clearTimeout(guardTimer);
+        }
       };
 
       try {

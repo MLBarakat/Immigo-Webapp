@@ -440,7 +440,15 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
 
     let succeeded = true;
     await act(async () => {
-      succeeded = await result.current.startRecording();
+      const pending = result.current.startRecording();
+      // The hook rebuilds the shared VAD once before giving up — the rebuilt
+      // instance fails exactly like the first, and only then may the error
+      // surface. Settling the rebuild with another silent failure mirrors the
+      // MicVAD 'errored' state in the field: every start() no-ops.
+      await vi.waitFor(() => expect(vadNewMock).toHaveBeenCalledTimes(2));
+      const rebuilt = settleVadLoad();
+      rebuilt.start = vi.fn(async () => undefined);
+      succeeded = await pending;
     });
 
     expect(succeeded).toBe(false);
@@ -474,6 +482,54 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
       expect(result.current.micError).toBeTruthy();
       // The half-started attempt released the mic instead of leaving it live.
       expect(currentVad!.pause).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never lets the acquisition guard timer kill a successful-but-slow start', async () => {
+    // Field regression: a cold-cache Silero model fetch pushed start() to
+    // ~14.1s of the 15s budget. The start won the race and capture committed,
+    // but the guard timer was never cleared, so ~15s after the tap the
+    // orphaned timeout fired and paused the HEALTHY listening VAD — silently,
+    // no log line, no error state — leaving the session "listening" on a
+    // permanently muted audio graph and the mic button erroring.
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useWhisper(), { wrapper });
+      await initFully(result);
+
+      // Slow-but-successful start, just inside the budget: the mic is only
+      // acquired (and listening flipped) after the simulated model fetch.
+      currentVad!.start = vi.fn(async () => {
+        await new Promise((resolve) => { window.setTimeout(resolve, 14000); });
+        await vadOptions.getStream();
+        currentVad!.listening = true;
+      });
+      // The hook pauses the VAD once at init; only LATER pauses are bugs.
+      const pauseCallsAfterInit = currentVad!.pause.mock.calls.length;
+
+      let succeeded = false;
+      await act(async () => {
+        const pending = result.current.startRecording();
+        await vi.advanceTimersByTimeAsync(14100);
+        succeeded = await pending;
+      });
+
+      expect(succeeded).toBe(true);
+      expect(result.current.currentState).toBe('LISTENING');
+      expect(result.current.micError).toBeNull();
+
+      // Well past the 15s mark: the guard timer must have been cleared when
+      // the race settled, not fired against the now-healthy VAD.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20000);
+      });
+
+      expect(currentVad!.listening).toBe(true);
+      expect(currentVad!.pause.mock.calls.length).toBe(pauseCallsAfterInit);
+      expect(result.current.micError).toBeNull();
+      expect(result.current.currentState).toBe('LISTENING');
     } finally {
       vi.useRealTimers();
     }
