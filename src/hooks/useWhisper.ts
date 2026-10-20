@@ -603,8 +603,17 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
   }, [handleWorkerMessage, flushActiveSegment, setInitStatusBoth, mirrorSharedInitState, instanceId]);
 
   useEffect(() => {
+    // The effect can clean up and re-run while the hook instance STAYS
+    // mounted (auth-settle remount churn; React StrictMode double-invoke in
+    // dev). The cleanup marks the instance unmounted — without this reset
+    // the flag is poisoned forever, and post-start verification then
+    // discards a provably healthy capture (VAD listening, live stream,
+    // generation intact), parking the session in error right after
+    // "started micVAD". A genuine unmount never re-runs the effect, so the
+    // stale-capture protection there is unaffected.
+    unmountedRef.current = false;
     tabIdRef.current = `tab_id_${performance.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    
+
     // BroadcastChannel tab leader-election implementation to block microphone hardware contention
     const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(LEADER_CHANNEL_NAME) : null;
     if (channel) {
@@ -982,6 +991,8 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
           generation,
           currentGeneration: captureGenerationRef.current,
           unmounted: unmountedRef.current,
+          instanceId,
+          tabId: tabIdRef.current,
           msSinceGrant: sharedRuntime.micGrantedAt > 0 ? Date.now() - sharedRuntime.micGrantedAt : null,
         });
 
@@ -1021,6 +1032,8 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             generation,
             currentGeneration: captureGenerationRef.current,
             unmounted: unmountedRef.current,
+            instanceId,
+            tabId: tabIdRef.current,
           });
           await abandonCaptureAttempt();
           isRecordingRef.current = false;
@@ -1059,7 +1072,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
     micAcquisitionRef.current = acquisition;
     return acquisition;
-  }, [hasLiveMicStream, rebuildSharedVadForCapture, abandonCaptureAttempt, describeMicFailure, micAcquisitionErrorMessage]);
+  }, [hasLiveMicStream, rebuildSharedVadForCapture, abandonCaptureAttempt, describeMicFailure, micAcquisitionErrorMessage, instanceId]);
 
   const startRecordingRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false));
   const startRecording = useCallback((): Promise<boolean> => {

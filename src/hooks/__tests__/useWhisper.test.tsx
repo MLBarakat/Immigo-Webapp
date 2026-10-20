@@ -626,4 +626,34 @@ describe('Model readiness & speech dispatch: useWhisper', () => {
       vi.useRealTimers();
     }
   });
+
+  it('captures successfully after the mount effect re-runs (cleanup must not poison the unmounted flag)', async () => {
+    // Field regression (desktop AND mobile, deployed build): the mount
+    // effect's cleanup marks the instance unmounted, but the effect body
+    // never reset the flag — so an effect re-run (auth-settle remount
+    // churn; StrictMode double-invoke here) left a LIVE instance flagged
+    // unmounted forever. Post-start verification then discarded a provably
+    // healthy capture (VAD listening, live stream, generation intact) and
+    // the mic gate parked the session in error right after
+    // "started micVAD". StrictMode reproduces the exact cleanup-then-rerun
+    // sequence on one hook instance.
+    const strictWrapper = ({ children }: { children: ReactNode }) => (
+      <React.StrictMode>
+        <TranscriptionProvider>{children}</TranscriptionProvider>
+      </React.StrictMode>
+    );
+    const { result } = renderHook(() => useWhisper(), { wrapper: strictWrapper });
+    await initFully(result);
+
+    let succeeded = false;
+    await act(async () => {
+      succeeded = await result.current.startRecording();
+    });
+
+    expect(succeeded).toBe(true);
+    expect(result.current.currentState).toBe('LISTENING');
+    expect(result.current.micError).toBeNull();
+    // A poisoned discard would have paused the healthy VAD.
+    expect(currentVad!.listening).toBe(true);
+  });
 });
