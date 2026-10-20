@@ -61,7 +61,7 @@ export function ConversationHistory({
   }, [onLoadOlder, hasMore]);
 
   return (
-    <div ref={conversationRef} className="h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-4 sm:px-6 py-5 space-y-5" role="log" aria-label={t('workspace.center.conversationAria')}>
+    <div ref={conversationRef} className="h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-4 sm:px-6 py-5 space-y-5" role="log" data-testid="conversation-history-log" aria-label={t('workspace.center.conversationAria')}>
       {/* Top Sentinel for Infinite Scroll Upward */}
       <div ref={topSentinelRef} className="h-1 w-full">
         {hasMore && <span className="text-xs text-immigo-gray-400 italic flex justify-center py-1">{t('workspace.center.loadingOlder')}</span>}
@@ -149,3 +149,4 @@ export function ConversationHistory({
     </div>
   );
 }
+

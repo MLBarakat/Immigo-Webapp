@@ -124,13 +124,13 @@ export function AuthPage(): JSX.Element {
               <div className="relative">
                 <label htmlFor="full-name" className="sr-only">{t('auth.fullName')}</label>
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" aria-hidden="true" />
-                <input id="full-name" type="text" placeholder={t('auth.fullName')} value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow" required />
+                <input id="full-name" data-testid="auth-fullname" type="text" placeholder={t('auth.fullName')} value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow" required />
               </div>
             )}
             <div className="relative">
               <label htmlFor="email" className="sr-only">{t('auth.email')}</label>
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-immigo-gray-400" aria-hidden="true" />
-              <input id="email" type="email" autoComplete="username" placeholder={t('auth.email')} value={email} onChange={(e) => setEmail(e.target.value)} className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow" required />
+              <input id="email" data-testid="auth-email" type="email" autoComplete="username" placeholder={t('auth.email')} value={email} onChange={(e) => setEmail(e.target.value)} className="w-full py-3 pl-12 pr-4 border border-immigo-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow" required />
             </div>
             <div>
               <div className="relative">
@@ -189,7 +189,7 @@ export function AuthPage(): JSX.Element {
               </div>
             )}
 
-            <button type="submit" disabled={loading} className="w-full py-3 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-art-blue-500">
+            <button type="submit" data-testid="auth-submit" disabled={loading} className="w-full py-3 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-art-blue-500">
               {loading ? t('auth.processing') : isLogin ? t('auth.login') : t('auth.createAccount')}
             </button>
           </form>
@@ -207,3 +207,4 @@ export function AuthPage(): JSX.Element {
     </>
   );
 }
+

@@ -60,6 +60,15 @@ describe('ConversationHistory', () => {
     );
     const log = screen.getByRole('log');
     Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 500 });
+
+    // jsdom has no layout, so the real scrollHeight at mount was 0 — the
+    // anchor baseline in previousHeightRef only records AFTER the mock above
+    // is installed. Rerender with equal content (fresh objects, same ids) to
+    // re-run the layout effect: neither scroll branch fires, but the effect
+    // re-records the mocked height as the baseline.
+    rerender(
+      <ConversationHistory messages={[message('latest', '2025-01-01T12:01:00.000Z')]} displayUser={displayUser} interimTranscript="" />
+    );
     log.scrollTop = 120;
 
     rerender(
@@ -73,6 +82,38 @@ describe('ConversationHistory', () => {
       />
     );
 
+    // With the baseline matching the mocked height, the prepend anchor shift
+    // is 500 - 500 = 0: the viewport must not move at all.
     expect(log.scrollTop).toBe(120);
+  });
+
+  it('shifts the scroll position by the height of prepended content', () => {
+    const { rerender } = render(
+      <ConversationHistory messages={[message('latest', '2025-01-01T12:01:00.000Z')]} displayUser={displayUser} interimTranscript="" />
+    );
+    const log = screen.getByRole('log');
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 500 });
+    // Re-record the anchor baseline now that the height is mocked (see above).
+    rerender(
+      <ConversationHistory messages={[message('latest', '2025-01-01T12:01:00.000Z')]} displayUser={displayUser} interimTranscript="" />
+    );
+    log.scrollTop = 120;
+
+    // Prepending content grows the list by 200px.
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 700 });
+    rerender(
+      <ConversationHistory
+        messages={[
+          message('older', '2025-01-01T12:00:00.000Z'),
+          message('latest', '2025-01-01T12:01:00.000Z'),
+        ]}
+        displayUser={displayUser}
+        interimTranscript=""
+      />
+    );
+
+    // The anchor must compensate by exactly the inserted height so the user
+    // stays on the same message: 120 + (700 - 500) = 320.
+    expect(log.scrollTop).toBe(320);
   });
 });

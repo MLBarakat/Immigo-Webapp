@@ -210,7 +210,7 @@ export function CenterPanel({
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
                 disabled={isVoiceSessionActive}
-                aria-label={t('workspace.center.inputAria')}
+                aria-label={t('workspace.center.inputAria')} data-testid="centerpanel-input"
               />
 
               <div className="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-1.5">
@@ -218,7 +218,7 @@ export function CenterPanel({
                   onClick={handleSend}
                   disabled={isEmpty || isVoiceSessionActive}
                   className="w-11 h-11 flex items-center justify-center rounded-full bg-art-blue-600 text-star-white hover:bg-art-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 shrink-0 shadow-sm hover:shadow-md active:scale-95"
-                  aria-label={t('workspace.center.send')}
+                  aria-label={t('workspace.center.send')} data-testid="centerpanel-send"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -245,3 +245,5 @@ export function CenterPanel({
     </main>
   );
 }
+
+

@@ -153,7 +153,7 @@ export function VoiceHub({
           }`} 
           aria-label={t(isSessionActive ? 'workspace.voice.pause' : 'workspace.voice.start')}
           aria-busy={isButtonDisabled || (isListenerLoading && isSessionActive)}
-          aria-live="polite"
+          aria-live="polite" data-testid="voicehub-mic-button"
           title={isSessionActive
             ? t('workspace.voice.pause')
             : isListenerLoading

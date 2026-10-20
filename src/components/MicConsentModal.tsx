@@ -64,3 +64,4 @@ export const MicConsentModal: React.FC<MicConsentModalProps> = ({ onAccept, onCa
     document.body
   );
 };
+
