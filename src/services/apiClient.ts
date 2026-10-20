@@ -1,5 +1,6 @@
 import amplifyOutputs from '../../amplify_outputs.json';
 import { logger } from '../logger';
+import { markDocTombstone } from '../utils/docTombstone';
 import type { SimulationMode } from '../context/conversationContextTypes';
 
 const API_BASE_URL = (amplifyOutputs as { custom?: { apiBaseUrl?: string; API_URL?: string } }).custom?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || '';
@@ -262,20 +263,38 @@ export class ApiClient {
       sessionId,
       voiceId: effectiveOptions.voiceId
     });
-    return this.sendTranscriptRequest(
-      {
-        transcript,
-        conversationWindow,
-        sessionId,
-        currentItemId,
-        confirmationRetry,
-        simulationMode: effectiveOptions.simulationMode ?? 'standard',
-        preferredLanguage: effectiveOptions.preferredLanguage ?? 'en-US',
-        ...(effectiveOptions.openingResponse ? { openingResponse: true } : {}),
-        ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {})
-      },
-      effectiveOptions
-    );
+    // Kill-forensics marks (sessionStorage survives an iOS process kill): the
+    // next boot's previous-document-fate line reports whether the fatal
+    // document died waiting for THIS response (submitAt set, no
+    // submitResponseAt) or after it arrived. A retry attempt re-marks dispatch
+    // and clears the prior response/error so the phase always reflects the
+    // LAST attempt. Diagnostics only — never throws, never alters control flow.
+    markDocTombstone({
+      submitAt: new Date().toISOString(),
+      submitResponseAt: null,
+      submitErrorAt: null,
+    });
+    try {
+      const result = await this.sendTranscriptRequest(
+        {
+          transcript,
+          conversationWindow,
+          sessionId,
+          currentItemId,
+          confirmationRetry,
+          simulationMode: effectiveOptions.simulationMode ?? 'standard',
+          preferredLanguage: effectiveOptions.preferredLanguage ?? 'en-US',
+          ...(effectiveOptions.openingResponse ? { openingResponse: true } : {}),
+          ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {})
+        },
+        effectiveOptions
+      );
+      markDocTombstone({ submitResponseAt: new Date().toISOString() });
+      return result;
+    } catch (error) {
+      markDocTombstone({ submitErrorAt: new Date().toISOString() });
+      throw error;
+    }
   }
 
   /** Select the first interview question without speaking before user input. */

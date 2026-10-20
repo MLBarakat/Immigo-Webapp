@@ -7,6 +7,7 @@ import './i18n';
 import { logger } from './logger';
 import { ErrorBoundary } from './ErrorBoundary';
 import { constrainOrtWasmThreadsForMobile } from './utils/ortWasmConfig';
+import { readDocTombstone, writeDocTombstone, markDocTombstone } from './utils/docTombstone';
 
 // --- Mobile memory guard (ORT WASM thread cap) ---
 // Runs before any InferenceSession is created (the VAD's session is created
@@ -28,28 +29,27 @@ const bootId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
   ? crypto.randomUUID()
   : `boot-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 
-// Cross-document death marker. sessionStorage survives WebContent process
-// kills on iOS (it is persisted by the browser UI process), so a boot that
-// finds the previous document's record with pagehideFired:false proves that
-// document died WITHOUT unloading (crash / OOM kill) rather than navigating.
-const DIAG_TOMBSTONE_KEY = 'immigo_doc_tombstone_v1';
-interface DiagDocTombstone {
-  bootId: string;
-  time: string;
-  pagehideFired: boolean;
-}
-const readDiagTombstone = (): DiagDocTombstone | null => {
-  try {
-    const raw = sessionStorage.getItem(DIAG_TOMBSTONE_KEY);
-    return raw ? (JSON.parse(raw) as DiagDocTombstone) : null;
-  } catch { return null; }
-};
-const writeDiagTombstone = (record: DiagDocTombstone): void => {
-  try { sessionStorage.setItem(DIAG_TOMBSTONE_KEY, JSON.stringify(record)); } catch { /* storage unavailable */ }
-};
-
-const previousDoc = readDiagTombstone();
+// Cross-document death marker (schema + IO in utils/docTombstone.ts).
+// sessionStorage survives WebContent process kills on iOS (persisted by the
+// browser UI process), so a boot that finds the previous document's record
+// with pagehideFired:false proves that document died WITHOUT unloading
+// (crash / OOM kill) rather than navigating. The extended marks below let the
+// NEXT boot also report WHERE in the submit cycle the death landed.
+const previousDoc = readDocTombstone();
+const msSinceIso = (iso?: string | null): number | null =>
+  iso && !Number.isNaN(Date.parse(iso)) ? Math.max(0, Date.now() - Date.parse(iso)) : null;
 if (previousDoc) {
+  // lastBeatAgeMs = time from the last alive-mark to this boot; it bounds the
+  // kill moment (death happened within [lastBeatAt, boot], heartbeat = 2s).
+  const lastBeatAgeMs = msSinceIso(previousDoc.lastBeatAt);
+  const submitPhase = previousDoc.submitAt
+    ? (previousDoc.submitResponseAt ? 'response-received'
+      : previousDoc.submitErrorAt ? 'request-error' : 'waiting-for-response')
+    : 'none';
+  const inferencePhase = previousDoc.inferAt
+    ? (previousDoc.inferCompletedAt ? 'completed'
+      : previousDoc.inferErrorAt ? 'failed' : 'in-flight')
+    : 'none';
   console.info(`[BOOT] ${JSON.stringify({
     phase: 'previous-document-fate',
     previousBootId: previousDoc.bootId,
@@ -58,9 +58,20 @@ if (previousDoc) {
     implication: previousDoc.pagehideFired
       ? 'previous document unloaded normally (navigation or back/forward traversal)'
       : 'previous document died WITHOUT pagehide (process kill or crash)',
+    // Kill-context discriminators (null/none = marker never recorded):
+    previousHiddenBeforeDeath: previousDoc.lastVisibilityState === 'hidden' ? true
+      : previousDoc.lastVisibilityState === 'visible' ? false : null,
+    lastBeatAgeMsAtBoot: lastBeatAgeMs,
+    lastBeatHidden: previousDoc.lastBeatHidden ?? null,
+    lastBeatJsHeap: previousDoc.lastBeatJsHeap ?? null,
+    previousSubmitPhase: submitPhase,
+    msSinceSubmitDispatchAtBoot: msSinceIso(previousDoc.submitAt),
+    previousInferencePhase: inferencePhase,
+    msSinceInferDispatchAtBoot: msSinceIso(previousDoc.inferAt),
   })}`);
 }
-writeDiagTombstone({ bootId, time: new Date().toISOString(), pagehideFired: false });
+// Fresh record for THIS document — a full replace that clears all prior marks.
+writeDocTombstone({ bootId, time: new Date().toISOString(), pagehideFired: false });
 
 try {
   const navEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
@@ -81,7 +92,7 @@ try {
 }
 window.addEventListener('pagehide', (event) => {
   console.info(`[PAGEHIDE] ${JSON.stringify({ bootId, persisted: event.persisted, time: Date.now() })}`);
-  writeDiagTombstone({ bootId, time: new Date().toISOString(), pagehideFired: true });
+  markDocTombstone({ pagehideFired: true, pagehideAt: new Date().toISOString() });
 });
 window.addEventListener('pageshow', (event) => {
   console.info(`[PAGESHOW] ${JSON.stringify({ bootId, persisted: event.persisted, time: Date.now() })}`);
@@ -102,6 +113,34 @@ type DiagLifecycleDocument = { addEventListener(type: string, listener: () => vo
 (document as unknown as DiagLifecycleDocument).addEventListener('resume', () => {
   console.info(`[LIFECYCLE-EVENT] ${JSON.stringify({ bootId, event: 'resume' })}`);
 });
+
+// Visibility marks: the DYING document's own visibilitychange handler cannot
+// run after an OS kill, so the tombstone records every transition here (this
+// listener is registered independently of the feature code in useWhisper).
+// `previousHiddenBeforeDeath` on the next boot = last recorded state.
+document.addEventListener('visibilitychange', () => {
+  markDocTombstone({
+    lastVisibilityState: document.visibilityState,
+    lastVisibilityAt: new Date().toISOString(),
+  });
+  console.info(`[VISIBILITY-EVENT] ${JSON.stringify({ bootId, state: document.visibilityState })}`);
+});
+
+// 2s heartbeat: silent tombstone marks (no console spam) that bound the kill
+// moment to ≤2s and carry the freshest pre-death visibility state. On engines
+// that expose it (Chrome Android/desktop), also snapshots the JS heap —
+// WebKit does not implement performance.memory, so iOS reports null.
+const readJsHeap = (): number | null => {
+  const perfMemory = (performance as { memory?: { usedJSHeapSize?: number } }).memory;
+  return typeof perfMemory?.usedJSHeapSize === 'number' ? perfMemory.usedJSHeapSize : null;
+};
+window.setInterval(() => {
+  markDocTombstone({
+    lastBeatAt: new Date().toISOString(),
+    lastBeatHidden: document.hidden,
+    lastBeatJsHeap: readJsHeap(),
+  });
+}, 2000);
 // --- End diagnostics ---
 
 // --- Global Error Handling ---

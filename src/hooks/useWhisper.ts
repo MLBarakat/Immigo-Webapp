@@ -5,6 +5,7 @@ import { useTranscription, TranscriptionState } from '../context/TranscriptionCo
 import { reconcileTranscripts } from '../utils/diffReconciliation';
 import { createMicrophoneStream } from '../utils/audioUtils';
 import { conditionAudio } from '../utils/audioConditioning';
+import { markDocTombstone } from '../utils/docTombstone';
 
 export interface WhisperHook {
   currentState: TranscriptionState;
@@ -244,6 +245,25 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             config: { language: 'en', task: 'transcribe' }
           }
         }, [compiledBuffer.buffer]);
+        // Main-thread mirror of the worker's [WHISPER-INFER] start line.
+        // DedicatedWorker console output does NOT reach field log captures
+        // (proven 2026-10-20: the worker's [WHISPER-ORT] line provably executed
+        // before the adjacent main-thread INIT_COMPLETED line, yet only the
+        // main-thread line appeared in the report). Dispatch/complete must
+        // therefore be visible HERE. Field reading rule: [WHISPER-DISPATCH]
+        // with no [WHISPER-COMPLETE] before the next [BOOT] = killed
+        // mid-inference.
+        logger.info('[WHISPER-DISPATCH]', {
+          reason,
+          audioSeconds: Number((sampleLength / 16_000).toFixed(2)),
+          fsm: stateRef.current.fsm,
+          correlationId: activeTraceIdRef.current,
+        });
+        markDocTombstone({
+          inferAt: new Date().toISOString(),
+          inferCompletedAt: null,
+          inferErrorAt: null,
+        });
       }
     } else {
       logger.warn('Empty Handoff Check Guard Engaged: Audio sample length below thresholds. Suppressing worker dispatch.');
@@ -316,6 +336,17 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         }
         break;
       case 'COMPLETED': {
+        // Unconditional kill-forensics line (the "Truth ledger" log below only
+        // fires while the FSM is VERIFYING): a completed inference must be
+        // visible even when the FSM has already moved on, so an
+        // inference-in-flight-at-death read is unambiguous.
+        logger.info('[WHISPER-COMPLETE]', {
+          latencyMs: payload.latencyMs || 0,
+          textLength: String(payload.text || '').trim().length,
+          fsm: stateRef.current.fsm,
+          correlationId,
+        });
+        markDocTombstone({ inferCompletedAt: new Date().toISOString() });
         if (stateRef.current.fsm === 'VERIFYING') {
           const verifiedTruthString = String(payload.text || '').trim();
           const latencyMs: number = payload.latencyMs || 0;
@@ -339,6 +370,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         break;
       }
       case 'ERROR':
+        markDocTombstone({ inferErrorAt: new Date().toISOString() });
         sharedRuntime.workerReady = false;
         workerUnavailableRef.current = true;
         setModelReadyState(false);
