@@ -1,4 +1,5 @@
 import { env, pipeline } from '@huggingface/transformers';
+import { constrainOrtWasmThreadsForMobile } from '../utils/ortWasmConfig';
 
 type WorkerAction = 'INIT' | 'TRANSCRIBE' | 'RESET';
 // INIT_COMPLETED now fires as soon as the fast quantized-tiny tier is ready —
@@ -243,6 +244,14 @@ async function createTranscriber(correlationId: string, tier: RuntimeTier): Prom
   const runtimeEnv = env as any;
   if (runtimeEnv.backends?.onnx?.wasm) {
     runtimeEnv.backends.onnx.wasm.wasmPaths = '/assets/js/';
+    // Mobile memory guard: this worker is a separate realm from the main
+    // thread, so it needs its own ORT configuration. See useWhisper.ts /
+    // src/utils/ortWasmConfig.ts for the iOS process-kill evidence.
+    const workerWasmThreads = constrainOrtWasmThreadsForMobile(
+      runtimeEnv.backends.onnx.wasm,
+      typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    );
+    console.info(`[WHISPER-ORT] ${JSON.stringify({ scope: 'whisper-worker', tier, wasmThreads: workerWasmThreads })}`);
   }
 
   const useWebGpu = tier === 'webgpu';
@@ -614,6 +623,13 @@ async function handleTranscribe(message: WorkerRequestMessage): Promise<void> {
       inferenceId: currentId
     });
 
+    // --- iOS kill forensics: inference boundary logs (console-only, no payload
+    // content). The WebContent process is SIGKILLed by iOS under memory
+    // pressure without any unload event, so a field report that shows a
+    // [WHISPER-INFER] start with no matching end — followed immediately by a
+    // new [BOOT] — proves the kill landed mid-inference.
+    console.info(`[WHISPER-INFER] ${JSON.stringify({ phase: 'start', inferenceId: currentId, tier, audioSeconds: Number(durationSeconds.toFixed(2)) })}`);
+
     const result = await pipeline(audio, {
       chunk_length_s: 20,
       stride_length_s: 1,
@@ -637,6 +653,10 @@ async function handleTranscribe(message: WorkerRequestMessage): Promise<void> {
       }
     });
 
+    // Emitted before the superseded-check so every start line has a matching
+    // end line (killed-mid-inference reads as start-without-end).
+    console.info(`[WHISPER-INFER] ${JSON.stringify({ phase: 'end', inferenceId: currentId, tier, latencyMs: Math.round(performance.now() - startedAt) })}`);
+
     if (currentId !== activeInferenceId) return;
 
     const latencyMs = performance.now() - startedAt;
@@ -658,6 +678,7 @@ async function handleTranscribe(message: WorkerRequestMessage): Promise<void> {
       inferenceId: currentId
     });
   } catch (error) {
+    console.info(`[WHISPER-INFER] ${JSON.stringify({ phase: 'error', inferenceId: currentId, tier })}`);
     postMessageToMain({
       status: 'ERROR',
       correlationId: message.correlationId,

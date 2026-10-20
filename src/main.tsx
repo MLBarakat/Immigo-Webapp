@@ -1,10 +1,26 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { env as ortEnv } from 'onnxruntime-web';
 import App from './App';
 import './index.css';
 import './i18n';
 import { logger } from './logger';
 import { ErrorBoundary } from './ErrorBoundary';
+import { constrainOrtWasmThreadsForMobile } from './utils/ortWasmConfig';
+
+// --- Mobile memory guard (ORT WASM thread cap) ---
+// Runs before any InferenceSession is created (the VAD's session is created
+// inside MicVAD.new, which only ever runs from a mounted-component effect,
+// long after this module executes). Caps the main-thread ORT instance — the
+// one @ricky0123/vad-web uses for Silero — to a single wasm thread on
+// phone-class devices; the whisper worker configures its own realm separately.
+// See src/utils/ortWasmConfig.ts for the field evidence behind this.
+const ortWasmThreads = constrainOrtWasmThreadsForMobile(
+  ortEnv.wasm,
+  typeof navigator !== 'undefined' ? navigator.userAgent : '',
+  typeof navigator !== 'undefined' ? (navigator.maxTouchPoints ?? 0) : 0,
+);
+console.info(`[ORT-CONFIG] ${JSON.stringify({ scope: 'main-thread-vad', wasmThreads: ortWasmThreads })}`);
 
 // --- Temporary mobile reload diagnostics (no mic data, tokens, or PII) ---
 // Distinguishes browser reload (new bootId) from React remount (same bootId).
