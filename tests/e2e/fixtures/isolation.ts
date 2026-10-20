@@ -1,5 +1,6 @@
 import { Page } from '@playwright/test';
 import { randomUUID } from 'crypto';
+import { E2E_CONFIG } from '../config';
 
 export interface IsolationOptions {
   userId?: string;
@@ -12,7 +13,7 @@ export function generateTestUser(): { userId: string; email: string; password: s
   return {
     userId: `e2e_${id}_${ts}`,
     email: `e2e-${id}-${ts}@immigo.app`,
-    password: 'E2ETest123!',
+    password: E2E_CONFIG.auth.password,
   };
 }
 

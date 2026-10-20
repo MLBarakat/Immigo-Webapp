@@ -1,8 +1,9 @@
 import { Page } from '@playwright/test';
+import { E2E_CONFIG } from '../config';
 
 export const E2E_USER = {
-  email: process.env.E2E_USER_EMAIL || 'e2e-test@immigo.app',
-  password: process.env.E2E_USER_PASSWORD || 'E2ETest123!',
+  email: E2E_CONFIG.auth.email,
+  password: E2E_CONFIG.auth.password,
 };
 
 export async function mockSupabaseAuth(page: Page, options: { userId?: string; email?: string } = {}) {
