@@ -204,7 +204,19 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
   const flushActiveSegment = useCallback((reason: 'silence' | 'time-chop' | 'capacity' | 'manual') => {
     if (audioFrameAccumulatorRef.current.length === 0) {
-      logger.debug('Blocked empty transcription segment flush pass.', { reason });
+      // INFO, not debug: production drops DEBUG (logger minLevel='INFO'), and
+      // this gate is a prime suspect for "transcription never dispatched"
+      // field reports. speechActive reads false here on the 'silence' path
+      // because onSpeechEnd clears it before calling; the preceding
+      // [VAD-CALLBACK] onSpeechEnd line disambiguates ordering.
+      logger.info('[FLUSH-BLOCK] Empty segment accumulator; nothing to dispatch.', {
+        gate: 'empty-accumulator',
+        reason,
+        fsm: stateRef.current.fsm,
+        speechActive: speechActiveRef.current,
+        isRecording: isRecordingRef.current,
+        isLeader: isLeaderRef.current,
+      });
       return;
     }
 
@@ -224,11 +236,28 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         actionsRef.current.whisperCancel();
         return;
       }
-      if (nativeFinalTranscriptRef.current) return;
+      if (nativeFinalTranscriptRef.current) {
+        // Was a fully silent return (no log anywhere named this exit); now
+        // visible so a field capture can distinguish it from the gates below.
+        logger.info('[FLUSH-BLOCK] Native final transcript present; suppressing worker dispatch.', {
+          gate: 'native-final-present',
+          reason,
+          fsm: stateRef.current.fsm,
+          nativeFinalLength: nativeFinalTranscriptRef.current.length,
+        });
+        return;
+      }
       if (stateRef.current.fsm !== 'SPECULATIVE') {
-        logger.debug('Skipping a local transcription segment that no longer has an active speech state.', {
+        // INFO, not debug: production drops DEBUG (logger minLevel='INFO'),
+        // so this rejection was invisible in every field capture.
+        logger.info('[FLUSH-BLOCK] FSM not in SPECULATIVE; discarding segment without dispatch.', {
+          gate: 'fsm-not-speculative',
           reason,
           transcriptionState: stateRef.current.fsm,
+          audioSeconds: Number((sampleLength / 16_000).toFixed(2)),
+          speechActive: speechActiveRef.current,
+          isRecording: isRecordingRef.current,
+          isLeader: isLeaderRef.current,
         });
         return;
       }
@@ -546,7 +575,19 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             minSpeechMs: 200,
             redemptionMs: 500,
             onSpeechStart: () => {
-              if (!isRecordingRef.current || !isLeaderRef.current) return;
+              if (!isRecordingRef.current || !isLeaderRef.current) {
+                logger.info('[VAD-CALLBACK] onSpeechStart early-return; segment logic not armed.', {
+                  isRecording: isRecordingRef.current,
+                  isLeader: isLeaderRef.current,
+                  fsm: stateRef.current.fsm,
+                });
+                return;
+              }
+              // fsm captured pre-speechOnset: the state speechOnset must
+              // transition FROM (a value other than IDLE here = already stuck).
+              logger.info('[VAD-CALLBACK] onSpeechStart; arming new segment.', {
+                fsm: stateRef.current.fsm,
+              });
               activeTraceIdRef.current = generateLocalTraceId();
               nativeFinalTranscriptRef.current = '';
               speechActiveRef.current = true;
@@ -559,11 +600,30 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
               try { nativeRecognizerRef.current.start(); } catch { /* ignore */ }
             },
             onSpeechEnd: () => {
-              if (!isRecordingRef.current) return;
+              if (!isRecordingRef.current) {
+                logger.info('[VAD-CALLBACK] onSpeechEnd early-return; recording already stopped.', {
+                  fsm: stateRef.current.fsm,
+                });
+                return;
+              }
+              // frames = accumulator size at speech end: 0 here means frame
+              // accumulation itself was broken (see [FLUSH-BLOCK] for the
+              // gates that reject a non-empty segment).
+              logger.info('[VAD-CALLBACK] onSpeechEnd; flushing accumulated segment.', {
+                fsm: stateRef.current.fsm,
+                frames: audioFrameAccumulatorRef.current.length,
+              });
               speechActiveRef.current = false;
               flushActiveSegment('silence');
             },
             onVADMisfire: () => {
+              // Misfire bypasses onSpeechEnd entirely; without this line a
+              // capture where no flush ever fires cannot distinguish
+              // "misfire ate the utterance" from "callback never fired".
+              logger.info('[VAD-CALLBACK] onVADMisfire; speech segment discarded before flush.', {
+                fsm: stateRef.current.fsm,
+                frames: audioFrameAccumulatorRef.current.length,
+              });
               speechActiveRef.current = false;
               actionsRef.current.whisperCancel();
             },
