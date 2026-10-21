@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { BookOpen, MessageSquare, SlidersHorizontal } from 'lucide-react';
 import { Amplify } from 'aws-amplify';
 import { useTranslation } from 'react-i18next';
@@ -445,6 +445,26 @@ function AppContent() {
       return null;
     }
   }, [accessToken]);
+
+  // Transition-only diagnostic: names the mount boundary that re-creates the
+  // workspace. Prime suspect for the 2026-10-21 post-resume transcription
+  // death: a momentary session null (or loading flash) on foregrounding
+  // swapping this tree to AuthPage/loading unmounted TranscriptionProvider
+  // while the module-shared VAD kept the dead instance's callbacks.
+  const appBranchRef = useRef<string | null>(null);
+  useEffect(() => {
+    let branch: string;
+    if (sessionReplacementPending) branch = 'session-replaced';
+    else if (loading) branch = 'loading';
+    else if (initializationError) branch = 'initialization-error';
+    else if (session) branch = 'workspace';
+    else branch = 'auth-page';
+    const previous = appBranchRef.current;
+    if (previous !== null && previous !== branch) {
+      logger.info('[APP-BRANCH] Workspace mount boundary crossed.', { from: previous, to: branch });
+    }
+    appBranchRef.current = branch;
+  }, [sessionReplacementPending, loading, initializationError, session]);
 
   if (sessionReplacementPending) {
     return (

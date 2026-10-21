@@ -41,6 +41,20 @@ const LEADER_CHANNEL_NAME = 'immigo-transcription-leader';
 type SharedInitStatus = 'idle' | 'initializing' | 'ready' | 'error';
 
 /**
+ * Event sinks of the hook instance that currently owns the shared VAD.
+ * The MicVAD options delegate through sharedRuntime.handlers so speech
+ * events always run against the LIVE instance — never a dead instance's
+ * frozen stateRef / unmounted provider after a remount (field case
+ * 2026-10-21: post-resume "listening" UI, every segment [FLUSH-BLOCK]ed).
+ */
+type VadEventHandlers = {
+  onSpeechStart: () => void;
+  onSpeechEnd: () => void;
+  onVADMisfire: () => void;
+  onFrameProcessed: (probabilities: { isSpeech?: number }, frame: Float32Array) => void;
+};
+
+/**
  * Module-level shared voice runtime. Survives ConversationWorkspace
  * remounts (auth settle re-renders): a remount attaches to the in-flight
  * preload promise instead of cancelling it and restarting the Tiny
@@ -64,8 +78,12 @@ const sharedRuntime: {
    * not setup time (the two-phase acquisition guard).
    */
   micGrantedAt: number;
+  /** Live-instance event sinks the shared VAD's options dispatch through. */
+  handlers: VadEventHandlers | null;
+  /** instanceId owning `handlers`; unmount clears only its own registration. */
+  handlersOwner: string | null;
   error: string | null;
-} = { status: 'idle', promise: null, worker: null, workerReady: false, vad: null, micStream: null, micGrantedAt: 0, error: null };
+} = { status: 'idle', promise: null, worker: null, workerReady: false, vad: null, micStream: null, micGrantedAt: 0, handlers: null, handlersOwner: null, error: null };
 
 /**
  * Phase-B acquisition budget: from mic GRANT to a live, listening VAD (the
@@ -210,6 +228,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       // because onSpeechEnd clears it before calling; the preceding
       // [VAD-CALLBACK] onSpeechEnd line disambiguates ordering.
       logger.info('[FLUSH-BLOCK] Empty segment accumulator; nothing to dispatch.', {
+        instanceId,
         gate: 'empty-accumulator',
         reason,
         fsm: stateRef.current.fsm,
@@ -240,6 +259,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         // Was a fully silent return (no log anywhere named this exit); now
         // visible so a field capture can distinguish it from the gates below.
         logger.info('[FLUSH-BLOCK] Native final transcript present; suppressing worker dispatch.', {
+          instanceId,
           gate: 'native-final-present',
           reason,
           fsm: stateRef.current.fsm,
@@ -251,6 +271,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         // INFO, not debug: production drops DEBUG (logger minLevel='INFO'),
         // so this rejection was invisible in every field capture.
         logger.info('[FLUSH-BLOCK] FSM not in SPECULATIVE; discarding segment without dispatch.', {
+          instanceId,
           gate: 'fsm-not-speculative',
           reason,
           transcriptionState: stateRef.current.fsm,
@@ -298,7 +319,118 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       logger.warn('Empty Handoff Check Guard Engaged: Audio sample length below thresholds. Suppressing worker dispatch.');
       actionsRef.current.whisperCancel();
     }
-  }, [compileAudioPayload]);
+  }, [compileAudioPayload, instanceId]);
+
+  // ─── Shared-VAD event sinks ───────────────────────────────────────────────
+  // The MicVAD object is module-shared and survives ConversationWorkspace
+  // remounts, but its options were originally bound to the creating
+  // instance's refs. After a remount those closures ran against the dead
+  // instance: a frozen stateRef failed the flush gate and a dead provider
+  // swallowed speechOnset (field case 2026-10-21: post-resume "listening"
+  // UI, zero dispatches). The options delegate through
+  // sharedRuntime.handlers, refreshed below by the live instance.
+  const handleVadSpeechStart = useCallback(() => {
+    if (!isRecordingRef.current || !isLeaderRef.current) {
+      logger.info('[VAD-CALLBACK] onSpeechStart early-return; segment logic not armed.', {
+        instanceId,
+        isRecording: isRecordingRef.current,
+        isLeader: isLeaderRef.current,
+        fsm: stateRef.current.fsm,
+      });
+      return;
+    }
+    // fsm captured pre-speechOnset: the state speechOnset must
+    // transition FROM (a value other than IDLE here = already stuck).
+    logger.info('[VAD-CALLBACK] onSpeechStart; arming new segment.', {
+      instanceId,
+      fsm: stateRef.current.fsm,
+    });
+    activeTraceIdRef.current = generateLocalTraceId();
+    nativeFinalTranscriptRef.current = '';
+    speechActiveRef.current = true;
+    onSpeechStartRef.current?.();
+    segmentSampleCountRef.current = 0;
+    segmentEnergySumRef.current = 0;
+    segmentSpeechProbabilitySumRef.current = 0;
+    segmentFrameCountRef.current = 0;
+    actionsRef.current.speechOnset(activeTraceIdRef.current);
+    try { nativeRecognizerRef.current.start(); } catch { /* ignore */ }
+  }, [instanceId]);
+
+  const handleVadSpeechEnd = useCallback(() => {
+    if (!isRecordingRef.current) {
+      logger.info('[VAD-CALLBACK] onSpeechEnd early-return; recording already stopped.', {
+        instanceId,
+        fsm: stateRef.current.fsm,
+      });
+      return;
+    }
+    // frames = accumulator size at speech end: 0 here means frame
+    // accumulation itself was broken (see [FLUSH-BLOCK] for the
+    // gates that reject a non-empty segment).
+    logger.info('[VAD-CALLBACK] onSpeechEnd; flushing accumulated segment.', {
+      instanceId,
+      fsm: stateRef.current.fsm,
+      frames: audioFrameAccumulatorRef.current.length,
+    });
+    speechActiveRef.current = false;
+    flushActiveSegment('silence');
+  }, [flushActiveSegment, instanceId]);
+
+  const handleVadMisfire = useCallback(() => {
+    // Misfire bypasses onSpeechEnd entirely; without this line a
+    // capture where no flush ever fires cannot distinguish
+    // "misfire ate the utterance" from "callback never fired".
+    logger.info('[VAD-CALLBACK] onVADMisfire; speech segment discarded before flush.', {
+      instanceId,
+      fsm: stateRef.current.fsm,
+      frames: audioFrameAccumulatorRef.current.length,
+    });
+    speechActiveRef.current = false;
+    actionsRef.current.whisperCancel();
+  }, [instanceId]);
+
+  const handleVadFrame = useCallback((probabilities: { isSpeech?: number }, frame: Float32Array) => {
+    if (!isRecordingRef.current || !speechActiveRef.current || !isLeaderRef.current) return;
+    audioFrameAccumulatorRef.current.push(frame);
+    let frameEnergy = 0;
+    for (let i = 0; i < frame.length; i++) frameEnergy += frame[i] * frame[i];
+    segmentSampleCountRef.current += frame.length;
+    segmentEnergySumRef.current += frameEnergy;
+    segmentSpeechProbabilitySumRef.current += Number(probabilities?.isSpeech || 0);
+    segmentFrameCountRef.current += 1;
+    const currentSamplesCount = audioFrameAccumulatorRef.current.reduce((acc, f) => acc + f.length, 0);
+    const liveSeconds = currentSamplesCount / 16000;
+    const physicalMemoryBytes = currentSamplesCount * 4;
+    if (liveSeconds >= remoteFeatureFlags.current.infiniteSpeakerCeilingS) {
+      logger.info('Infinite Speaker Guard Engaged: Hard 20-second continuous duration ceiling split pass forced.');
+      flushActiveSegment('time-chop');
+      activeTraceIdRef.current = generateLocalTraceId();
+      speechActiveRef.current = true;
+    } else if (physicalMemoryBytes >= remoteFeatureFlags.current.forcedBufferBoundsBytes) {
+      logger.warn('Forced Buffer Bounds Fence Engaged: Ingestion memory pool weight limit breached. Flushing arena.');
+      flushActiveSegment('capacity');
+    }
+  }, [flushActiveSegment]);
+
+  // Live-instance registration: runs on mount and whenever a sink identity
+  // changes; owner-guarded so a departing instance can only clear its own
+  // slot (a later mount's registration is never clobbered by old cleanups).
+  useEffect(() => {
+    sharedRuntime.handlers = {
+      onSpeechStart: handleVadSpeechStart,
+      onSpeechEnd: handleVadSpeechEnd,
+      onVADMisfire: handleVadMisfire,
+      onFrameProcessed: handleVadFrame,
+    };
+    sharedRuntime.handlersOwner = instanceId;
+    return () => {
+      if (sharedRuntime.handlersOwner === instanceId) {
+        sharedRuntime.handlers = null;
+        sharedRuntime.handlersOwner = null;
+      }
+    };
+  }, [handleVadSpeechStart, handleVadSpeechEnd, handleVadMisfire, handleVadFrame, instanceId]);
 
   const hasSpeechQuality = useCallback(() => {
     const sampleCount = segmentSampleCountRef.current;
@@ -574,82 +706,17 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             preSpeechPadMs: 500,
             minSpeechMs: 200,
             redemptionMs: 500,
-            onSpeechStart: () => {
-              if (!isRecordingRef.current || !isLeaderRef.current) {
-                logger.info('[VAD-CALLBACK] onSpeechStart early-return; segment logic not armed.', {
-                  isRecording: isRecordingRef.current,
-                  isLeader: isLeaderRef.current,
-                  fsm: stateRef.current.fsm,
-                });
-                return;
-              }
-              // fsm captured pre-speechOnset: the state speechOnset must
-              // transition FROM (a value other than IDLE here = already stuck).
-              logger.info('[VAD-CALLBACK] onSpeechStart; arming new segment.', {
-                fsm: stateRef.current.fsm,
-              });
-              activeTraceIdRef.current = generateLocalTraceId();
-              nativeFinalTranscriptRef.current = '';
-              speechActiveRef.current = true;
-              onSpeechStartRef.current?.();
-              segmentSampleCountRef.current = 0;
-              segmentEnergySumRef.current = 0;
-              segmentSpeechProbabilitySumRef.current = 0;
-              segmentFrameCountRef.current = 0;
-              actionsRef.current.speechOnset(activeTraceIdRef.current);
-              try { nativeRecognizerRef.current.start(); } catch { /* ignore */ }
-            },
-            onSpeechEnd: () => {
-              if (!isRecordingRef.current) {
-                logger.info('[VAD-CALLBACK] onSpeechEnd early-return; recording already stopped.', {
-                  fsm: stateRef.current.fsm,
-                });
-                return;
-              }
-              // frames = accumulator size at speech end: 0 here means frame
-              // accumulation itself was broken (see [FLUSH-BLOCK] for the
-              // gates that reject a non-empty segment).
-              logger.info('[VAD-CALLBACK] onSpeechEnd; flushing accumulated segment.', {
-                fsm: stateRef.current.fsm,
-                frames: audioFrameAccumulatorRef.current.length,
-              });
-              speechActiveRef.current = false;
-              flushActiveSegment('silence');
-            },
-            onVADMisfire: () => {
-              // Misfire bypasses onSpeechEnd entirely; without this line a
-              // capture where no flush ever fires cannot distinguish
-              // "misfire ate the utterance" from "callback never fired".
-              logger.info('[VAD-CALLBACK] onVADMisfire; speech segment discarded before flush.', {
-                fsm: stateRef.current.fsm,
-                frames: audioFrameAccumulatorRef.current.length,
-              });
-              speechActiveRef.current = false;
-              actionsRef.current.whisperCancel();
-            },
+            // Events delegate to the LIVE hook instance through the module
+            // slot: this VAD object survives workspace remounts, and bindings
+            // captured here to the creating instance's refs ran against a dead
+            // instance after one (frozen stateRef gate + dead provider
+            // dispatch — field case 2026-10-21). See handleVad* sinks above.
+            onSpeechStart: () => sharedRuntime.handlers?.onSpeechStart(),
+            onSpeechEnd: () => sharedRuntime.handlers?.onSpeechEnd(),
+            onVADMisfire: () => sharedRuntime.handlers?.onVADMisfire(),
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            onFrameProcessed: (probabilities: any, frame: Float32Array) => {
-              if (!isRecordingRef.current || !speechActiveRef.current || !isLeaderRef.current) return;
-              audioFrameAccumulatorRef.current.push(frame);
-              let frameEnergy = 0;
-              for (let i = 0; i < frame.length; i++) frameEnergy += frame[i] * frame[i];
-              segmentSampleCountRef.current += frame.length;
-              segmentEnergySumRef.current += frameEnergy;
-              segmentSpeechProbabilitySumRef.current += Number(probabilities?.isSpeech || 0);
-              segmentFrameCountRef.current += 1;
-              const currentSamplesCount = audioFrameAccumulatorRef.current.reduce((acc, f) => acc + f.length, 0);
-              const liveSeconds = currentSamplesCount / 16000;
-              const physicalMemoryBytes = currentSamplesCount * 4;
-              if (liveSeconds >= remoteFeatureFlags.current.infiniteSpeakerCeilingS) {
-                logger.info('Infinite Speaker Guard Engaged: Hard 20-second continuous duration ceiling split pass forced.');
-                flushActiveSegment('time-chop');
-                activeTraceIdRef.current = generateLocalTraceId();
-                speechActiveRef.current = true;
-              } else if (physicalMemoryBytes >= remoteFeatureFlags.current.forcedBufferBoundsBytes) {
-                logger.warn('Forced Buffer Bounds Fence Engaged: Ingestion memory pool weight limit breached. Flushing arena.');
-                flushActiveSegment('capacity');
-              }
-            }
+            onFrameProcessed: (probabilities: any, frame: Float32Array) =>
+              sharedRuntime.handlers?.onFrameProcessed(probabilities, frame),
           });
           vadRef.current = initializedVad;
           sharedRuntime.vad = initializedVad;
@@ -692,7 +759,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     })();
     sharedRuntime.promise = promise;
     return promise;
-  }, [handleWorkerMessage, flushActiveSegment, setInitStatusBoth, mirrorSharedInitState, instanceId]);
+  }, [handleWorkerMessage, setInitStatusBoth, mirrorSharedInitState, instanceId]);
 
   useEffect(() => {
     // The effect can clean up and re-run while the hook instance STAYS
