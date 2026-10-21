@@ -354,6 +354,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     segmentSpeechProbabilitySumRef.current = 0;
     segmentFrameCountRef.current = 0;
     actionsRef.current.speechOnset(activeTraceIdRef.current);
+    logger.info('[NATIVE-ASR] start (speech onset).', { instanceId });
     try { nativeRecognizerRef.current.start(); } catch { /* ignore */ }
   }, [instanceId]);
 
@@ -815,6 +816,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
         const cleanedCommittedText = committedSequence.replace(/\s+/g, ' ').trim();
         if (cleanedCommittedText) {
+          logger.info('[NATIVE-ASR] final-result committed.', { length: cleanedCommittedText.length });
           nativeFinalTranscriptRef.current += `${nativeFinalTranscriptRef.current ? ' ' : ''}${cleanedCommittedText}`;
           if (workerUnavailableRef.current) {
             actionsRef.current.nativeTranscript(cleanedCommittedText);
@@ -834,9 +836,18 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
 
       recognizer.onend = () => {
         // Enforce active recovery loop to handle sudden cellular/mobile network timeout drops
-        if (isRecordingRef.current && isLeaderRef.current) {
+        const willRestart = isRecordingRef.current && isLeaderRef.current;
+        logger.info('[NATIVE-ASR] onend.', { willRestart });
+        if (willRestart) {
           try { nativeRecognizerRef.current.start(); } catch { /* Catch overlap executions */ }
         }
+      };
+
+      // Forensics only: consume error events so field captures show the native
+      // recognizer's failure codes (no behavior depends on these).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      recognizer.onerror = (event: any) => {
+        logger.info('[NATIVE-ASR] error.', { code: event?.error ?? 'unknown' });
       };
 
       nativeRecognizerRef.current = recognizer;
@@ -858,6 +869,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       if (document.hidden) {
         logger.info('Mobile Lifecycle Suspension Event: Tab contextual backgrounding detected. Freezing hardware channels.');
         try { vadRef.current?.pause(); } catch { /* ignore */ }
+        logger.info('[NATIVE-ASR] stop (backgrounding).');
         try { nativeRecognizerRef.current?.stop(); } catch { /* ignore */ }
       } else if (isRecordingRef.current && isLeaderRef.current && vadRef.current) {
         // Revalidate before resume: stream may have ended while suspended.
@@ -880,6 +892,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             });
           });
         } catch { /* ignore sync throw */ }
+        logger.info('[NATIVE-ASR] start (resumption).');
         try { nativeRecognizerRef.current?.start(); } catch { /* ignore */ }
       }
     };
@@ -892,6 +905,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         audioFrameAccumulatorRef.current = [];
         if (!workerRef.current || !vadRef.current) return;
         if (isRecordingRef.current && isLeaderRef.current) {
+          logger.info('[NATIVE-ASR] start (bfcache resumption).');
           try { nativeRecognizerRef.current?.start(); } catch { /* ignore */ }
         }
       }
@@ -946,6 +960,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       try { void vadRef.current?.pause(); } catch { /* ignore */ }
       sharedRuntime.micStream?.getTracks().forEach((track) => track.stop());
       sharedRuntime.micStream = null;
+      logger.info('[NATIVE-ASR] abort (unmount).');
       try { nativeRecognizerRef.current?.abort(); } catch { /* ignore */ }
 
       const worker = workerRef.current;
@@ -1269,6 +1284,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     speechActiveRef.current = false;
     
     try { vadRef.current.pause(); } catch { /* ignore */ }
+    logger.info('[NATIVE-ASR] stop (manual wind-down).', { finalTranscriptLength: nativeFinalTranscriptRef.current.length });
     try { nativeRecognizerRef.current?.stop(); } catch { /* ignore */ }
     
     if (pendingBrowserTranscript && (stateRef.current.fsm === 'SPECULATIVE' || stateRef.current.fsm === 'VERIFYING')) {

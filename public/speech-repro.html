@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light" />
+<title>Immigo — SpeechRecognition Crash Repro</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --line: #2a2f3a; --txt: #e6e8ee;
+    --dim: #9aa3b2; --ok: #3fb950; --bad: #f85149; --warn: #d29922; --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--txt);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 14px 16px 6px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--dim); font-size: 13px; }
+  section { margin: 12px 16px; padding: 12px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; }
+  h2 { font-size: 14px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); }
+  #crashBanner { border-color: var(--bad); background: #2a1215; display: none; }
+  #crashBanner.show { display: block; }
+  .verdict { font-weight: 700; color: var(--bad); font-size: 16px; margin-bottom: 6px; }
+  .verdict small { display: block; font-weight: 400; color: var(--txt); font-size: 13px; margin-top: 4px; }
+  table.hist { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.hist td, table.hist th { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; }
+  table.hist .st-running { color: var(--bad); font-weight: 700; }
+  table.hist .st-clean-end { color: var(--ok); }
+  table.hist .st-ended-pagehide { color: var(--warn); }
+  table.hist .st-reviewed, table.hist .st-error { color: var(--dim); }
+  .scenario { display: block; padding: 10px; margin: 8px 0; background: #10131a;
+    border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .scenario input { margin-right: 8px; }
+  .scenario .desc { display: block; color: var(--dim); font-size: 12.5px; margin-top: 4px; padding-left: 24px; }
+  .scenario.primary { border-color: var(--accent); }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  label.param { font-size: 12.5px; color: var(--dim); display: flex; align-items: center; gap: 6px; }
+  input[type=number] { width: 74px; background: #10131a; color: var(--txt);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 14px; }
+  button { font-size: 15px; font-weight: 600; padding: 12px 16px; border-radius: 8px;
+    border: 1px solid var(--line); background: #212633; color: var(--txt); cursor: pointer; }
+  button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; min-width: 160px; }
+  button.danger { background: #3d1518; border-color: #6e2328; color: #ffb3ad; }
+  button:disabled { opacity: .45; }
+  .info { font-size: 12.5px; color: var(--dim); word-break: break-all; }
+  .info b { color: var(--txt); }
+  #log { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #0b0d11; border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px; height: 300px; overflow-y: auto; white-space: pre-wrap; }
+  #log .t { color: var(--accent); }
+  #log .warn { color: var(--warn); }
+  #log .bad { color: var(--bad); }
+  #log .ok { color: var(--ok); }
+  .note { font-size: 12.5px; color: var(--dim); margin-top: 8px; }
+  .note b { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>SpeechRecognition Crash Repro</h1>
+  <div class="sub">Deliberately stress-tests <code>webkitSpeechRecognition</code> start/stop teardown
+    to reproduce the WebKit <code>SpeechRecognitionServer</code> crash seen in the Immigo app.
+    Every step is written through to <code>localStorage</code> — if the browser process dies,
+    the next load shows the forensic panel.</div>
+</header>
+
+<section id="crashBanner">
+  <div class="verdict" id="crashVerdict">PROCESS DIED — REPRODUCED</div>
+  <div class="info" id="crashDetail"></div>
+  <div class="row">
+    <button id="copyCrashReport">Copy crash report</button>
+    <button id="dismissCrash">Mark reviewed</button>
+  </div>
+</section>
+
+<section>
+  <h2>Device</h2>
+  <div class="info" id="deviceInfo"></div>
+</section>
+
+<section>
+  <h2>Scenario</h2>
+  <label class="scenario primary">
+    <input type="radio" name="sc" value="S1" checked /> <b>S1 — App-mirror wind-down</b> (PRIMARY)
+    <span class="desc">Persistent mic stream + running AudioContext (mini-VAD) + recognizer, then the app's exact
+    wind-down: <code>ctx.suspend()</code> (vad.pause mirror) → <code>rec.stop()</code> in the same tick,
+    mic tracks stay live. Death is expected inside the 0–7 s window (app kills: +1.8–6.3 s after stop).</span>
+  </label>
+  <label class="scenario">
+    <input type="radio" name="sc" value="S2" /> <b>S2 — Recognition stop only</b>
+    <span class="desc">No getUserMedia, no AudioContext: <code>rec.stop()</code> alone. Isolates whether the
+    speech server crashes without our audio graph in the picture.</span>
+  </label>
+  <label class="scenario">
+    <input type="radio" name="sc" value="S3" /> <b>S3 — Stop + mic track teardown</b>
+    <span class="desc">Like S1, but the mic tracks are also stopped in the wind-down tick (stream re-acquired
+    next cycle). Tests whether tearing the device stream amplifies the race.</span>
+  </label>
+  <label class="scenario">
+    <input type="radio" name="sc" value="S4" /> <b>S4 — Rapid churn ×30</b>
+    <span class="desc">One recognizer instance, mic live: start → 700 ms → stop → 300 ms → start…
+    mirrors the app's continuous churn (per-onset start + onend auto-restart).</span>
+  </label>
+  <label class="scenario">
+    <input type="radio" name="sc" value="S5" /> <b>S5 — abort() vs stop() (mitigation B test)</b>
+    <span class="desc">S1 wind-down, but even cycles call <code>stop()</code> and odd cycles
+    <code>abort()</code>. The app's crash stack is the <i>didFinishSuccessfully</i> path of
+    <code>stop()</code> — if stop dies and abort survives, abort() is our fix.</span>
+  </label>
+  <label class="scenario">
+    <input type="radio" name="sc" value="S6" /> <b>S6 — Background during recognition</b>
+    <span class="desc">Starts a long listen; press Home / switch apps while it listens (mirror of the app's
+    visibilitychange handler: suspend + stop on hide), return after ~5 s, read the status.
+    Note: iOS fires pagehide on backgrounding, so a kill-while-suspended is reported as
+    “ended-pagehide”, not as a crash — inspect the last steps either way.</span>
+  </label>
+
+  <div class="row">
+    <label class="param">listen ms <input type="number" id="pListen" value="5000" step="500" min="300" /></label>
+    <label class="param">cycles <input type="number" id="pCycles" value="8" step="1" min="1" max="60" /></label>
+    <label class="param">kill window ms <input type="number" id="pWindow" value="7000" step="500" min="1000" /></label>
+    <label class="param"><input type="checkbox" id="pAutoRestart" checked style="width:auto" /> auto-restart on onend (app behavior)</label>
+  </div>
+  <div class="row">
+    <button class="primary" id="btnStart">START scenario</button>
+    <button class="danger" id="btnStop">STOP &amp; mark clean</button>
+  </div>
+  <div class="note"><b>Rules:</b> keep the screen on and stay on this page during S1–S5 (switching away fires
+    pagehide and ends the run). The page WILL talk to the mic — accept the permission prompts.
+    If Chrome/Safari crashes, reopen the same URL: the red panel is the result.</div>
+</section>
+
+<section>
+  <h2>Run history</h2>
+  <table class="hist"><thead><tr>
+    <th>scenario</th><th>started</th><th>status</th><th>cycles</th><th>last step</th>
+  </tr></thead><tbody id="histBody"></tbody></table>
+  <div class="row">
+    <button id="btnCopyAll">Copy full report</button>
+    <button id="btnClear">Clear history</button>
+  </div>
+</section>
+
+<section>
+  <h2>Live log</h2>
+  <div id="log"></div>
+</section>
+
+<script>
+(function () {
+  'use strict';
+
+  var LS_KEY = 'speechRepro.v1';
+  var $ = function (id) { return document.getElementById(id); };
+  var logEl = $('log');
+
+  /* ---------- persistence (write-through, survives process death) ---------- */
+  function loadDb() {
+    try { var v = JSON.parse(localStorage.getItem(LS_KEY)); if (v && v.runs) return v; } catch (e) {}
+    return { runs: [] };
+  }
+  var db = loadDb();
+  function persist() {
+    try {
+      if (db.runs.length > 8) db.runs = db.runs.slice(db.runs.length - 8);
+      localStorage.setItem(LS_KEY, JSON.stringify(db));
+    } catch (e) {}
+  }
+  function nowMs() { return Date.now(); }
+
+  var run = null;       // active run record (persisted)
+  var res = { rec: null, ctx: null, stream: null, source: null, procTimer: null };
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function line(t, cls, text) {
+    var div = document.createElement('div');
+    div.innerHTML = '<span class="t">+' + t + 'ms</span> <span class="' + (cls || '') + '">' + esc(text) + '</span>';
+    logEl.appendChild(div);
+    while (logEl.childNodes.length > 400) logEl.removeChild(logEl.firstChild);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function step(name, detail) {
+    var t = run ? (nowMs() - Date.parse(run.startedAt)) : 0;
+    var text = detail !== undefined && detail !== null && detail !== '' ? name + ' ' + JSON.stringify(detail) : name;
+    if (run) {
+      run.steps.push({ t: t, name: name, detail: detail === undefined ? undefined : detail });
+      if (run.steps.length > 400) run.steps.splice(0, run.steps.length - 400);
+      persist(); // write-through BEFORE anything can kill the process
+    }
+    line(t, name.indexOf('SURVIVED') >= 0 ? 'ok' : (name.indexOf('ERROR') >= 0 || name.indexOf('DIED') >= 0 ? 'bad' : ''), text);
+  }
+  function persistRun() { persist(); }
+
+  /* ---------- boot: did the previous run die without pagehide? ---------- */
+  function findVictim() {
+    for (var i = db.runs.length - 1; i >= 0; i--) {
+      if (db.runs[i].status === 'running') return db.runs[i];
+      if (db.runs[i].status === 'ended-pagehide' || db.runs[i].status === 'clean-end') return null;
+    }
+    return null;
+  }
+  function renderCrashBanner() {
+    var v = findVictim();
+    var banner = $('crashBanner');
+    if (!v) { banner.classList.remove('show'); return; }
+    var steps = v.steps || [];
+    var last = steps.length ? steps[steps.length - 1] : null;
+    var lastStop = null;
+    for (var i = steps.length - 1; i >= 0; i--) {
+      if (steps[i].name.indexOf('rec.stop() returned') >= 0 ||
+          steps[i].name.indexOf('rec.abort() returned') >= 0 ||
+          steps[i].name.indexOf('mirror: nativeRecognizerRef') >= 0) { lastStop = steps[i]; break; }
+    }
+    var inWindow = last && last.name.indexOf('kill-window') >= 0;
+    var verdict = inWindow
+      ? 'PROCESS DIED INSIDE THE POST-STOP KILL WINDOW — REPRODUCED'
+      : (last ? 'PROCESS DIED — REPRODUCED (see last step)' : 'PROCESS DIED — REPRODUCED');
+    $('crashVerdict').textContent = verdict;
+    var detail =
+      'scenario: ' + v.scenario + ' · started: ' + v.startedAt +
+      ' · completedCycles: ' + (v.completedCycles || 0) + '/' + v.cycles + '\n' +
+      (last ? 'last recorded step: @+' + last.t + 'ms ' + last.name + (last.detail ? ' ' + JSON.stringify(last.detail) : '') + '\n' : '') +
+      (lastStop && last ? '→ died ' + (last.t - lastStop.t) + 'ms after the last rec.stop()/abort() call (app kills: +1.8–6.3s)\n' : '') +
+      'ua: ' + v.ua;
+    $('crashDetail').textContent = detail;
+    $('crashDetail').style.whiteSpace = 'pre-wrap';
+    banner.classList.add('show');
+    window.__crashVictim = v;
+  }
+  $('dismissCrash').addEventListener('click', function () {
+    if (window.__crashVictim) { window.__crashVictim.status = 'reviewed'; persist(); renderCrashBanner(); renderHistory(); }
+  });
+
+  function renderHistory() {
+    var rows = db.runs.slice().reverse().map(function (r) {
+      var steps = r.steps || [];
+      var last = steps.length ? steps[steps.length - 1] : null;
+      return '<tr><td>' + esc(r.scenario) + '</td><td>' + esc((r.startedAt || '').replace('T', ' ').replace('.000Z', 'Z')) +
+        '</td><td class="st-' + esc(r.status) + '">' + esc(r.status) + '</td><td>' +
+        (r.completedCycles || 0) + '/' + r.cycles + '</td><td>' +
+        esc(last ? '+' + last.t + 'ms ' + last.name : '—') + '</td></tr>';
+    }).join('');
+    $('histBody').innerHTML = rows || '<tr><td colspan="5" class="info">no runs yet</td></tr>';
+  }
+
+  /* ---------- capabilities ---------- */
+  var SRCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  $('deviceInfo').innerHTML =
+    '<div><b>UA:</b> ' + esc(navigator.userAgent) + '</div>' +
+    '<div><b>secure context:</b> ' + window.isSecureContext + ' · <b>webkitSpeechRecognition:</b> ' +
+    (SRCtor ? 'PRESENT' : 'MISSING') + ' · <b>getUserMedia:</b> ' + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) + '</div>' +
+    '<div><b>time:</b> ' + new Date().toISOString() + ' · <b>origin:</b> ' + esc(location.origin) + '</div>';
+
+  /* ---------- lifecycle markers (crash detection) ---------- */
+  window.addEventListener('pagehide', function () {
+    if (run && run.status === 'running') {
+      run.steps.push({ t: nowMs() - Date.parse(run.startedAt), name: 'pagehide fired (normal end/background)' });
+      run.status = 'ended-pagehide';
+      persistRun();
+    }
+  });
+
+  /* ---------- audio resources (mirrors app's shared mic + context) ---------- */
+  function ensureStream() {
+    if (res.stream) {
+      var tr = res.stream.getAudioTracks();
+      if (tr.length && tr.some(function (t) { return t.readyState === 'live'; })) return res.stream;
+    }
+    return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
+      res.stream = s;
+      step('gUM stream acquired');
+      return s;
+    });
+  }
+  function ensureCtx() {
+    if (!res.ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      res.ctx = new AC();
+      step('AudioContext created', { state: res.ctx.state });
+    }
+    if (res.ctx.state === 'suspended') { res.ctx.resume().catch(function () {}); }
+    if (res.stream && !res.source) {
+      try {
+        res.source = res.ctx.createMediaStreamSource(res.stream);
+        res.ctx.createAnalyser();
+        if (!res.procTimer) {
+          res.procTimer = setInterval(function () { /* keep processing loop alive like the VAD worklet */ }, 100);
+        }
+        step('mini-VAD processing loop attached');
+      } catch (e) { step('ERROR attaching processing loop', { err: String(e) }); }
+    }
+    return res.ctx;
+  }
+
+  /* ---------- recognizer ---------- */
+  function makeRec(tag) {
+    if (!SRCtor) throw new Error('webkitSpeechRecognition not available in this browser');
+    var r = new SRCtor();
+    r.continuous = true;        // exact app config (useWhisper.ts)
+    r.interimResults = true;    // exact app config
+    r.lang = 'en-US';           // exact app config
+    r.__active = false;
+    r.onstart = function () { step('rec.onstart', { tag: tag }); };
+    r.onaudiostart = function () { step('rec.onaudiostart', { tag: tag }); };
+    r.onspeechstart = function () { step('rec.onspeechstart', { tag: tag }); };
+    r.onspeechend = function () { step('rec.onspeechend', { tag: tag }); };
+    r.onresult = function (event) {
+      var fin = '', inter = '';
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        var tx = (event.results[i][0] && event.results[i][0].transcript) || '';
+        if (event.results[i].isFinal) fin += tx; else inter += tx;
+      }
+      if (fin.trim()) step('rec.onresult FINAL', { len: fin.trim().length });
+      if (inter.trim()) step('rec.onresult interim', { len: inter.trim().length });
+    };
+    r.onerror = function (event) {
+      step('rec.onerror', { code: (event && event.error) || 'unknown' });
+      if (event && (event.error === 'not-allowed' || event.error === 'service-not-allowed')) {
+        abortRun('speech permission denied: ' + event.error);
+      }
+    };
+    r.onend = function () {
+      var willRestart = !!(r.__active && run && run.status === 'running' && $('pAutoRestart').checked);
+      step('rec.onend', { willRestart: willRestart });
+      if (willRestart) {
+        try { r.start(); step('rec.restart (onend auto-restart, app behavior)'); }
+        catch (e) { step('rec.restart failed', { err: String(e) }); }
+      }
+    };
+    return r;
+  }
+  function windDown(rec, opts) {
+    // App order (stopRecording): vad.pause() FIRST, then nativeRecognizer.stop().
+    if (opts.suspendCtx && res.ctx && res.ctx.state === 'running') {
+      step('mirror: vad.pause() → ctx.suspend()');
+      res.ctx.suspend().catch(function (e) { step('ctx.suspend failed', { err: String(e) }); });
+    }
+    rec.__active = false;
+    var method = opts.method || 'stop';
+    step('mirror: nativeRecognizerRef.' + method + '() call');
+    try { rec[method](); step('rec.' + method + '() returned'); }
+    catch (e) { step('ERROR rec.' + method + '() threw', { err: String(e) }); }
+    if (opts.stopTracks && res.stream) {
+      res.stream.getTracks().forEach(function (t) { t.stop(); });
+      res.source = null;
+      step('mic tracks stopped (mirror of stream teardown)');
+    }
+    step('kill-window open', { ms: opts.windowMs, note: 'app kills land 1.8-6.3s after stop' });
+  }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /* ---------- scenarios ---------- */
+  var SCENARIOS = {
+    S1: { label: 'S1 app-mirror wind-down', params: { listen: 5000, cycles: 8 }, body: function (p) {
+      return forEachCycle(p, function (n) {
+        return ensureStream().then(function () { ensureCtx(); step('cycle ' + n + ': listening', { ms: p.listen });
+          return wait(p.listen); }).then(function () {
+          windDown(res.rec, { suspendCtx: true, method: 'stop', windowMs: p.windowMs });
+          return wait(p.windowMs);
+        });
+      });
+    }},
+    S2: { label: 'S2 recognition stop only', params: { listen: 5000, cycles: 8 }, body: function (p) {
+      return forEachCycle(p, function (n) {
+        step('cycle ' + n + ': listening (no mic stream, no audio graph)', { ms: p.listen });
+        return wait(p.listen).then(function () {
+          windDown(res.rec, { suspendCtx: false, method: 'stop', windowMs: p.windowMs });
+          return wait(p.windowMs);
+        });
+      });
+    }},
+    S3: { label: 'S3 stop + track teardown', params: { listen: 5000, cycles: 8 }, body: function (p) {
+      return forEachCycle(p, function (n) {
+        res.source = null;
+        return ensureStream().then(function () { ensureCtx(); step('cycle ' + n + ': listening', { ms: p.listen });
+          return wait(p.listen); }).then(function () {
+          windDown(res.rec, { suspendCtx: true, method: 'stop', stopTracks: true, windowMs: p.windowMs });
+          return wait(p.windowMs);
+        });
+      });
+    }},
+    S4: { label: 'S4 rapid churn', params: { listen: 700, cycles: 30 }, body: function (p) {
+      return ensureStream().then(function () { ensureCtx(); }).then(function () {
+        return forEachCycle(p, function (n) {
+          step('cycle ' + n + ': churn listening (mic + ctx live)', { ms: p.listen });
+          return wait(p.listen).then(function () {
+            step('cycle ' + n + ': churn stop (no kill window; next cycle restarts)');
+            res.rec.__active = false;
+            try { res.rec.stop(); step('rec.stop() returned (churn)'); }
+            catch (e) { step('ERROR churn stop', { err: String(e) }); }
+            return wait(300);
+          });
+        });
+      });
+    }},
+    S5: { label: 'S5 abort vs stop', params: { listen: 5000, cycles: 8 }, body: function (p) {
+      return forEachCycle(p, function (n) {
+        var method = (n % 2 === 1) ? 'stop' : 'abort';
+        return ensureStream().then(function () { ensureCtx(); step('cycle ' + n + ': listening', { ms: p.listen, method: method });
+          return wait(p.listen); }).then(function () {
+          windDown(res.rec, { suspendCtx: true, method: method, windowMs: p.windowMs });
+          return wait(p.windowMs);
+        });
+      });
+    }},
+    S6: { label: 'S6 background test', params: { listen: 45000, cycles: 1 }, body: function (p) {
+      return ensureStream().then(function () {
+        ensureCtx();
+        step('cycle 1: listening — now press Home / switch apps, wait ~5s, return', { ms: p.listen });
+        return wait(p.listen);
+      }).then(function () {
+        if (run && run.status === 'running') {
+          step('cycle 1 SURVIVED full listen window without backgrounding');
+        } else {
+          step('run ended via lifecycle event', { status: run ? run.status : 'n/a' });
+        }
+      });
+    }}
+  };
+
+  function forEachCycle(p, body) {
+    var n = 0;
+    function next() {
+      if (!run || run.status !== 'running') { step('run stopped by lifecycle event — aborting remaining cycles'); return Promise.resolve(); }
+      if (n >= p.cycles) { step('ALL CYCLES SURVIVED', { cycles: p.cycles }); return Promise.resolve(); }
+      n++;
+      run.completedCycles = n; persistRun();
+      return Promise.resolve()
+        .then(function () {
+          // mirror app: next start resumes context + starts recognizer from gesture/VAD path
+          if (res.ctx && res.ctx.state === 'suspended') { res.ctx.resume().catch(function () {}); }
+          res.rec.__active = true;
+          try { res.rec.start(); step('rec.start() accepted', { cycle: n }); }
+          catch (e) { step('ERROR rec.start() threw', { err: String(e), cycle: n }); }
+          return body(n);
+        })
+        .then(function () {
+          if (run && run.status === 'running') step('cycle ' + n + ' SURVIVED kill window');
+          return next();
+        });
+    }
+    return next();
+  }
+
+  /* ---------- run control ---------- */
+  function startRun(scenarioId, p) {
+    var sc = SCENARIOS[scenarioId];
+    run = {
+      id: nowMs().toString(36),
+      scenario: scenarioId + ' — ' + sc.label,
+      cycles: p.cycles,
+      listenMs: p.listen,
+      windowMs: p.windowMs,
+      completedCycles: 0,
+      startedAt: new Date().toISOString(),
+      ua: navigator.userAgent,
+      autoRestart: $('pAutoRestart').checked,
+      status: 'running',
+      steps: []
+    };
+    db.runs.push(run);
+    persist();
+    step('RUN START', { scenario: scenarioId, cycles: p.cycles, listen: p.listen, windowMs: p.windowMs });
+    res.rec = makeRec(scenarioId);
+    step('recognizer created', { continuous: res.rec.continuous, interim: res.rec.interimResults, lang: res.rec.lang });
+    return sc;
+  }
+  function abortRun(reason) {
+    if (!run) return;
+    step('ERROR run aborted: ' + reason);
+    run.status = 'error';
+    persistRun();
+    renderHistory();
+  }
+  function finishRun() {
+    if (run && run.status === 'running') { run.status = 'clean-end'; persistRun(); }
+    if (res.rec) { res.rec.__active = false; try { res.rec.stop(); } catch (e) {} }
+    renderHistory();
+  }
+
+  function readParams(scenarioId) {
+    var sc = SCENARIOS[scenarioId];
+    var listen = parseInt($('pListen').value, 10);
+    var cycles = parseInt($('pCycles').value, 10);
+    return {
+      listen: isNaN(listen) ? sc.params.listen : listen,
+      cycles: isNaN(cycles) ? sc.params.cycles : cycles,
+      windowMs: parseInt($('pWindow').value, 10) || 7000,
+      scenario: scenarioId
+    };
+  }
+  function applyScenarioParams() {
+    var sel = document.querySelector('input[name=sc]:checked');
+    var id = sel ? sel.value : 'S1';
+    var sc = SCENARIOS[id];
+    $('pListen').value = sc.params.listen;
+    $('pCycles').value = sc.params.cycles;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=sc]'), function (el) {
+    el.addEventListener('change', applyScenarioParams);
+  });
+
+  $('btnStart').addEventListener('click', function () {
+    if (run && run.status === 'running') { step('ERROR: a run is already active — press STOP first'); return; }
+    var sel = document.querySelector('input[name=sc]:checked');
+    var id = sel ? sel.value : 'S1';
+    var p = readParams(id);
+    $('btnStart').disabled = true;
+    var sc;
+    try { sc = startRun(id, p); } catch (e) {
+      $('btnStart').disabled = false;
+      line(0, 'bad', 'ERROR starting run: ' + String(e));
+      return;
+    }
+    p.scenario = id;
+    Promise.resolve()
+      .then(function () { return sc.body(p); })
+      .then(function () {
+        finishRun();
+        step(run && run.status === 'error' ? 'RUN ERROR-ENDED' : 'RUN CLEAN-ENDED — no crash', { scenario: id });
+        $('btnStart').disabled = false;
+        renderHistory();
+      })
+      .catch(function (e) {
+        abortRun(String(e));
+        $('btnStart').disabled = false;
+        renderHistory();
+      });
+  });
+
+  $('btnStop').addEventListener('click', function () {
+    if (run) {
+      run.status = 'clean-end';
+      if (res.rec) { res.rec.__active = false; try { res.rec.stop(); } catch (e) {} }
+      step('manual STOP — run marked clean');
+      persistRun();
+    }
+    $('btnStart').disabled = false;
+    renderHistory();
+  });
+
+  /* ---------- visibility mirror (app's handleBrowserLifecycleVisibilityShift) ---------- */
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (run && run.status === 'running' && res.rec && res.rec.__active) {
+        step('app-mirror: tab backgrounded → wind-down (suspend + stop)');
+        if (res.ctx && res.ctx.state === 'running') res.ctx.suspend().catch(function () {});
+        res.rec.__active = false;
+        try { res.rec.stop(); step('mirror: nativeRecognizerRef.stop() (backgrounding) returned'); }
+        catch (e) { step('ERROR background stop', { err: String(e) }); }
+      }
+    } else if (run && run.status === 'running') {
+      step('tab visible again', { status: run.status });
+      if (res.ctx && res.ctx.state === 'suspended') res.ctx.resume().catch(function () {});
+    }
+  });
+
+  /* ---------- report export ---------- */
+  function report() {
+    return JSON.stringify({ report: 'speech-repro', collectedAt: new Date().toISOString(), runs: db.runs }, null, 2);
+  }
+  function copyText(text, btn) {
+    var done = function () { var old = btn.textContent; btn.textContent = 'COPIED ✓'; setTimeout(function () { btn.textContent = old; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+    } else fallback();
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { prompt('Copy manually:', text); }
+      document.body.removeChild(ta);
+    }
+  }
+  $('btnCopyAll').addEventListener('click', function () { copyText(report(), this); });
+  $('copyCrashReport').addEventListener('click', function () {
+    copyText(JSON.stringify({ report: 'speech-repro-crash', collectedAt: new Date().toISOString(), victim: window.__crashVictim }, null, 2), this);
+  });
+  $('btnClear').addEventListener('click', function () {
+    if (run && run.status === 'running') { line(0, 'warn', 'cannot clear while a run is active'); return; }
+    db = { runs: [] }; persist(); renderHistory(); renderCrashBanner();
+    line(0, 'ok', 'history cleared');
+  });
+
+  /* ---------- init ---------- */
+  renderCrashBanner();
+  renderHistory();
+  line(0, '', 'ready — select a scenario and press START');
+  if (!SRCtor) line(0, 'bad', 'webkitSpeechRecognition MISSING in this browser');
+})();
+</script>
+</body>
+</html>
