@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { SUPPORTED_LANGUAGES } from "../constants";
+import { FlagIcon } from "./FlagIcon";
 
 interface LanguageSelectorProps {
   currentLanguageCode: string;
@@ -52,7 +53,10 @@ export function LanguageSelector({
         onClick={() => setIsOpen(prev => !prev)}
         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-deep-navy bg-immigo-gray-100 hover:bg-immigo-gray-200"
       >
-        <span className="font-bold">{selectedLanguage.label}</span>
+        <span className="font-bold flex items-center gap-1">
+          <FlagIcon code={selectedLanguage.flag} size={12} />
+          {selectedLanguage.label}
+        </span>
         <ChevronDown
           aria-hidden="true"
           className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
@@ -77,7 +81,10 @@ export function LanguageSelector({
                       isSelected ? 'font-bold text-art-blue-600' : 'text-deep-navy'
                     } hover:bg-immigo-gray-100 focus:outline-none focus:bg-immigo-gray-100`}
                   >
-                    <span className="w-6 text-center font-bold">{lang.label}</span>
+                    <span className="w-6 text-center font-bold flex items-center justify-center gap-1">
+                      <FlagIcon code={lang.flag} size={10} />
+                      {lang.label}
+                    </span>
                     <span>{lang.name}</span>
                   </button>
                 </li>

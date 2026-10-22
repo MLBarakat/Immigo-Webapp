@@ -11,7 +11,7 @@ describe('Footer Component (LEG-01 Disclaimers)', () => {
     render(<Footer />);
 
     expect(
-      screen.getByText(/ImmiGO is an independent educational tool not affiliated with USCIS/i)
+      screen.getByText(/ImmiGO is not affiliated with USCIS and does not provide a legal advice\./i)
     ).toBeDefined();
     expect(screen.getByRole('button', { name: 'Terms' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Privacy' })).toBeDefined();
@@ -20,10 +20,18 @@ describe('Footer Component (LEG-01 Disclaimers)', () => {
   it('keeps legal links and a compact disclaimer in a single mobile footer row', () => {
     const { container } = render(<Footer />);
     const footerRow = container.querySelector('footer > div');
-    const disclaimer = screen.getByText(/ImmiGO is an independent educational tool/i);
+    const disclaimer = screen.getByText(/ImmiGO is not affiliated with USCIS/i);
 
     expect(footerRow?.className).toContain('flex-row');
     expect(disclaimer.className).toContain('truncate');
+  });
+
+  it('makes the disclaimer focusable so it can be revealed on mobile', () => {
+    render(<Footer />);
+
+    const disclaimer = screen.getByText(/ImmiGO is not affiliated with USCIS/i);
+    expect(disclaimer.getAttribute('tabindex')).toBe('0');
+    expect(disclaimer.getAttribute('title')).toContain('ImmiGO is not affiliated with USCIS');
   });
 
   it('uses the Immigo navy background with readable foreground colors', () => {
@@ -32,7 +40,7 @@ describe('Footer Component (LEG-01 Disclaimers)', () => {
 
     expect(footer?.className).toContain('bg-deep-navy');
     expect(footer?.className).toContain('text-star-white');
-    expect(screen.getByText(/ImmiGO is an independent educational tool/i).className).toContain('text-immigo-gray-300');
+    expect(screen.getByText(/ImmiGO is not affiliated with USCIS/i).className).toContain('text-immigo-gray-300');
   });
 
   it('opens and closes Terms modal on click', () => {

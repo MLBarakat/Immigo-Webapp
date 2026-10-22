@@ -77,9 +77,14 @@ export default {
             '80%': { transform: 'scale(0.95) rotate(-5deg)' },
             '100%': { transform: 'scale(1) rotate(0deg)', opacity: '1' },
         },
+        marquee: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-100%)' },
+        },
       },
       animation: {
         'fill-wave': 'fill-wave 4s ease-in-out infinite',
+        marquee: 'marquee 20s linear infinite',
         'waveform-bar': 'waveform 1.2s ease-in-out infinite',
         'gravity-particle': 'circular-roll 3s linear infinite',
         'hourglass-intro': 'hourglass-intro 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards',
