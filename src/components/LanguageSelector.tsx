@@ -66,7 +66,7 @@ export function LanguageSelector({
       {isOpen && (
         <div
           role="menu"
-          className="absolute top-full right-0 mt-2 w-48 bg-star-white rounded-lg shadow-lg border border-immigo-gray-200 z-10"
+          className="absolute top-full right-0 mt-2 w-48 bg-star-white rounded-lg shadow-lg border border-immigo-gray-200 z-50"
         >
           <ul className="py-1">
             {SUPPORTED_LANGUAGES.map((lang) => {
