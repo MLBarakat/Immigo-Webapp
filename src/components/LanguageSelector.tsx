@@ -81,11 +81,10 @@ export function LanguageSelector({
                       isSelected ? 'font-bold text-art-blue-600' : 'text-deep-navy'
                     } hover:bg-immigo-gray-100 focus:outline-none focus:bg-immigo-gray-100`}
                   >
-                    <span className="w-6 text-center font-bold flex items-center justify-center gap-1">
+                    <span className="font-bold flex items-center gap-1">
                       <FlagIcon code={lang.flag} size={10} />
-                      {lang.label}
+                      {lang.name}
                     </span>
-                    <span>{lang.name}</span>
                   </button>
                 </li>
               );

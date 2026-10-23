@@ -11,14 +11,32 @@ export const Footer: React.FC = () => {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [isDisclaimerFocused, setIsDisclaimerFocused] = useState(false);
   const [disclaimerOverflows, setDisclaimerOverflows] = useState(false);
+  // Distance (as % of the full text width) needed to scroll the entire
+  // disclaimer through the visible container.
+  const [marqueeDistance, setMarqueeDistance] = useState(0);
   const disclaimerRef = useRef<HTMLParagraphElement>(null);
+  const disclaimerTextRef = useRef<HTMLSpanElement>(null);
 
-  // Re-check overflow whenever the rendered disclaimer text changes (e.g. language switch)
-  // or the component re-mounts, so the marquee only plays when the text is actually cut off.
+  // Re-check overflow whenever the rendered disclaimer text changes
+  // (e.g. language switch) or the component re-mounts.
   useEffect(() => {
-    const el = disclaimerRef.current;
-    setDisclaimerOverflows(Boolean(el && el.scrollWidth > el.clientWidth));
+    const container = disclaimerRef.current;
+    const text = disclaimerTextRef.current;
+    if (container && text) {
+      const overflow = text.scrollWidth - container.clientWidth;
+      setDisclaimerOverflows(overflow > 0);
+      setMarqueeDistance(
+        overflow > 0 ? Math.round((overflow / text.scrollWidth) * 100) : 0
+      );
+    }
   }, [t('footer.disclaimer'), i18n.language]);
+
+  const dir = i18n.dir();
+  // RTL languages read right-to-left, so the marquee travels in the
+  // opposite direction (positive translateX).
+  const sign = dir === 'rtl' ? '' : '-';
+
+  const isMarqueeActive = isDisclaimerFocused && disclaimerOverflows && marqueeDistance > 0;
 
   const handleDisclaimerFocus = () => setIsDisclaimerFocused(true);
   const handleDisclaimerBlur = () => setIsDisclaimerFocused(false);
@@ -34,12 +52,27 @@ export const Footer: React.FC = () => {
           onMouseEnter={handleDisclaimerFocus}
           onMouseLeave={handleDisclaimerBlur}
           className={[
-            'min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left leading-tight text-immigo-gray-300 sm:text-xs',
-            isDisclaimerFocused && disclaimerOverflows ? 'animate-marquee' : 'truncate',
+            'min-w-0 flex-1 overflow-hidden text-left leading-tight text-immigo-gray-300 sm:text-xs',
+            !isMarqueeActive ? 'truncate' : '',
           ].join(' ')}
           title={t('footer.disclaimer')}
         >
-          {t('footer.disclaimer')}
+          {/* Inner span keeps the full text width so the marquee scrolls the
+              entire sentence, not just the visible portion. */}
+          <span
+            ref={disclaimerTextRef}
+            className="inline-block whitespace-nowrap will-change-transform"
+            style={{
+              transform: isMarqueeActive
+                ? `translateX(${sign}${marqueeDistance}%)`
+                : 'translateX(0%)',
+              transition: isMarqueeActive
+                ? 'transform 20s linear'
+                : 'transform 0.4s ease-out',
+            }}
+          >
+            {t('footer.disclaimer')}
+          </span>
         </p>
         <div className="flex shrink-0 items-center gap-2 sm:gap-4 whitespace-nowrap text-[10px] sm:text-sm text-star-white">
           <span>&copy; {currentYear} ImmiGO</span>
