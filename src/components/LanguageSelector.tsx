@@ -54,7 +54,7 @@ export function LanguageSelector({
         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-deep-navy bg-immigo-gray-100 hover:bg-immigo-gray-200"
       >
         <span className="font-bold flex items-center gap-1">
-          <FlagIcon code={selectedLanguage.flag} size={12} />
+          <FlagIcon code={selectedLanguage.flag} size={12} label={selectedLanguage.name} />
           {selectedLanguage.label}
         </span>
         <ChevronDown
@@ -82,7 +82,7 @@ export function LanguageSelector({
                     } hover:bg-immigo-gray-100 focus:outline-none focus:bg-immigo-gray-100`}
                   >
                     <span className="font-bold flex items-center gap-1">
-                      <FlagIcon code={lang.flag} size={10} />
+                      <FlagIcon code={lang.flag} size={10} label={lang.name} />
                       {lang.name}
                     </span>
                   </button>

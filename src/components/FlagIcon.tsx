@@ -1,6 +1,8 @@
 interface FlagIconProps {
   /** ISO 3166-1 alpha-2 country code (e.g. "US", "ES", "FR", "SA"). */
   code: string;
+  /** Country name used for the accessible label. */
+  label?: string;
   className?: string;
   size?: number;
 }
@@ -17,8 +19,14 @@ interface FlagIconProps {
  * flag remains recognisable even at the small sizes used in the language
  * selector.
  */
-export function FlagIcon({ code, className, size = 16 }: FlagIconProps): JSX.Element {
+export function FlagIcon({
+  code,
+  label,
+  className,
+  size = 16,
+}: FlagIconProps): JSX.Element {
   const upper = code.toUpperCase();
+  const ariaLabel = label ?? upper;
 
   return (
     <svg
@@ -28,7 +36,7 @@ export function FlagIcon({ code, className, size = 16 }: FlagIconProps): JSX.Ele
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label={upper}
+      aria-label={ariaLabel}
       className={className}
     >
       {upper === 'US' && (
@@ -72,9 +80,9 @@ export function FlagIcon({ code, className, size = 16 }: FlagIconProps): JSX.Ele
       {upper === 'FR' && (
         <g>
           {/* France: vertical tricolor — blue, white, red (equal thirds) */}
-          <rect width="16 / 3" height="16" fill="#002D9E" />
-          <rect x="16 / 3" width="16 / 3" height="16" fill="white" />
-          <rect x={32 / 3} width="16 / 3" height="16" fill="#ED2939" />
+          <rect width={16 / 3} height="16" fill="#002D9E" />
+          <rect x={16 / 3} width={16 / 3} height="16" fill="white" />
+          <rect x={32 / 3} width={16 / 3} height="16" fill="#ED2939" />
         </g>
       )}
       {upper === 'SA' && (
@@ -95,4 +103,4 @@ export function FlagIcon({ code, className, size = 16 }: FlagIconProps): JSX.Ele
       )}
     </svg>
   );
-};
+}
