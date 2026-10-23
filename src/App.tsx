@@ -30,7 +30,6 @@ import { applyFontSize } from './utils/fontSize';
 import { applyTheme } from './utils/theme';
 import { MIC_CONSENT_VERSION } from './utils/micConsent';
 import { logger } from './logger';
-import { createMicrophoneStream, describeAudioEnvironment } from './utils/audioUtils';
 import useMediaQuery from './hooks/useMediaQuery';
 import { normalizeAppLanguage } from './i18n';
 import { I18nProvider } from './i18n/I18nProvider';
@@ -316,52 +315,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         currentLanguageCode={currentLanguageCode}
         onLanguageChange={(code) => { void updateUserLanguage(code); }}
       />
-
-      {/* MICROPHONE VALIDATION (TEMP DIAGNOSTIC)
-          Requesting the mic as early as possible — before any session or
-          model work — is what surfaces the iOS permission prompt and gives us
-          the real, unguarded state of the device stream that the deferred
-          capture path sees. Fails soft: the normal flow still requests it. */}
-      <button
-        type="button"
-        className="fixed bottom-2 left-2 z-50 rounded bg-art-blue-600 px-3 py-1 text-xs font-semibold text-star-white shadow"
-        onClick={() => {
-          const media = navigator.mediaDevices as (MediaDevices & { getSupportedConstraints?: () => MediaTrackSupportedConstraints }) | undefined;
-          logger.info('[MIC-TEST] tap: requesting microphone directly.', {
-            hasMediaDevices: Boolean(media),
-            hasGetUserMedia: Boolean(media?.getUserMedia),
-            permissionState: String((navigator as unknown as { permissions?: unknown }).permissions ?? 'no-permissions-api'),
-            supported: media?.getSupportedConstraints ? Object.keys(media.getSupportedConstraints()).length : 'n/a',
-            ...describeAudioEnvironment(),
-          });
-          void (async () => {
-            try {
-              const stream = await createMicrophoneStream();
-              logger.info('[MIC-TEST] raw getUserMedia RESOLVED.', {
-                tracks: stream.getAudioTracks().map((track) => ({
-                  label: track.label,
-                  readyState: track.readyState,
-                  enabled: track.enabled,
-                  muted: track.muted,
-                  settings: track.getSettings?.() ?? null,
-                })),
-                ...describeAudioEnvironment(),
-              });
-            } catch (error) {
-              const mediaError = error as { name?: string; message?: string; constraint?: string };
-              logger.error('[MIC-TEST] raw getUserMedia REJECTED.', undefined, {
-                name: mediaError?.name,
-                message: mediaError?.message,
-                constraint: mediaError?.constraint,
-                isSecureContext: window.isSecureContext,
-                ...describeAudioEnvironment(),
-              });
-            }
-          })();
-        }}
-      >
-        mic test
-      </button>
 
       {/* Three-column workspace */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
