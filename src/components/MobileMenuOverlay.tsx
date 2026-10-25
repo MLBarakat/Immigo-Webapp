@@ -1,10 +1,7 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Settings, LogOut, Trash2, Download } from 'lucide-react';
-import { DisplayUser } from '../types/user'; // Import the new type
-import { UserSettings } from '../types/settings';
-import { FontSizeSelector } from './FontSizeSelector';
-import { LanguageSelector } from './LanguageSelector';
+import { X, Settings, LogOut, CreditCard, LifeBuoy, Share2 } from 'lucide-react';
+import { DisplayUser } from '../types/user';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface MobileMenuOverlayProps {
@@ -12,14 +9,11 @@ interface MobileMenuOverlayProps {
   onClose: () => void;
   onOpenAppSettings: () => void;
   onOpenAccountSettings: () => void;
+  onManageSubscription: () => void;
+  onOpenHelpSupport: () => void;
+  onOpenInviteFriends: () => void;
   onSignOut: () => void;
-  onClearConversation: () => void;
-  onDownloadTranscript: () => void;
-  user: DisplayUser; // Use the new type
-  userSettings: Partial<UserSettings>;
-  currentLanguageCode: string;
-  onLanguageChange: (code: string) => void;
-  onSettingChange: (key: keyof UserSettings, value: unknown) => void;
+  user: DisplayUser;
 }
 
 export const MobileMenuOverlay: React.FC<MobileMenuOverlayProps> = ({
@@ -27,22 +21,21 @@ export const MobileMenuOverlay: React.FC<MobileMenuOverlayProps> = ({
   onClose,
   onOpenAppSettings,
   onOpenAccountSettings,
+  onManageSubscription,
+  onOpenHelpSupport,
+  onOpenInviteFriends,
   onSignOut,
-  onClearConversation,
-  onDownloadTranscript,
   user,
-  userSettings,
-  currentLanguageCode,
-  onLanguageChange,
-  onSettingChange,
 }) => {
   if (!isOpen) return null;
 
-  return <MobileMenuContent {...{ isOpen, onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user, userSettings, currentLanguageCode, onLanguageChange, onSettingChange }} />;
+  return <MobileMenuContent {...{ onClose, onOpenAppSettings, onOpenAccountSettings, onManageSubscription, onOpenHelpSupport, onOpenInviteFriends, onSignOut, user }} />;
 };
 
-function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, onSignOut, onClearConversation, onDownloadTranscript, user, userSettings, currentLanguageCode, onLanguageChange, onSettingChange }: MobileMenuOverlayProps): JSX.Element {
-  const { t } = useTranslation(['common', 'conversation']);
+type MobileMenuContentProps = Omit<MobileMenuOverlayProps, 'isOpen'>;
+
+function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, onManageSubscription, onOpenHelpSupport, onOpenInviteFriends, onSignOut, user }: MobileMenuContentProps): JSX.Element {
+  const { t } = useTranslation('common');
   const modalRef = useFocusTrap(true);
 
   useEffect(() => {
@@ -57,11 +50,6 @@ function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, 
     action();
     onClose();
   };
-  const handleClearConversation = () => {
-    if (window.confirm(t('workspace.right.clearConfirmMessage', { ns: 'conversation' }))) {
-      handleAction(onClearConversation);
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden" role="presentation" onClick={onClose}>
@@ -73,52 +61,44 @@ function MobileMenuContent({ onClose, onOpenAppSettings, onOpenAccountSettings, 
           </button>
         </header>
 
-        <nav className="flex-1 p-4 space-y-4">
-          <div>
-            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">{t('menu.account')}</h3>
-            <button onClick={() => handleAction(onOpenAccountSettings)} className="w-full flex items-center p-3 mt-1 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-art-blue-100 text-art-blue-700 font-bold">
-                {user.initials}
-              </div>
-              <span className="font-semibold text-deep-navy">{user.name}</span>
-            </button>
-          </div>
-
-          <div>
-            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">{t('menu.application')}</h3>
-            <button onClick={() => handleAction(onOpenAppSettings)} className="w-full flex items-center p-3 mt-1 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
-              <Settings className="w-6 h-6 text-immigo-gray-700" />
-              <span className="font-semibold text-deep-navy">{t('menu.settings')}</span>
-            </button>
-          </div>
-
-          <div>
-            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">{t('workspace.mobile.accessibility', { ns: 'conversation' })}</h3>
-            <div className="flex flex-wrap items-center gap-3 px-3 pt-2">
-              <LanguageSelector currentLanguageCode={currentLanguageCode} onLanguageChange={onLanguageChange} />
-              <FontSizeSelector
-                currentFontSize={userSettings.font_size || 'default'}
-                onFontSizeChange={(size) => onSettingChange('font_size', size)}
-              />
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          <button onClick={() => handleAction(onOpenAccountSettings)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
+            <div className="flex flex-shrink-0 items-center justify-center w-10 h-10 rounded-full bg-art-blue-100 text-art-blue-700 font-bold">
+              {user.initials}
             </div>
-          </div>
-
-          <div>
-            <h3 className="px-3 text-xs font-semibold text-immigo-gray-600 uppercase tracking-wider">{t('menu.tools')}</h3>
-            <div className="mt-1">
-              <button onClick={handleClearConversation} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
-                <Trash2 className="w-6 h-6 text-immigo-gray-700" />
-                <span className="font-semibold text-deep-navy">{t('menu.clearConversation')}</span>
-              </button>
-              <button onClick={() => handleAction(onDownloadTranscript)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
-                <Download className="w-6 h-6 text-immigo-gray-700" />
-                <span className="font-semibold text-deep-navy">{t('menu.downloadTranscript')}</span>
-              </button>
+            <div className="min-w-0">
+              <span className="block font-semibold text-deep-navy">{t('menu.accountSettings')}</span>
+              <span className="block text-sm text-immigo-gray-600 truncate">{user.name}</span>
             </div>
-          </div>
+          </button>
+
+          <button onClick={() => handleAction(onOpenAppSettings)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
+            <Settings className="w-6 h-6 flex-shrink-0 text-immigo-gray-700" />
+            <span className="font-semibold text-deep-navy">{t('menu.applicationSettings')}</span>
+          </button>
+
+          <button onClick={() => handleAction(onManageSubscription)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
+            <CreditCard className="w-6 h-6 flex-shrink-0 text-immigo-gray-700" />
+            <span className="font-semibold text-deep-navy">{t('menu.manageSubscription')}</span>
+            <span className="ml-auto flex-shrink-0 rounded-full bg-art-blue-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-art-blue-700 ring-1 ring-inset ring-art-blue-200 dark:bg-art-blue-900/40 dark:text-art-blue-200 dark:ring-art-blue-800 rtl:ml-0 rtl:mr-auto">
+              {t('menu.freePlan')}
+            </span>
+          </button>
+
+          <button onClick={() => handleAction(onOpenHelpSupport)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
+            <LifeBuoy className="w-6 h-6 flex-shrink-0 text-immigo-gray-700" />
+            <span className="font-semibold text-deep-navy">{t('menu.helpSupport')}</span>
+          </button>
+
+          <button onClick={() => handleAction(onOpenInviteFriends)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
+            <Share2 className="w-6 h-6 flex-shrink-0 text-immigo-gray-700" />
+            <span className="font-semibold text-deep-navy">{t('menu.inviteFriends')}</span>
+          </button>
+
+          <div role="separator" className="mx-3 mt-3 border-t border-immigo-gray-200 dark:border-gray-700" />
         </nav>
 
-        <footer className="p-4 border-t border-immigo-gray-200">
+        <footer className="p-4">
           <button onClick={() => handleAction(onSignOut)} className="w-full flex items-center p-3 space-x-3 text-left rounded-lg hover:bg-immigo-gray-200">
             <LogOut className="w-6 h-6 text-art-red-600" />
             <span className="font-semibold text-art-red-600">{t('menu.logout')}</span>

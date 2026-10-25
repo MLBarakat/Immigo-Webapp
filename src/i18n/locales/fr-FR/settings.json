@@ -22,6 +22,10 @@
     "large": "Grand",
     "extraLarge": "Très grand"
   },
+  "language": {
+    "title": "Langue",
+    "description": "Choisissez la langue d'ImmiGo."
+  },
   "voice": {
     "title": "Voix IA",
     "description": "Sélectionnez la voix de votre partenaire de conversation IA."
@@ -52,9 +56,43 @@
     "weekly": "Hebdomadaire",
     "monthly": "Mensuel"
   },
+  "audio": {
+    "title": "Microphone et test audio",
+    "description": "Choisissez les appareils utilisés par ImmiGO et testez-les avant votre session.",
+    "connectedDevice": "Appareil connecté",
+    "deviceHint": "Connectez un casque Bluetooth avant d'ouvrir cet écran ; les nouveaux appareils apparaissent automatiquement.",
+    "deviceFallback": "Appareil audio {{number}}",
+    "inputLabel": "Microphone",
+    "outputLabel": "Haut-parleur / casque",
+    "inputConnected": "Microphone : {{device}}",
+    "outputConnected": "Haut-parleur : {{device}}",
+    "systemDefault": "Valeur par défaut du système",
+    "refresh": "Actualiser les appareils",
+    "permissionTitle": "Autoriser l'accès au microphone",
+    "permissionDescription": "Nous avons besoin de l'autorisation du microphone pour afficher les noms des appareils et tester votre audio.",
+    "permissionButton": "Autoriser l'accès au microphone",
+    "requesting": "Demande d'accès...",
+    "permissionDenied": "L'accès au microphone est bloqué. Autorisez-le dans les paramètres du navigateur, puis actualisez.",
+    "unsupported": "Ce navigateur ne prend pas en charge la sélection des appareils audio.",
+    "testMic": "Tester le microphone",
+    "testingMic": "Écoute... parlez maintenant",
+    "stopTest": "Arrêter le test",
+    "micWorking": "Nous vous entendons. Votre microphone fonctionne.",
+    "micSilent": "Aucun son détecté. Vérifiez le microphone sélectionné ou essayez un autre appareil.",
+    "micError": "Impossible de démarrer le test du microphone. Vérifiez l'autorisation du navigateur et réessayez.",
+    "micBusy": "Terminez votre session vocale avant de tester le microphone.",
+    "testSpeaker": "Lire le son de test",
+    "testingSpeaker": "Lecture du son de test...",
+    "speakerUnsupported": "Ce navigateur ne permet pas de choisir un appareil de sortie. Le haut-parleur par défaut du système sera utilisé.",
+    "speakerPlayed": "Si vous avez entendu le carillon, votre haut-parleur fonctionne.",
+    "speakerFailed": "Impossible de lire le son de test. Essayez le haut-parleur par défaut du système.",
+    "noDevices": "Aucun appareil audio trouvé.",
+    "secureContext": "Le test audio nécessite une connexion sécurisée (HTTPS)."
+  },
   "subscription": {
     "title": "Gérer l'abonnement",
     "description": "Consultez votre forfait actuel et explorez les fonctionnalités premium.",
-    "unavailable": "Indisponible"
+    "unavailable": "Indisponible",
+    "close": "Fermer la fenêtre d'abonnement"
   }
 }

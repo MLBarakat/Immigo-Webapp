@@ -19,6 +19,10 @@ import { WelcomeModal } from './components/WelcomeModal';
 import { ApplicationSettingsModal } from './components/ApplicationSettingsModal';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
 import { MobileMenuOverlay } from './components/MobileMenuOverlay';
+import { SubscriptionModal } from './components/SubscriptionModal';
+import { HelpSupportModal } from './components/HelpSupportModal';
+import { InviteFriendsModal } from './components/InviteFriendsModal';
+import { NotificationsPanel } from './components/NotificationsPanel';
 import { LeftPanel } from './components/LeftPanel';
 import { CenterPanel } from './components/CenterPanel';
 import { RightPanel } from './components/RightPanel';
@@ -31,6 +35,9 @@ import { applyTheme } from './utils/theme';
 import { MIC_CONSENT_VERSION } from './utils/micConsent';
 import { logger } from './logger';
 import useMediaQuery from './hooks/useMediaQuery';
+import { useNotifications } from './hooks/useNotifications';
+import { setPreferredInputDeviceId, setPreferredOutputDeviceId } from './utils/audioUtils';
+import { analytics } from './analytics';
 import { normalizeAppLanguage } from './i18n';
 import { I18nProvider } from './i18n/I18nProvider';
 import { APP_VOICES, getDefaultVoiceId, normalizeVoiceId } from './constants/voices';
@@ -51,6 +58,7 @@ interface ConversationWorkspaceProps {
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
   const { user, profile, logout, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
   const { t: tConversation } = useTranslation('conversation');
+  const { t: tCommon } = useTranslation('common');
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [simulationMode, setSimulationMode] = useState<SimulationMode>('standard');
   const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
@@ -102,7 +110,47 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [showSubscription, setShowSubscription] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showHelpSupport, setShowHelpSupport] = useState(false);
+  const [showInviteFriends, setShowInviteFriends] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const {
+    notifications,
+    unreadCount,
+    addNotification,
+    markRead,
+    markAllRead,
+    clearAll,
+  } = useNotifications({
+    userId: user?.id ?? null,
+    settings: userSettings,
+  });
+
+  // Persisted device choices are applied before the next session starts. The
+  // VAD helper reads this module-level preference when it opens the mic, and
+  // the shared Polly element re-routes on creation/update.
+  useEffect(() => {
+    setPreferredInputDeviceId(userSettings.input_device_id ?? null);
+  }, [userSettings.input_device_id]);
+
+  useEffect(() => {
+    setPreferredOutputDeviceId(userSettings.output_device_id ?? null);
+  }, [userSettings.output_device_id]);
+
+  const previousSessionActiveRef = useRef(false);
+  useEffect(() => {
+    const wasActive = previousSessionActiveRef.current;
+    previousSessionActiveRef.current = manager.isSessionActive;
+    if (!wasActive || manager.isSessionActive) return;
+    if (manager.conversationHistory.length === 0) return;
+    addNotification({
+      type: 'session',
+      title: tCommon('notifications.sessionCompleteTitle'),
+      body: tCommon('notifications.sessionCompleteBody', { count: manager.conversationHistory.length }),
+    });
+  }, [addNotification, manager.conversationHistory.length, manager.isSessionActive, tCommon]);
 
   // ── Panel collapse state ──
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -146,6 +194,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
             settings={userSettings}
             pollyVoices={APP_VOICES.map(v => ({ id: v.id, name: v.displayName }))}
             isDesktop={false}
+            isSessionActive={manager.isSessionActive || manager.isVoiceSessionActive}
             onClose={() => { setPreviewTheme(null); setShowAppSettings(false); }}
             onThemePreview={setPreviewTheme}
             onSave={async (newSettings) => { await updateUserSettings(newSettings); }}
@@ -154,19 +203,32 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         {showAccountSettings && (
           <AccountSettingsPage onNavigateBack={() => setShowAccountSettings(false)} isDesktop={false} />
         )}
+        {showSubscription && <SubscriptionModal isOpen={showSubscription} onClose={() => setShowSubscription(false)} />}
+        {showHelpSupport && <HelpSupportModal isOpen={showHelpSupport} onClose={() => setShowHelpSupport(false)} />}
+        {showInviteFriends && <InviteFriendsModal isOpen={showInviteFriends} onClose={() => setShowInviteFriends(false)} />}
+        {showNotifications && (
+          <NotificationsPanel
+            isOpen={showNotifications}
+            onClose={() => setShowNotifications(false)}
+            notifications={notifications}
+            unreadCount={unreadCount}
+            onMarkRead={markRead}
+            onMarkAllRead={markAllRead}
+            onClearAll={clearAll}
+            settings={userSettings}
+            onSettingChange={handleSettingChange}
+          />
+        )}
         <MobileMenuOverlay
           isOpen={showMobileMenu}
           onClose={() => setShowMobileMenu(false)}
           onOpenAppSettings={() => { setShowMobileMenu(false); setShowAppSettings(true); }}
           onOpenAccountSettings={() => { setShowMobileMenu(false); setShowAccountSettings(true); }}
+          onManageSubscription={() => { setShowMobileMenu(false); setShowSubscription(true); }}
+          onOpenHelpSupport={() => { setShowMobileMenu(false); setShowHelpSupport(true); }}
+          onOpenInviteFriends={() => { setShowMobileMenu(false); setShowInviteFriends(true); }}
           onSignOut={logout}
-          onClearConversation={manager.clearConversation}
-          onDownloadTranscript={manager.downloadTranscript}
           user={displayUser}
-          userSettings={userSettings}
-          currentLanguageCode={currentLanguageCode}
-          onLanguageChange={(code) => { void updateUserLanguage(code); }}
-          onSettingChange={handleSettingChange}
         />
         <Header
           displayUser={displayUser}
@@ -178,6 +240,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onSettingChange={handleSettingChange}
           currentLanguageCode={currentLanguageCode}
           onLanguageChange={(code) => { void updateUserLanguage(code); }}
+          notificationCount={unreadCount}
+          onOpenNotifications={() => setShowNotifications(true)}
         />
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
           {mobileWorkspace === 'resources' && (
@@ -278,6 +342,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           settings={userSettings}
           pollyVoices={APP_VOICES.map(v => ({ id: v.id, name: v.displayName }))}
           isDesktop={isDesktop}
+          isSessionActive={manager.isSessionActive || manager.isVoiceSessionActive}
           onClose={() => { setPreviewTheme(null); setShowAppSettings(false); }}
           onThemePreview={setPreviewTheme}
           onSave={async (newSettings) => { await updateUserSettings(newSettings); }}
@@ -288,19 +353,34 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         <AccountSettingsPage onNavigateBack={() => setShowAccountSettings(false)} isDesktop={isDesktop} />
       )}
 
+      {showSubscription && <SubscriptionModal isOpen={showSubscription} onClose={() => setShowSubscription(false)} />}
+
+      {showHelpSupport && <HelpSupportModal isOpen={showHelpSupport} onClose={() => setShowHelpSupport(false)} />}
+      {showInviteFriends && <InviteFriendsModal isOpen={showInviteFriends} onClose={() => setShowInviteFriends(false)} />}
+      {showNotifications && (
+        <NotificationsPanel
+          isOpen={showNotifications}
+          onClose={() => setShowNotifications(false)}
+          notifications={notifications}
+          unreadCount={unreadCount}
+          onMarkRead={markRead}
+          onMarkAllRead={markAllRead}
+          onClearAll={clearAll}
+          settings={userSettings}
+          onSettingChange={handleSettingChange}
+        />
+      )}
+
       <MobileMenuOverlay
         isOpen={showMobileMenu}
         onClose={() => setShowMobileMenu(false)}
         onOpenAppSettings={() => { setShowMobileMenu(false); setShowAppSettings(true); }}
         onOpenAccountSettings={() => { setShowMobileMenu(false); setShowAccountSettings(true); }}
+        onManageSubscription={() => { setShowMobileMenu(false); setShowSubscription(true); }}
+        onOpenHelpSupport={() => { setShowMobileMenu(false); setShowHelpSupport(true); }}
+        onOpenInviteFriends={() => { setShowMobileMenu(false); setShowInviteFriends(true); }}
         onSignOut={logout}
-        onClearConversation={manager.clearConversation}
-        onDownloadTranscript={manager.downloadTranscript}
         user={displayUser}
-        userSettings={userSettings}
-        currentLanguageCode={currentLanguageCode}
-        onLanguageChange={(code) => { void updateUserLanguage(code); }}
-        onSettingChange={handleSettingChange}
       />
 
       {/* Top Navigation */}
@@ -314,6 +394,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         onSettingChange={handleSettingChange}
         currentLanguageCode={currentLanguageCode}
         onLanguageChange={(code) => { void updateUserLanguage(code); }}
+        notificationCount={unreadCount}
+        onOpenNotifications={() => setShowNotifications(true)}
       />
 
       {/* Three-column workspace */}
@@ -386,6 +468,25 @@ function AppContent() {
   } = useAuth();
   const { t } = useTranslation();
   const accessToken = session?.access_token;
+
+  // Capture invite attribution before authentication so the value survives the
+  // sign-up round trip. The code is stored in user_metadata by signUp().
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const referral = url.searchParams.get('ref');
+      if (!referral) return;
+      const cleanReferral = referral.trim().slice(0, 32);
+      if (cleanReferral) {
+        window.localStorage.setItem('immigo_referral_code', cleanReferral);
+        analytics.track('referral_visit', { code: cleanReferral });
+      }
+      url.searchParams.delete('ref');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+      // Attribution is best-effort; never block app start.
+    }
+  }, []);
 
   const apiClientInstance = useMemo(() => {
     if (!accessToken) return null;

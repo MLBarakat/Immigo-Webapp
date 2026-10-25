@@ -3,6 +3,7 @@ import {
   acquirePollyPlaybackElement,
   unlockAudioPlayback,
   getMicrophoneConstraints,
+  setPreferredInputDeviceId,
 } from '../audioUtils';
 
 vi.mock('../../logger', () => ({
@@ -199,5 +200,15 @@ describe('getMicrophoneConstraints (FR-005-B channel isolation)', () => {
     expect(constraints.audio?.echoCancellation).toBe(false);
     expect(constraints.audio?.noiseSuppression).toBe(false);
     expect(constraints.audio?.autoGainControl).toBe(true);
+  });
+
+  it('uses the saved microphone unless the caller explicitly requests the default', () => {
+    setPreferredInputDeviceId('mic-bluetooth');
+    expect(getMicrophoneConstraints().audio?.deviceId).toEqual({ ideal: 'mic-bluetooth' });
+
+    // The settings test button passes null to mean "system default"; it must
+    // not silently fall back to the saved device.
+    expect(getMicrophoneConstraints({ deviceId: null }).audio?.deviceId).toBeUndefined();
+    setPreferredInputDeviceId(null);
   });
 });

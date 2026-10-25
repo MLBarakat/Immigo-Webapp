@@ -22,6 +22,10 @@
     "large": "Large",
     "extraLarge": "Extra Large"
   },
+  "language": {
+    "title": "Language",
+    "description": "Choose the language for ImmiGo."
+  },
   "voice": {
     "title": "AI Voice",
     "description": "Select the voice for your AI conversation partner."
@@ -52,9 +56,43 @@
     "weekly": "Weekly",
     "monthly": "Monthly"
   },
+  "audio": {
+    "title": "Microphone & Audio Check",
+    "description": "Choose the devices ImmiGO uses and test them before your session.",
+    "connectedDevice": "Connected device",
+    "deviceHint": "Connect a Bluetooth headset before opening this screen; new devices appear automatically.",
+    "deviceFallback": "Audio device {{number}}",
+    "inputLabel": "Microphone",
+    "outputLabel": "Speaker / headphones",
+    "inputConnected": "Microphone: {{device}}",
+    "outputConnected": "Speaker: {{device}}",
+    "systemDefault": "System default",
+    "refresh": "Refresh devices",
+    "permissionTitle": "Allow microphone access",
+    "permissionDescription": "We need microphone permission to show device names and test your audio.",
+    "permissionButton": "Allow microphone access",
+    "requesting": "Requesting access...",
+    "permissionDenied": "Microphone access is blocked. Allow it in your browser settings, then refresh.",
+    "unsupported": "Audio device selection is not supported in this browser.",
+    "testMic": "Test microphone",
+    "testingMic": "Listening... speak now",
+    "stopTest": "Stop test",
+    "micWorking": "We can hear you. Your microphone is working.",
+    "micSilent": "No sound detected. Check the selected microphone or try another device.",
+    "micError": "We couldn't start the microphone test. Check your browser permission and try again.",
+    "micBusy": "End your voice session before testing the microphone.",
+    "testSpeaker": "Play test sound",
+    "testingSpeaker": "Playing test sound...",
+    "speakerUnsupported": "Choosing an output device isn't supported by this browser. Your system default speaker will be used.",
+    "speakerPlayed": "If you heard the chime, your speaker is working.",
+    "speakerFailed": "We couldn't play the test sound. Try the system default speaker.",
+    "noDevices": "No audio devices found.",
+    "secureContext": "Audio testing requires a secure (HTTPS) connection."
+  },
   "subscription": {
     "title": "Manage Subscription",
     "description": "View your current plan and explore premium features.",
-    "unavailable": "Unavailable"
+    "unavailable": "Unavailable",
+    "close": "Close subscription dialog"
   }
 }

@@ -11,6 +11,14 @@ import { UserSettingsService, userSettingsRowToSettings } from '../services/user
 import type { UserSettingsRow } from '../services/userSettingsService';
 import { normalizeTheme } from '../utils/theme';
 
+function clearReferralAttribution(): void {
+  try {
+    window.localStorage.removeItem('immigo_referral_code');
+  } catch {
+    // Attribution cleanup is best-effort.
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -399,17 +407,37 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     if (!supabase) throw new Error("Supabase client not initialized.");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    // A returning user is not a new referral; never attribute a later sign-up
+    // on this browser to a link they clicked while signed in.
+    clearReferralAttribution();
     analytics.track('user_login', { method: 'email' });
   }, [supabase]);
 
   const signUp = useCallback(async ({ email, password, fullName, language, termsAcceptedAt, termsVersion, privacyVersion }: SignUpPayload): Promise<void> => {
     if (!supabase) throw new Error("Supabase client not initialized.");
+    let referralCode: string | null = null;
+    try {
+      referralCode = window.localStorage.getItem('immigo_referral_code');
+    } catch {
+      // Storage can be unavailable; sign-up must still work.
+    }
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, language, terms_accepted_at: termsAcceptedAt, terms_version: termsVersion, privacy_version: privacyVersion } },
+      options: {
+        data: {
+          full_name: fullName,
+          language,
+          terms_accepted_at: termsAcceptedAt,
+          terms_version: termsVersion,
+          privacy_version: privacyVersion,
+          ...(referralCode ? { referral_code: referralCode } : {}),
+        },
+      },
     });
     if (error) throw error;
+
+    clearReferralAttribution();
 
     analytics.track('user_signup', { method: 'email', language });
   }, [supabase]);

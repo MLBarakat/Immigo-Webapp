@@ -6,6 +6,8 @@ import { FONT_SIZES, FONT_SIZE_LABELS, normalizeFontSize, type CanonicalFontSize
 import { applyTheme, normalizeTheme } from '../utils/theme';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
+import { LanguageSelector } from './LanguageSelector';
+import { AudioDeviceSettings } from './AudioDeviceSettings';
 
 interface Voice {
   id: string;
@@ -21,6 +23,8 @@ interface ApplicationSettingsModalProps {
   onThemePreview: (theme: ThemeOption | null) => void;
   pollyVoices: Voice[];
   isDesktop: boolean;
+  /** Disables live microphone testing while the AI voice session owns the mic. */
+  isSessionActive?: boolean;
 }
 
 const THEME_OPTION_VALUES: ThemeOption[] = ['light', 'dark'];
@@ -50,9 +54,9 @@ const SettingRow: React.FC<{ title: string; description: string; children: React
   </div>
 );
 
-export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, onThemePreview, pollyVoices = [], isDesktop }) => {
+export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, onThemePreview, pollyVoices = [], isDesktop, isSessionActive = false }) => {
   const { t } = useTranslation('settings');
-  const defaults = useMemo((): UserSettings => ({ language: 'en-US', theme: 'light', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default', has_seen_welcome: false }), [pollyVoices]);
+  const defaults = useMemo((): UserSettings => ({ language: 'en-US', theme: 'light', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default', has_seen_welcome: false, notifications_enabled: false, reminder_time: '19:00', input_device_id: null, output_device_id: null }), [pollyVoices]);
   const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings, theme: normalizeTheme(settings.theme ?? defaults.theme) });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +136,14 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
           {!isDesktop && (
             <>
               <hr className="border-immigo-gray-200 dark:border-gray-700" />
+              <SettingRow title={t('language.title')} description={t('language.description')}>
+                <LanguageSelector
+                  currentLanguageCode={draft.language}
+                  onLanguageChange={(code) => handleDraftChange('language', code)}
+                />
+              </SettingRow>
+
+              <hr className="border-immigo-gray-200 dark:border-gray-700" />
               <SettingRow title={t('font.title')} description={t('font.description')}>
                 <div role="radiogroup" aria-label={t('font.title')} className="flex items-center gap-1 p-1 bg-immigo-gray-200 dark:bg-gray-700 rounded-lg">
                   {FONT_SIZES.map(size => {
@@ -182,6 +194,22 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
 
           <hr className="border-immigo-gray-200 dark:border-gray-700" />
 
+          <div className="space-y-3">
+            <div>
+              <h3 className="font-semibold text-deep-navy dark:text-gray-100">{t('audio.title')}</h3>
+              <p className="text-sm text-immigo-gray-600 dark:text-gray-300">{t('audio.description')}</p>
+            </div>
+            <AudioDeviceSettings
+              inputDeviceId={draft.input_device_id}
+              outputDeviceId={draft.output_device_id}
+              isSessionActive={isSessionActive}
+              onInputDeviceChange={(deviceId) => handleDraftChange('input_device_id', deviceId)}
+              onOutputDeviceChange={(deviceId) => handleDraftChange('output_device_id', deviceId)}
+            />
+          </div>
+
+          <hr className="border-immigo-gray-200 dark:border-gray-700" />
+
           <SettingRow title={t('bargeIn.title')} description={t('bargeIn.description')}>
             <div role="radiogroup" className="flex items-center gap-2 p-1 bg-immigo-gray-200 rounded-lg">
               <button role="radio" aria-checked={draft.barge_in === 'relaxed'} onClick={() => handleDraftChange('barge_in', 'relaxed')} className={`px-3 py-1 rounded-md text-sm ${draft.barge_in === 'relaxed' ? 'bg-star-white shadow font-semibold' : 'hover:bg-immigo-gray-300'}`}>{t('bargeIn.relaxed')}</button>
@@ -202,11 +230,15 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
             </select>
           </SettingRow>
 
-          <hr className="border-immigo-gray-200 dark:border-gray-700" />
+          {isDesktop && (
+            <>
+              <hr className="border-immigo-gray-200 dark:border-gray-700" />
 
-          <SettingRow title={t('subscription.title')} description={t('subscription.description')}>
-            <span className="text-sm text-immigo-gray-500">{t('subscription.unavailable')}</span>
-          </SettingRow>
+              <SettingRow title={t('subscription.title')} description={t('subscription.description')}>
+                <span className="text-sm text-immigo-gray-500">{t('subscription.unavailable')}</span>
+              </SettingRow>
+            </>
+          )}
         </main>
 
         <footer className="p-4 border-t border-immigo-gray-200 dark:border-gray-700 bg-immigo-gray-50 dark:bg-gray-900 flex items-center justify-between flex-shrink-0">

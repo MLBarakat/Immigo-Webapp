@@ -19,6 +19,10 @@ export interface UserSettingsRow {
   font_size: string | null;
   has_seen_welcome: boolean;
   mic_consent_version: string | null;
+  notifications_enabled: boolean;
+  reminder_time: string;
+  input_device_id: string | null;
+  output_device_id: string | null;
   updated_at: string;
 }
 
@@ -35,6 +39,10 @@ export function userSettingsRowToSettings(row: UserSettingsRow): Partial<UserSet
     font_size: (row.font_size ?? undefined) as UserSettings['font_size'],
     has_seen_welcome: row.has_seen_welcome,
     mic_consent_version: row.mic_consent_version ?? null,
+    notifications_enabled: row.notifications_enabled ?? false,
+    reminder_time: row.reminder_time ?? DEFAULT_USER_SETTINGS.reminder_time,
+    input_device_id: row.input_device_id ?? null,
+    output_device_id: row.output_device_id ?? null,
   };
 }
 
@@ -52,6 +60,10 @@ function settingsToRow(userId: string, settings: UserSettings): Omit<UserSetting
     font_size: settings.font_size ?? null,
     has_seen_welcome: settings.has_seen_welcome ?? false,
     mic_consent_version: settings.mic_consent_version ?? null,
+    notifications_enabled: settings.notifications_enabled ?? false,
+    reminder_time: settings.reminder_time ?? '19:00',
+    input_device_id: settings.input_device_id ?? null,
+    output_device_id: settings.output_device_id ?? null,
   };
 }
 

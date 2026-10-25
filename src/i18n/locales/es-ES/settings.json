@@ -22,6 +22,10 @@
     "large": "Grande",
     "extraLarge": "Muy grande"
   },
+  "language": {
+    "title": "Idioma",
+    "description": "Elige el idioma de ImmiGo."
+  },
   "voice": {
     "title": "Voz de IA",
     "description": "Selecciona la voz de tu compañero de conversación de IA."
@@ -52,9 +56,43 @@
     "weekly": "Semanal",
     "monthly": "Mensual"
   },
+  "audio": {
+    "title": "Micrófono y comprobación de audio",
+    "description": "Elige los dispositivos que usa ImmiGO y pruébalos antes de tu sesión.",
+    "connectedDevice": "Dispositivo conectado",
+    "deviceHint": "Conecta unos auriculares Bluetooth antes de abrir esta pantalla; los nuevos dispositivos aparecen automáticamente.",
+    "deviceFallback": "Dispositivo de audio {{number}}",
+    "inputLabel": "Micrófono",
+    "outputLabel": "Altavoz / auriculares",
+    "inputConnected": "Micrófono: {{device}}",
+    "outputConnected": "Altavoz: {{device}}",
+    "systemDefault": "Predeterminado del sistema",
+    "refresh": "Actualizar dispositivos",
+    "permissionTitle": "Permitir acceso al micrófono",
+    "permissionDescription": "Necesitamos permiso para el micrófono para mostrar los nombres de los dispositivos y probar tu audio.",
+    "permissionButton": "Permitir acceso al micrófono",
+    "requesting": "Solicitando acceso...",
+    "permissionDenied": "El acceso al micrófono está bloqueado. Permítelo en la configuración del navegador y actualiza.",
+    "unsupported": "Este navegador no admite la selección de dispositivos de audio.",
+    "testMic": "Probar micrófono",
+    "testingMic": "Escuchando... habla ahora",
+    "stopTest": "Detener prueba",
+    "micWorking": "Podemos oírte. Tu micrófono funciona.",
+    "micSilent": "No se detectó sonido. Comprueba el micrófono seleccionado o prueba otro dispositivo.",
+    "micError": "No pudimos iniciar la prueba del micrófono. Comprueba el permiso del navegador e inténtalo de nuevo.",
+    "micBusy": "Finaliza tu sesión de voz antes de probar el micrófono.",
+    "testSpeaker": "Reproducir sonido de prueba",
+    "testingSpeaker": "Reproduciendo sonido de prueba...",
+    "speakerUnsupported": "Este navegador no permite elegir un dispositivo de salida. Se usará el altavoz predeterminado del sistema.",
+    "speakerPlayed": "Si oíste el tono, tu altavoz funciona.",
+    "speakerFailed": "No pudimos reproducir el sonido de prueba. Prueba el altavoz predeterminado del sistema.",
+    "noDevices": "No se encontraron dispositivos de audio.",
+    "secureContext": "La prueba de audio requiere una conexión segura (HTTPS)."
+  },
   "subscription": {
     "title": "Administrar suscripción",
     "description": "Consulta tu plan actual y explora funciones premium.",
-    "unavailable": "No disponible"
+    "unavailable": "No disponible",
+    "close": "Cerrar el cuadro de suscripción"
   }
 }

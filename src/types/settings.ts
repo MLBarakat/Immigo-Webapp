@@ -25,6 +25,12 @@ export interface UserSettings {
   font_size?: FontSize;
   has_seen_welcome?: boolean;
   mic_consent_version?: string | null;
+  /** Daily practice reminder preferences. */
+  notifications_enabled?: boolean;
+  reminder_time?: string;
+  /** Persisted AudioDeviceInfo.deviceId values. Empty string = system default. */
+  input_device_id?: string | null;
+  output_device_id?: string | null;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -38,4 +44,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   font_size: 'default',
   has_seen_welcome: false,
   mic_consent_version: null,
+  notifications_enabled: false,
+  reminder_time: '19:00',
+  input_device_id: null,
+  output_device_id: null,
 };
