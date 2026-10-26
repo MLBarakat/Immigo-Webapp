@@ -63,6 +63,23 @@ describe('CenterPanel text interview flow', () => {
   it.each([
     ['idle', 'Ready'],
     ['connecting', 'Ready'],
+  ] as const)('centres the "%s" status label without a dot so the word is truly centred', (appStatus, label) => {
+    renderCenterPanel({ appStatus });
+
+    const status = screen.getByRole('status');
+    const statusText = screen.getByText(label);
+    const island = screen.getByTestId('app-status-island');
+
+    expect(status.querySelector('[aria-hidden="true"]')).toBeNull();
+    expect(status.contains(statusText)).toBe(true);
+    expect(status.className).toContain('items-center');
+    expect(status.className).toContain('justify-center');
+    expect(status.className).toContain('whitespace-nowrap');
+    expect(island.className).toContain('justify-center');
+    expect(island.className).toContain('px-4');
+  });
+
+  it.each([
     ['listening', 'Listening…'],
     ['processing', 'Thinking…'],
     ['speaking', 'Speaking…'],
@@ -88,16 +105,26 @@ describe('CenterPanel text interview flow', () => {
     renderCenterPanel({ conversationHistory: conversation });
 
     const wrapper = screen.getByTestId('app-status-island-wrapper');
+    const island = screen.getByTestId('app-status-island');
     expect(wrapper.getAttribute('data-visible')).toBe('true');
-    expect(wrapper.className).toContain('duration-500');
+    // The island must slide (transform) rather than just fade in/out.
+    expect(wrapper.className).toContain('transition-transform');
+    expect(wrapper.className).toContain('duration-[800ms]');
+    expect(wrapper.className).not.toContain('opacity');
+    expect(island.className).toContain('opacity-100');
 
     fireEvent.wheel(screen.getByRole('log'));
 
     expect(wrapper.getAttribute('data-visible')).toBe('false');
+    // While hiding, the island stays opaque during the slide and only fades
+    // once it is clipped by the panel edge.
+    expect(island.className).toContain('opacity-0');
+    expect(island.className).toContain('delay-[600ms]');
 
     fireEvent.pointerDown(screen.getByRole('textbox', { name: 'Type your response' }));
 
     expect(wrapper.getAttribute('data-visible')).toBe('true');
+    expect(island.className).toContain('opacity-100');
   });
 
   it('reveals the status island when the app status changes', () => {

@@ -92,6 +92,7 @@ export function CenterPanel({
   const [isStatusVisible, setIsStatusVisible] = useState(true);
   const previousStatusRef = useRef(appStatus);
   const { t } = useTranslation('conversation');
+  const isReadyStatus = appStatus === 'idle' || appStatus === 'connecting';
   const statusLabelKeys: Record<AppStatus, string> = {
     idle: 'workspace.center.status.ready',
     connecting: 'workspace.center.status.ready',
@@ -146,13 +147,18 @@ export function CenterPanel({
         data-testid="app-status-island-wrapper"
         data-visible={isStatusVisible}
         aria-hidden={!isStatusVisible}
-        className={`pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-4 transition-all duration-500 ease-out motion-reduce:transition-none sm:px-6 ${
-          isStatusVisible ? 'translate-y-3 opacity-100' : '-translate-y-full opacity-0'
+        className={`pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-4 transition-transform duration-[800ms] ease-in-out motion-reduce:transition-none sm:px-6 ${
+          isStatusVisible ? 'translate-y-3' : '-translate-y-full'
         }`}
       >
         <div
           data-testid="app-status-island"
-          className="relative inline-flex min-h-9 items-center justify-center overflow-hidden rounded-full border border-white/70 bg-white/60 px-4 py-2 shadow-[0_10px_35px_-12px_rgba(15,23,42,0.45),0_2px_8px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/50 backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-900/60 dark:shadow-[0_12px_35px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.12)] dark:ring-white/10"
+          className={`relative inline-flex min-h-9 items-center justify-center overflow-hidden rounded-full border border-white/70 bg-white/60 px-4 py-2 shadow-[0_10px_35px_-12px_rgba(15,23,42,0.45),0_2px_8px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/50 backdrop-blur-2xl backdrop-saturate-150 transition-opacity duration-200 motion-reduce:transition-none dark:border-white/10 dark:bg-gray-900/60 dark:shadow-[0_12px_35px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.12)] dark:ring-white/10 ${
+            // On hide the island stays fully opaque while it slides up, then
+            // fades only once it is clipped by the panel edge (no shadow bleed
+            // at rest). On show it fades in immediately while sliding down.
+            isStatusVisible ? 'opacity-100' : 'opacity-0 delay-[600ms]'
+          }`}
         >
           <span
             aria-hidden="true"
@@ -172,10 +178,14 @@ export function CenterPanel({
             aria-atomic="true"
             className="relative flex items-center justify-center gap-2.5 whitespace-nowrap"
           >
-            <span aria-hidden="true" className="relative flex h-2.5 w-2.5 flex-none">
-              <span className={`absolute inset-0 rounded-full opacity-30 ${STATUS_DOT_COLORS[appStatus]}`} />
-              <span className={`absolute inset-[3px] rounded-full ${STATUS_DOT_COLORS[appStatus]}`} />
-            </span>
+            {/* "Ready" intentionally renders without a dot so the word itself
+                sits exactly at the centre of the island. */}
+            {!isReadyStatus && (
+              <span aria-hidden="true" className="relative flex h-2.5 w-2.5 flex-none">
+                <span className={`absolute inset-0 rounded-full opacity-30 ${STATUS_DOT_COLORS[appStatus]}`} />
+                <span className={`absolute inset-[3px] rounded-full ${STATUS_DOT_COLORS[appStatus]}`} />
+              </span>
+            )}
             <span className={`text-[13px] font-semibold leading-none tracking-[-0.01em] ${STATUS_COLORS[appStatus]}`}>
               {t(statusLabelKeys[appStatus])}
             </span>
