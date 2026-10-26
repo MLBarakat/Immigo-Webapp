@@ -1005,8 +1005,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let generatedAssistantText = '';
     let verdict: 'correct' | 'incorrect' | 'partial' | null = null;
     let needsConfirmation = false;
-    let nextItemId: string | null;
-    let nextQuestionText: string;
+    let nextItemId: string | null = null;
+    let nextQuestionText = '';
     let assistantSegments: string[] | null = null;
     let examRunId: string | null = parsedBody.examRunId ?? null;
     let examCompleted = false;

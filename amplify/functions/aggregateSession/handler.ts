@@ -262,7 +262,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const missed = graded
       .filter((g) => g.verdict !== 'correct')
-      .map((g) => `  * (${g.test_version ?? '2020'}:${g.item_id}) ${bankById.get(`${g.test_version ?? '2020'}:${g.item_id}`)?.question ?? g.item_id}`);
+      .map((g) => {
+        const version = g.test_version === '2008' ? '2008' : '2020';
+        return `  * (${version}:${g.item_id}) ${bankById.get(`${version}:${g.item_id}`)?.question ?? g.item_id}`;
+      });
 
     const modeBreakdown = [...new Set(graded.map((g) => g.simulation_mode ?? 'standard'))].map((mode) => {
       const rows = graded.filter((g) => (g.simulation_mode ?? 'standard') === mode);
