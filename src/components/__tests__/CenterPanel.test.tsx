@@ -60,12 +60,28 @@ describe('CenterPanel text interview flow', () => {
     expect(screen.getByText('Ready')).toBeDefined();
   });
 
-  it('centres the status label inside the island regardless of its width', () => {
-    renderCenterPanel();
+  it.each([
+    ['idle', 'Ready'],
+    ['connecting', 'Ready'],
+    ['listening', 'Listening…'],
+    ['processing', 'Thinking…'],
+    ['speaking', 'Speaking…'],
+    ['error', 'Error'],
+  ] as const)('centres the dot and "%s" status label together as one unit on a single line', (appStatus, label) => {
+    renderCenterPanel({ appStatus });
 
-    const statusText = screen.getByText('Ready');
-    expect(statusText.className).toContain('text-center');
-    expect(screen.getByTestId('app-status-island').className).toContain('px-7');
+    const status = screen.getByRole('status');
+    const dot = status.querySelector('[aria-hidden="true"]');
+    const statusText = screen.getByText(label);
+    const island = screen.getByTestId('app-status-island');
+
+    expect(status.className).toContain('items-center');
+    expect(status.className).toContain('justify-center');
+    expect(status.className).toContain('whitespace-nowrap');
+    expect(dot).not.toBeNull();
+    expect(status.contains(statusText)).toBe(true);
+    expect(island.className).toContain('justify-center');
+    expect(island.className).toContain('px-4');
   });
 
   it('slides the status island away while the conversation is scrolled and reveals it on input interaction', () => {
@@ -73,6 +89,7 @@ describe('CenterPanel text interview flow', () => {
 
     const wrapper = screen.getByTestId('app-status-island-wrapper');
     expect(wrapper.getAttribute('data-visible')).toBe('true');
+    expect(wrapper.className).toContain('duration-500');
 
     fireEvent.wheel(screen.getByRole('log'));
 
