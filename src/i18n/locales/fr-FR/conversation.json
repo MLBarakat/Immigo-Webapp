@@ -7,10 +7,10 @@
   "downloadScript": "Télécharger le script",
   "workspace": {
     "mobile": {
-      "resources": "Étudier",
-      "interview": "Entretien",
+      "resources": "Bibliothèque",
+      "interview": "Chat",
       "controls": "Commandes",
-      "navigation": "Espaces de travail de l’entretien",
+      "navigation": "Navigation entre les espaces de travail",
       "accessibility": "Langue et accessibilité"
     },
     "left": {

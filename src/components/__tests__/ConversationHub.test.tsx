@@ -12,7 +12,6 @@ const renderHub = (props: Partial<Parameters<typeof ConversationHub>[0]> = {}) =
     <ConversationHub
       status="idle"
       isSessionActive={false}
-      sessionTime={0}
       errorMessage={null}
       onStartSession={vi.fn()}
       onEndSession={vi.fn()}

@@ -7,10 +7,10 @@
   "downloadScript": "تنزيل النص",
   "workspace": {
     "mobile": {
-      "resources": "الدراسة",
-      "interview": "المقابلة",
-      "controls": "عناصر التحكم",
-      "navigation": "مساحات عمل المقابلة",
+      "resources": "المكتبة",
+      "interview": "الدردشة",
+      "controls": "التحكم",
+      "navigation": "التنقل بين مساحات العمل",
       "accessibility": "اللغة وإمكانية الوصول"
     },
     "left": {

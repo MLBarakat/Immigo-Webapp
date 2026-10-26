@@ -1,4 +1,4 @@
-import { Maximize2, Minimize2, Send, Timer } from 'lucide-react';
+import { Maximize2, Minimize2, Send } from 'lucide-react';
 import { useState, KeyboardEvent, ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConversationHistory } from './ConversationHistory';
@@ -15,7 +15,6 @@ interface CenterPanelProps {
   isVadReady: boolean;
   isSessionActive: boolean;
   isVoiceSessionActive: boolean;
-  sessionTime: number;
   errorMessage: string | null;
   hasMoreHistory: boolean;
   onSendMessage: (message: string) => void;
@@ -33,22 +32,15 @@ interface CenterPanelProps {
   isAudioRetryPending?: boolean;
 }
 
-function formatTime(seconds: number): string {
-  const abs = Math.max(0, Math.floor(seconds));
-  const m = Math.floor(abs / 60);
-  const s = abs % 60;
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
-
 const STATUS_COLORS: Record<AppStatus, string> = {
-  idle: 'text-immigo-gray-500',
+  idle: 'text-immigo-gray-600 dark:text-gray-300',
   // 'connecting' = session starting, mic not confirmed. Renders as idle so a
   // consent/permission prompt never looks like "Thinking".
-  connecting: 'text-immigo-gray-500',
-  listening: 'text-green-600',
-  processing: 'text-amber-600',
-  speaking: 'text-art-blue-600',
-  error: 'text-art-red-600',
+  connecting: 'text-immigo-gray-600 dark:text-gray-300',
+  listening: 'text-emerald-700 dark:text-emerald-300',
+  processing: 'text-amber-700 dark:text-amber-300',
+  speaking: 'text-art-blue-700 dark:text-art-blue-200',
+  error: 'text-art-red-700 dark:text-art-red-300',
 };
 
 const STATUS_DOT_COLORS: Record<AppStatus, string> = {
@@ -60,6 +52,17 @@ const STATUS_DOT_COLORS: Record<AppStatus, string> = {
   error: 'bg-art-red-600',
 };
 
+// A soft tint inside the glass gives each state its own "liquid" colour without
+// changing the established status labels or dot colours.
+const STATUS_GLOW_COLORS: Record<AppStatus, string> = {
+  idle: 'bg-slate-400/25',
+  connecting: 'bg-slate-400/25',
+  listening: 'bg-emerald-400/30',
+  processing: 'bg-amber-400/30',
+  speaking: 'bg-art-blue-400/30',
+  error: 'bg-art-red-500/30',
+};
+
 export function CenterPanel({
   conversationHistory,
   displayUser,
@@ -69,7 +72,6 @@ export function CenterPanel({
   isVadReady,
   isSessionActive,
   isVoiceSessionActive,
-  sessionTime,
   errorMessage,
   hasMoreHistory,
   onSendMessage,
@@ -123,46 +125,47 @@ export function CenterPanel({
 
   return (
     <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-immigo-gray-50 dark:bg-gray-900">
-      {/* Center Panel Header */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-star-white dark:bg-gray-800 border-b border-immigo-gray-200 dark:border-gray-700 shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-lg" aria-hidden="true">🏛</span>
-          <div>
-            <h1 className="text-sm font-bold text-deep-navy dark:text-gray-100 leading-tight">{t('workspace.center.title')}</h1>
-            <p className="text-[11px] text-immigo-gray-500 leading-tight">{t('workspace.center.subtitle')}</p>
-          </div>
-        </div>
-
-        {/* Status + Timer */}
-        <div className="flex items-center gap-2 sm:gap-4">
-          {/* Status indicator */}
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${STATUS_DOT_COLORS[appStatus]}`} />
-            <span className={`text-xs font-semibold transition-colors duration-200 ${STATUS_COLORS[appStatus]}`}>
+      {/* Floating status island — replaces the old title/subtitle header. */}
+      <div className="relative z-20 flex h-14 shrink-0 items-center justify-center px-4 sm:px-6">
+        <div
+          data-testid="app-status-island"
+          className="relative inline-flex min-h-9 items-center justify-center gap-2.5 overflow-hidden rounded-full border border-white/70 bg-white/60 px-4 py-2 shadow-[0_10px_35px_-12px_rgba(15,23,42,0.45),0_2px_8px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/50 backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 dark:border-white/10 dark:bg-gray-900/60 dark:shadow-[0_12px_35px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.12)] dark:ring-white/10"
+        >
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute -left-6 top-1/2 h-12 w-28 -translate-y-1/2 rounded-full blur-2xl ${STATUS_GLOW_COLORS[appStatus]}`}
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/35 via-transparent to-white/5 dark:from-white/10 dark:to-transparent"
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/95 to-transparent dark:via-white/40"
+          />
+          <span role="status" aria-live="polite" aria-atomic="true" className="relative flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5 flex-none">
+              <span className={`absolute inset-0 rounded-full opacity-30 ${STATUS_DOT_COLORS[appStatus]}`} />
+              <span className={`absolute inset-[3px] rounded-full ${STATUS_DOT_COLORS[appStatus]}`} />
+            </span>
+            <span className={`text-[13px] font-semibold leading-none tracking-[-0.01em] ${STATUS_COLORS[appStatus]}`}>
               {t(statusLabelKeys[appStatus])}
             </span>
-          </div>
-
-          {/* Timer */}
-          {isSessionActive && (
-            <div className="flex items-center gap-1.5 bg-immigo-gray-100 dark:bg-gray-700 rounded-lg px-3 py-1.5">
-            <Timer className="w-3.5 h-3.5 text-immigo-gray-600 dark:text-gray-300" />
-            <span className="text-xs font-mono font-bold text-deep-navy dark:text-gray-100 tabular-nums">{formatTime(sessionTime)}</span>
-            </div>
-          )}
-          {onToggleFocus && (
-            <button
-              type="button"
-              onClick={onToggleFocus}
-              className="hidden md:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-immigo-gray-600 hover:bg-immigo-gray-100 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
-              aria-label={t(isFocusMode ? 'workspace.center.exitFocusAria' : 'workspace.center.enterFocusAria')}
-              title={t('workspace.center.focusTitle')}
-            >
-              {isFocusMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              <span>{t(isFocusMode ? 'workspace.center.exitFocus' : 'workspace.center.focus')}</span>
-            </button>
-          )}
+          </span>
         </div>
+
+        {onToggleFocus && (
+          <button
+            type="button"
+            onClick={onToggleFocus}
+            className="absolute end-4 top-1/2 hidden -translate-y-1/2 items-center gap-1.5 rounded-full border border-white/60 bg-white/50 px-3 py-1.5 text-xs font-semibold text-immigo-gray-600 shadow-sm ring-1 ring-inset ring-white/40 backdrop-blur-xl transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-art-blue-500 dark:border-white/10 dark:bg-gray-900/50 dark:text-gray-300 dark:ring-white/10 dark:hover:bg-gray-800/70 sm:end-6 md:flex"
+            aria-label={t(isFocusMode ? 'workspace.center.exitFocusAria' : 'workspace.center.enterFocusAria')}
+            title={t('workspace.center.focusTitle')}
+          >
+            {isFocusMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <span>{t(isFocusMode ? 'workspace.center.exitFocus' : 'workspace.center.focus')}</span>
+          </button>
+        )}
       </div>
 
       {/* Error Banner */}

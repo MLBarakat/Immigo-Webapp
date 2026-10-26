@@ -265,7 +265,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               isVadReady={manager.isVadReady}
               isSessionActive={manager.isSessionActive}
               isVoiceSessionActive={manager.isVoiceSessionActive}
-              sessionTime={manager.sessionTime}
               errorMessage={manager.errorMessage}
               hasMoreHistory={manager.hasMoreHistory}
               onSendMessage={manager.sendTextMessage}
@@ -300,27 +299,27 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
             type="button"
             onClick={() => setMobileWorkspace('resources')}
             aria-current={mobileWorkspace === 'resources' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center gap-1 py-2 text-xs font-semibold ${mobileWorkspace === 'resources' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+            className={`flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap px-0.5 py-2 text-[11px] font-semibold leading-none sm:text-xs ${mobileWorkspace === 'resources' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
           >
-            <BookOpen className="w-5 h-5" />
+            <BookOpen className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
             {tConversation('workspace.mobile.resources')}
           </button>
           <button
             type="button"
             onClick={() => setMobileWorkspace('interview')}
             aria-current={mobileWorkspace === 'interview' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center gap-1 py-2 text-xs font-semibold ${mobileWorkspace === 'interview' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+            className={`flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap px-0.5 py-2 text-[11px] font-semibold leading-none sm:text-xs ${mobileWorkspace === 'interview' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
           >
-            <MessageSquare className="w-5 h-5" />
+            <MessageSquare className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
             {tConversation('workspace.mobile.interview')}
           </button>
           <button
             type="button"
             onClick={() => setMobileWorkspace('controls')}
             aria-current={mobileWorkspace === 'controls' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center gap-1 py-2 text-xs font-semibold ${mobileWorkspace === 'controls' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+            className={`flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap px-0.5 py-2 text-[11px] font-semibold leading-none sm:text-xs ${mobileWorkspace === 'controls' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
           >
-            <SlidersHorizontal className="w-5 h-5" />
+            <SlidersHorizontal className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
             {tConversation('workspace.mobile.controls')}
           </button>
         </nav>
@@ -420,7 +419,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           isVadReady={manager.isVadReady}
           isSessionActive={manager.isSessionActive}
           isVoiceSessionActive={manager.isVoiceSessionActive}
-          sessionTime={manager.sessionTime}
           errorMessage={manager.errorMessage}
           hasMoreHistory={manager.hasMoreHistory}
           onSendMessage={manager.sendTextMessage}

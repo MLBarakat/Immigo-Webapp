@@ -6,7 +6,6 @@ import { UserSettings } from '../types/settings';
 interface ConversationHubProps {
   readonly status: AppStatus;
   readonly isSessionActive: boolean;
-  readonly sessionTime: number;
   readonly errorMessage: string | null;
   readonly onStartSession: () => void;
   readonly onEndSession: () => void;
@@ -23,7 +22,6 @@ interface ConversationHubProps {
 export function ConversationHub({
   status,
   isSessionActive,
-  sessionTime,
   errorMessage,
   onStartSession,
   onEndSession,
@@ -36,12 +34,6 @@ export function ConversationHub({
   // Only 'processing'/'speaking' lock other actions. 'connecting' (mic prompt
   // still pending) must stay interactive so the user can cancel a stuck prompt.
   const isButtonDisabled = status === 'processing' || status === 'speaking';
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
 
   const statusMessage = () => {
     switch (status) {
@@ -64,8 +56,6 @@ export function ConversationHub({
       onStartSession();
     }
   };
-
-  const statusColor = isSessionActive ? 'text-art-red-600' : 'text-immigo-gray-600';
 
   return (
       <div className="flex flex-col justify-between w-full h-full bg-star-white rounded-lg shadow-md p-6">
@@ -91,7 +81,6 @@ export function ConversationHub({
               </button>
               <div className="text-center">
                   <p className={`text-sm font-semibold capitalize ${status === 'error' ? 'text-art-red-600' : 'text-deep-navy'}`}>{statusMessage()}</p>
-                  <p className={`text-lg font-mono ${statusColor}`}>{formatTime(sessionTime)}</p>
               </div>
           </div>
       </div>

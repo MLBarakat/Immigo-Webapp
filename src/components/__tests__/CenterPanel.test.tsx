@@ -33,7 +33,6 @@ function renderCenterPanel({
       appStatus={appStatus}
       isSessionActive={isSessionActive}
       isVoiceSessionActive={isVoiceSessionActive}
-      sessionTime={0}
       errorMessage={null}
       hasMoreHistory={false}
       onSendMessage={onSendMessage}
@@ -46,6 +45,46 @@ function renderCenterPanel({
 }
 
 describe('CenterPanel text interview flow', () => {
+  it('removes the old title/subtitle header in favour of the status island', () => {
+    renderCenterPanel();
+
+    expect(screen.queryByText('Naturalization Interview')).toBeNull();
+    expect(screen.queryByText('Practice Session')).toBeNull();
+    expect(screen.getByTestId('app-status-island')).toBeDefined();
+    expect(screen.getByText('Ready')).toBeDefined();
+  });
+
+  it('hides the session timer in every UI state', () => {
+    const { rerender } = renderCenterPanel({
+      isSessionActive: true,
+      isVoiceSessionActive: true,
+      appStatus: 'listening',
+    });
+
+    expect(screen.queryByTestId('session-timer')).toBeNull();
+
+    rerender(
+      <CenterPanel
+        conversationHistory={[]}
+        displayUser={{ name: 'Alex Morgan', initials: 'AM' }}
+        interimTranscript=""
+        appStatus="idle"
+        isSessionActive
+        isVoiceSessionActive={false}
+        errorMessage={null}
+        hasMoreHistory={false}
+        onSendMessage={vi.fn()}
+        onStartSession={vi.fn()}
+        onEndSession={vi.fn()}
+        onLoadOlder={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId('session-timer')).toBeNull();
+    expect(screen.getByText('Ready')).toBeDefined();
+  });
+
   it('allows text input before a session without activating voice conversation', () => {
     const onStartSession = vi.fn();
     const onSendMessage = vi.fn();

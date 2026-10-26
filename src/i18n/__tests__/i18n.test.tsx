@@ -110,6 +110,21 @@ describe('i18n configuration and utilities', () => {
     expect(i18n.t('workspace.left.title', { ns: 'conversation', lng: 'ar-SA' })).toBe('التعلّم والموارد');
   });
 
+  it('uses the approved one-line workspace labels in every locale', () => {
+    const expected = {
+      'en-US': ['Library', 'Chat', 'Controls'],
+      'es-ES': ['Biblioteca', 'Chat', 'Controles'],
+      'fr-FR': ['Bibliothèque', 'Chat', 'Commandes'],
+      'ar-SA': ['المكتبة', 'الدردشة', 'التحكم'],
+    } as const;
+
+    for (const [lng, [resources, interview, controls]] of Object.entries(expected)) {
+      expect(i18n.t('workspace.mobile.resources', { ns: 'conversation', lng })).toBe(resources);
+      expect(i18n.t('workspace.mobile.interview', { ns: 'conversation', lng })).toBe(interview);
+      expect(i18n.t('workspace.mobile.controls', { ns: 'conversation', lng })).toBe(controls);
+    }
+  });
+
   it('renders settings namespace translations and responds to language changes', async () => {
     const { rerender } = render(
       <I18nProvider>

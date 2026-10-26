@@ -7,10 +7,10 @@
   "downloadScript": "Download Script",
   "workspace": {
     "mobile": {
-      "resources": "Study",
-      "interview": "Interview",
+      "resources": "Library",
+      "interview": "Chat",
       "controls": "Controls",
-      "navigation": "Interview workspaces",
+      "navigation": "Workspace navigation",
       "accessibility": "Language & accessibility"
     },
     "left": {

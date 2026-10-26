@@ -7,10 +7,10 @@
   "downloadScript": "Descargar guion",
   "workspace": {
     "mobile": {
-      "resources": "Estudio",
-      "interview": "Entrevista",
+      "resources": "Biblioteca",
+      "interview": "Chat",
       "controls": "Controles",
-      "navigation": "Espacios de trabajo de entrevista",
+      "navigation": "Navegación por espacios de trabajo",
       "accessibility": "Idioma y accesibilidad"
     },
     "left": {

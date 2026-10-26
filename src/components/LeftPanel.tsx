@@ -187,21 +187,23 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
         ? { width: '100%', minWidth: 0, maxWidth: 'none' }
         : { width: '23%', minWidth: 'clamp(200px, 23vw, 420px)', maxWidth: 'none', flexBasis: '23%', flexShrink: 1 }}
     >
-      {/* Panel Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 dark:border-gray-700 bg-star-white dark:bg-gray-800 sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <BookOpen className="w-4 h-4 text-art-blue-600" />
-          <span className="text-sm font-bold text-deep-navy dark:text-gray-100 tracking-tight">{t('workspace.left.title')}</span>
+      {/* The mobile tab bar already names this workspace, so only desktop keeps the panel title. */}
+      {!isMobile && (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 dark:border-gray-700 bg-star-white dark:bg-gray-800 sticky top-0 z-10">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-art-blue-600" />
+            <span className="text-sm font-bold text-deep-navy dark:text-gray-100 tracking-tight">{t('workspace.left.title')}</span>
+          </div>
+          <button
+            onClick={onToggleCollapse}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-immigo-gray-100 text-immigo-gray-500 transition-colors"
+            aria-label={t('workspace.left.collapse')}
+            title={t('workspace.left.collapse')}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
         </div>
-        {!isMobile && <button
-          onClick={onToggleCollapse}
-          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-immigo-gray-100 text-immigo-gray-500 transition-colors"
-          aria-label={t('workspace.left.collapse')}
-          title={t('workspace.left.collapse')}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>}
-      </div>
+      )}
 
       <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
         {/* ── Section 1: USCIS Knowledge Bank ── */}
