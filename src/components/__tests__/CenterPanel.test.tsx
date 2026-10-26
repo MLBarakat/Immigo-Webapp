@@ -12,46 +12,88 @@ afterEach(() => {
   cleanup();
 });
 
-function renderCenterPanel({
-  isSessionActive = false,
-  isVoiceSessionActive = false,
-  appStatus = 'idle',
-  onSendMessage = vi.fn(),
-  onStartSession = vi.fn(),
-}: {
-  isSessionActive?: boolean;
-  isVoiceSessionActive?: boolean;
-  appStatus?: 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error';
-  onSendMessage?: (message: string) => void;
-  onStartSession?: () => void;
-} = {}) {
-  return render(
+type CenterPanelOverrides = Partial<Parameters<typeof CenterPanel>[0]>;
+
+function centerPanelElement(overrides: CenterPanelOverrides = {}) {
+  return (
     <CenterPanel
       conversationHistory={[]}
       displayUser={{ name: 'Alex Morgan', initials: 'AM' }}
       interimTranscript=""
-      appStatus={appStatus}
-      isSessionActive={isSessionActive}
-      isVoiceSessionActive={isVoiceSessionActive}
+      appStatus="idle"
+      isModelLoading={false}
+      isVadReady={false}
+      isSessionActive={false}
+      isVoiceSessionActive={false}
       errorMessage={null}
       hasMoreHistory={false}
-      onSendMessage={onSendMessage}
-      onStartSession={onStartSession}
+      onSendMessage={vi.fn()}
+      onStartSession={vi.fn()}
       onEndSession={vi.fn()}
       onLoadOlder={vi.fn()}
       onClearError={vi.fn()}
+      {...overrides}
     />
   );
 }
 
+function renderCenterPanel(overrides: CenterPanelOverrides = {}) {
+  return render(centerPanelElement(overrides));
+}
+
+const conversation = [{
+  id: 'message-1',
+  role: 'assistant' as const,
+  content: 'Welcome to your interview.',
+  timestamp: '2025-01-01T12:00:00.000Z',
+}];
+
 describe('CenterPanel text interview flow', () => {
-  it('removes the old title/subtitle header in favour of the status island', () => {
+  it('removes the old title/subtitle header in favour of the floating status island', () => {
     renderCenterPanel();
 
     expect(screen.queryByText('Naturalization Interview')).toBeNull();
     expect(screen.queryByText('Practice Session')).toBeNull();
+    const wrapper = screen.getByTestId('app-status-island-wrapper');
+    expect(wrapper.className).toContain('absolute');
     expect(screen.getByTestId('app-status-island')).toBeDefined();
     expect(screen.getByText('Ready')).toBeDefined();
+  });
+
+  it('centres the status label inside the island regardless of its width', () => {
+    renderCenterPanel();
+
+    const statusText = screen.getByText('Ready');
+    expect(statusText.className).toContain('text-center');
+    expect(screen.getByTestId('app-status-island').className).toContain('px-7');
+  });
+
+  it('slides the status island away while the conversation is scrolled and reveals it on input interaction', () => {
+    renderCenterPanel({ conversationHistory: conversation });
+
+    const wrapper = screen.getByTestId('app-status-island-wrapper');
+    expect(wrapper.getAttribute('data-visible')).toBe('true');
+
+    fireEvent.wheel(screen.getByRole('log'));
+
+    expect(wrapper.getAttribute('data-visible')).toBe('false');
+
+    fireEvent.pointerDown(screen.getByRole('textbox', { name: 'Type your response' }));
+
+    expect(wrapper.getAttribute('data-visible')).toBe('true');
+  });
+
+  it('reveals the status island when the app status changes', () => {
+    const { rerender } = renderCenterPanel({ conversationHistory: conversation });
+
+    const wrapper = screen.getByTestId('app-status-island-wrapper');
+    fireEvent.touchMove(screen.getByRole('log'));
+    expect(wrapper.getAttribute('data-visible')).toBe('false');
+
+    rerender(centerPanelElement({ conversationHistory: conversation, appStatus: 'processing' }));
+
+    expect(wrapper.getAttribute('data-visible')).toBe('true');
+    expect(screen.getByText('Thinking…')).toBeDefined();
   });
 
   it('hides the session timer in every UI state', () => {
@@ -63,23 +105,7 @@ describe('CenterPanel text interview flow', () => {
 
     expect(screen.queryByTestId('session-timer')).toBeNull();
 
-    rerender(
-      <CenterPanel
-        conversationHistory={[]}
-        displayUser={{ name: 'Alex Morgan', initials: 'AM' }}
-        interimTranscript=""
-        appStatus="idle"
-        isSessionActive
-        isVoiceSessionActive={false}
-        errorMessage={null}
-        hasMoreHistory={false}
-        onSendMessage={vi.fn()}
-        onStartSession={vi.fn()}
-        onEndSession={vi.fn()}
-        onLoadOlder={vi.fn()}
-        onClearError={vi.fn()}
-      />
-    );
+    rerender(centerPanelElement({ isSessionActive: true, isVoiceSessionActive: false }));
 
     expect(screen.queryByTestId('session-timer')).toBeNull();
     expect(screen.getByText('Ready')).toBeDefined();

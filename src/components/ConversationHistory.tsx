@@ -10,6 +10,7 @@ interface ConversationHistoryProps {
   interimTranscript: string;
   onLoadOlder?: () => void;
   hasMore?: boolean;
+  onUserScroll?: () => void;
 }
 
 export function ConversationHistory({
@@ -18,6 +19,7 @@ export function ConversationHistory({
   interimTranscript,
   onLoadOlder,
   hasMore = false,
+  onUserScroll,
 }: ConversationHistoryProps): JSX.Element {
   const { t, i18n } = useTranslation('conversation');
   const conversationRef = useRef<HTMLDivElement>(null);
@@ -61,7 +63,15 @@ export function ConversationHistory({
   }, [onLoadOlder, hasMore]);
 
   return (
-    <div ref={conversationRef} className="h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-4 sm:px-6 py-5 space-y-5" role="log" data-testid="conversation-history-log" aria-label={t('workspace.center.conversationAria')}>
+    <div
+      ref={conversationRef}
+      className="h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-4 pt-14 pb-5 space-y-5 sm:px-6"
+      role="log"
+      data-testid="conversation-history-log"
+      aria-label={t('workspace.center.conversationAria')}
+      onWheel={onUserScroll}
+      onTouchMove={onUserScroll}
+    >
       {/* Top Sentinel for Infinite Scroll Upward */}
       <div ref={topSentinelRef} className="h-1 w-full">
         {hasMore && <span className="text-xs text-immigo-gray-400 italic flex justify-center py-1">{t('workspace.center.loadingOlder')}</span>}

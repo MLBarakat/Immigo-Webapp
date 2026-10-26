@@ -1,5 +1,5 @@
 import { Maximize2, Minimize2, Send } from 'lucide-react';
-import { useState, KeyboardEvent, ChangeEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, KeyboardEvent, ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConversationHistory } from './ConversationHistory';
 import { VoiceHub } from './VoiceHub';
@@ -89,6 +89,8 @@ export function CenterPanel({
   isAudioRetryPending,
 }: CenterPanelProps) {
   const [message, setMessage] = useState('');
+  const [isStatusVisible, setIsStatusVisible] = useState(true);
+  const previousStatusRef = useRef(appStatus);
   const { t } = useTranslation('conversation');
   const statusLabelKeys: Record<AppStatus, string> = {
     idle: 'workspace.center.status.ready',
@@ -98,6 +100,20 @@ export function CenterPanel({
     speaking: 'workspace.center.status.speaking',
     error: 'workspace.center.status.error',
   };
+
+  useEffect(() => {
+    if (previousStatusRef.current === appStatus) return;
+    previousStatusRef.current = appStatus;
+    setIsStatusVisible(true);
+  }, [appStatus]);
+
+  const revealStatusIsland = useCallback(() => {
+    setIsStatusVisible(true);
+  }, []);
+
+  const hideStatusIsland = useCallback(() => {
+    setIsStatusVisible(current => (current ? false : current));
+  }, []);
 
   const handleSend = () => {
     const text = message.trim();
@@ -124,12 +140,19 @@ export function CenterPanel({
   const isEmpty = !message.trim();
 
   return (
-    <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-immigo-gray-50 dark:bg-gray-900">
-      {/* Floating status island — replaces the old title/subtitle header. */}
-      <div className="relative z-20 flex h-14 shrink-0 items-center justify-center px-4 sm:px-6">
+    <main className="relative flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-immigo-gray-50 dark:bg-gray-900">
+      {/* Floating status island — overlays the conversation so chat bubbles can scroll behind it. */}
+      <div
+        data-testid="app-status-island-wrapper"
+        data-visible={isStatusVisible}
+        aria-hidden={!isStatusVisible}
+        className={`pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-4 transition-all duration-300 ease-out motion-reduce:transition-none sm:px-6 ${
+          isStatusVisible ? 'translate-y-3 opacity-100' : '-translate-y-full opacity-0'
+        }`}
+      >
         <div
           data-testid="app-status-island"
-          className="relative inline-flex min-h-9 items-center justify-center gap-2.5 overflow-hidden rounded-full border border-white/70 bg-white/60 px-4 py-2 shadow-[0_10px_35px_-12px_rgba(15,23,42,0.45),0_2px_8px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/50 backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 dark:border-white/10 dark:bg-gray-900/60 dark:shadow-[0_12px_35px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.12)] dark:ring-white/10"
+          className="relative inline-flex min-h-9 items-center justify-center overflow-hidden rounded-full border border-white/70 bg-white/60 px-7 py-2 shadow-[0_10px_35px_-12px_rgba(15,23,42,0.45),0_2px_8px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/50 backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-900/60 dark:shadow-[0_12px_35px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.12)] dark:ring-white/10"
         >
           <span
             aria-hidden="true"
@@ -143,34 +166,40 @@ export function CenterPanel({
             aria-hidden="true"
             className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/95 to-transparent dark:via-white/40"
           />
-          <span role="status" aria-live="polite" aria-atomic="true" className="relative flex items-center gap-2.5">
-            <span className="relative flex h-2.5 w-2.5 flex-none">
-              <span className={`absolute inset-0 rounded-full opacity-30 ${STATUS_DOT_COLORS[appStatus]}`} />
-              <span className={`absolute inset-[3px] rounded-full ${STATUS_DOT_COLORS[appStatus]}`} />
-            </span>
-            <span className={`text-[13px] font-semibold leading-none tracking-[-0.01em] ${STATUS_COLORS[appStatus]}`}>
-              {t(statusLabelKeys[appStatus])}
-            </span>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute start-3.5 top-1/2 flex h-2.5 w-2.5 -translate-y-1/2"
+          >
+            <span className={`absolute inset-0 rounded-full opacity-30 ${STATUS_DOT_COLORS[appStatus]}`} />
+            <span className={`absolute inset-[3px] rounded-full ${STATUS_DOT_COLORS[appStatus]}`} />
+          </span>
+          <span
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className={`relative block text-center text-[13px] font-semibold leading-none tracking-[-0.01em] ${STATUS_COLORS[appStatus]}`}
+          >
+            {t(statusLabelKeys[appStatus])}
           </span>
         </div>
-
-        {onToggleFocus && (
-          <button
-            type="button"
-            onClick={onToggleFocus}
-            className="absolute end-4 top-1/2 hidden -translate-y-1/2 items-center gap-1.5 rounded-full border border-white/60 bg-white/50 px-3 py-1.5 text-xs font-semibold text-immigo-gray-600 shadow-sm ring-1 ring-inset ring-white/40 backdrop-blur-xl transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-art-blue-500 dark:border-white/10 dark:bg-gray-900/50 dark:text-gray-300 dark:ring-white/10 dark:hover:bg-gray-800/70 sm:end-6 md:flex"
-            aria-label={t(isFocusMode ? 'workspace.center.exitFocusAria' : 'workspace.center.enterFocusAria')}
-            title={t('workspace.center.focusTitle')}
-          >
-            {isFocusMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            <span>{t(isFocusMode ? 'workspace.center.exitFocus' : 'workspace.center.focus')}</span>
-          </button>
-        )}
       </div>
+
+      {onToggleFocus && (
+        <button
+          type="button"
+          onClick={onToggleFocus}
+          className="absolute end-4 top-3 z-30 hidden items-center gap-1.5 rounded-full border border-white/60 bg-white/50 px-3 py-1.5 text-xs font-semibold text-immigo-gray-600 shadow-sm ring-1 ring-inset ring-white/40 backdrop-blur-xl transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-art-blue-500 dark:border-white/10 dark:bg-gray-900/50 dark:text-gray-300 dark:ring-white/10 dark:hover:bg-gray-800/70 sm:end-6 md:flex"
+          aria-label={t(isFocusMode ? 'workspace.center.exitFocusAria' : 'workspace.center.enterFocusAria')}
+          title={t('workspace.center.focusTitle')}
+        >
+          {isFocusMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          <span>{t(isFocusMode ? 'workspace.center.exitFocus' : 'workspace.center.focus')}</span>
+        </button>
+      )}
 
       {/* Error Banner */}
       {errorMessage && (
-        <div className="mx-6 mt-3 p-3 bg-art-red-50 border-l-4 border-art-red-600 rounded text-sm text-art-red-800 flex justify-between items-center shrink-0" role="alert">
+        <div className="mx-4 mt-14 p-3 bg-art-red-50 border-l-4 border-art-red-600 rounded text-sm text-art-red-800 flex justify-between items-center shrink-0 sm:mx-6" role="alert">
           <p className="font-medium">{errorMessage}</p>
           <button onClick={onClearError} className="text-xs underline hover:text-art-red-900 cursor-pointer ml-4 shrink-0">{t('workspace.center.dismiss')}</button>
         </div>
@@ -185,6 +214,7 @@ export function CenterPanel({
             interimTranscript={interimTranscript}
             onLoadOlder={onLoadOlder}
             hasMore={hasMoreHistory}
+            onUserScroll={hideStatusIsland}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">
@@ -200,7 +230,11 @@ export function CenterPanel({
       </div>
 
       {/* Input Area */}
-      <div className="shrink-0 bg-star-white dark:bg-gray-800 border-t border-immigo-gray-200 dark:border-gray-700">
+      <div
+        className="shrink-0 bg-star-white dark:bg-gray-800 border-t border-immigo-gray-200 dark:border-gray-700"
+        onPointerDown={revealStatusIsland}
+        onFocusCapture={revealStatusIsland}
+      >
         <div className="px-4 py-3">
           <div className="relative">
             <div className="relative min-h-[68px] rounded-xl border-2 border-immigo-gray-200 dark:border-gray-600 bg-star-white dark:bg-gray-800 transition-colors duration-150 focus-within:border-art-blue-500">

@@ -299,28 +299,28 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
             type="button"
             onClick={() => setMobileWorkspace('resources')}
             aria-current={mobileWorkspace === 'resources' ? 'page' : undefined}
-            className={`flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap px-0.5 py-2 text-[11px] font-semibold leading-none sm:text-xs ${mobileWorkspace === 'resources' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+            className={`flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap px-0.5 py-2 text-xs font-semibold leading-none min-[360px]:gap-1.5 min-[360px]:text-[0.8125rem] sm:text-sm ${mobileWorkspace === 'resources' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
           >
-            <BookOpen className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
-            {tConversation('workspace.mobile.resources')}
+            <BookOpen className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
+            <span className="min-w-0 truncate">{tConversation('workspace.mobile.resources')}</span>
           </button>
           <button
             type="button"
             onClick={() => setMobileWorkspace('interview')}
             aria-current={mobileWorkspace === 'interview' ? 'page' : undefined}
-            className={`flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap px-0.5 py-2 text-[11px] font-semibold leading-none sm:text-xs ${mobileWorkspace === 'interview' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+            className={`flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap px-0.5 py-2 text-xs font-semibold leading-none min-[360px]:gap-1.5 min-[360px]:text-[0.8125rem] sm:text-sm ${mobileWorkspace === 'interview' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
           >
-            <MessageSquare className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
-            {tConversation('workspace.mobile.interview')}
+            <MessageSquare className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
+            <span className="min-w-0 truncate">{tConversation('workspace.mobile.interview')}</span>
           </button>
           <button
             type="button"
             onClick={() => setMobileWorkspace('controls')}
             aria-current={mobileWorkspace === 'controls' ? 'page' : undefined}
-            className={`flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap px-0.5 py-2 text-[11px] font-semibold leading-none sm:text-xs ${mobileWorkspace === 'controls' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+            className={`flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap px-0.5 py-2 text-xs font-semibold leading-none min-[360px]:gap-1.5 min-[360px]:text-[0.8125rem] sm:text-sm ${mobileWorkspace === 'controls' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
           >
-            <SlidersHorizontal className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
-            {tConversation('workspace.mobile.controls')}
+            <SlidersHorizontal className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
+            <span className="min-w-0 truncate">{tConversation('workspace.mobile.controls')}</span>
           </button>
         </nav>
         <Footer />

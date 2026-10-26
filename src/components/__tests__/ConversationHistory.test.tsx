@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConversationHistory } from '../ConversationHistory';
 import { Message } from '../../context/conversationContextTypes';
 
@@ -37,6 +37,7 @@ describe('ConversationHistory', () => {
     const log = screen.getByRole('log');
     expect(log.className).toContain('overflow-y-auto');
     expect(log.className).toContain('touch-pan-y');
+    expect(log.className).toContain('pt-14');
     Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 500 });
     log.scrollTop = 0;
 
@@ -52,6 +53,24 @@ describe('ConversationHistory', () => {
     );
 
     expect(log.scrollTop).toBe(500);
+  });
+
+  it('notifies the parent when the user scrolls the conversation', () => {
+    const onUserScroll = vi.fn();
+    render(
+      <ConversationHistory
+        messages={[message('first', '2025-01-01T12:00:00.000Z')]}
+        displayUser={displayUser}
+        interimTranscript=""
+        onUserScroll={onUserScroll}
+      />
+    );
+
+    const log = screen.getByRole('log');
+    fireEvent.wheel(log);
+    fireEvent.touchMove(log);
+
+    expect(onUserScroll).toHaveBeenCalledTimes(2);
   });
 
   it('does not jump to the bottom when older messages are prepended', () => {
