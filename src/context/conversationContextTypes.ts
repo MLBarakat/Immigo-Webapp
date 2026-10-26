@@ -8,6 +8,7 @@ import { createContext } from 'react';
 // actually runs.
 export type AppStatus = 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error';
 export type SimulationMode = 'standard' | 'practice' | 'study';
+export type TestVersion = '2008' | '2020';
 
 export interface Message {
   id: string;

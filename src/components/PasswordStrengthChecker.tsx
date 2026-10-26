@@ -1,28 +1,6 @@
 import { useMemo } from 'react';
 import { Check, X } from 'lucide-react';
-
-interface Rule {
-  label: string;
-  test: (p: string) => boolean;
-}
-
-const RULES: Rule[] = [
-  { label: 'At least 8 characters',    test: (p) => p.length >= 8 },
-  { label: 'Lowercase letter (a–z)',    test: (p) => /[a-z]/.test(p) },
-  { label: 'Uppercase letter (A–Z)',    test: (p) => /[A-Z]/.test(p) },
-  { label: 'Number (0–9)',              test: (p) => /[0-9]/.test(p) },
-  { label: 'Symbol (!@#$…)',            test: (p) => /[^a-zA-Z0-9]/.test(p) },
-];
-
-/** Returns 0-5 based on how many rules pass. */
-export function getPasswordStrength(password: string): number {
-  return RULES.reduce((acc, rule) => acc + (rule.test(password) ? 1 : 0), 0);
-}
-
-/** Returns true only when every rule passes. */
-export function isPasswordValid(password: string): boolean {
-  return RULES.every((rule) => rule.test(password));
-}
+import { PASSWORD_RULES } from '../utils/passwordStrength';
 
 interface PasswordStrengthCheckerProps {
   password: string;
@@ -30,7 +8,7 @@ interface PasswordStrengthCheckerProps {
 
 export function PasswordStrengthChecker({ password }: PasswordStrengthCheckerProps): JSX.Element {
   const results = useMemo(
-    () => RULES.map((rule) => ({ label: rule.label, met: rule.test(password) })),
+    () => PASSWORD_RULES.map((rule) => ({ label: rule.label, met: rule.test(password) })),
     [password],
   );
 

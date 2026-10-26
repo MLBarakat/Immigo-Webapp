@@ -8,6 +8,7 @@ import { TranscriptionProvider } from './context/TranscriptionContext';
 import { ConversationProvider } from './context/ConversationContext';
 import { useConversation } from './hooks/useConversation';
 import { ApiClient } from './services/apiClient';
+import { MockExamService, InProgressMockExam } from './services/mockExamService';
 
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
@@ -26,7 +27,7 @@ import { NotificationsPanel } from './components/NotificationsPanel';
 import { LeftPanel } from './components/LeftPanel';
 import { CenterPanel } from './components/CenterPanel';
 import { RightPanel } from './components/RightPanel';
-import type { SimulationMode } from './context/conversationContextTypes';
+import type { SimulationMode, TestVersion } from './context/conversationContextTypes';
 
 import { DisplayUser } from './types/user';
 import { UserSettings, FontSize, ThemeOption } from './types/settings';
@@ -61,6 +62,17 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const { t: tCommon } = useTranslation('common');
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [simulationMode, setSimulationMode] = useState<SimulationMode>('standard');
+  const [examToResume, setExamToResume] = useState<InProgressMockExam | null>(null);
+  const [pendingExamStartText, setPendingExamStartText] = useState<string | null>(null);
+  const [isCheckingExam, setIsCheckingExam] = useState(false);
+  const [testVersion, setTestVersion] = useState<TestVersion>(() => {
+    try { return localStorage.getItem('immigo_test_version') === '2008' ? '2008' : '2020'; }
+    catch { return '2020'; }
+  });
+  const [includeEnglishSimulation, setIncludeEnglishSimulation] = useState(() => {
+    try { return localStorage.getItem('immigo_include_english_simulation') === 'true'; }
+    catch { return false; }
+  });
   const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
   const [previewTheme, setPreviewTheme] = useState<ThemeOption | null>(null);
   const [micAccessError, setMicAccessError] = useState<string | null>(null);
@@ -83,10 +95,78 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     userId: user?.id ?? null,
     voiceId: activeVoiceId,
     simulationMode,
+    testVersion,
+    includeEnglishSimulation,
     preferredLanguage: currentLanguageCode,
     bargeIn: userSettings.barge_in,
   });
+  useEffect(() => {
+    try {
+      localStorage.setItem('immigo_test_version', testVersion);
+      localStorage.setItem('immigo_include_english_simulation', String(includeEnglishSimulation));
+    } catch { /* preferences remain available for the current app lifetime */ }
+  }, [testVersion, includeEnglishSimulation]);
+  useEffect(() => {
+    if (!manager.dailySessionSettings) return;
+    const settings = manager.dailySessionSettings;
+    void Promise.resolve().then(() => {
+      setSimulationMode(settings.mode);
+      setTestVersion(settings.testVersion);
+      setIncludeEnglishSimulation(settings.includeEnglishSimulation);
+    });
+  }, [manager.dailySessionSettings]);
   const managerInitError = (manager as { initError?: string | null }).initError ?? null;
+
+  const requestSessionStart = async () => {
+    if (simulationMode !== 'standard' || !user?.id) {
+      manager.setMockExamAction('new');
+      manager.startSession();
+      return;
+    }
+    setIsCheckingExam(true);
+    const unfinishedExam = await MockExamService.getLatestInProgress(user.id, testVersion);
+    setIsCheckingExam(false);
+    if (unfinishedExam) {
+      setExamToResume(unfinishedExam);
+      return;
+    }
+    manager.setMockExamAction('new');
+    manager.startSession();
+  };
+
+  const chooseExamAction = (action: 'new' | 'resume') => {
+    setExamToResume(null);
+    manager.setMockExamAction(action);
+    if (pendingExamStartText !== null) {
+      const text = pendingExamStartText;
+      setPendingExamStartText(null);
+      void manager.sendTextMessage(text);
+    } else {
+      manager.startSession();
+    }
+  };
+
+  const handleSendTextMessage = async (text: string) => {
+    if (simulationMode === 'standard' && user?.id && !manager.currentItemId) {
+      setPendingExamStartText(text);
+      setIsCheckingExam(true);
+      const unfinishedExam = await MockExamService.getLatestInProgress(user.id, testVersion);
+      setIsCheckingExam(false);
+      if (unfinishedExam) {
+        setExamToResume(unfinishedExam);
+        return;
+      }
+      setPendingExamStartText(null);
+      manager.setMockExamAction('new');
+    }
+    void manager.sendTextMessage(text);
+  };
+
+  const handleSimulationModeChange = (mode: SimulationMode) => {
+    if (mode === simulationMode) return;
+    setSimulationMode(mode);
+    if (manager.sessionId && user?.id) void manager.changeMode(mode);
+  };
 
   // ── UI State ──
   const hasSeenWelcome = Boolean(
@@ -267,8 +347,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               isVoiceSessionActive={manager.isVoiceSessionActive}
               errorMessage={manager.errorMessage}
               hasMoreHistory={manager.hasMoreHistory}
-              onSendMessage={manager.sendTextMessage}
-              onStartSession={manager.startSession}
+              onSendMessage={handleSendTextMessage}
+              onStartSession={requestSessionStart}
               onEndSession={manager.endSession}
               micConsentVersion={userSettings.mic_consent_version}
               onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
@@ -286,7 +366,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               isMobile
               onToggleCollapse={() => setMobileWorkspace('interview')}
               simulationMode={simulationMode}
-              onSimulationModeChange={setSimulationMode}
+              onSimulationModeChange={handleSimulationModeChange}
+              testVersion={testVersion}
+              onTestVersionChange={setTestVersion}
+              includeEnglishSimulation={includeEnglishSimulation}
+              onIncludeEnglishSimulationChange={setIncludeEnglishSimulation}
+              userId={user?.id}
+              currentItemId={manager.currentItemId}
               onClearSession={manager.clearConversation}
               onDownloadTranscript={manager.downloadTranscript}
               conversationLength={manager.conversationHistory.length}
@@ -421,8 +507,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           isVoiceSessionActive={manager.isVoiceSessionActive}
           errorMessage={manager.errorMessage}
           hasMoreHistory={manager.hasMoreHistory}
-          onSendMessage={manager.sendTextMessage}
-          onStartSession={manager.startSession}
+          onSendMessage={handleSendTextMessage}
+          onStartSession={requestSessionStart}
           onEndSession={manager.endSession}
           micConsentVersion={userSettings.mic_consent_version}
           onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
@@ -441,7 +527,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           isCollapsed={rightCollapsed}
           onToggleCollapse={() => setRightCollapsed(p => !p)}
           simulationMode={simulationMode}
-          onSimulationModeChange={setSimulationMode}
+          onSimulationModeChange={handleSimulationModeChange}
+          testVersion={testVersion}
+          onTestVersionChange={setTestVersion}
+          includeEnglishSimulation={includeEnglishSimulation}
+          onIncludeEnglishSimulationChange={setIncludeEnglishSimulation}
+          userId={user?.id}
+          currentItemId={manager.currentItemId}
           onClearSession={manager.clearConversation}
           onDownloadTranscript={manager.downloadTranscript}
           conversationLength={manager.conversationHistory.length}
@@ -450,6 +542,45 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       </div>
 
       <Footer />
+
+      {(examToResume || isCheckingExam) && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="mock-exam-choice-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-800">
+            <h2 id="mock-exam-choice-title" className="text-lg font-bold text-deep-navy dark:text-white">
+              {isCheckingExam ? 'Checking your exam…' : 'Continue your mock exam?'}
+            </h2>
+            {isCheckingExam ? (
+              <p className="mt-2 text-sm text-immigo-gray-600 dark:text-gray-300">Looking for an unfinished exam in this question bank.</p>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-immigo-gray-600 dark:text-gray-300">
+                  {examToResume?.english_stage === 'reading' || examToResume?.english_stage === 'writing'
+                    ? `Your previous ${examToResume.test_version} exam has finished the civics section and is ready to continue with English ${examToResume.english_stage} practice.`
+                    : `Your previous ${examToResume?.test_version} exam has ${Math.max(0, examToResume?.question_ids.length ?? 0) - (examToResume?.current_index ?? 0)} civics questions remaining. You can continue it or begin a new exam.`}
+                </p>
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <button type="button" onClick={() => chooseExamAction('resume')} className="rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-art-blue-700">Continue exam</button>
+                  <button type="button" onClick={() => chooseExamAction('new')} className="rounded-lg border border-immigo-gray-300 px-4 py-2 text-sm font-semibold text-deep-navy hover:bg-immigo-gray-50 dark:text-white">Start a new exam</button>
+                  <button type="button" onClick={() => { setExamToResume(null); setPendingExamStartText(null); }} className="rounded-lg px-4 py-2 text-sm text-immigo-gray-600 hover:bg-immigo-gray-100 dark:text-gray-300">Cancel</button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      )}
+      {manager.examCompletion && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="mock-exam-complete-title" className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-800">
+            <h2 id="mock-exam-complete-title" className="text-lg font-bold text-deep-navy dark:text-white">Mock exam complete</h2>
+            <p className="mt-3 whitespace-pre-line text-sm text-immigo-gray-700 dark:text-gray-200">{manager.examCompletion.report}</p>
+            <p className="mt-3 text-sm text-immigo-gray-700 dark:text-gray-200">Based on this result, {manager.examCompletion.recommendedMode === 'study' ? 'Study Mode' : 'Practice Mode'} may help you most next.</p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => { manager.dismissExamCompletion(); manager.setMockExamAction('new'); manager.startSession(); }} className="rounded-lg border border-immigo-gray-300 px-4 py-2 text-sm font-semibold text-deep-navy hover:bg-immigo-gray-50 dark:text-white">Start a new mock exam</button>
+              <button type="button" onClick={() => { const mode = manager.examCompletion!.recommendedMode; manager.dismissExamCompletion(); handleSimulationModeChange(mode); }} className="rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-art-blue-700">Switch modes and continue</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

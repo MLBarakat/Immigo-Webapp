@@ -15,9 +15,10 @@ export interface CivicsItem {
 export type Intent =
   | 'answer' | 'explain' | 'assist' | 'affirmation'
   | 'smalltalk' | 'off_topic' | 'manipulation' | 'unclear'
-  | 'repeat' | 'hint' | 'legal_advice';
+  | 'repeat' | 'hint' | 'legal_advice' | 'english_retry';
 
 export type SimulationMode = 'standard' | 'practice' | 'study';
+export type TestVersion = '2008' | '2020';
 
 export interface ConversationTurn {
   role: 'user' | 'assistant';

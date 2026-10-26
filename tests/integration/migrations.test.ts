@@ -54,4 +54,14 @@ describe('supabase migrations define the schema the code relies on', () => {
     expect(sql).toContain("tablename = 'active_user_sessions'");
     expect(sql).toMatch(/alter publication supabase_realtime add table public\.active_user_sessions/);
   });
+
+  it('persists mock exam English sections, stable prompt selections, and answer attempts', () => {
+    expect(sql).toMatch(/add column if not exists english_stage/);
+    expect(sql).toMatch(/add column if not exists reading_prompt_ids/);
+    expect(sql).toMatch(/add column if not exists writing_prompt_ids/);
+    expect(sql).toMatch(/create table if not exists mock_exam_english_answers/);
+    expect(sql).toMatch(/unique \(exam_id, section, prompt_index\)/);
+    expect(sql).toMatch(/alter table mock_exam_english_answers enable row level security/);
+    expect(sql).toMatch(/users own mock exam english answers/);
+  });
 });

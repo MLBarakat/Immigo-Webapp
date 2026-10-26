@@ -3,6 +3,66 @@ import { PersistedMessage, SessionHydrationPayload } from '../types/persistence'
 import { logger } from '../logger';
 
 export class ChatPersistenceService {
+  static getDeviceLocalDate(date = new Date()): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  static async getOrCreateDailySession(
+    userId: string,
+    localDate = ChatPersistenceService.getDeviceLocalDate(),
+    localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local'
+  ): Promise<{ id: string; current_item_id: string | null; mode_goal_pending: boolean; current_mode: string; test_version: string; include_english_simulation: boolean } | null> {
+    if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(localDate)) return null;
+    const supabase = getSupabaseClient();
+    const selectSession = async () => supabase
+      .from('sessions')
+      .select('id,current_item_id,mode_goal_pending,current_mode,test_version,include_english_simulation')
+      .eq('user_id', userId)
+      .eq('local_date', localDate)
+      .maybeSingle();
+
+    try {
+      const { data: existing, error: lookupError } = await selectSession();
+      if (lookupError) throw lookupError;
+      if (existing) {
+        const { error } = await supabase.from('sessions')
+          .update({ status: 'active', ended_at: null, local_timezone: localTimezone })
+          .eq('id', existing.id);
+        if (error) throw error;
+        return existing as { id: string; current_item_id: string | null; mode_goal_pending: boolean; current_mode: string; test_version: string; include_english_simulation: boolean };
+      }
+
+      const { data: created, error: createError } = await supabase.from('sessions')
+        .insert({ user_id: userId, status: 'active', local_date: localDate, local_timezone: localTimezone })
+        .select('id,current_item_id,mode_goal_pending,current_mode,test_version,include_english_simulation')
+        .single();
+      if (!createError && created) return created as { id: string; current_item_id: string | null; mode_goal_pending: boolean; current_mode: string; test_version: string; include_english_simulation: boolean };
+
+      // Another tab/device may have won the unique local-date insert race.
+      const { data: raced, error: raceError } = await selectSession();
+      if (!raceError && raced) return raced as { id: string; current_item_id: string | null; mode_goal_pending: boolean; current_mode: string; test_version: string; include_english_simulation: boolean };
+      throw createError ?? raceError;
+    } catch (err) {
+      logger.error('Failed to get or create the device-local daily session:', undefined, { error: String(err) });
+      return null;
+    }
+  }
+
+  static async saveDailySessionState(
+    sessionId: string,
+    state: { current_item_id?: string | null; current_mode?: string; test_version?: string; include_english_simulation?: boolean }
+  ): Promise<void> {
+    if (!sessionId) return;
+    try {
+      const { error } = await getSupabaseClient().from('sessions').update(state).eq('id', sessionId);
+      if (error) logger.error('Failed to save daily learning state:', undefined, { error: error.message });
+    } catch (err) {
+      logger.error('Exception saving daily learning state:', undefined, { error: String(err) });
+    }
+  }
   /**
    * Inserts a new active session record into the `sessions` table.
    * Returns the new session ID, or null if unauthenticated or error.
@@ -92,17 +152,17 @@ export class ChatPersistenceService {
    * Loads the most recent messages across all sessions for continuous chat UI hydration.
    * Returns messages in chronological order (oldest to newest).
    */
-  static async loadRecentMessages(userId: string, limit = 25): Promise<SessionHydrationPayload> {
+  static async loadRecentMessages(userId: string, limit = 25, sessionId?: string | null): Promise<SessionHydrationPayload> {
     if (!userId) return { messages: [], hasMore: false, oldestCursor: null };
 
     try {
       const supabase = getSupabaseClient();
-      const { data, error } = await supabase
+      let query = supabase
         .from('messages')
         .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(limit + 1);
+        .eq('user_id', userId);
+      if (sessionId) query = query.eq('session_id', sessionId);
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(limit + 1);
 
       if (error) {
         logger.error('Failed to load recent messages from Supabase:', undefined, { error: error.message });
@@ -137,17 +197,20 @@ export class ChatPersistenceService {
   static async loadOlderMessages(
     userId: string,
     beforeCursor: string,
-    limit = 25
+    limit = 25,
+    sessionId?: string | null
   ): Promise<SessionHydrationPayload> {
     if (!userId || !beforeCursor) return { messages: [], hasMore: false, oldestCursor: null };
 
     try {
       const supabase = getSupabaseClient();
-      const { data, error } = await supabase
+      let query = supabase
         .from('messages')
         .select('*')
         .eq('user_id', userId)
-        .lt('created_at', beforeCursor)
+        .lt('created_at', beforeCursor);
+      if (sessionId) query = query.eq('session_id', sessionId);
+      const { data, error } = await query
         .order('created_at', { ascending: false })
         .limit(limit + 1);
 

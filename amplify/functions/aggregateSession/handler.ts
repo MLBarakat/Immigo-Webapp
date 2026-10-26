@@ -6,6 +6,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 import bank from '../transcript/civics-bank.2020-128.json';
+import bank2008 from '../transcript/civics-bank.2008-100.json';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const modelId = process.env.DEFAULT_MODEL_ID || 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
@@ -16,7 +17,11 @@ const bedrockClient = new BedrockRuntimeClient({ region });
 let supabaseClient: SupabaseClient | null = null;
 
 const bankItems = (bank as { items: Array<{ id: string; question: string }> }).items;
-const bankById = new Map(bankItems.map((i) => [i.id, i]));
+const bank2008Items = (bank2008 as { items: Array<{ id: string; question: string }> }).items;
+const bankById = new Map([
+  ...bankItems.map((i) => [`2020:${i.id}`, i] as const),
+  ...bank2008Items.map((i) => [`2008:${i.id}`, i] as const),
+]);
 
 const LambdaUnsupportedRealtimeTransport: WebSocketLikeConstructor = class {
   static readonly CONNECTING = 0;
@@ -186,18 +191,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log(`[Aggregator-Execution] [${traceId}] Processing session aggregation for session: ${sessionId}, user: ${userId}`);
 
-    const today = new Date().toISOString().split('T')[0];
-    const dayStart = `${today}T00:00:00.000Z`;
-    const nextDay = new Date(Date.parse(dayStart) + 24 * 60 * 60 * 1000).toISOString();
+    const db = createClient(
+      process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!,
+      process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY!,
+      { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false }, realtime: { transport: LambdaUnsupportedRealtimeTransport } }
+    );
+    const { data: sessionRow } = await db.from('sessions').select('local_date').eq('id', sessionId).eq('user_id', userId).maybeSingle();
+    const today = sessionRow?.local_date ?? new Date().toISOString().split('T')[0];
 
-    // A daily report combines all of this user's activity across sessions and
-    // devices in the UTC day, rather than replacing it with the last session.
-    const { data: sessionMessages, error: msgError } = await supabase
+    // The local-date session row is the source of truth for today's accumulated
+    // conversation across devices and across all three learning modes.
+    const { data: sessionMessages, error: msgError } = await db
       .from('messages')
       .select('role, content, created_at')
       .eq('user_id', userId)
-      .gte('created_at', dayStart)
-      .lt('created_at', nextDay)
+      .eq('session_id', sessionId)
       .order('created_at', { ascending: true });
 
     if (msgError) {
@@ -212,7 +220,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // this invocation is about to replace.
     let previousReportMarkdown = 'No previous progress report recorded.';
 
-    const { data: latestReport } = await supabase
+    const { data: latestReport } = await db
       .from('daily_progress_reports')
       .select('report_markdown')
       .eq('user_id', userId)
@@ -226,18 +234,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // 2b. Fetch authoritative per-answer verdicts for the full UTC day.
-    const { data: gradedRows, error: gradedErr } = await supabase
+    const { data: gradedRows, error: gradedErr } = await db
       .from('graded_answers')
-      .select('item_id, verdict, created_at')
+      .select('item_id, verdict, created_at, simulation_mode, test_version')
       .eq('user_id', userId)
-      .gte('created_at', dayStart)
-      .lt('created_at', nextDay);
+      .eq('session_id', sessionId);
 
     if (gradedErr) {
       console.warn(`[Aggregator-Grade] [${traceId}] graded_answers query error: ${gradedErr.message}`);
     }
 
-    const graded = (gradedRows ?? []) as Array<{ item_id: string; verdict: string }>;
+    const graded = (gradedRows ?? []) as Array<{ item_id: string; verdict: string; simulation_mode?: string; test_version?: string }>;
     if (sessionTranscript.length === 0 && graded.length === 0) {
       console.log(`[Aggregator-Execution] No messages or graded answers found for session ${sessionId}. Skipping aggregation.`);
       return {
@@ -255,7 +262,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const missed = graded
       .filter((g) => g.verdict !== 'correct')
-      .map((g) => `  * (${g.item_id}) ${bankById.get(g.item_id)?.question ?? g.item_id}`);
+      .map((g) => `  * (${g.test_version ?? '2020'}:${g.item_id}) ${bankById.get(`${g.test_version ?? '2020'}:${g.item_id}`)?.question ?? g.item_id}`);
+
+    const modeBreakdown = [...new Set(graded.map((g) => g.simulation_mode ?? 'standard'))].map((mode) => {
+      const rows = graded.filter((g) => (g.simulation_mode ?? 'standard') === mode);
+      const modeCorrect = rows.filter((g) => g.verdict === 'correct').length;
+      return `- ${mode}: ${modeCorrect}/${rows.length} correct (${Math.round(modeCorrect * 100 / rows.length)}%)`;
+    });
 
     const scoreFacts = answered > 0
       ? [
@@ -265,6 +278,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           `- Partial: ${partial}`,
           `- Incorrect: ${incorrect}`,
           `- Accuracy: ${accuracyPct}% (correct / graded)`,
+          '- Results by mode:',
+          ...modeBreakdown,
           missed.length
             ? `- Missed or partial questions:\n${missed.join('\n')}`
             : '- No missed questions today.',
@@ -284,7 +299,7 @@ USCIS N-400 Examination Categories:
 
 Instructions:
 - The "AUTHORITATIVE GRADING FACTS" block (computed from recorded per-answer verdicts) is the source of truth for this session's accuracy, counts, and which questions were missed. Report those numbers and the missed-question list EXACTLY; never override them with your own judgment of the transcript.
-- These authoritative facts include every committed answer from Standard Interview, Practice, and Study modes. Treat them as one combined measure of civics-question progress; do not omit or discount a mode.
+- These authoritative facts include results by mode and an overall total. Preserve both; never hide differences between Standard Interview, Practice, and Study Mode.
 - Some questions require a current answer and are intentionally ungraded until an authoritative current answer is available. Do not infer a score for those turns from the transcript.
 - Evaluate the candidate's performance in categories practiced today, across all of today's sessions.
 - For categories NOT practiced today, inherit the previous scores and feedback from the Previous Progress Report.
@@ -306,7 +321,7 @@ Instructions:
           content: [
             {
               type: 'text',
-              text: `Previous Progress Report:\n${previousReportMarkdown}\n\n${scoreFacts}\n\nToday's Conversation Transcript (for qualitative context only):\n${sessionTranscript}\n\nPlease generate the updated Living Daily Progress Report for UTC date ${today}. Report the authoritative accuracy and counts EXACTLY as given, and list the missed questions exactly. Do not invent numbers that contradict the authoritative facts.`
+              text: `Previous Progress Report:\n${previousReportMarkdown}\n\n${scoreFacts}\n\nToday's Conversation Transcript (for qualitative context only):\n${sessionTranscript}\n\nPlease generate the updated Living Daily Progress Report for local date ${today}. Report the authoritative accuracy, mode breakdown, and counts EXACTLY as given, and list the missed questions exactly. Do not invent numbers that contradict the authoritative facts.`
             }
           ]
         }
@@ -342,7 +357,7 @@ Instructions:
     const embeddingVector = await getTitanEmbedding(reportMarkdown);
 
     // 5. UPSERT into daily_progress_reports (on conflict user_id, date)
-    const { error: upsertError } = await supabase
+    const { error: upsertError } = await db
       .from('daily_progress_reports')
       .upsert(
         {

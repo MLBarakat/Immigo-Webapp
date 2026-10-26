@@ -1,0 +1,79 @@
+{
+  "edition": "english-practice-v1",
+  "title": "Naturalization English Reading and Writing Practice Bank",
+  "source": {
+    "authority": "USCIS Reading and Writing Vocabulary for the Naturalization Test",
+    "note": "These are original Immigo practice sentences based on USCIS vocabulary. USCIS does not publish the live test sentences; these are not official USCIS test questions.",
+    "readingVocabulary": "https://www.uscis.gov/sites/default/files/document/guides/M-715_reading.pdf",
+    "writingVocabulary": "https://www.uscis.gov/sites/default/files/document/guides/M-715_writing.pdf"
+  },
+  "format": {
+    "sentencesPerSection": 3,
+    "passingRule": "A learner passes a section after one correct sentence, or completes three sentences without passing.",
+    "questionSentenceRule": "Each mock exam randomly selects three reading sentences and three writing sentences from this bank."
+  },
+  "reading": [
+    {
+      "id": "read-01",
+      "number": 1,
+      "sentence": "Who was the first President?"
+    },
+    {
+      "id": "read-02",
+      "number": 2,
+      "sentence": "Where is the capital of the United States?"
+    },
+    {
+      "id": "read-03",
+      "number": 3,
+      "sentence": "When do we vote for President?"
+    },
+    {
+      "id": "read-04",
+      "number": 4,
+      "sentence": "What is the Bill of Rights?"
+    },
+    {
+      "id": "read-05",
+      "number": 5,
+      "sentence": "Who can vote in the United States?"
+    },
+    {
+      "id": "read-06",
+      "number": 6,
+      "sentence": "Where does Congress meet?"
+    }
+  ],
+  "writing": [
+    {
+      "id": "write-01",
+      "number": 1,
+      "sentence": "The President lives in the White House."
+    },
+    {
+      "id": "write-02",
+      "number": 2,
+      "sentence": "Citizens can vote for President."
+    },
+    {
+      "id": "write-03",
+      "number": 3,
+      "sentence": "Congress meets in the capital."
+    },
+    {
+      "id": "write-04",
+      "number": 4,
+      "sentence": "George Washington was the first President."
+    },
+    {
+      "id": "write-05",
+      "number": 5,
+      "sentence": "The United States has fifty states."
+    },
+    {
+      "id": "write-06",
+      "number": 6,
+      "sentence": "The people vote for Senators."
+    }
+  ]
+}

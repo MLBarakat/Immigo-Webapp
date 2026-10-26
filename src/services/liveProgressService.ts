@@ -4,7 +4,9 @@
 // round-trip, no Bedrock call, no Titan embedding. Every committed grade is
 // already written to graded_answers in real time (persistGradedAnswer), so
 // this is a plain arithmetic read, essentially free, safe to refresh after
-// every single question. This is deliberately SEPARATE from the narrative
+// every single question. Daily stats use the shared device-local date session,
+// so typing, voice, mode changes, and other devices accumulate together. This
+// is deliberately SEPARATE from the narrative
 // progress report (aggregateSession), which is the expensive, LLM-generated
 // prose summary — that stays throttled (session-end + periodic refresh),
 // while these numeric facts can be as live as you want them.
@@ -24,6 +26,30 @@ export interface ProgressReport {
   id: string;
   date: string;
   report_markdown: string;
+}
+
+export interface QuestionMastery {
+  attempts: number;
+  correctCount: number;
+  masteryPct: number;
+  mastered: boolean;
+}
+
+export async function fetchQuestionMastery(userId: string, itemId: string, testVersion: '2008' | '2020'): Promise<QuestionMastery | null> {
+  if (!userId || !itemId) return null;
+  const { data, error } = await getSupabaseClient().from('question_mastery')
+    .select('attempts,correct_count,mastery_pct,mastered')
+    .eq('user_id', userId).eq('item_id', itemId).eq('test_version', testVersion).maybeSingle();
+  if (error) {
+    logger.warn('[LiveProgress] Question mastery query error:', { error: error.message });
+    return null;
+  }
+  return data ? {
+    attempts: Number(data.attempts),
+    correctCount: Number(data.correct_count),
+    masteryPct: Number(data.mastery_pct),
+    mastered: data.mastered === true,
+  } : null;
 }
 
 interface GradedRow {
@@ -51,21 +77,22 @@ export function getUtcDayBounds(now = new Date()): { start: string; end: string 
 }
 
 /**
- * Reads all of the user's committed answers for the current UTC day. Since
- * grades are stored in Supabase under the user's record, this is shared across
- * sessions and devices and naturally rolls over at UTC midnight.
+ * Reads the committed answers for the user's current device-local day session.
  */
 export async function fetchDailyProgressStats(userId: string, now = new Date()): Promise<LiveSessionStats | null> {
   if (!userId) return null;
   try {
-    const { start, end } = getUtcDayBounds(now);
     const supabase = getSupabaseClient();
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const { data: session, error: sessionError } = await supabase.from('sessions')
+      .select('id').eq('user_id', userId).eq('local_date', localDate).maybeSingle();
+    if (sessionError) throw sessionError;
+    if (!session) return computeLiveStats([]);
     const { data, error } = await supabase
       .from('graded_answers')
       .select('item_id, verdict')
       .eq('user_id', userId)
-      .gte('created_at', start)
-      .lt('created_at', end)
+      .eq('session_id', session.id)
       .order('created_at', { ascending: false });
 
     if (error) {

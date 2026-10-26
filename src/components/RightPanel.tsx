@@ -1,13 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, Trash2, Download, SlidersHorizontal, AlertTriangle } from 'lucide-react';
-import { AppStatus, SimulationMode } from '../context/conversationContextTypes';
+import { AppStatus, SimulationMode, TestVersion } from '../context/conversationContextTypes';
+import { fetchQuestionMastery } from '../services/liveProgressService';
+import type { QuestionMastery } from '../services/liveProgressService';
 
 interface RightPanelProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   simulationMode: SimulationMode;
   onSimulationModeChange: (mode: SimulationMode) => void;
+  testVersion: TestVersion;
+  onTestVersionChange: (version: TestVersion) => void;
+  includeEnglishSimulation: boolean;
+  onIncludeEnglishSimulationChange: (include: boolean) => void;
+  userId?: string | null;
+  currentItemId?: string | null;
   onClearSession: () => void;
   onDownloadTranscript: () => void;
   conversationLength: number;
@@ -22,6 +30,12 @@ export function RightPanel({
   onToggleCollapse,
   simulationMode,
   onSimulationModeChange,
+  testVersion,
+  onTestVersionChange,
+  includeEnglishSimulation,
+  onIncludeEnglishSimulationChange,
+  userId,
+  currentItemId,
   onClearSession,
   onDownloadTranscript,
   conversationLength,
@@ -30,6 +44,22 @@ export function RightPanel({
 }: RightPanelProps) {
   const { t } = useTranslation('conversation');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [questionMasteryResult, setQuestionMasteryResult] = useState<{
+    key: string;
+    value: QuestionMastery | null;
+  } | null>(null);
+  const questionMasteryKey = userId && currentItemId ? `${userId}:${testVersion}:${currentItemId}` : null;
+  const questionMastery = questionMasteryKey && questionMasteryResult?.key === questionMasteryKey
+    ? questionMasteryResult.value
+    : null;
+  useEffect(() => {
+    let active = true;
+    if (!userId || !currentItemId) return () => { active = false; };
+    void fetchQuestionMastery(userId, currentItemId, testVersion).then(value => {
+      if (active) setQuestionMasteryResult({ key: `${userId}:${testVersion}:${currentItemId}`, value });
+    });
+    return () => { active = false; };
+  }, [userId, currentItemId, testVersion]);
   const isRequestInFlight = appStatus === 'processing' || appStatus === 'speaking';
 
   const handleClearRequest = () => {
@@ -153,6 +183,31 @@ export function RightPanel({
               );
             })}
           </fieldset>
+          <div className="mt-3 space-y-2 rounded-lg border border-immigo-gray-200 p-2.5">
+            <fieldset>
+              <legend className="mb-1.5 text-[11px] font-semibold text-immigo-gray-600">{t('workspace.right.testVersion')}</legend>
+              <div className="grid grid-cols-2 gap-1">
+                {(['2008', '2020'] as TestVersion[]).map(version => (
+                  <label key={version} className={`cursor-pointer rounded-md border px-2 py-1.5 text-center text-[11px] ${testVersion === version ? 'border-art-blue-600 bg-art-blue-50 font-semibold text-art-blue-700' : 'border-immigo-gray-200 text-immigo-gray-600'}`}>
+                    {version === '2008' ? t('workspace.right.version2008') : t('workspace.right.version2020')}
+                    <input type="radio" name="test-version" value={version} checked={testVersion === version} onChange={() => onTestVersionChange(version)} className="sr-only" />
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label className="flex cursor-pointer items-center gap-2 text-[11px] text-immigo-gray-700">
+              <input type="checkbox" checked={includeEnglishSimulation} onChange={event => onIncludeEnglishSimulationChange(event.target.checked)} className="rounded border-immigo-gray-300 text-art-blue-600 focus:ring-art-blue-500" />
+              <span>{t('workspace.right.includeEnglishSimulation')}</span>
+            </label>
+          </div>
+          {currentItemId && (
+            <div className="mt-2 rounded-lg bg-immigo-gray-50 px-2.5 py-2 text-[11px] text-immigo-gray-600">
+              <div className="font-semibold text-immigo-gray-700">{t('workspace.right.questionMastery')}</div>
+              {questionMastery ? (
+                <span>{t('workspace.right.masteryStats', { correct: questionMastery.correctCount, attempts: questionMastery.attempts, percent: questionMastery.masteryPct })}{questionMastery.mastered ? ` · ${t('workspace.right.mastered')}` : ''}</span>
+              ) : <span>{t('workspace.right.noMasteryYet')}</span>}
+            </div>
+          )}
         </section>
 
         <div className="shrink-0 border-t border-immigo-gray-200" />

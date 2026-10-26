@@ -152,6 +152,9 @@ export function resolveTurn(interp: TurnInterpretation | null, opts: ResolveOpti
       return outcome('hint', null, false, false, 'teach', interp.reply, true, ['hint_requested']);
     }
 
+    case 'english_retry':
+      return outcome('english_retry', null, false, false, 'teach', interp.reply, true, ['english_answer_requested']);
+
     default:
       return outcome('safe_fail', null, false, false, 'safe_fail', SAFE.safeFail, false, ['unknown_intent']);
   }

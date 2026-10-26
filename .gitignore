@@ -153,3 +153,4 @@ REMEDIATION_AUDIT.md
 /eval/stt/clips
 /.agents
 /public/models
+/.tmp

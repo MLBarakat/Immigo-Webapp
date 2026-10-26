@@ -1,7 +1,7 @@
 import amplifyOutputs from '../../amplify_outputs.json';
 import { logger } from '../logger';
 import { markDocTombstone } from '../utils/docTombstone';
-import type { SimulationMode } from '../context/conversationContextTypes';
+import type { SimulationMode, TestVersion } from '../context/conversationContextTypes';
 
 const API_BASE_URL = (amplifyOutputs as { custom?: { apiBaseUrl?: string; API_URL?: string } }).custom?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || '';
 // NOTE: no VITE_API_KEY here by design. A key baked into the web bundle is
@@ -18,6 +18,8 @@ interface ApiErrorPayload {
   message?: string;
   [key: string]: unknown;
 }
+
+export type MockExamAction = 'new' | 'resume';
 
 /**
  * Reduces unknown server payloads to shape metadata for logs. Full bodies
@@ -155,6 +157,12 @@ export class ApiClient {
     needsConfirmation: boolean;
     nextItemId: string | null;
     nextQuestion: string | null;
+    assistantSegments: string[];
+    examRunId: string | null;
+    examCompleted: boolean;
+    examReport: string | null;
+    examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
+    modeGoalPending: boolean;
   }> {
     let response: Response;
     try {
@@ -182,6 +190,12 @@ export class ApiClient {
       needsConfirmation?: unknown;
       nextItemId?: unknown;
       nextQuestion?: unknown;
+      assistantSegments?: unknown;
+      examRunId?: unknown;
+      examCompleted?: unknown;
+      examReport?: unknown;
+      examStage?: unknown;
+      modeGoalPending?: unknown;
       error?: string;
     }
 
@@ -218,6 +232,9 @@ export class ApiClient {
       const needsConfirmation = parsedPayload.needsConfirmation === true;
       const nextItemId = typeof parsedPayload.nextItemId === 'string' ? parsedPayload.nextItemId : null;
       const nextQuestion = typeof parsedPayload.nextQuestion === 'string' ? parsedPayload.nextQuestion : null;
+      const assistantSegments = Array.isArray(parsedPayload.assistantSegments)
+        ? parsedPayload.assistantSegments.filter((segment): segment is string => typeof segment === 'string' && segment.trim().length > 0)
+        : [parsedPayload.responseText];
 
       logger.info('[ApiClient] transcript endpoint payload parsed and decoded successfully.');
       return {
@@ -227,6 +244,12 @@ export class ApiClient {
         needsConfirmation,
         nextItemId,
         nextQuestion,
+        assistantSegments: assistantSegments.length > 0 ? assistantSegments : [parsedPayload.responseText],
+        examRunId: typeof parsedPayload.examRunId === 'string' ? parsedPayload.examRunId : null,
+        examCompleted: parsedPayload.examCompleted === true,
+        examReport: typeof parsedPayload.examReport === 'string' ? parsedPayload.examReport : null,
+        examStage: parsedPayload.examStage === 'reading' || parsedPayload.examStage === 'writing' || parsedPayload.examStage === 'complete' || parsedPayload.examStage === 'none' ? parsedPayload.examStage : null,
+        modeGoalPending: parsedPayload.modeGoalPending === true,
       };
     } catch (error) {
       logger.error('[ApiClient] Codec Exception decoding audio stream:', undefined, { error: String(error) });
@@ -239,8 +262,8 @@ export class ApiClient {
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     currentItemId?: string | null,
-    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean },
-    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean } = {}
+    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string },
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -248,6 +271,12 @@ export class ApiClient {
     needsConfirmation: boolean;
     nextItemId: string | null;
     nextQuestion: string | null;
+    assistantSegments: string[];
+    examRunId: string | null;
+    examCompleted: boolean;
+    examReport: string | null;
+    examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
+    modeGoalPending: boolean;
   }> {
     let confirmationRetry: boolean | undefined;
     let effectiveOptions = options;
@@ -284,6 +313,13 @@ export class ApiClient {
           confirmationRetry,
           simulationMode: effectiveOptions.simulationMode ?? 'standard',
           preferredLanguage: effectiveOptions.preferredLanguage ?? 'en-US',
+          testVersion: effectiveOptions.testVersion ?? '2020',
+          includeEnglishSimulation: effectiveOptions.includeEnglishSimulation ?? false,
+          ...(effectiveOptions.examRunId ? { examRunId: effectiveOptions.examRunId } : {}),
+          ...(effectiveOptions.modeGoalResponse ? { modeGoalResponse: true } : {}),
+          ...(effectiveOptions.examAction ? { examAction: effectiveOptions.examAction } : {}),
+          ...(effectiveOptions.inputMethod ? { inputMethod: effectiveOptions.inputMethod } : {}),
+          ...(effectiveOptions.requestId ? { requestId: effectiveOptions.requestId } : {}),
           ...(effectiveOptions.openingResponse ? { openingResponse: true } : {}),
           ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {})
         },
@@ -297,10 +333,27 @@ export class ApiClient {
     }
   }
 
+  async postModeTransition(
+    sessionId: string,
+    currentItemId: string | null,
+    options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; testVersion?: TestVersion; includeEnglishSimulation?: boolean } = {}
+  ) {
+    return this.sendTranscriptRequest({
+      modeTransition: true,
+      sessionId,
+      currentItemId,
+      simulationMode: options.simulationMode ?? 'standard',
+      preferredLanguage: options.preferredLanguage ?? 'en-US',
+      testVersion: options.testVersion ?? '2020',
+      includeEnglishSimulation: options.includeEnglishSimulation ?? false,
+      ...(options.voiceId ? { voiceId: options.voiceId } : {}),
+    }, options);
+  }
+
   /** Select the first interview question without speaking before user input. */
   async postSessionStart(
     sessionId?: string | null,
-    options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
+    options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examAction?: MockExamAction } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -308,6 +361,11 @@ export class ApiClient {
     needsConfirmation: boolean;
     nextItemId: string | null;
     nextQuestion: string | null;
+    assistantSegments: string[];
+    examRunId: string | null;
+    examCompleted: boolean;
+    examReport: string | null;
+    examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
   }> {
     logger.info('[ApiClient] Dispatching postSessionStart request:', { sessionId, voiceId: options.voiceId });
     return this.sendTranscriptRequest({
@@ -315,6 +373,9 @@ export class ApiClient {
       sessionId,
       simulationMode: options.simulationMode ?? 'standard',
       preferredLanguage: options.preferredLanguage ?? 'en-US',
+      testVersion: options.testVersion ?? '2020',
+      includeEnglishSimulation: options.includeEnglishSimulation ?? false,
+      ...(options.examAction ? { examAction: options.examAction } : {}),
       ...(options.voiceId ? { voiceId: options.voiceId } : {})
     }, options);
   }
@@ -322,7 +383,7 @@ export class ApiClient {
   async postSilenceNudge(
     sessionId: string | null,
     currentItemId: string | null,
-    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; testVersion?: TestVersion; includeEnglishSimulation?: boolean } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -330,6 +391,7 @@ export class ApiClient {
     needsConfirmation: boolean;
     nextItemId: string | null;
     nextQuestion: string | null;
+    assistantSegments: string[];
   }> {
     logger.info('[ApiClient] Dispatching postSilenceNudge request:', { sessionId, currentItemId });
     return this.sendTranscriptRequest({
@@ -338,6 +400,8 @@ export class ApiClient {
       currentItemId,
       simulationMode: options.simulationMode ?? 'standard',
       preferredLanguage: options.preferredLanguage ?? 'en-US',
+      testVersion: options.testVersion ?? '2020',
+      includeEnglishSimulation: options.includeEnglishSimulation ?? false,
       ...(options.voiceId ? { voiceId: options.voiceId } : {}),
     }, options);
   }

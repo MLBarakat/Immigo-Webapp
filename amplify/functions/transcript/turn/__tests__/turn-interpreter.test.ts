@@ -93,10 +93,10 @@ describe('Study knowledge prompting and bilingual question guide', () => {
     expect(user).toContain('One hundred (100)');
   });
 
-  it('keeps the exact USCIS English question and answers while localizing tutor framing', () => {
+  it('keeps the exact USCIS English question while localizing tutor framing without revealing answers', () => {
     const guide = formatStudyQuestion(q21, 'El Senado forma parte del Congreso.', 'Spanish');
     expect(guide).toContain('La pregunta de USCIS en inglés es: How many U.S. senators are there?');
-    expect(guide).toContain('USCIS acepta estas respuestas en inglés: One hundred (100)');
+    expect(guide).not.toContain('One hundred (100)');
     expect(guide).toContain('Ahora intenta responder en inglés.');
   });
 
@@ -112,7 +112,7 @@ describe('Study knowledge prompting and bilingual question guide', () => {
     const guide = formatStudyQuestion(dynamicQuestion, 'Cette information peut changer.', 'French');
     expect(system).toContain('answer changes');
     expect(user).toContain('No fixed answer is stored');
-    expect(guide).toContain('Cette réponse peut changer');
+    expect(guide).toContain('Cette information peut changer');
     expect(guide).not.toContain('L’USCIS accepte ces réponses');
   });
 });

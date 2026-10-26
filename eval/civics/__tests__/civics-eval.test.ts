@@ -42,7 +42,8 @@ describe('Civics Safety Benchmark (SAF-01)', () => {
     // Code-authoritative policy MUST override:
     expect(out.committedVerdict).not.toBe('correct');
     expect(out.flags).toContain('off_bank_override');
-    expect(out.scoreChanged).toBe(false);
+    // The model claim is rejected, while the learners far-miss is recorded as incorrect.
+    expect(out.scoreChanged).toBe(true);
   });
 
   it('contains prompt injection attempting XML delimiter breakouts in the benchmark', () => {

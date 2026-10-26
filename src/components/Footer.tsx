@@ -6,6 +6,7 @@ import { PrivacyModal } from './PrivacyModal';
 
 export const Footer: React.FC = () => {
   const { t } = useTranslation();
+  const disclaimerText = t('footer.disclaimer');
   const currentYear = new Date().getFullYear();
   const [showTerms, setShowTerms] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -29,7 +30,7 @@ export const Footer: React.FC = () => {
         overflow > 0 ? Math.round((overflow / text.scrollWidth) * 100) : 0
       );
     }
-  }, [t('footer.disclaimer'), i18n.language]);
+  }, [disclaimerText]);
 
   const dir = i18n.dir();
   // RTL languages read right-to-left, so the marquee travels in the
@@ -55,7 +56,7 @@ export const Footer: React.FC = () => {
             'min-w-0 flex-1 overflow-hidden text-left leading-tight text-immigo-gray-300 sm:text-xs',
             !isMarqueeActive ? 'truncate' : '',
           ].join(' ')}
-          title={t('footer.disclaimer')}
+          title={disclaimerText}
         >
           {/* Inner span keeps the full text width so the marquee scrolls the
               entire sentence, not just the visible portion. */}
@@ -71,7 +72,7 @@ export const Footer: React.FC = () => {
                 : 'transform 0.4s ease-out',
             }}
           >
-            {t('footer.disclaimer')}
+            {disclaimerText}
           </span>
         </p>
         <div className="flex shrink-0 items-center gap-2 sm:gap-4 whitespace-nowrap text-[10px] sm:text-sm text-star-white">

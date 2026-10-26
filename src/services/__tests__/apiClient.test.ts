@@ -15,6 +15,35 @@ afterEach(() => {
 });
 
 describe('ApiClient active route contracts', () => {
+  it('transmits English exercise modality and idempotency key and parses the active exam stage', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      responseText: 'English writing, sentence one.',
+      audioData: '',
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: null,
+      nextQuestion: 'The President lives in the White House.',
+      examRunId: 'exam-1',
+      examStage: 'writing',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await new ApiClient('token', 'https://api.example.test').postTranscript(
+      'The President lives in the White House.',
+      [],
+      'session-1',
+      null,
+      { simulationMode: 'standard', examRunId: 'exam-1', inputMethod: 'text', requestId: 'request-1' },
+    );
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      examRunId: 'exam-1', inputMethod: 'text', requestId: 'request-1',
+    });
+    expect(result.examStage).toBe('writing');
+    expect(result.examRunId).toBe('exam-1');
+  });
+
   it('sends the selected simulation mode and language for transcript turns', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       responseText: 'Next question',

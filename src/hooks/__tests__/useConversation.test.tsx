@@ -35,6 +35,9 @@ vi.mock('../../logger', () => ({
 
 vi.mock('../../services/chatPersistenceService', () => ({
   ChatPersistenceService: {
+    getDeviceLocalDate: vi.fn(() => '2026-10-26'),
+    getOrCreateDailySession: vi.fn().mockResolvedValue({ id: 'daily-session', current_item_id: null, mode_goal_pending: false, current_mode: 'standard', test_version: '2020', include_english_simulation: false }),
+    saveDailySessionState: vi.fn().mockResolvedValue(undefined),
     createSession: vi.fn().mockResolvedValue(null),
     closeSession: vi.fn().mockResolvedValue(undefined),
     persistMessage: vi.fn().mockResolvedValue(null),
@@ -161,6 +164,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     const syntheticBuffer = new ArrayBuffer(8);
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Welcome to the Immigo interaction matrix layer.',
+    assistantSegments: [],
       audioData: syntheticBuffer,
       verdict: null,
       nextItemId: null,
@@ -193,6 +197,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   it('opens the microphone without playing another opening response', async () => {
     mockApiClient.postSessionStart.mockResolvedValue({
       responseText: '',
+    assistantSegments: [],
       audioData: new ArrayBuffer(0),
       verdict: null,
       needsConfirmation: false,
@@ -221,6 +226,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockStartRecording.mockResolvedValueOnce(false);
     mockApiClient.postSessionStart.mockResolvedValue({
       responseText: '',
+    assistantSegments: [],
       audioData: new ArrayBuffer(0),
       verdict: null,
       needsConfirmation: false,
@@ -293,6 +299,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     }));
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Correct. Next question.',
+    assistantSegments: [],
       audioData: new ArrayBuffer(0),
       verdict: 'correct',
       needsConfirmation: false,
@@ -337,6 +344,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     }));
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Correct. Next question.',
+    assistantSegments: [],
       audioData: new ArrayBuffer(0),
       verdict: 'correct',
       needsConfirmation: false,
@@ -356,11 +364,11 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       });
     }
 
-    expect(ChatPersistenceService.createSession).toHaveBeenCalledOnce();
+    expect(ChatPersistenceService.getOrCreateDailySession).toHaveBeenCalled();
     expect(mockApiClient.postTranscript).toHaveBeenLastCalledWith(
       'Text answer 10',
       expect.any(Array),
-      'text-session',
+      'daily-session',
       'q-next',
       false,
       expect.any(Object),
@@ -370,13 +378,13 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       1,
       'Text answer 1',
       expect.any(Array),
-      'text-session',
+      'daily-session',
       null,
       false,
       expect.objectContaining({ openingResponse: true }),
     );
     expect(analytics.track).toHaveBeenCalledWith('session_started', { mode: 'text' });
-    await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledWith('text-session'));
+    await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledWith('daily-session'));
     expect(mockStartRecording).not.toHaveBeenCalled();
   });
 
@@ -384,6 +392,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     vi.mocked(ChatPersistenceService.createSession).mockResolvedValue('text-session');
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'How many senators are there?',
+    assistantSegments: [],
       audioData: new ArrayBuffer(0),
       verdict: null,
       needsConfirmation: false,
@@ -404,7 +413,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       await result.current.startSession();
     });
 
-    expect(ChatPersistenceService.createSession).toHaveBeenCalledOnce();
+    expect(ChatPersistenceService.getOrCreateDailySession).toHaveBeenCalled();
     expect(mockApiClient.postSessionStart).not.toHaveBeenCalled();
     expect(mockStartRecording).toHaveBeenCalledOnce();
   });
@@ -413,6 +422,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     const responseText = "Let's begin. How can people become United States citizens?";
     mockApiClient.postSessionStart.mockResolvedValue({
       responseText,
+    assistantSegments: [],
       audioData: new ArrayBuffer(8),
       verdict: null,
       needsConfirmation: false,
@@ -476,6 +486,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       })
       .mockResolvedValueOnce({
         responseText: 'Interruption response',
+    assistantSegments: [],
         audioData: new ArrayBuffer(0),
         verdict: null,
         needsConfirmation: false,
@@ -515,7 +526,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       content: 'Saved text answer',
       timestamp: '2026-10-08T18:00:00.000Z',
     };
-    sessionStorage.setItem('immigo_conversation_user-cache', JSON.stringify([cachedMessage]));
+    sessionStorage.setItem('immigo_conversation_user-cache_2026-10-26', JSON.stringify([cachedMessage]));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
         {children}
@@ -535,12 +546,13 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         },
       });
     });
-    expect(sessionStorage.getItem('immigo_conversation_user-cache')).toBe(JSON.stringify([cachedMessage]));
+    expect(sessionStorage.getItem('immigo_conversation_user-cache_2026-10-26')).toBe(JSON.stringify([cachedMessage]));
   });
 
   it('persists new text conversation turns in the current browser tab', async () => {
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'A saved assistant reply',
+    assistantSegments: [],
       audioData: new ArrayBuffer(0),
       verdict: null,
       needsConfirmation: false,
@@ -562,7 +574,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       ]);
     });
     await waitFor(() => {
-      expect(JSON.parse(sessionStorage.getItem('immigo_conversation_user-session-cache') ?? '[]')).toHaveLength(2);
+      expect(JSON.parse(sessionStorage.getItem('immigo_conversation_user-session-cache_2026-10-26') ?? '[]')).toHaveLength(2);
     });
   });
 
@@ -629,6 +641,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   it('should submit a committed speech transcript to the LLM automatically', async () => {
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
+    assistantSegments: [],
       audioData: new ArrayBuffer(8),
       verdict: null,
       nextItemId: null,
@@ -672,6 +685,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   it('should submit the next speech utterance after the transcript is cleared', async () => {
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
+    assistantSegments: [],
       audioData: new ArrayBuffer(8),
       verdict: null,
       nextItemId: 'q-001',
@@ -726,6 +740,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   it('uses a newly selected mode and language on subsequent turns in the same session', async () => {
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Tutor feedback',
+    assistantSegments: [],
       audioData: new ArrayBuffer(0),
       verdict: null,
       needsConfirmation: false,
@@ -775,6 +790,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockContextValue.state.isSessionActive = true;
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
+    assistantSegments: [],
       audioData: new ArrayBuffer(8),
       verdict: null,
       nextItemId: null,
@@ -810,6 +826,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       .mockRejectedValueOnce(autoplayBlocked);
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
+    assistantSegments: [],
       audioData: new ArrayBuffer(8),
       verdict: null,
       nextItemId: null,
@@ -852,6 +869,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       .mockResolvedValueOnce(undefined);
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
+    assistantSegments: [],
       audioData: new ArrayBuffer(8),
       verdict: null,
       nextItemId: null,
@@ -888,6 +906,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockAudioInstance.play.mockRejectedValueOnce(autoplayBlocked);
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
+    assistantSegments: [],
       audioData: new ArrayBuffer(8),
       verdict: null,
       nextItemId: null,
@@ -929,6 +948,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       mockAudioInstance.play.mockRejectedValueOnce(autoplayBlocked);
       mockApiClient.postTranscript.mockResolvedValue({
         responseText: 'Speech response',
+    assistantSegments: [],
         audioData: new ArrayBuffer(8),
         verdict: null,
         nextItemId: null,
@@ -966,6 +986,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockAudioInstance.play.mockRejectedValueOnce(new Error('decode failure'));
     mockApiClient.postTranscript.mockResolvedValue({
       responseText: 'Speech response',
+    assistantSegments: [],
       audioData: new ArrayBuffer(8),
       verdict: null,
       nextItemId: null,
