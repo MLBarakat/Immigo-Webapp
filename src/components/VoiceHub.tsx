@@ -16,6 +16,8 @@ interface VoiceHubProps {
   readonly onEndSession: () => void;
   readonly micConsentVersion?: string | null;
   readonly onMicConsent?: () => Promise<void>;
+  readonly onPrepareMic?: () => Promise<boolean>;
+  readonly onReleasePreparedMic?: () => void;
   readonly micAccessError?: string | null;
   readonly onClearMicAccessError?: () => void;
   readonly initError?: string | null;
@@ -31,6 +33,8 @@ export function VoiceHub({
   onEndSession,
   micConsentVersion = null,
   onMicConsent,
+  onPrepareMic,
+  onReleasePreparedMic,
   micAccessError = null,
   onClearMicAccessError,
   initError = null,
@@ -67,6 +71,7 @@ export function VoiceHub({
     }
 
     lastInteractionTimestampRef.current = currentTimestamp;
+    unlockAudioPlayback();
     onClearMicAccessError?.();
     setConsentError(null);
 
@@ -79,16 +84,19 @@ export function VoiceHub({
         setShowMicConsent(true);
         return;
       }
+      void onPrepareMic?.();
       logger.info('VoiceHub: manual user intervention captured. Launching speech session recording.');
       onStartSession();
     }
-  }, [isSessionActive, status, isListenerLoading, onStartSession, onEndSession, micConsentVersion, onClearMicAccessError]);
+  }, [isSessionActive, status, isListenerLoading, onStartSession, onEndSession, micConsentVersion, onClearMicAccessError, onPrepareMic]);
 
   const handleMicConsentAccept = useCallback(async () => {
     // Unlock audible playback while still inside the consent-accept tap.
     unlockAudioPlayback();
+    void onPrepareMic?.();
     if (!onMicConsent) {
       setConsentError('Unable to save microphone consent. Please try again.');
+      onReleasePreparedMic?.();
       logger.error('Microphone consent cannot be accepted because persistence is unavailable.');
       return;
     }
@@ -99,9 +107,10 @@ export function VoiceHub({
       if (!isListenerLoading) onStartSession();
     } catch (error) {
       setConsentError(error instanceof Error ? error.message : 'Unable to save microphone consent. Please try again.');
+      onReleasePreparedMic?.();
       logger.error('Failed to persist microphone consent.', { error: String(error) });
     }
-  }, [onMicConsent, onStartSession, isListenerLoading]);
+  }, [onMicConsent, onStartSession, onPrepareMic, onReleasePreparedMic, isListenerLoading]);
 
   // 'connecting' = session starting, mic prompt pending. It must not be
   // disabled (the tap is the only way to cancel a stuck prompt) and it must

@@ -2,6 +2,49 @@ import { getSupabaseClient } from '../supabaseClient';
 import { PersistedMessage, SessionHydrationPayload } from '../types/persistence';
 import { logger } from '../logger';
 
+interface DailySessionRecord {
+  id: string;
+  current_item_id: string | null;
+  mode_goal_pending: boolean;
+  current_mode: string;
+  test_version: string;
+  include_english_simulation: boolean;
+  local_date?: string | null;
+  local_timezone?: string | null;
+  created_at?: string;
+}
+
+const DAILY_SESSION_COLUMNS = 'id,current_item_id,mode_goal_pending,current_mode,test_version,include_english_simulation';
+
+function getDateInTimeZone(date: Date, timeZone: string): string | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const get = (type: 'year' | 'month' | 'day') => parts.find(part => part.type === type)?.value;
+    const year = get('year');
+    const month = get('month');
+    const day = get('day');
+    return year && month && day ? `${year}-${month}-${day}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function isCurrentDailySession(session: DailySessionRecord, now: Date, localDate: string, localTimezone: string): boolean {
+  if (session.local_date && session.local_timezone) {
+    return getDateInTimeZone(now, session.local_timezone) === session.local_date;
+  }
+  if (!session.local_date && session.created_at) {
+    const createdAtLocalDate = getDateInTimeZone(new Date(session.created_at), localTimezone);
+    return createdAtLocalDate === localDate;
+  }
+  return false;
+}
+
 export class ChatPersistenceService {
   static getDeviceLocalDate(date = new Date()): string {
     const year = date.getFullYear();
@@ -14,12 +57,12 @@ export class ChatPersistenceService {
     userId: string,
     localDate = ChatPersistenceService.getDeviceLocalDate(),
     localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local'
-  ): Promise<{ id: string; current_item_id: string | null; mode_goal_pending: boolean; current_mode: string; test_version: string; include_english_simulation: boolean } | null> {
+  ): Promise<DailySessionRecord | null> {
     if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(localDate)) return null;
     const supabase = getSupabaseClient();
     const selectSession = async () => supabase
       .from('sessions')
-      .select('id,current_item_id,mode_goal_pending,current_mode,test_version,include_english_simulation')
+      .select(DAILY_SESSION_COLUMNS)
       .eq('user_id', userId)
       .eq('local_date', localDate)
       .maybeSingle();
@@ -32,18 +75,64 @@ export class ChatPersistenceService {
           .update({ status: 'active', ended_at: null, local_timezone: localTimezone })
           .eq('id', existing.id);
         if (error) throw error;
-        return existing as { id: string; current_item_id: string | null; mode_goal_pending: boolean; current_mode: string; test_version: string; include_english_simulation: boolean };
+        return existing as DailySessionRecord;
+      }
+
+      // Devices in different time zones can have different calendar dates
+      // while the account's current daily session is still active in the
+      // time zone that created it. Reuse that canonical session instead of
+      // silently creating a second conversation for the same day.
+      const { data: latestTaggedSession, error: taggedLookupError } = await supabase
+        .from('sessions')
+        .select(`${DAILY_SESSION_COLUMNS},local_date,local_timezone,created_at`)
+        .eq('user_id', userId)
+        .not('local_date', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (taggedLookupError) throw taggedLookupError;
+      const now = new Date();
+      const taggedSession = latestTaggedSession as DailySessionRecord | null;
+      if (taggedSession && isCurrentDailySession(taggedSession, now, localDate, localTimezone)) {
+        const { error } = await supabase.from('sessions')
+          .update({ status: 'active', ended_at: null })
+          .eq('id', taggedSession.id);
+        if (error) throw error;
+        return taggedSession;
+      }
+
+      // Migration 009 left older sessions untagged. Recover the latest legacy
+      // row only when its creation time falls on this device's current date.
+      const { data: legacySession, error: legacyLookupError } = await supabase
+        .from('sessions')
+        .select(`${DAILY_SESSION_COLUMNS},local_date,local_timezone,created_at`)
+        .eq('user_id', userId)
+        .is('local_date', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (legacyLookupError) throw legacyLookupError;
+      const legacy = legacySession as DailySessionRecord | null;
+      if (legacy && isCurrentDailySession(legacy, now, localDate, localTimezone)) {
+        const { data: adopted, error } = await supabase.from('sessions')
+          .update({ local_date: localDate, local_timezone: localTimezone, status: 'active', ended_at: null })
+          .eq('id', legacy.id)
+          .select(DAILY_SESSION_COLUMNS)
+          .single();
+        if (!error && adopted) return adopted as DailySessionRecord;
+        // A concurrent device may have tagged this same row first. Fall
+        // through to the normal date lookup/race recovery below.
       }
 
       const { data: created, error: createError } = await supabase.from('sessions')
         .insert({ user_id: userId, status: 'active', local_date: localDate, local_timezone: localTimezone })
-        .select('id,current_item_id,mode_goal_pending,current_mode,test_version,include_english_simulation')
+        .select(DAILY_SESSION_COLUMNS)
         .single();
-      if (!createError && created) return created as { id: string; current_item_id: string | null; mode_goal_pending: boolean; current_mode: string; test_version: string; include_english_simulation: boolean };
+      if (!createError && created) return created as DailySessionRecord;
 
       // Another tab/device may have won the unique local-date insert race.
       const { data: raced, error: raceError } = await selectSession();
-      if (!raceError && raced) return raced as { id: string; current_item_id: string | null; mode_goal_pending: boolean; current_mode: string; test_version: string; include_english_simulation: boolean };
+      if (!raceError && raced) return raced as DailySessionRecord;
       throw createError ?? raceError;
     } catch (err) {
       logger.error('Failed to get or create the device-local daily session:', undefined, { error: String(err) });

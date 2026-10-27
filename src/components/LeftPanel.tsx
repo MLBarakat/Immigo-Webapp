@@ -70,6 +70,7 @@ const USCIS_MEDIA = [
 
 export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversationLength, userId, isGeneratingProgressReport = false, isMobile = false }: LeftPanelProps) {
   const { t, i18n } = useTranslation('conversation');
+  const isArabic = i18n.language === 'ar-SA';
   const [knowledgeBankOpen, setKnowledgeBankOpen] = useState(true);
   const [performanceOpen, setPerformanceOpen] = useState(true);
   const [studyBankOpen, setStudyBankOpen] = useState(true);
@@ -190,7 +191,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
       {/* The mobile tab bar already names this workspace, so only desktop keeps the panel title. */}
       {!isMobile && (
         <div className="flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 dark:border-gray-700 bg-star-white dark:bg-gray-800 sticky top-0 z-10">
-          <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-2 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
             <BookOpen className="w-4 h-4 text-art-blue-600" />
             <span className="text-sm font-bold text-deep-navy dark:text-gray-100 tracking-tight">{t('workspace.left.title')}</span>
           </div>
@@ -200,7 +201,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
             aria-label={t('workspace.left.collapse')}
             title={t('workspace.left.collapse')}
           >
-            <ChevronLeft className="w-4 h-4" />
+            {isArabic ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
       )}
@@ -209,7 +210,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
         {/* ── Section 1: USCIS Knowledge Bank ── */}
         <section className="flex min-h-0 flex-[0.9] flex-col overflow-hidden">
           <button
-            className="w-full shrink-0 flex items-center justify-between px-4 py-2 text-xs font-bold uppercase tracking-widest text-immigo-gray-600 hover:bg-immigo-gray-50 transition-colors"
+            className={`w-full shrink-0 flex items-center justify-between px-4 py-2 text-xs font-bold uppercase tracking-widest text-immigo-gray-600 hover:bg-immigo-gray-50 transition-colors ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}
             onClick={() => setKnowledgeBankOpen(p => !p)}
             aria-expanded={knowledgeBankOpen}
           >
@@ -221,8 +222,8 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-2">
               {/* Study Bank */}
               <div className="flex min-h-0 flex-1 flex-col">
-                <button type="button" onClick={() => setStudyBankOpen(p => !p)} aria-expanded={studyBankOpen} className="w-full shrink-0 flex items-center justify-between px-1 py-1.5 text-left">
-                  <span className="flex items-center gap-1.5">
+                <button type="button" onClick={() => setStudyBankOpen(p => !p)} aria-expanded={studyBankOpen} className={`w-full shrink-0 flex items-center justify-between px-1 py-1.5 ${isArabic ? 'text-right flex-row-reverse' : 'text-left'}`}>
+                  <span className={`flex items-center gap-1.5 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
                   <GraduationCap className="w-3.5 h-3.5 text-art-blue-600" />
                   <span className="text-xs font-semibold text-deep-navy">{t('workspace.left.studyBank')}</span>
                   </span>
@@ -290,7 +291,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
         {/* ── Section 2: Performance and Exports ── */}
         <section className="flex min-h-0 flex-[1.1] flex-col overflow-hidden">
           <button
-            className="w-full shrink-0 flex items-center justify-between px-4 py-2 text-xs font-bold uppercase tracking-widest text-immigo-gray-600 hover:bg-immigo-gray-50 transition-colors"
+            className={`w-full shrink-0 flex items-center justify-between px-4 py-2 text-xs font-bold uppercase tracking-widest text-immigo-gray-600 hover:bg-immigo-gray-50 transition-colors ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}
             onClick={() => setPerformanceOpen(p => !p)}
             aria-expanded={performanceOpen}
           >
@@ -303,7 +304,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
               {/* Session Analytics */}
               <div className="shrink-0 pb-2">
                 <div className="flex items-center justify-between px-1 py-1.5">
-                  <span className="flex items-center gap-1.5">
+                  <span className={`flex items-center gap-1.5 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
                   <BarChart2 className="w-3.5 h-3.5 text-art-blue-600" />
                   <span className="text-xs font-semibold text-deep-navy">{t('workspace.left.analytics')}</span>
                   </span>
@@ -336,8 +337,8 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
 
               {/* Previous Progress Reports */}
               <div className="flex min-h-0 flex-1 flex-col border-t border-immigo-gray-200 pt-1">
-                <button type="button" onClick={() => setReportsOpen(p => !p)} aria-expanded={reportsOpen} className="w-full shrink-0 flex items-center justify-between px-1 py-1.5 text-left">
-                  <span className="flex items-center gap-1.5">
+                <button type="button" onClick={() => setReportsOpen(p => !p)} aria-expanded={reportsOpen} className={`w-full shrink-0 flex items-center justify-between px-1 py-1.5 ${isArabic ? 'text-right flex-row-reverse' : 'text-left'}`}>
+                  <span className={`flex items-center gap-1.5 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
                   <FileText className="w-3.5 h-3.5 text-art-blue-600" />
                   <span className="text-xs font-semibold text-deep-navy">{t('workspace.left.previousReports')}</span>
                   </span>

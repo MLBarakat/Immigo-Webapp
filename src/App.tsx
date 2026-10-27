@@ -352,6 +352,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               onEndSession={manager.endSession}
               micConsentVersion={userSettings.mic_consent_version}
               onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
+              onPrepareMic={manager.prepareVoiceCapture}
+              onReleasePreparedMic={manager.releasePreparedVoiceCapture}
               micAccessError={manager.micError ?? micAccessError}
               onClearMicAccessError={() => { setMicAccessError(null); manager.clearMicError(); }}
               initError={managerInitError}
@@ -512,6 +514,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onEndSession={manager.endSession}
           micConsentVersion={userSettings.mic_consent_version}
           onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
+          onPrepareMic={manager.prepareVoiceCapture}
+          onReleasePreparedMic={manager.releasePreparedVoiceCapture}
           micAccessError={manager.micError ?? micAccessError}
           onClearMicAccessError={() => { setMicAccessError(null); manager.clearMicError(); }}
           initError={managerInitError}
@@ -561,7 +565,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
                   <button type="button" onClick={() => chooseExamAction('resume')} className="rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-art-blue-700">Continue exam</button>
                   <button type="button" onClick={() => chooseExamAction('new')} className="rounded-lg border border-immigo-gray-300 px-4 py-2 text-sm font-semibold text-deep-navy hover:bg-immigo-gray-50 dark:text-white">Start a new exam</button>
-                  <button type="button" onClick={() => { setExamToResume(null); setPendingExamStartText(null); }} className="rounded-lg px-4 py-2 text-sm text-immigo-gray-600 hover:bg-immigo-gray-100 dark:text-gray-300">Cancel</button>
+                  <button type="button" onClick={() => { setExamToResume(null); setPendingExamStartText(null); manager.releasePreparedVoiceCapture(); }} className="rounded-lg px-4 py-2 text-sm text-immigo-gray-600 hover:bg-immigo-gray-100 dark:text-gray-300">Cancel</button>
                 </div>
               </>
             )}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, Trash2, Download, SlidersHorizontal, AlertTriangle } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Trash2, Download, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 import { AppStatus, SimulationMode, TestVersion } from '../context/conversationContextTypes';
 import { fetchQuestionMastery } from '../services/liveProgressService';
 import type { QuestionMastery } from '../services/liveProgressService';
@@ -42,7 +42,8 @@ export function RightPanel({
   appStatus,
   isMobile = false,
 }: RightPanelProps) {
-  const { t } = useTranslation('conversation');
+  const { t, i18n } = useTranslation('conversation');
+  const isArabic = i18n.language === 'ar-SA';
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [questionMasteryResult, setQuestionMasteryResult] = useState<{
     key: string;
@@ -124,9 +125,9 @@ export function RightPanel({
             aria-label={t('workspace.right.collapse')}
             title={t('workspace.right.collapse')}
           >
-            <ChevronRight className="w-4 h-4" />
+            {isArabic ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
-          <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-2 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
             <SlidersHorizontal className="w-4 h-4 text-art-blue-600" />
             <span className="text-sm font-bold text-deep-navy dark:text-gray-100 tracking-tight">{t('workspace.right.title')}</span>
           </div>
@@ -137,7 +138,7 @@ export function RightPanel({
 
         {/* ── Section 1: Simulation Modes ── */}
         <section>
-          <div className="mb-2 flex items-center gap-2">
+          <div className={`mb-2 flex items-center gap-2 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
             <SlidersHorizontal className="w-4 h-4 text-art-blue-600" />
             <span className="text-xs font-bold uppercase tracking-widest text-immigo-gray-600">{t('workspace.right.simulationModes')}</span>
           </div>
@@ -214,8 +215,8 @@ export function RightPanel({
 
         {/* ── Section 2: Session Utilities ── */}
         <section>
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-base">🔧</span>
+          <div className={`mb-2 flex items-center gap-2 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
+            <span className="text-base">???🔧</span>
             <span className="text-xs font-bold uppercase tracking-widest text-immigo-gray-600">{t('workspace.right.utilities')}</span>
           </div>
 

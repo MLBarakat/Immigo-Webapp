@@ -26,6 +26,8 @@ interface CenterPanelProps {
   isFocusMode?: boolean;
   micConsentVersion?: string | null;
   onMicConsent?: () => Promise<void>;
+  onPrepareMic?: () => Promise<boolean>;
+  onReleasePreparedMic?: () => void;
   micAccessError?: string | null;
   onClearMicAccessError?: () => void;
   initError?: string | null;
@@ -83,6 +85,8 @@ export function CenterPanel({
   isFocusMode = false,
   micConsentVersion,
   onMicConsent,
+  onPrepareMic,
+  onReleasePreparedMic,
   micAccessError,
   onClearMicAccessError,
   initError,
@@ -278,6 +282,8 @@ export function CenterPanel({
                   onEndSession={onEndSession}
                   micConsentVersion={micConsentVersion}
                   onMicConsent={onMicConsent}
+                  onPrepareMic={onPrepareMic}
+                  onReleasePreparedMic={onReleasePreparedMic}
                   micAccessError={micAccessError}
                   onClearMicAccessError={onClearMicAccessError}
                   initError={initError}

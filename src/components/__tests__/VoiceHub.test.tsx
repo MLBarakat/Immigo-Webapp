@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, screen, cleanup } from '@testing-library/react';
 import { VoiceHub } from '../VoiceHub';
 import { MIC_CONSENT_VERSION } from '../../utils/micConsent';
@@ -166,6 +166,49 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     expect(mockStartSession).toHaveBeenCalledTimes(2);
   });
 
+  it('requests the microphone in the same tap before the asynchronous session start', () => {
+    const events: string[] = [];
+    render(
+      <VoiceHub
+        status="idle"
+        isSessionActive={false}
+        onStartSession={() => { events.push('start'); }}
+        onEndSession={mockEndSession}
+        micConsentVersion={MIC_CONSENT_VERSION}
+        onPrepareMic={() => { events.push('prepare'); return Promise.resolve(true); }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /start voice/i }));
+    expect(events).toEqual(['prepare', 'start']);
+  });
+
+  it('starts microphone permission from the consent acceptance tap before awaiting consent persistence', async () => {
+    const events: string[] = [];
+    let finishConsent: (() => void) | undefined;
+    render(
+      <VoiceHub
+        status="idle"
+        isSessionActive={false}
+        onStartSession={() => { events.push('start'); }}
+        onEndSession={mockEndSession}
+        micConsentVersion={null}
+        onPrepareMic={() => { events.push('prepare'); return Promise.resolve(true); }}
+        onMicConsent={() => {
+          events.push('persist-consent');
+          return new Promise<void>(resolve => { finishConsent = resolve; });
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /start voice/i }));
+    fireEvent.click(screen.getByRole('button', { name: /I understand/i }));
+    expect(events.slice(0, 2)).toEqual(['prepare', 'persist-consent']);
+    expect(events).not.toContain('start');
+    finishConsent?.();
+    await vi.waitFor(() => expect(events).toContain('start'));
+  });
+
   it('surfaces the tap-to-hear banner while a blocked audio turn is parked', () => {
     render(
       <VoiceHub
@@ -244,7 +287,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     expect(overlay?.className).toContain('items-center');
     expect(overlay?.parentElement).toBe(document.body);
 
-    fireEvent.click(screen.getByRole('button', { name: 'I understand — start' }));
+    fireEvent.click(screen.getByRole('button', { name: /I understand.*start/i }));
     await vi.waitFor(() => expect(onMicConsent).toHaveBeenCalledTimes(1));
     expect(mockStartSession).toHaveBeenCalledTimes(1);
   });
@@ -262,7 +305,7 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /start voice/i }));
-    expect(screen.queryByText(/I understand — start/i)).toBeNull();
+    expect(screen.queryByText(/I understand.*start/i)).toBeNull();
     expect(mockStartSession).toHaveBeenCalledTimes(1);
   });
 
@@ -278,9 +321,10 @@ describe('Interaction Viewport Validation: VoiceHub', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /start voice/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'I understand — start' }));
+    fireEvent.click(screen.getByRole('button', { name: /I understand.*start/i }));
 
     expect((await screen.findByRole('alert')).textContent).toContain('Could not save consent.');
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 });
+

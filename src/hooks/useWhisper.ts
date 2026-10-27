@@ -19,6 +19,8 @@ export interface WhisperHook {
   /** Last init failure, retryable on next tap. Never includes mic data. */
   initError?: string | null;
   ensureInitialized?: () => Promise<boolean>;
+  prepareMicrophoneAccess: () => Promise<boolean>;
+  releasePreparedMicrophone: () => void;
   /** Resolves true only once the mic is provably acquired and capture runs. */
   startRecording: () => Promise<boolean>;
   stopRecording: () => void;
@@ -71,6 +73,7 @@ const sharedRuntime: {
   vad: MicVAD | null;
   /** The stream the shared VAD is currently driving (module-shared so remounts can verify it). */
   micStream: MediaStream | null;
+  micAcquirePromise: Promise<MediaStream> | null;
   /**
    * When the current attempt's getUserMedia resolved (0 = not granted yet).
    * startVadBounded resets this per attempt and starts its setup budget only
@@ -83,7 +86,7 @@ const sharedRuntime: {
   /** instanceId owning `handlers`; unmount clears only its own registration. */
   handlersOwner: string | null;
   error: string | null;
-} = { status: 'idle', promise: null, worker: null, workerReady: false, vad: null, micStream: null, micGrantedAt: 0, handlers: null, handlersOwner: null, error: null };
+} = { status: 'idle', promise: null, worker: null, workerReady: false, vad: null, micStream: null, micAcquirePromise: null, micGrantedAt: 0, handlers: null, handlersOwner: null, error: null };
 
 /**
  * Phase-B acquisition budget: from mic GRANT to a live, listening VAD (the
@@ -582,6 +585,30 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     }
   }, [setInitStatusBoth]);
 
+  const acquireMicStream = useCallback((): Promise<MediaStream> => {
+    const existing = sharedRuntime.micStream;
+    const hasLiveTrack = existing?.getAudioTracks().some(track => track.readyState === 'live');
+    if (existing && hasLiveTrack) {
+      sharedRuntime.micGrantedAt = Date.now();
+      return Promise.resolve(existing);
+    }
+    if (sharedRuntime.micAcquirePromise) return sharedRuntime.micAcquirePromise;
+
+    const acquisition = createMicrophoneStream({
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    }).then(stream => {
+      sharedRuntime.micStream = stream;
+      sharedRuntime.micGrantedAt = Date.now();
+      return stream;
+    }).finally(() => {
+      sharedRuntime.micAcquirePromise = null;
+    });
+    sharedRuntime.micAcquirePromise = acquisition;
+    return acquisition;
+  }, []);
+
   /**
    * Shared, retryable init. Model download + compile starts on mount
    * (background preload, no mic: startOnLoad:false so getUserMedia is NOT
@@ -659,22 +686,11 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
           workerRef.current = sharedRuntime.worker;
         }
 
-        // VAD model load only (no getUserMedia until vad.start()).
+        // VAD model load only (no getUserMedia until the user explicitly
+        // prepares microphone access or starts capture).
         // Created once by the starter mount; remounts reuse sharedRuntime.vad.
         // Callbacks close over the starter mount's refs; TranscriptionContext
         // actions are memoized so they stay valid across remounts.
-        const acquireMicStream = async () => {
-          const stream = await createMicrophoneStream({
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          });
-          sharedRuntime.micStream = stream;
-          // Record the grant moment: the acquisition guard starts its 15s
-          // setup budget only from here — prompt dwell is not setup time.
-          sharedRuntime.micGrantedAt = Date.now();
-          return stream;
-        };
         if (!sharedRuntime.vad) {
           console.info(`[VAD-MOUNT] ${JSON.stringify({ instanceId, tabId: tabIdRef.current, phase: 'init-start' })}`);
           const initializedVad = await MicVAD.new({
@@ -682,7 +698,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
             onnxWASMBasePath: '/assets/js/',
             model: 'legacy',
             startOnLoad: false,
-            getStream: async () => acquireMicStream(),
+            getStream: acquireMicStream,
             pauseStream: async (stream) => {
               stream.getAudioTracks().forEach((track) => { track.enabled = false; });
             },
@@ -760,7 +776,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     })();
     sharedRuntime.promise = promise;
     return promise;
-  }, [handleWorkerMessage, setInitStatusBoth, mirrorSharedInitState, instanceId]);
+  }, [handleWorkerMessage, setInitStatusBoth, mirrorSharedInitState, instanceId, acquireMicStream]);
 
   useEffect(() => {
     // The effect can clean up and re-run while the hook instance STAYS
@@ -970,7 +986,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
       }
       vadRef.current = null;
     };
-  }, [handleWorkerMessage, setInitStatusBoth, instanceId, ensureInitialized]);
+  }, [handleWorkerMessage, setInitStatusBoth, instanceId, ensureInitialized, acquireMicStream]);
 
   /** True when the VAD holds a stream with a track the device is still delivering. */
   const hasLiveMicStream = useCallback((): boolean => {
@@ -1024,6 +1040,36 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
         return micAcquisitionErrorMessage;
     }
   }, [micAcquisitionErrorMessage]);
+
+  const micPreparationGenerationRef = useRef(0);
+  const prepareMicrophoneAccess = useCallback(async (): Promise<boolean> => {
+    if (!isLeaderRef.current) return false;
+    const generation = ++micPreparationGenerationRef.current;
+    try {
+      // Called synchronously from the start/consent tap. Requesting the stream
+      // before session and exam records load preserves mobile browser gesture
+      // activation. MicVAD starts later with this already-authorized stream.
+      const stream = await acquireMicStream();
+      if (generation !== micPreparationGenerationRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        if (sharedRuntime.micStream === stream) sharedRuntime.micStream = null;
+        return false;
+      }
+      setMicError(null);
+      return true;
+    } catch (error) {
+      if (generation === micPreparationGenerationRef.current) setMicError(describeMicFailure(error));
+      return false;
+    }
+  }, [acquireMicStream, describeMicFailure]);
+
+  const releasePreparedMicrophone = useCallback(() => {
+    micPreparationGenerationRef.current += 1;
+    if (isRecordingRef.current || vadRef.current?.listening) return;
+    sharedRuntime.micStream?.getTracks().forEach(track => track.stop());
+    sharedRuntime.micStream = null;
+    sharedRuntime.micGrantedAt = 0;
+  }, []);
 
   /**
    * Rebuilds the module-shared VAD (reusing the loaded worker) after a
@@ -1255,7 +1301,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     // the UI (pulsating); guard here ignores it. A tap after an init error
     // retries once via the shared promise.
     if (initStatusRef.current !== 'ready' || !vadRef.current) {
-      if (initStatusRef.current === 'error') {
+      if (initStatusRef.current === 'error' || initStatusRef.current === 'idle') {
         const runner = startRecordingRef.current;
         return ensureInitialized().then((ok) => (ok && !unmountedRef.current ? runner() : false));
       }
@@ -1329,6 +1375,8 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     isInitializing: initStatus === 'initializing',
     initError,
     ensureInitialized,
+    prepareMicrophoneAccess,
+    releasePreparedMicrophone,
     startRecording,
     stopRecording,
     pauseVAD,
