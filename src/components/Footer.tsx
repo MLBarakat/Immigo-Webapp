@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import i18n from '../i18n';
 import { TermsModal } from './TermsModal';
 import { PrivacyModal } from './PrivacyModal';
 
@@ -32,10 +31,8 @@ export const Footer: React.FC = () => {
     }
   }, [disclaimerText]);
 
-  const dir = i18n.dir();
-  // RTL languages read right-to-left, so the marquee travels in the
-  // opposite direction (positive translateX).
-  const sign = dir === 'rtl' ? '' : '-';
+  // Keep marquee direction consistent regardless of language.
+  const sign = '-';
 
   const isMarqueeActive = isDisclaimerFocused && disclaimerOverflows && marqueeDistance > 0;
 

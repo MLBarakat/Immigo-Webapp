@@ -137,7 +137,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
       character === '&' ? '&amp;' : character === '<' ? '&lt;' : '&gt;'
     ));
     const reportTitle = t('workspace.left.reportTitle');
-    printWindow.document.write(`<!doctype html><html lang="${i18n.language}" dir="${i18n.dir()}"><head><meta charset="utf-8"><title>ImmiGO - ${reportTitle} - ${safeDate}</title><style>body{font-family:Arial,sans-serif;color:#172b4d;margin:40px;line-height:1.6}h1{font-size:22px}pre{font:14px/1.6 Arial,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><h1>ImmiGO - ${reportTitle}</h1><p>${safeDate}</p><pre>${safeContent}</pre></body></html>`);
+    printWindow.document.write(`<!doctype html><html lang="${i18n.language}" dir="ltr"><head><meta charset="utf-8"><title>ImmiGO - ${reportTitle} - ${safeDate}</title><style>body{font-family:Arial,sans-serif;color:#172b4d;margin:40px;line-height:1.6}h1{font-size:22px}pre{font:14px/1.6 Arial,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><h1>ImmiGO - ${reportTitle}</h1><p>${safeDate}</p><pre>${safeContent}</pre></body></html>`);
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();

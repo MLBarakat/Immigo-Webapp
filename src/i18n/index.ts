@@ -34,18 +34,18 @@ export function normalizeAppLanguage(language?: string | null): SupportedLanguag
     : DEFAULT_LANGUAGE;
 }
 
-export function getLanguageDirection(languageCode?: string | null): 'rtl' | 'ltr' {
-  const normalized = normalizeAppLanguage(languageCode);
-  return normalized === 'ar-SA' ? 'rtl' : 'ltr';
+export function getLanguageDirection(_languageCode?: string | null): 'ltr' | 'rtl' {
+  // Arabic should keep the app layout in LTR but allow text direction
+  // to be handled per-component where flipping is desired.
+  return 'ltr';
 }
 
-export function applyLanguageDirection(languageCode?: string | null): 'rtl' | 'ltr' {
-  const dir = getLanguageDirection(languageCode);
+export function applyLanguageDirection(languageCode?: string | null): 'ltr' | 'rtl' {
   if (typeof document !== 'undefined') {
     document.documentElement.lang = normalizeAppLanguage(languageCode);
-    document.documentElement.dir = dir;
+    document.documentElement.dir = 'ltr';
   }
-  return dir;
+  return 'ltr';
 }
 
 export const resources = {

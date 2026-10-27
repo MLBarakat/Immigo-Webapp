@@ -66,7 +66,7 @@ describe('i18n configuration and utilities', () => {
   });
 
   it('determines language direction correctly', () => {
-    expect(getLanguageDirection('ar-SA')).toBe('rtl');
+    expect(getLanguageDirection('ar-SA')).toBe('ltr');
     expect(getLanguageDirection('en-US')).toBe('ltr');
     expect(getLanguageDirection('es-ES')).toBe('ltr');
     expect(getLanguageDirection('fr-FR')).toBe('ltr');
@@ -74,7 +74,7 @@ describe('i18n configuration and utilities', () => {
 
   it('applies direction and lang to document element for Arabic', () => {
     applyLanguageDirection('ar-SA');
-    expect(document.documentElement.dir).toBe('rtl');
+    expect(document.documentElement.dir).toBe('ltr');
     expect(document.documentElement.lang).toBe('ar-SA');
 
     applyLanguageDirection('en-US');
@@ -160,7 +160,7 @@ describe('i18n configuration and utilities', () => {
 
     expect(screen.getByTestId('settings-title').textContent).toBe('إعدادات التطبيق');
     expect(screen.getByTestId('appearance-title').textContent).toBe('المظهر');
-    expect(document.documentElement.dir).toBe('rtl');
+    expect(document.documentElement.dir).toBe('ltr');
   });
 
   it('renders account namespace translations', () => {

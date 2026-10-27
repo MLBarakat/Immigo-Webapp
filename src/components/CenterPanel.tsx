@@ -147,13 +147,13 @@ export function CenterPanel({
         data-testid="app-status-island-wrapper"
         data-visible={isStatusVisible}
         aria-hidden={!isStatusVisible}
-        className={`pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-4 transition-transform duration-[800ms] ease-in-out motion-reduce:transition-none sm:px-6 ${
+        className={`pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-4 transition-transform duration-[800ms] ease-in-out motion-reduce:transition-none sm:px-6 transform-gpu will-change-transform ${
           isStatusVisible ? 'translate-y-3' : '-translate-y-full'
         }`}
       >
         <div
           data-testid="app-status-island"
-          className={`relative inline-flex min-h-9 items-center justify-center overflow-hidden rounded-full border border-white/70 bg-white/60 px-4 py-2 shadow-[0_10px_35px_-12px_rgba(15,23,42,0.45),0_2px_8px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/50 backdrop-blur-2xl backdrop-saturate-150 transition-opacity duration-200 motion-reduce:transition-none dark:border-white/10 dark:bg-gray-900/60 dark:shadow-[0_12px_35px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.12)] dark:ring-white/10 ${
+          className={`relative inline-flex min-h-9 items-center justify-center overflow-hidden rounded-full border border-white/70 bg-white/60 px-4 py-2 shadow-[0_10px_35px_-12px_rgba(15,23,42,0.45),0_2px_8px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/50 backdrop-blur-2xl backdrop-saturate-150 transition-opacity duration-200 motion-reduce:transition-none transform-gpu will-change-transform dark:border-white/10 dark:bg-gray-900/60 dark:shadow-[0_12px_35px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.12)] dark:ring-white/10 ${
             // On hide the island stays fully opaque while it slides up, then
             // fades only once it is clipped by the panel edge (no shadow bleed
             // at rest). On show it fades in immediately while sliding down.
