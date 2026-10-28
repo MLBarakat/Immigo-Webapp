@@ -319,27 +319,35 @@ export function buildWelcomeBannerPrompt(ctx: WelcomeBannerContext): { system: s
   const system = [
     'You write a short welcome message displayed as TEXT on screen (never spoken aloud) when a',
     'US Civics naturalization test study app loads, before the user starts practicing.',
-    'Keep it warm and encouraging, 3-5 sentences, plain prose (no markdown, no bullet points).' + lang,
+    'Keep it warm, encouraging, and personal — 3-5 sentences, plain prose (no markdown, no bullet points).' + lang,
     '',
-    'Write exactly ONE of these two cases, matching "User type" below:',
+    'Write exactly ONE of these three cases, matching "User type" below:',
     '- NEW USER (no prior activity at all): give a warm welcome, briefly explain the purpose of this',
     '  app — practicing for the US naturalization civics interview by answering real test questions',
     '  out loud — and end with a few words of encouragement to get started.',
-    '- RETURNING USER (has prior activity): briefly summarize their achievement so far using the',
-    '  stats provided (e.g. total questions answered and accuracy), suggest a focus/goal for this',
-    '  session (if recently-missed questions are provided, reference what they cover), and end with',
-    '  a few words of encouragement.',
+    '- RETURNING USER — FIRST VISIT TODAY (has prior activity, but has not yet practiced today):',
+    '  briefly summarize their achievement so far using the stats provided (e.g. total questions answered',
+    '  and accuracy), suggest a focus/goal for this session (if recently-missed questions are provided,',
+    '  reference what they cover), and end with an energising welcome back for today\'s session.',
+    '- RETURNING USER — BACK FOR MORE TODAY (has already practiced today and is returning for another round):',
+    '  briefly acknowledge they have already been working hard today, give a short encouraging note on',
+    '  their progress so far (using the stats), and invite them to keep going with enthusiasm.',
   ].join('\n');
 
   const user = ctx.isNewUser
     ? 'User type: NEW USER (no prior activity).'
-    : [
-        'User type: RETURNING USER.',
-        `Lifetime: ${ctx.lifetimeStats?.answered ?? 0} questions answered, ${ctx.lifetimeStats?.accuracyPct ?? 0}% accuracy.`,
-        ctx.lifetimeStats?.recentlyMissedQuestions?.length
-          ? `Recently missed questions (for suggesting today's focus):\n${ctx.lifetimeStats.recentlyMissedQuestions.map((q) => `- ${q}`).join('\n')}`
-          : 'No specific recently-missed questions on file.',
-      ].join('\n');
+    : ctx.isFirstVisitToday
+      ? [
+          'User type: RETURNING USER — FIRST VISIT TODAY.',
+          `Lifetime: ${ctx.lifetimeStats?.answered ?? 0} questions answered, ${ctx.lifetimeStats?.accuracyPct ?? 0}% accuracy.`,
+          ctx.lifetimeStats?.recentlyMissedQuestions?.length
+            ? `Recently missed questions (for suggesting today's focus):\n${ctx.lifetimeStats.recentlyMissedQuestions.map((q) => `- ${q}`).join('\n')}`
+            : 'No specific recently-missed questions on file.',
+        ].join('\n')
+      : [
+          'User type: RETURNING USER — BACK FOR MORE TODAY.',
+          `Lifetime: ${ctx.lifetimeStats?.answered ?? 0} questions answered, ${ctx.lifetimeStats?.accuracyPct ?? 0}% accuracy.`,
+        ].join('\n');
 
   return { system, user };
 }
@@ -499,7 +507,10 @@ export class TurnInterpreterAdapter {
     }
     const acc = ctx.lifetimeStats?.accuracyPct ?? 0;
     const answered = ctx.lifetimeStats?.answered ?? 0;
-    return `Welcome back! So far you've answered ${answered} question${answered === 1 ? '' : 's'} with ${acc}% accuracy. Keep up the great work — let's keep building on that today.`;
+    if (ctx.isFirstVisitToday) {
+      return `Welcome back! So far you've answered ${answered} question${answered === 1 ? '' : 's'} with ${acc}% accuracy. Let's see how much we can build on that today — you're doing great!`;
+    }
+    return `Great to see you again! You've already put in solid effort today. Keep it up — every question you practice brings you closer to acing your interview.`;
   }
 
   async respondToOpening(

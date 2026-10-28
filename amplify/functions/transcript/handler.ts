@@ -87,6 +87,12 @@ interface RequestBody {
    * early with no Polly synthesis at all.
    */
   welcomeBanner?: boolean;
+  /**
+   * ISO date string (YYYY-MM-DD) in the user's local timezone, sent by the
+   * client so the backend can distinguish a first-visit-today from a same-day
+   * returning visit without having to resolve the timezone server-side.
+   */
+  localDate?: string;
   examReview?: boolean;
   examId?: string;
   postExamConversation?: boolean;
@@ -956,6 +962,44 @@ async function getLifetimeStats(
   }
 }
 
+/**
+ * Returns true when the user has graded answers recorded on today's local date
+ * (as reported by the client). Used by the welcome banner to distinguish a
+ * first-of-day visit from a same-day returning visit so the greeting can be
+ * appropriately personalised (e.g. "welcome back for another round today!").
+ * Falls back to false on any error so the first-visit path is taken.
+ */
+async function getHasTodaySession(
+  token: string,
+  localDate: string,
+  traceId: string,
+): Promise<boolean> {
+  // Validate format to avoid SQL injection via the date string.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(localDate)) return false;
+  try {
+    const db = getUserScopedSupabase(token);
+    // graded_answers.created_at is a timestamptz; compare against a UTC
+    // day range derived from the client’s local date so no server-side
+    // timezone conversion is needed.
+    const startUtc = `${localDate}T00:00:00.000Z`;
+    const endUtc   = `${localDate}T23:59:59.999Z`;
+    const { data, error } = await db
+      .from('graded_answers')
+      .select('id')
+      .gte('created_at', startUtc)
+      .lte('created_at', endUtc)
+      .limit(1);
+    if (error) {
+      console.warn(`[Lambda-WelcomeBanner] [${traceId}] today-session query error: ${error.message}`);
+      return false;
+    }
+    return (data ?? []).length > 0;
+  } catch (err) {
+    console.error(`[Lambda-WelcomeBanner] [${traceId}] today-session exception:`, err);
+    return false;
+  }
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const traceId = getCaseInsensitiveHeader(event.headers || {}, 'x-correlation-trace-id') || `lambda-trace-${Date.now()}`;
 
@@ -1067,13 +1111,28 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Returns early, before the transcript guard or any Polly synthesis —
     // this call has no transcript and produces no audio at all.
     if (parsedBody.welcomeBanner === true) {
-      const lifetime = await getLifetimeStats(token, traceId);
+      // Validate localDate format if provided; fall back to today's UTC date.
+      const clientLocalDate = typeof parsedBody.localDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsedBody.localDate)
+        ? parsedBody.localDate
+        : new Date().toISOString().slice(0, 10);
+
+      // Run both queries in parallel — no dependency between them.
+      const [lifetime, hasTodaySession] = await Promise.all([
+        getLifetimeStats(token, traceId),
+        getHasTodaySession(token, clientLocalDate, traceId),
+      ]);
+
       const isNewUser = lifetime.answered === 0;
+      // A new user trivially has no prior session today; returning users may
+      // already have practiced earlier in the same calendar day.
+      const isFirstVisitToday = isNewUser || !hasTodaySession;
+
       const message = await turnInterpreter.generateWelcomeBanner(
         isNewUser
-          ? { isNewUser: true }
+          ? { isNewUser: true, isFirstVisitToday: true }
           : {
               isNewUser: false,
+              isFirstVisitToday,
               lifetimeStats: {
                 answered: lifetime.answered,
                 correct: lifetime.correct,
@@ -1082,7 +1141,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
               },
             }
       );
-      console.log(`[Lambda-WelcomeBanner] [${traceId}] isNewUser=${isNewUser}, lifetimeAnswered=${lifetime.answered}`);
+      console.log(`[Lambda-WelcomeBanner] [${traceId}] isNewUser=${isNewUser}, isFirstVisitToday=${isFirstVisitToday}, lifetimeAnswered=${lifetime.answered}`);
       return {
         statusCode: 200,
         headers: responseHeaders,

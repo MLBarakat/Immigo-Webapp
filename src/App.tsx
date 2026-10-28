@@ -188,6 +188,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   const requestSessionStart = async () => {
+    if (examToResume || isCheckingExam) return;
     if (manager.postExamId) {
       manager.startSession();
       return;
@@ -198,11 +199,14 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       return;
     }
     setIsCheckingExam(true);
-    const unfinishedExam = await MockExamService.getLatestInProgress(user.id, testVersion);
-    setIsCheckingExam(false);
-    if (unfinishedExam) {
-      setExamToResume(unfinishedExam);
-      return;
+    try {
+      const unfinishedExam = await MockExamService.getLatestInProgress(user.id, testVersion);
+      if (unfinishedExam) {
+        setExamToResume(unfinishedExam);
+        return;
+      }
+    } finally {
+      setIsCheckingExam(false);
     }
     manager.setMockExamAction('new');
     manager.startSession();
@@ -224,11 +228,14 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     if (simulationMode === 'standard' && user?.id && !manager.currentItemId && !manager.postExamId) {
       setPendingExamStartText(text);
       setIsCheckingExam(true);
-      const unfinishedExam = await MockExamService.getLatestInProgress(user.id, testVersion);
-      setIsCheckingExam(false);
-      if (unfinishedExam) {
-        setExamToResume(unfinishedExam);
-        return;
+      try {
+        const unfinishedExam = await MockExamService.getLatestInProgress(user.id, testVersion);
+        if (unfinishedExam) {
+          setExamToResume(unfinishedExam);
+          return;
+        }
+      } finally {
+        setIsCheckingExam(false);
       }
       setPendingExamStartText(null);
       manager.setMockExamAction('new');
@@ -487,6 +494,44 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           </button>
         </nav>
         <Footer />
+        {(examToResume || isCheckingExam) && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation">
+            <section ref={examChoiceRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mock-exam-choice-title" dir="ltr" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl outline-none dark:bg-gray-800">
+              <h2 id="mock-exam-choice-title" className="text-lg font-bold text-deep-navy dark:text-white">
+                {isCheckingExam ? 'Checking your exam…' : 'Continue your mock exam?'}
+              </h2>
+              {isCheckingExam ? (
+                <p className="mt-2 text-sm text-immigo-gray-600 dark:text-gray-300">Looking for an unfinished exam in this question bank.</p>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm text-immigo-gray-600 dark:text-gray-300">
+                    {examToResume?.english_stage === 'reading' || examToResume?.english_stage === 'writing'
+                      ? `Your previous ${examToResume.test_version} exam has finished the civics section and is ready to continue with English ${examToResume.english_stage} practice.`
+                      : `Your previous ${examToResume?.test_version} exam has ${Math.max(0, examToResume?.question_ids.length ?? 0) - (examToResume?.current_index ?? 0)} civics questions remaining. You can continue it or begin a new exam.`}
+                  </p>
+                  <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" onClick={() => chooseExamAction('resume')} className="rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-art-blue-700">Continue exam</button>
+                    <button type="button" onClick={() => chooseExamAction('new')} className="rounded-lg border border-immigo-gray-300 px-4 py-2 text-sm font-semibold text-deep-navy hover:bg-immigo-gray-50 dark:text-white">Start a new exam</button>
+                    <button type="button" onClick={() => { setExamToResume(null); setPendingExamStartText(null); manager.releasePreparedVoiceCapture(); }} className="rounded-lg px-4 py-2 text-sm text-immigo-gray-600 hover:bg-immigo-gray-100 dark:text-gray-300">Cancel</button>
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
+        )}
+        <FeedbackModal
+          isOpen={Boolean(activeExamReviewId)}
+          onClose={() => setActiveExamReviewId(null)}
+          isLoading={isExamReviewLoading}
+          feedback={activeExamReviewId ? examReviewCache[activeExamReviewId]?.feedback ?? null : null}
+          report={activeExamReviewId ? examReviewCache[activeExamReviewId]?.report ?? null : null}
+          error={examReviewError}
+          onStartPractice={continueInMode}
+          onChooseMode={continueInMode}
+          onSetGoal={continueWithGoal}
+          onStartNewExam={startNewMockExam}
+          onRetry={() => { if (activeExamReviewId) void openExamReview(activeExamReviewId); }}
+        />
       </div>
     );
   }

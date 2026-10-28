@@ -68,6 +68,13 @@ export interface SessionStartContext {
  */
 export interface WelcomeBannerContext {
   isNewUser: boolean;
+  /**
+   * True when this is the first time the user has opened the app today
+   * (no prior session recorded for today's local date). False when the
+   * user has already had a session today and is returning for another round.
+   * Always true for new users (isNewUser = true).
+   */
+  isFirstVisitToday: boolean;
   /** Lifetime totals across all sessions, not just one session. Ignored when isNewUser. */
   lifetimeStats?: {
     answered: number;

@@ -461,10 +461,27 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
 
   const logout = useCallback(async (): Promise<void> => {
     if (!supabase) throw new Error("Supabase client not initialized.");
+    const currentUserId = user?.id;
+    if (currentUserId) {
+      try {
+        // Clear per-day welcome banner flags (today and yesterday) so the
+        // next login always shows a fresh personalised greeting, regardless
+        // of the user’s timezone offset.
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const toDateStr = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        localStorage.removeItem(`welcome-banner-shown:${currentUserId}:${toDateStr(today)}`);
+        localStorage.removeItem(`welcome-banner-shown:${currentUserId}:${toDateStr(yesterday)}`);
+      } catch {
+        // Storage access may fail in restricted contexts; ignore.
+      }
+    }
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     analytics.track('user_logout');
-  }, [supabase]);
+  }, [supabase, user?.id]);
 
   const updateProfile = useCallback(async (fullName: string): Promise<void> => {
     if (!user || !supabase) throw new Error('User not authenticated or Supabase client not initialized.');

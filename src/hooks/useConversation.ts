@@ -554,6 +554,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // history when no local snapshot exists, or to retain its pagination cursor.
   useLayoutEffect(() => {
     hydratedHistoryUserIdRef.current = null;
+    hasFetchedWelcomeBannerRef.current = false;
     if (!userId) return;
 
     let isMounted = true;
@@ -802,22 +803,36 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     if (userId) {
       const previousSessionId = activeSessionId;
       const previousSessionDate = localSessionDateRef.current;
+      const isOngoingConversation = Boolean(
+        activeSessionId && (
+          conversationState.isSessionActive ||
+          latestConversationHistoryRef.current.length > 0 ||
+          examRunIdRef.current !== null ||
+          currentItemIdRef.current !== null
+        )
+      );
       const dailySession = await ChatPersistenceService.getOrCreateDailySession(userId, requestedSessionDate, accountTimezoneRef.current);
       const localDate = dailySession?.local_date ?? requestedSessionDate;
-      activeSessionId = dailySession?.id ?? null;
+      if (!isOngoingConversation || !activeSessionId) {
+        activeSessionId = dailySession?.id ?? null;
+      }
       if (turnGeneration !== turnGenerationRef.current) return;
       if (activeSessionId) {
-        if (previousSessionDate !== localDate) {
+        if (previousSessionDate !== localDate && !isOngoingConversation) {
           dispatch({ type: 'CLEAR_CONVERSATION' });
           historyClearedBeforeHydrationRef.current = true;
         }
-        localSessionDateRef.current = localDate;
-        sessionIdRef.current = activeSessionId;
-        updateCurrentItemId(dailySession?.current_item_id ?? null);
-        modeGoalPendingRef.current = dailySession?.mode_goal_pending ?? false;
-        dispatch({ type: 'SET_SESSION_ID', payload: activeSessionId });
+        if (!isOngoingConversation) {
+          localSessionDateRef.current = localDate;
+          sessionIdRef.current = activeSessionId;
+          updateCurrentItemId(dailySession?.current_item_id ?? null);
+          modeGoalPendingRef.current = dailySession?.mode_goal_pending ?? false;
+          dispatch({ type: 'SET_SESSION_ID', payload: activeSessionId });
+        }
         if (previousSessionId !== activeSessionId || previousSessionDate !== localDate) {
-          analytics.track('session_started', { mode: 'text' });
+          if (!isOngoingConversation) {
+            analytics.track('session_started', { mode: 'text' });
+          }
         }
       }
     }
@@ -1270,12 +1285,20 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     const requestedSessionDate = getCurrentSessionDate();
     const previousLocalDate = localSessionDateRef.current;
     const storedSessionId = sessionIdRef.current || conversationState.sessionId;
+    const isOngoingConversation = Boolean(
+      storedSessionId && (
+        conversationState.isSessionActive ||
+        latestConversationHistoryRef.current.length > 0 ||
+        examRunIdRef.current !== null ||
+        currentItemIdRef.current !== null
+      )
+    );
     const dailySession = userId ? await ChatPersistenceService.getOrCreateDailySession(userId, requestedSessionDate, accountTimezoneRef.current) : null;
     const localDate = dailySession?.local_date ?? requestedSessionDate;
-    const existingSessionId = previousLocalDate === localDate ? storedSessionId : null;
-    let newSessionId: string | null = dailySession?.id ?? existingSessionId;
+    const existingSessionId = (previousLocalDate === localDate || isOngoingConversation) ? storedSessionId : null;
+    let newSessionId: string | null = (isOngoingConversation && storedSessionId) ? storedSessionId : (dailySession?.id ?? existingSessionId);
     const continuingTextSession = Boolean(newSessionId && existingSessionId === newSessionId && !conversationState.isSessionActive);
-    if (previousLocalDate !== localDate) {
+    if (previousLocalDate !== localDate && !isOngoingConversation) {
       dispatch({ type: 'CLEAR_CONVERSATION' });
       historyClearedBeforeHydrationRef.current = true;
       updateCurrentItemId(null);
@@ -1543,9 +1566,13 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // so there must be nothing (not even an empty bubble) before it.
   useEffect(() => {
     if (!apiClient || !userId || hasFetchedWelcomeBannerRef.current || conversationState.conversationHistory.length > 0) return;
-    const storageKey = `welcome-banner-requested:${userId}`;
+    // Key by user + calendar date (in the account timezone) so the banner
+    // shows at most once per day, even across tabs and page refreshes.
+    // On logout, AuthContext clears this key so the next login gets a fresh banner.
+    const localDate = localSessionDateRef.current || ChatPersistenceService.getSessionDate(accountTimezoneRef.current);
+    const storageKey = `welcome-banner-shown:${userId}:${localDate}`;
     try {
-      if (sessionStorage.getItem(storageKey) === 'done') {
+      if (localStorage.getItem(storageKey) === 'done') {
         hasFetchedWelcomeBannerRef.current = true;
         return;
       }
@@ -1557,13 +1584,13 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     let cancelled = false;
     void (async () => {
       try {
-        const { message } = await apiClient.fetchWelcomeBanner();
+        const { message } = await apiClient.fetchWelcomeBanner({ localDate });
         if (cancelled) return;
         if (latestConversationHistoryRef.current.length > 0) return;
         const assistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId, content: message } });
         try {
-          sessionStorage.setItem(storageKey, 'done');
+          localStorage.setItem(storageKey, 'done');
         } catch {
           // Best-effort only.
         }
@@ -1581,7 +1608,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     return () => {
       cancelled = true;
     };
-  }, [apiClient, userId, dispatch, conversationState.conversationHistory.length]);
+  }, [apiClient, userId, dispatch, conversationState.conversationHistory.length, accountTimezone]);
 
   const stopRecordingRef = useRef(stopRecording);
   useEffect(() => {

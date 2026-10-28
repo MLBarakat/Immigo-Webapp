@@ -93,7 +93,7 @@ export async function fetchDailyProgressStats(userId: string, accountTimezone = 
       // A learner may change their account time zone mid-day. Continue using
       // that day's original session until its original calendar boundary.
       const { data: latest, error: latestError } = await supabase.from('sessions')
-        .select('id,local_date,local_timezone')
+        .select('id,local_date,local_timezone,status')
         .eq('user_id', userId)
         .not('local_date', 'is', null)
         .order('started_at', { ascending: false })
@@ -103,15 +103,42 @@ export async function fetchDailyProgressStats(userId: string, accountTimezone = 
       if (latest?.local_date && latest.local_timezone
         && ChatPersistenceService.getSessionDate(latest.local_timezone, now) === latest.local_date) {
         sessionId = latest.id as string;
+      } else if (latest?.status === 'active') {
+        sessionId = latest.id as string;
       }
     }
     if (!sessionId) return computeLiveStats([]);
-    const { data, error } = await supabase
+    const { data: initialData, error } = await supabase
       .from('graded_answers')
       .select('item_id, verdict')
       .eq('user_id', userId)
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false });
+    let data = initialData;
+
+    // Edge case: if a new day's session was created but an ongoing test is still active on the previous session,
+    // continue reading the active session's graded answers so test stats don't drop to 0 mid-exam.
+    if (!error && (!data || data.length === 0)) {
+      const { data: ongoingSession } = await supabase.from('sessions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .neq('id', sessionId)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (ongoingSession?.id) {
+        const fallback = await supabase
+          .from('graded_answers')
+          .select('item_id, verdict')
+          .eq('user_id', userId)
+          .eq('session_id', ongoingSession.id)
+          .order('created_at', { ascending: false });
+        if (!fallback.error && fallback.data && fallback.data.length > 0) {
+          data = fallback.data;
+        }
+      }
+    }
 
     if (error) {
       logger.warn('[LiveProgress] Daily graded_answers query error (non-fatal):', { error: error.message });

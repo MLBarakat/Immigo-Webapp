@@ -447,13 +447,19 @@ export class ApiClient {
    * loads — independent of starting a practice session. No audio at all, so
    * this is a dedicated, simpler method rather than sendTranscriptRequest
    * (which requires an audioData string and would incorrectly throw here).
+   * @param options.localDate - ISO date string (YYYY-MM-DD) in the user's timezone.
+   *   The backend uses this to distinguish a first-visit-today from a same-day
+   *   returning visit so the welcome message can be appropriately personalised.
    */
-  async fetchWelcomeBanner(options: { headers?: Record<string, string> } = {}): Promise<{ message: string; isNewUser: boolean }> {
+  async fetchWelcomeBanner(options: { headers?: Record<string, string>; localDate?: string } = {}): Promise<{ message: string; isNewUser: boolean }> {
     logger.info('[ApiClient] Dispatching fetchWelcomeBanner request.');
     const response = await this.fetchWithAuth('/transcript', {
       method: 'POST',
       headers: options.headers,
-      body: JSON.stringify({ welcomeBanner: true }),
+      body: JSON.stringify({
+        welcomeBanner: true,
+        ...(options.localDate ? { localDate: options.localDate } : {}),
+      }),
     });
 
     const data: unknown = await response.json();
