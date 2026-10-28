@@ -5,7 +5,10 @@ import type { WelcomeBannerContext } from '../types';
 
 describe('buildWelcomeBannerPrompt — two cases only, text-only (no TTS hygiene)', () => {
   it('new-user case: no stats needed, instructs purpose + encouragement', () => {
-    const ctx: WelcomeBannerContext = { isNewUser: true };
+    const ctx: WelcomeBannerContext = {
+      isNewUser: true,
+      isFirstVisitToday: true,
+    };
     const { system, user } = buildWelcomeBannerPrompt(ctx);
     expect(system.toLowerCase()).toContain('new user');
     expect(system.toLowerCase()).toContain('purpose');
@@ -18,7 +21,13 @@ describe('buildWelcomeBannerPrompt — two cases only, text-only (no TTS hygiene
   it('returning-user case: includes lifetime stats and recently-missed questions', () => {
     const ctx: WelcomeBannerContext = {
       isNewUser: false,
-      lifetimeStats: { answered: 42, correct: 30, accuracyPct: 71, recentlyMissedQuestions: ['Name one power of the U.S. Congress.'] },
+      isFirstVisitToday: false, // or true, depending on the scenario tested
+      lifetimeStats: {
+        answered: 10,
+        correct: 8,
+        accuracyPct: 80,
+        recentlyMissedQuestions: ['q1'], // or whatever existing data was present
+      },
     };
     const { system, user } = buildWelcomeBannerPrompt(ctx);
     expect(system.toLowerCase()).toContain('returning user');
@@ -28,7 +37,11 @@ describe('buildWelcomeBannerPrompt — two cases only, text-only (no TTS hygiene
   });
 
   it('returning user with no missed questions on file still produces a valid prompt', () => {
-    const ctx: WelcomeBannerContext = { isNewUser: false, lifetimeStats: { answered: 5, correct: 5, accuracyPct: 100, recentlyMissedQuestions: [] } };
+    const ctx: WelcomeBannerContext = {
+      isNewUser: false,
+      isFirstVisitToday: false,
+      lifetimeStats: { answered: 5, correct: 5, accuracyPct: 100, recentlyMissedQuestions: [] },
+    };
     const { user } = buildWelcomeBannerPrompt(ctx);
     expect(user).toContain('No specific recently-missed questions on file.');
   });
