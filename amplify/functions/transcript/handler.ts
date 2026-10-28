@@ -293,7 +293,24 @@ function getSupabaseClient(): SupabaseClient {
 
 async function fetchUserProgressReport(userId: string): Promise<string> {
   const supabase = getSupabaseClient();
-  const today = new Date().toISOString().split('T')[0];
+  let timeZone = 'UTC';
+  try {
+    const { data: settings } = await supabase.from('user_settings')
+      .select('account_timezone')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (settings?.account_timezone) timeZone = settings.account_timezone;
+  } catch {
+    // Existing reports remain available if account settings cannot be read.
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const part = (type: 'year' | 'month' | 'day') => parts.find((entry) => entry.type === type)?.value;
+  const today = `${part('year')}-${part('month')}-${part('day')}`;
   try {
     console.log(`[Lambda-FetchReport] Querying daily_progress_reports for user=${userId}, date=${today}`);
     const { data: todayReport, error: todayErr } = await supabase

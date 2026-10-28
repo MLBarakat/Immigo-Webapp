@@ -12,6 +12,7 @@
 // while these numeric facts can be as live as you want them.
 import { getSupabaseClient } from '../supabaseClient';
 import { logger } from '../logger';
+import { ChatPersistenceService } from './chatPersistenceService';
 
 export interface LiveSessionStats {
   answered: number;
@@ -77,22 +78,39 @@ export function getUtcDayBounds(now = new Date()): { start: string; end: string 
 }
 
 /**
- * Reads the committed answers for the user's current device-local day session.
+ * Reads the committed answers for the user's current account-time-zone day session.
  */
-export async function fetchDailyProgressStats(userId: string, now = new Date()): Promise<LiveSessionStats | null> {
+export async function fetchDailyProgressStats(userId: string, accountTimezone = 'UTC', now = new Date()): Promise<LiveSessionStats | null> {
   if (!userId) return null;
   try {
     const supabase = getSupabaseClient();
-    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const localDate = ChatPersistenceService.getSessionDate(accountTimezone, now);
     const { data: session, error: sessionError } = await supabase.from('sessions')
       .select('id').eq('user_id', userId).eq('local_date', localDate).maybeSingle();
     if (sessionError) throw sessionError;
-    if (!session) return computeLiveStats([]);
+    let sessionId = session?.id as string | undefined;
+    if (!sessionId) {
+      // A learner may change their account time zone mid-day. Continue using
+      // that day's original session until its original calendar boundary.
+      const { data: latest, error: latestError } = await supabase.from('sessions')
+        .select('id,local_date,local_timezone')
+        .eq('user_id', userId)
+        .not('local_date', 'is', null)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestError) throw latestError;
+      if (latest?.local_date && latest.local_timezone
+        && ChatPersistenceService.getSessionDate(latest.local_timezone, now) === latest.local_date) {
+        sessionId = latest.id as string;
+      }
+    }
+    if (!sessionId) return computeLiveStats([]);
     const { data, error } = await supabase
       .from('graded_answers')
       .select('item_id, verdict')
       .eq('user_id', userId)
-      .eq('session_id', session.id)
+      .eq('session_id', sessionId)
       .order('created_at', { ascending: false });
 
     if (error) {

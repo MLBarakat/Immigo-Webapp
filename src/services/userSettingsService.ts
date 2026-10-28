@@ -23,6 +23,8 @@ export interface UserSettingsRow {
   reminder_time: string;
   input_device_id: string | null;
   output_device_id: string | null;
+  location_state?: string | null;
+  account_timezone?: string | null;
   updated_at: string;
 }
 
@@ -43,6 +45,8 @@ export function userSettingsRowToSettings(row: UserSettingsRow): Partial<UserSet
     reminder_time: row.reminder_time ?? DEFAULT_USER_SETTINGS.reminder_time,
     input_device_id: row.input_device_id ?? null,
     output_device_id: row.output_device_id ?? null,
+    ...(row.location_state ? { location_state: row.location_state } : {}),
+    ...(row.account_timezone ? { account_timezone: row.account_timezone } : {}),
   };
 }
 
@@ -64,6 +68,8 @@ function settingsToRow(userId: string, settings: UserSettings): Omit<UserSetting
     reminder_time: settings.reminder_time ?? '19:00',
     input_device_id: settings.input_device_id ?? null,
     output_device_id: settings.output_device_id ?? null,
+    location_state: settings.location_state ?? null,
+    account_timezone: settings.account_timezone ?? null,
   };
 }
 

@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import amplifyOutputs from '../../amplify_outputs.json';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
+import { getDefaultTimeZoneForState, getTimeZoneLabel, US_STATES, US_TIME_ZONES } from '../utils/usLocation';
 
 interface AccountSettingsPageProps {
   onNavigateBack: () => void;
@@ -15,12 +16,14 @@ interface AccountSettingsPageProps {
 type SettingsView = 'profile' | 'security' | 'connections' | 'delete';
 
 export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettingsPageProps): JSX.Element => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [activeView, setActiveView] = useState<SettingsView>('profile');
   const modalRef = useFocusTrap(true);
   const { handlePointerDown, handlePointerMove, handlePointerUp } = useDraggableOverlay<HTMLDivElement>(modalRef);
-  const { user, profile, session, logout, updateProfile, updatePassword } = useAuth();
+  const { user, profile, session, logout, updateProfile, updatePassword, userSettings, updateUserSettings } = useAuth();
   const [fullName, setFullName] = useState(() => profile?.full_name || (user?.user_metadata?.full_name as string) || '');
+  const [locationState, setLocationState] = useState(userSettings.location_state ?? '');
+  const [accountTimezone, setAccountTimezone] = useState(userSettings.account_timezone ?? getDefaultTimeZoneForState(userSettings.location_state));
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -71,10 +74,15 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
       setProfileMessage(t('account.profile.fullNameRequired'));
       return;
     }
+    if (!locationState) {
+      setProfileMessage(t('account.profile.locationRequired'));
+      return;
+    }
     setProfileSaving(true);
     setProfileMessage(null);
     try {
       await updateProfile(nextName);
+      await updateUserSettings({ location_state: locationState, account_timezone: accountTimezone });
       setProfileMessage(t('account.profile.saved'));
     } catch (err) {
       setProfileMessage(err instanceof Error ? err.message : t('account.profile.saveFailed'));
@@ -124,6 +132,38 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
                   onChange={(event) => setFullName(event.target.value)}
                   className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500"
                 />
+              </div>
+              <div>
+                <label htmlFor="account-location-state" className="block text-sm font-medium text-immigo-gray-700">{t('account.profile.locationState')}</label>
+                <select
+                  id="account-location-state"
+                  value={locationState}
+                  onChange={(event) => {
+                    const nextState = event.target.value;
+                    setLocationState(nextState);
+                    setAccountTimezone(getDefaultTimeZoneForState(nextState));
+                  }}
+                  className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500"
+                  required
+                >
+                  <option value="">{t('auth.selectState')}</option>
+                  {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="account-timezone" className="block text-sm font-medium text-immigo-gray-700">{t('account.profile.sessionTimezone')}</label>
+                <select
+                  id="account-timezone"
+                  value={accountTimezone}
+                  onChange={(event) => setAccountTimezone(event.target.value)}
+                  className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500"
+                  required
+                >
+                  {US_TIME_ZONES.map((timeZone) => (
+                    <option key={timeZone} value={timeZone}>{getTimeZoneLabel(timeZone, i18n.language)}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-immigo-gray-600">{t('account.profile.sessionTimezoneHelp')}</p>
               </div>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-immigo-gray-700">{t('account.profile.email')}</label>

@@ -98,6 +98,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     testVersion,
     includeEnglishSimulation,
     preferredLanguage: currentLanguageCode,
+    accountTimezone: userSettings.account_timezone || 'UTC',
     bargeIn: userSettings.barge_in,
   });
   useEffect(() => {

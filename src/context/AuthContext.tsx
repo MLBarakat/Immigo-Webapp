@@ -10,6 +10,7 @@ import { AuthContext, SignUpPayload } from './authContextTypes';
 import { UserSettingsService, userSettingsRowToSettings } from '../services/userSettingsService';
 import type { UserSettingsRow } from '../services/userSettingsService';
 import { normalizeTheme } from '../utils/theme';
+import { isSupportedUSTimeZone, US_STATES } from '../utils/usLocation';
 
 function clearReferralAttribution(): void {
   try {
@@ -167,12 +168,23 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         if (settingsRealtimeGenerationRef.current === settingsRealtimeGeneration) {
           if (dbSettings) {
             // DB row exists → use it as the highest-priority source.
+            const resolvedSettings = {
+              ...mergedSettings,
+              ...dbSettings,
+              // Existing rows may predate account time-zone settings. Keep the
+              // account metadata/default value until it is written to the DB.
+              account_timezone: dbSettings.account_timezone ?? mergedSettings.account_timezone ?? 'UTC',
+              location_state: dbSettings.location_state ?? mergedSettings.location_state ?? null,
+            };
             setUserSettings(prev => ({
               ...prev,
-              ...dbSettings,
+              ...resolvedSettings,
               // Always prefer the DB font_size; fall back to localStorage only if DB has none.
               font_size: dbSettings.font_size ?? prev.font_size,
             }));
+            if (!dbSettings.account_timezone || (!dbSettings.location_state && resolvedSettings.location_state)) {
+              void UserSettingsService.upsertSettings(supabase, currentUser.id, resolvedSettings);
+            }
           } else {
             // No row yet → upsert defaults so the record exists for next time.
             logger.info('No user_settings row found; creating defaults.', { userId: currentUser.id });
@@ -413,8 +425,10 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     analytics.track('user_login', { method: 'email' });
   }, [supabase]);
 
-  const signUp = useCallback(async ({ email, password, fullName, language, termsAcceptedAt, termsVersion, privacyVersion }: SignUpPayload): Promise<void> => {
+  const signUp = useCallback(async ({ email, password, fullName, language, locationState, accountTimezone, termsAcceptedAt, termsVersion, privacyVersion }: SignUpPayload): Promise<void> => {
     if (!supabase) throw new Error("Supabase client not initialized.");
+    if (!US_STATES.some(([code]) => code === locationState)) throw new Error('Please select a valid U.S. state.');
+    if (!isSupportedUSTimeZone(accountTimezone)) throw new Error('Please select a valid U.S. time zone.');
     let referralCode: string | null = null;
     try {
       referralCode = window.localStorage.getItem('immigo_referral_code');
@@ -428,6 +442,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         data: {
           full_name: fullName,
           language,
+          location_state: locationState,
+          account_timezone: accountTimezone,
+          settings: { location_state: locationState, account_timezone: accountTimezone },
           terms_accepted_at: termsAcceptedAt,
           terms_version: termsVersion,
           privacy_version: privacyVersion,

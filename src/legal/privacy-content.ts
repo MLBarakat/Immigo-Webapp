@@ -1,7 +1,7 @@
 import { legalEntityConfig } from './terms-content';
 
 export const privacyContent = {
-  effectiveDate: 'August 26, 2026',
+  effectiveDate: 'October 27, 2026',
   sections: [
     {
       title: '1. Who we are',
@@ -13,11 +13,11 @@ export const privacyContent = {
     },
     {
       title: '3. Information we collect',
-      content: `Account information you provide at registration (e.g., email, first name, and optional preferences such as preferred language and target interview date). Your spoken answers as text: your device transcribes your speech to text on your device, and only the resulting text transcript is sent to us — we do not receive, store, or process audio recordings, and we do not create or store voiceprints or any biometric identifiers. Practice results: which civics questions you practiced and whether each answer was graded correct, partial, or incorrect, with timestamps. Progress summaries generated to help you study. Technical logs used to run and secure the service. We practice data minimization: we collect only what is needed to run the study tool and track your progress.`,
+      content: `Account information you provide at registration (e.g., email, first name, U.S. state, preferred language, and target interview date). Your state is used to suggest your account time zone, which defines the daily learning-session boundary across devices. You can change your state and time zone in account settings. Your spoken answers as text: your device transcribes your speech to text on your device, and only the resulting text transcript is sent to us — we do not receive, store, or process audio recordings, and we do not create or store voiceprints or any biometric identifiers. Practice results: which civics questions you practiced and whether each answer was graded correct, partial, or incorrect, with timestamps. Progress summaries generated to help you study. Technical logs used to run and secure the service. We practice data minimization: we collect only what is needed to run the study tool and track your progress.`,
     },
     {
       title: '4. How we use your information',
-      content: `To provide the tutoring/grading service, track and personalize your progress, operate and secure the app, and comply with law. We do not sell your personal information, and we do not use it for advertising.`,
+      content: `To provide the tutoring/grading service, track and personalize your progress, determine the shared daily-session boundary from your account time zone, operate and secure the app, and comply with law. We do not sell your personal information, and we do not use it for advertising.`,
     },
     {
       title: '5. How long we keep it (retention)',
@@ -55,4 +55,4 @@ export const privacyContent = {
 };
 
 /** Version stamp recorded when a user accepts, so acceptance is auditable. */
-export const PRIVACY_VERSION = '2026-08-26';
+export const PRIVACY_VERSION = '2026-10-27';

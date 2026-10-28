@@ -36,6 +36,7 @@ vi.mock('../../logger', () => ({
 vi.mock('../../services/chatPersistenceService', () => ({
   ChatPersistenceService: {
     getDeviceLocalDate: vi.fn(() => '2026-10-26'),
+    getSessionDate: vi.fn(() => '2026-10-26'),
     getOrCreateDailySession: vi.fn().mockResolvedValue({ id: 'daily-session', current_item_id: null, mode_goal_pending: false, current_mode: 'standard', test_version: '2020', include_english_simulation: false }),
     saveDailySessionState: vi.fn().mockResolvedValue(undefined),
     createSession: vi.fn().mockResolvedValue(null),
@@ -332,6 +333,16 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   });
 
   it('creates a reportable analytics session for text-only graded answers', async () => {
+    vi.mocked(ChatPersistenceService.getOrCreateDailySession).mockResolvedValue({
+      id: 'daily-session',
+      current_item_id: 'q-next',
+      mode_goal_pending: false,
+      current_mode: 'standard',
+      test_version: '2020',
+      include_english_simulation: false,
+      local_date: '2026-10-26',
+      local_timezone: 'UTC',
+    });
     vi.mocked(ChatPersistenceService.createSession).mockResolvedValue('text-session');
     let statsReadCount = 0;
     vi.mocked(fetchDailyProgressStats).mockImplementation(async () => ({
@@ -373,13 +384,13 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       false,
       expect.any(Object),
     );
-    expect(fetchDailyProgressStats).toHaveBeenCalledWith('user-1');
+    expect(fetchDailyProgressStats).toHaveBeenCalledWith('user-1', 'UTC');
     expect(mockApiClient.postTranscript).toHaveBeenNthCalledWith(
       1,
       'Text answer 1',
       expect.any(Array),
       'daily-session',
-      null,
+      'q-next',
       false,
       expect.objectContaining({ openingResponse: true }),
     );

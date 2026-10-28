@@ -21,6 +21,8 @@ const baseAuth: AuthContextType = {
     barge_in: 'balanced',
     progress_report_frequency: 'after_session',
     font_size: 'default',
+    location_state: 'CA',
+    account_timezone: 'America/Los_Angeles',
   },
   login: vi.fn(),
   signUp: vi.fn(),
@@ -47,14 +49,25 @@ afterEach(() => {
 describe('AccountSettingsPage', () => {
   it('persists a changed profile name', async () => {
     const updateProfile = vi.fn().mockResolvedValue(undefined);
-    renderPage({ updateProfile });
+    const updateUserSettings = vi.fn().mockResolvedValue(undefined);
+    renderPage({ updateProfile, updateUserSettings });
 
     const nameInput = screen.getByLabelText('Full Name');
     fireEvent.change(nameInput, { target: { value: 'New Name' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }));
+    fireEvent.submit(screen.getByLabelText('U.S. state').closest('form') as HTMLFormElement);
 
     await waitFor(() => expect(updateProfile).toHaveBeenCalledWith('New Name'));
+    expect(updateUserSettings).toHaveBeenCalledWith({ location_state: 'CA', account_timezone: 'America/Los_Angeles' });
     expect(screen.getByRole('status').textContent).toContain('Profile saved.');
+  });
+
+  it('defaults the account time zone when the state changes and allows an override', () => {
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText('U.S. state'), { target: { value: 'AZ' } });
+    expect((screen.getByLabelText('Daily session time zone') as HTMLSelectElement).value).toBe('America/Phoenix');
+    fireEvent.change(screen.getByLabelText('Daily session time zone'), { target: { value: 'America/Denver' } });
+    expect((screen.getByLabelText('Daily session time zone') as HTMLSelectElement).value).toBe('America/Denver');
   });
 
   it('rejects mismatched passwords before calling auth', async () => {

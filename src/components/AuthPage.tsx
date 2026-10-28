@@ -13,6 +13,7 @@ import { SUPPORTED_LANGUAGES } from '../constants';
 import { Language } from '../types/language';
 import { ImmiGOLabel } from './ImmiGOLabel';
 import i18n, { applyLanguageDirection } from '../i18n';
+import { getDefaultTimeZoneForState, US_STATES, getTimeZoneLabel } from '../utils/usLocation';
 
 export function AuthPage(): JSX.Element {
   const { t } = useTranslation('common');
@@ -22,6 +23,7 @@ export function AuthPage(): JSX.Element {
   const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [language, setLanguage] = useState(() => i18n.language || 'en-US');
+  const [locationState, setLocationState] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +59,8 @@ export function AuthPage(): JSX.Element {
           password,
           fullName,
           language,
+          locationState,
+          accountTimezone: getDefaultTimeZoneForState(locationState),
           termsAcceptedAt: new Date().toISOString(),
           termsVersion: TERMS_VERSION,
           privacyVersion: PRIVACY_VERSION,
@@ -171,6 +175,25 @@ export function AuthPage(): JSX.Element {
                       <option key={lang.code} value={lang.code}>{lang.name}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label htmlFor="signup-location" className="block text-sm font-medium text-immigo-gray-700 mb-1">{t('auth.locationState')}</label>
+                  <select
+                    id="signup-location"
+                    data-testid="auth-location-state"
+                    value={locationState}
+                    onChange={(e) => setLocationState(e.target.value)}
+                    className="w-full py-3 px-4 border border-immigo-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-shadow"
+                    required
+                  >
+                    <option value="">{t('auth.selectState')}</option>
+                    {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                  </select>
+                  {locationState && (
+                    <p className="mt-1 text-xs text-immigo-gray-600">
+                      {t('auth.sessionTimezoneDefault', { timeZone: getTimeZoneLabel(getDefaultTimeZoneForState(locationState), language) })}
+                    </p>
+                  )}
                 </div>
                 <div className="pt-2">
                   <label className="flex items-start space-x-3 cursor-pointer">

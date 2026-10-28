@@ -27,6 +27,7 @@ interface UseConversationManagerProps {
   testVersion?: TestVersion;
   includeEnglishSimulation?: boolean;
   preferredLanguage?: string;
+  accountTimezone?: string;
   bargeIn?: BargeIn;
 }
 
@@ -43,7 +44,7 @@ const SILENCE_NUDGE_DELAY_MS = 15_000;
 // than the previous behavior).
 const GESTURE_RETRY_TIMEOUT_MS = 20_000;
 
-export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', testVersion = '2020', includeEnglishSimulation = false, preferredLanguage = 'en-US', bargeIn = 'balanced' }: UseConversationManagerProps) {
+export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', testVersion = '2020', includeEnglishSimulation = false, preferredLanguage = 'en-US', accountTimezone = 'UTC', bargeIn = 'balanced' }: UseConversationManagerProps) {
   const { t, i18n } = useTranslation('conversation');
   const context = useContext(ConversationContext);
   if (!context) {
@@ -74,6 +75,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   useEffect(() => {
     bargeInRef.current = bargeIn;
   }, [bargeIn]);
+  const accountTimezoneRef = useRef(accountTimezone || 'UTC');
 
   const intervalRef = useRef<number | null>(null);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
@@ -84,7 +86,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const turnGenerationRef = useRef(0);
   const sessionIdRef = useRef<string | null>(conversationState.sessionId);
-  const localSessionDateRef = useRef<string>(ChatPersistenceService.getDeviceLocalDate());
+  const localSessionDateRef = useRef<string>(ChatPersistenceService.getSessionDate(accountTimezone || 'UTC'));
+  const getCurrentSessionDate = () => ChatPersistenceService.getSessionDate(accountTimezoneRef.current);
   // Tracks which bank question the server last asked, so the next answer is
   // graded against the correct item (server-owned grounded grading).
   const currentItemIdRef = useRef<string | null>(null);
@@ -97,7 +100,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const nextExamActionRef = useRef<MockExamAction | undefined>(undefined);
   const modeGoalPendingRef = useRef(false);
   const openingResponseRef = useRef(false);
-  const reportMilestoneDateRef = useRef(new Date().toISOString().slice(0, 10));
+  const reportMilestoneDateRef = useRef(ChatPersistenceService.getSessionDate(accountTimezone || 'UTC'));
   const hydratedHistoryUserIdRef = useRef<string | null>(null);
   const skipNextHistoryCacheWriteRef = useRef(false);
   const historyChangedBeforeHydrationRef = useRef(false);
@@ -472,6 +475,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     sessionIdRef.current = conversationState.sessionId;
   }, [conversationState.sessionId]);
   useLayoutEffect(() => {
+    accountTimezoneRef.current = accountTimezone || 'UTC';
+  }, [accountTimezone]);
+
+  useLayoutEffect(() => {
     latestConversationHistoryRef.current = conversationState.conversationHistory;
   }, [conversationState.conversationHistory]);
 
@@ -493,7 +500,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     let isMounted = true;
     const refreshDailyStats = async () => {
-      const stats = await fetchDailyProgressStats(userId);
+      const stats = await fetchDailyProgressStats(userId, accountTimezoneRef.current);
       if (isMounted && stats) dispatch({ type: 'SET_LIVE_STATS', payload: stats });
     };
     const handleVisibilityChange = () => {
@@ -541,45 +548,45 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     if (!userId) return;
 
     let isMounted = true;
-    const localDate = ChatPersistenceService.getDeviceLocalDate();
-    localSessionDateRef.current = localDate;
-    const cacheKey = `immigo_conversation_${userId}_${localDate}`;
-    let cachedMessages: Message[] | null = null;
-    try {
-      const stored = sessionStorage.getItem(cacheKey);
-      if (stored !== null) {
-        const parsed: unknown = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.every((entry): entry is Message =>
-          typeof entry === 'object' &&
-          entry !== null &&
-          typeof entry.id === 'string' &&
-          (entry.role === 'user' || entry.role === 'assistant') &&
-          typeof entry.content === 'string' &&
-          typeof entry.timestamp === 'string'
-        )) {
-          cachedMessages = parsed.slice(-100);
-        } else {
-          logger.warn('Ignoring invalid per-tab conversation cache.', { userId });
-        }
-      }
-    } catch (error: unknown) {
-      logger.error('Failed to read per-tab conversation cache.', undefined, {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    const estimatedDate = getCurrentSessionDate();
 
-    if (cachedMessages !== null) {
-      skipNextHistoryCacheWriteRef.current = true;
-      dispatch({
-        type: 'LOAD_HISTORICAL_MESSAGES',
-        payload: { messages: cachedMessages, hasMore: false, oldestCursor: null, replace: true },
-      });
-    }
-    hydratedHistoryUserIdRef.current = userId;
-
-    void ChatPersistenceService.getOrCreateDailySession(userId, localDate).then(async dailySession => {
+    void ChatPersistenceService.getOrCreateDailySession(userId, estimatedDate, accountTimezoneRef.current).then(async dailySession => {
       if (!isMounted || !dailySession) return;
+      // The database clock is authoritative for the session day. Read the
+      // local snapshot only after resolving that date, so skewed device clocks
+      // cannot briefly show another day's cached conversation.
+      const localDate = dailySession.local_date ?? estimatedDate;
+      localSessionDateRef.current = localDate;
+      const cacheKey = `immigo_conversation_${userId}_${localDate}`;
+      let cachedMessages: Message[] | null = null;
+      try {
+        const stored = sessionStorage.getItem(cacheKey);
+        if (stored !== null) {
+          const parsed: unknown = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.every((entry): entry is Message =>
+            typeof entry === 'object' && entry !== null && typeof entry.id === 'string'
+            && (entry.role === 'user' || entry.role === 'assistant')
+            && typeof entry.content === 'string' && typeof entry.timestamp === 'string'
+          )) {
+            cachedMessages = parsed.slice(-100);
+          } else {
+            logger.warn('Ignoring invalid per-tab conversation cache.', { userId });
+          }
+        }
+      } catch (error: unknown) {
+        logger.error('Failed to read per-tab conversation cache.', undefined, {
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      if (cachedMessages !== null) {
+        skipNextHistoryCacheWriteRef.current = true;
+        dispatch({
+          type: 'LOAD_HISTORICAL_MESSAGES',
+          payload: { messages: cachedMessages, hasMore: false, oldestCursor: null, replace: true },
+        });
+      }
+      hydratedHistoryUserIdRef.current = userId;
       sessionIdRef.current = dailySession.id;
       updateCurrentItemId(dailySession.current_item_id);
       modeGoalPendingRef.current = dailySession.mode_goal_pending;
@@ -629,7 +636,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     return () => {
       isMounted = false;
     };
-  }, [userId, dispatch, updateCurrentItemId]);
+  }, [userId, accountTimezone, dispatch, updateCurrentItemId]);
 
   useEffect(() => {
     if (!userId || hydratedHistoryUserIdRef.current !== userId) return;
@@ -772,13 +779,16 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       timestamp: new Date().toISOString() 
     };
     let activeSessionId = sessionIdRef.current || conversationState.sessionId;
-    const localDate = ChatPersistenceService.getDeviceLocalDate();
-    if (userId && (!activeSessionId || localSessionDateRef.current !== localDate)) {
-      const dailySession = await ChatPersistenceService.getOrCreateDailySession(userId, localDate);
+    const requestedSessionDate = getCurrentSessionDate();
+    if (userId) {
+      const previousSessionId = activeSessionId;
+      const previousSessionDate = localSessionDateRef.current;
+      const dailySession = await ChatPersistenceService.getOrCreateDailySession(userId, requestedSessionDate, accountTimezoneRef.current);
+      const localDate = dailySession?.local_date ?? requestedSessionDate;
       activeSessionId = dailySession?.id ?? null;
       if (turnGeneration !== turnGenerationRef.current) return;
       if (activeSessionId) {
-        if (localSessionDateRef.current !== localDate) {
+        if (previousSessionDate !== localDate) {
           dispatch({ type: 'CLEAR_CONVERSATION' });
           historyClearedBeforeHydrationRef.current = true;
         }
@@ -787,7 +797,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         updateCurrentItemId(dailySession?.current_item_id ?? null);
         modeGoalPendingRef.current = dailySession?.mode_goal_pending ?? false;
         dispatch({ type: 'SET_SESSION_ID', payload: activeSessionId });
-        analytics.track('session_started', { mode: 'text' });
+        if (previousSessionId !== activeSessionId || previousSessionDate !== localDate) {
+          analytics.track('session_started', { mode: 'text' });
+        }
       }
     }
 
@@ -898,12 +910,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // it doesn't go stale for the whole session, without regenerating it
       // after every single question.
       if (verdict !== null && userId) {
-        const todayUtc = new Date().toISOString().slice(0, 10);
-        if (reportMilestoneDateRef.current !== todayUtc) {
-          reportMilestoneDateRef.current = todayUtc;
+        const todaySessionDate = getCurrentSessionDate();
+        if (reportMilestoneDateRef.current !== todaySessionDate) {
+          reportMilestoneDateRef.current = todaySessionDate;
           lastReportedDailyMilestoneRef.current = 0;
         }
-        void fetchDailyProgressStats(userId).then((stats) => {
+        void fetchDailyProgressStats(userId, accountTimezoneRef.current).then((stats) => {
           if (!stats) return;
           dispatch({ type: 'SET_LIVE_STATS', payload: stats });
           if (stats.answered > 0 && stats.answered % 10 === 0
@@ -1235,11 +1247,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     // Unlock audible playback while still inside the Start-tap gesture.
     unlockAudioPlayback();
     historyChangedBeforeHydrationRef.current = true;
-    const localDate = ChatPersistenceService.getDeviceLocalDate();
+    const requestedSessionDate = getCurrentSessionDate();
     const previousLocalDate = localSessionDateRef.current;
     const storedSessionId = sessionIdRef.current || conversationState.sessionId;
+    const dailySession = userId ? await ChatPersistenceService.getOrCreateDailySession(userId, requestedSessionDate, accountTimezoneRef.current) : null;
+    const localDate = dailySession?.local_date ?? requestedSessionDate;
     const existingSessionId = previousLocalDate === localDate ? storedSessionId : null;
-    const dailySession = userId ? await ChatPersistenceService.getOrCreateDailySession(userId, localDate) : null;
     let newSessionId: string | null = dailySession?.id ?? existingSessionId;
     const continuingTextSession = Boolean(newSessionId && existingSessionId === newSessionId && !conversationState.isSessionActive);
     if (previousLocalDate !== localDate) {
@@ -1268,7 +1281,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ type: 'SET_SESSION_ID', payload: newSessionId });
     }
     if (!newSessionId && userId) {
-      const fallbackSession = await ChatPersistenceService.getOrCreateDailySession(userId, localDate);
+      const fallbackSession = await ChatPersistenceService.getOrCreateDailySession(userId, localDate, accountTimezoneRef.current);
       newSessionId = fallbackSession?.id ?? null;
       if (!voiceSessionRef.current) {
         return;

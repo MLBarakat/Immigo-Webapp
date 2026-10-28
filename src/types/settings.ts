@@ -31,6 +31,10 @@ export interface UserSettings {
   /** Persisted AudioDeviceInfo.deviceId values. Empty string = system default. */
   input_device_id?: string | null;
   output_device_id?: string | null;
+  /** Account home state, used to suggest a time zone. */
+  location_state?: string | null;
+  /** IANA time zone that defines the user's daily learning-session boundary. */
+  account_timezone?: string | null;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -48,4 +52,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   reminder_time: '19:00',
   input_device_id: null,
   output_device_id: null,
+  location_state: null,
+  account_timezone: 'UTC',
 };

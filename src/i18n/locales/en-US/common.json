@@ -15,7 +15,11 @@
       "saving": "Saving...",
       "saved": "Profile saved.",
       "saveFailed": "Profile could not be saved.",
-      "fullNameRequired": "Full name is required."
+      "fullNameRequired": "Full name is required.",
+      "locationState": "U.S. state",
+      "locationRequired": "Please select your U.S. state.",
+      "sessionTimezone": "Daily session time zone",
+      "sessionTimezoneHelp": "This time zone sets when your daily learning session changes across all your devices. A change takes effect at the current session's next day boundary. Message times still appear in your device's local time."
     },
     "security": {
       "tab": "Security & Login",
@@ -82,6 +86,9 @@
     "email": "Email Address",
     "password": "Password",
     "primaryLanguage": "Primary Language",
+    "locationState": "U.S. state",
+    "selectState": "Select a state",
+    "sessionTimezoneDefault": "Your daily session time zone will default to {{timeZone}}. You can change it later in account settings.",
     "termsAgreement": "I am 18 or older and a U.S. resident, and I agree to the <tos>Terms of Service</tos> and <privacy>Privacy Policy</privacy>.",
     "errorMustAgree": "You must confirm you are 18+ and agree to the Terms of Service and Privacy Policy to sign up.",
     "errorPasswordRequirements": "Please ensure your password meets all the requirements shown below.",
