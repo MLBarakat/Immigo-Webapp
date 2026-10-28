@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, fireEvent, screen, cleanup } from '@testing-library/react';
 import { VoiceHub } from '../VoiceHub';
 import { MIC_CONSENT_VERSION } from '../../utils/micConsent';
@@ -17,8 +17,8 @@ vi.mock('../../logger', () => ({
 }));
 
 describe('Interaction Viewport Validation: VoiceHub', () => {
-  let mockStartSession: vi.Mock;
-  let mockEndSession: vi.Mock;
+  let mockStartSession: Mock;
+  let mockEndSession: Mock;
 
   beforeEach(() => {
     mockStartSession = vi.fn();

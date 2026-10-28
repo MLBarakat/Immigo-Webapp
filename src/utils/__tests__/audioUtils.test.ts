@@ -182,12 +182,16 @@ describe('unlockAudioPlayback (mobile autoplay unlock guards)', () => {
   });
 });
 
+function audioTrackConstraints(constraints: MediaStreamConstraints): MediaTrackConstraints {
+  return constraints.audio as MediaTrackConstraints;
+}
+
 describe('getMicrophoneConstraints (FR-005-B channel isolation)', () => {
   it('isolates to a single mono capture lane by default', () => {
     const constraints = getMicrophoneConstraints();
-    expect(constraints.audio?.channelCount).toEqual({ ideal: 1, max: 1 });
-    expect(constraints.audio?.echoCancellation).toBe(true);
-    expect(constraints.audio?.noiseSuppression).toBe(true);
+    expect(audioTrackConstraints(constraints).channelCount).toEqual({ ideal: 1, max: 1 });
+    expect(audioTrackConstraints(constraints).echoCancellation).toBe(true);
+    expect(audioTrackConstraints(constraints).noiseSuppression).toBe(true);
     expect(constraints.video).toBe(false);
   });
 
@@ -197,18 +201,18 @@ describe('getMicrophoneConstraints (FR-005-B channel isolation)', () => {
       noiseSuppression: false,
       autoGainControl: true,
     });
-    expect(constraints.audio?.echoCancellation).toBe(false);
-    expect(constraints.audio?.noiseSuppression).toBe(false);
-    expect(constraints.audio?.autoGainControl).toBe(true);
+    expect(audioTrackConstraints(constraints).echoCancellation).toBe(false);
+    expect(audioTrackConstraints(constraints).noiseSuppression).toBe(false);
+    expect(audioTrackConstraints(constraints).autoGainControl).toBe(true);
   });
 
   it('uses the saved microphone unless the caller explicitly requests the default', () => {
     setPreferredInputDeviceId('mic-bluetooth');
-    expect(getMicrophoneConstraints().audio?.deviceId).toEqual({ ideal: 'mic-bluetooth' });
+    expect(audioTrackConstraints(getMicrophoneConstraints()).deviceId).toEqual({ ideal: 'mic-bluetooth' });
 
     // The settings test button passes null to mean "system default"; it must
     // not silently fall back to the saved device.
-    expect(getMicrophoneConstraints({ deviceId: null }).audio?.deviceId).toBeUndefined();
+    expect(audioTrackConstraints(getMicrophoneConstraints({ deviceId: null })).deviceId).toBeUndefined();
     setPreferredInputDeviceId(null);
   });
 });

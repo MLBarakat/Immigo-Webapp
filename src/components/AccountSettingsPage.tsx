@@ -17,6 +17,7 @@ type SettingsView = 'profile' | 'security' | 'connections' | 'delete';
 
 export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettingsPageProps): JSX.Element => {
   const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === 'ar-SA';
   const [activeView, setActiveView] = useState<SettingsView>('profile');
   const modalRef = useFocusTrap(true);
   const { handlePointerDown, handlePointerMove, handlePointerUp } = useDraggableOverlay<HTMLDivElement>(modalRef);
@@ -173,6 +174,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
                   value={userEmail}
                   disabled
                   className="mt-1 block w-full rounded-md border-immigo-gray-300 shadow-sm bg-immigo-gray-100 cursor-not-allowed"
+                  dir="ltr"
                 />
               </div>
               {profileMessage && <p className="text-sm text-immigo-gray-600" role="status">{profileMessage}</p>}
@@ -191,13 +193,13 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
               <div>
                 <label htmlFor="new-password" className="block text-sm font-medium text-immigo-gray-700">{t('account.security.newPassword')}</label>
                 <div className="relative mt-1">
-                  <input type={showNewPassword ? 'text' : 'password'} id="new-password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="block w-full rounded-md border-immigo-gray-300 pr-12 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                  <input type={showNewPassword ? 'text' : 'password'} id="new-password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className={`block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500 ${isArabic ? 'ps-12' : 'pe-12'}`} dir="ltr" />
                   <button
                     type="button"
                     onClick={() => setShowNewPassword((visible) => !visible)}
                     aria-label={t(showNewPassword ? 'passwordVisibility.hide' : 'passwordVisibility.show')}
                     aria-controls="new-password"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-immigo-gray-500 hover:text-immigo-gray-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
+                    className="absolute end-2 top-1/2 -translate-y-1/2 rounded p-1 text-immigo-gray-500 hover:text-immigo-gray-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
                   >
                     {showNewPassword
                       ? <EyeOff className="w-5 h-5" aria-hidden="true" />
@@ -208,13 +210,13 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
               <div>
                 <label htmlFor="confirm-password" className="block text-sm font-medium text-immigo-gray-700">{t('account.security.confirmPassword')}</label>
                 <div className="relative mt-1">
-                  <input type={showConfirmPassword ? 'text' : 'password'} id="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="block w-full rounded-md border-immigo-gray-300 pr-12 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500" />
+                  <input type={showConfirmPassword ? 'text' : 'password'} id="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className={`block w-full rounded-md border-immigo-gray-300 shadow-sm focus:border-art-blue-500 focus:ring-art-blue-500 ${isArabic ? 'ps-12' : 'pe-12'}`} dir="ltr" />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword((visible) => !visible)}
                     aria-label={t(showConfirmPassword ? 'passwordVisibility.hide' : 'passwordVisibility.show')}
                     aria-controls="confirm-password"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-immigo-gray-500 hover:text-immigo-gray-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
+                    className="absolute end-2 top-1/2 -translate-y-1/2 rounded p-1 text-immigo-gray-500 hover:text-immigo-gray-700 focus:outline-none focus:ring-2 focus:ring-art-blue-500"
                   >
                     {showConfirmPassword
                       ? <EyeOff className="w-5 h-5" aria-hidden="true" />
@@ -305,7 +307,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
   const mainContentClasses = "flex-1 p-6 overflow-y-auto";
 
   return (
-    <div className={containerClasses}>
+    <div dir={isArabic ? 'rtl' : 'ltr'} className={containerClasses}>
       <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="account-settings-title" className={`${contentClasses} outline-none`}>
         <header
           onPointerDown={isDesktop ? handlePointerDown : undefined}
@@ -316,10 +318,10 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
         >
           {!isDesktop && (
             <button onClick={onNavigateBack} aria-label={t('account.close')} className="p-2 rounded-full hover:bg-immigo-gray-100 text-immigo-gray-600">
-              <ArrowLeft className="w-6 h-6 rtl:rotate-180" />
+              <ArrowLeft className={`w-6 h-6 ${isArabic ? 'rotate-180' : ''}`} />
             </button>
           )}
-          <h1 id="account-settings-title" className={`font-bold text-deep-navy ${isDesktop ? 'text-2xl font-display' : 'text-xl ml-4 font-display'}`}>{t('account.title')}</h1>
+          <h1 id="account-settings-title" className={`font-bold text-deep-navy ${isDesktop ? 'text-2xl font-display' : `text-xl ${isArabic ? 'mr-4' : 'ml-4'} font-display`}`}>{t('account.title')}</h1>
           {isDesktop && (
             <button onClick={onNavigateBack} aria-label={t('account.close')} className="p-2 rounded-full hover:bg-immigo-gray-100">
               <X className="w-6 h-6 text-immigo-gray-600" />
@@ -330,10 +332,10 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
           <div className="lg:grid lg:grid-cols-12 gap-8">
             <nav className="lg:col-span-3">
               <ul className="space-y-1">
-                <li><button type="button" onClick={() => setActiveView('profile')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'profile' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><User className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0" /> {t('account.profile.tab')}</button></li>
-                <li><button type="button" onClick={() => setActiveView('security')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'security' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Lock className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0" /> {t('account.security.tab')}</button></li>
-                <li><button type="button" onClick={() => setActiveView('connections')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold ${activeView === 'connections' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Share2 className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0" /> {t('account.connections.tab')}</button></li>
-                <li><button type="button" onClick={() => setActiveView('delete')} className={`w-full text-left flex items-center p-3 rounded-lg font-semibold text-art-red-700 ${activeView === 'delete' ? 'bg-art-red-50' : 'hover:bg-art-red-50'}`}><AlertTriangle className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0" /> {t('account.delete.tab')}</button></li>
+                <li><button type="button" onClick={() => setActiveView('profile')} className={`w-full text-start flex items-center p-3 rounded-lg font-semibold ${activeView === 'profile' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><User className="w-5 h-5 me-3" /> {t('account.profile.tab')}</button></li>
+                <li><button type="button" onClick={() => setActiveView('security')} className={`w-full text-start flex items-center p-3 rounded-lg font-semibold ${activeView === 'security' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Lock className="w-5 h-5 me-3" /> {t('account.security.tab')}</button></li>
+                <li><button type="button" onClick={() => setActiveView('connections')} className={`w-full text-start flex items-center p-3 rounded-lg font-semibold ${activeView === 'connections' ? 'bg-immigo-gray-200' : 'hover:bg-immigo-gray-200'}`}><Share2 className="w-5 h-5 me-3" /> {t('account.connections.tab')}</button></li>
+                <li><button type="button" onClick={() => setActiveView('delete')} className={`w-full text-start flex items-center p-3 rounded-lg font-semibold text-art-red-700 ${activeView === 'delete' ? 'bg-art-red-50' : 'hover:bg-art-red-50'}`}><AlertTriangle className="w-5 h-5 me-3" /> {t('account.delete.tab')}</button></li>
               </ul>
             </nav>
             <main className="lg:col-span-9 mt-6 lg:mt-0">

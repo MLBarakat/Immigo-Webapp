@@ -14,8 +14,6 @@ vi.mock('@ricky0123/vad-web', () => ({
 import { buildCloudSocketStartMessage } from '../../src/hooks/useWhisper';
 
 describe('WebSocket API Integration', () => {
-  let mockServer: any;
-
   beforeEach(() => {
     // Mock WebSocket globally for testing
     global.WebSocket = vi.fn(() => ({
@@ -44,7 +42,7 @@ describe('WebSocket API Integration', () => {
 
   it('should successfully establish WebSocket connection with correct URL parameters', () => {
     const wsUrl = 'wss://example.com/transcription?token=fake-token';
-    const ws = new WebSocket(wsUrl);
+    new WebSocket(wsUrl);
     expect(global.WebSocket).toHaveBeenCalledWith(wsUrl);
   });
 });

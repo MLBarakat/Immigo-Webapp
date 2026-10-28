@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AccountSettingsPage } from '../AccountSettingsPage';
 import { AuthContext } from '../../context/authContextTypes';
@@ -11,7 +10,10 @@ const baseAuth: AuthContextType = {
   profile: { id: 'user-1', full_name: 'Old Name', language: 'en-US', created_at: '', updated_at: '' },
   loading: false,
   initializationError: null,
+  sessionReplacementPending: false,
+  sessionReplacementError: null,
   retryInitialization: vi.fn(),
+  logoutReplacedSession: vi.fn().mockResolvedValue(undefined),
   userSettings: {
     language: 'en-US',
     theme: 'light',

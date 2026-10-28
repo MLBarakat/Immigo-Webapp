@@ -1,4 +1,4 @@
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Bug,
@@ -70,6 +70,7 @@ async function copyText(text: string): Promise<boolean> {
 
 export function HelpSupportModal({ isOpen, onClose }: HelpSupportModalProps): JSX.Element | null {
   const { t, i18n } = useTranslation('common');
+  const isArabic = i18n.language === 'ar-SA';
   const { user } = useAuth();
   const modalRef = useFocusTrap(isOpen);
   const [category, setCategory] = useState<FeedbackCategory>('general');
@@ -85,6 +86,15 @@ export function HelpSupportModal({ isOpen, onClose }: HelpSupportModalProps): JS
     if (typeof document !== 'undefined') document.documentElement.classList.remove('overflow-hidden');
     onClose();
   }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') handleClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleClose, isOpen]);
 
   const handleCopySupportEmail = useCallback(async (): Promise<void> => {
     const copied = await copyText(legalEntityConfig.supportEmail);
@@ -150,6 +160,7 @@ export function HelpSupportModal({ isOpen, onClose }: HelpSupportModalProps): JS
         role="dialog"
         aria-modal="true"
         aria-labelledby="help-support-title"
+        dir={isArabic ? 'rtl' : 'ltr'}
         className="flex h-full w-full max-w-3xl flex-col overflow-hidden bg-star-white outline-none dark:bg-gray-800 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:shadow-2xl"
         onClick={event => event.stopPropagation()}
       >
@@ -277,6 +288,7 @@ export function HelpSupportModal({ isOpen, onClose }: HelpSupportModalProps): JS
                     maxLength={MAX_MESSAGE_LENGTH}
                     rows={5}
                     required
+                    dir="auto"
                     placeholder={t('help.messagePlaceholder')}
                     className="w-full rounded-xl border-2 border-immigo-gray-300 bg-star-white p-3 text-sm text-deep-navy outline-none focus:border-art-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                   />
@@ -294,6 +306,7 @@ export function HelpSupportModal({ isOpen, onClose }: HelpSupportModalProps): JS
                     onChange={event => setEmail(event.target.value)}
                     placeholder={t('help.emailPlaceholder')}
                     autoComplete="email"
+                    dir="ltr"
                     className="w-full rounded-xl border-2 border-immigo-gray-300 bg-star-white p-3 text-sm text-deep-navy outline-none focus:border-art-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                   />
                 </label>

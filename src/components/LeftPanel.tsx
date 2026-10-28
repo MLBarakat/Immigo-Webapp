@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { LiveSessionStats } from '../context/conversationContextTypes';
 import { fetchProgressReports, ProgressReport } from '../services/liveProgressService';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface LeftPanelProps {
   isCollapsed: boolean;
@@ -80,6 +81,16 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
   const [reportsLoading, setReportsLoading] = useState(Boolean(userId));
   const [reportsError, setReportsError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<ProgressReport | null>(null);
+  const reportModalRef = useFocusTrap(Boolean(selectedReport));
+
+  useEffect(() => {
+    if (!selectedReport) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedReport(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedReport]);
 
   const loadReports = useCallback(async () => {
     if (!userId) return;
@@ -190,7 +201,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
     >
       {/* The mobile tab bar already names this workspace, so only desktop keeps the panel title. */}
       {!isMobile && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 dark:border-gray-700 bg-star-white dark:bg-gray-800 sticky top-0 z-10">
+        <div className={`flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 dark:border-gray-700 bg-star-white dark:bg-gray-800 sticky top-0 z-10 ${isArabic ? 'flex-row-reverse' : ''}`}>
           <div className={`flex items-center gap-2 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
             <BookOpen className="w-4 h-4 text-art-blue-600" />
             <span className="text-sm font-bold text-deep-navy dark:text-gray-100 tracking-tight">{t('workspace.left.title')}</span>
@@ -235,12 +246,12 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                     const material = t(`workspace.left.materials.${item.id}`, { returnObjects: true }) as { title: string; subtitle: string; badge: string };
                     return (
                     <li key={item.id}>
-                      <a href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${material.title} — ${material.subtitle}`} className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-art-blue-50 border border-transparent hover:border-art-blue-100 transition-all group text-left">
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${material.title} — ${material.subtitle}`} className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-art-blue-50 border border-transparent hover:border-art-blue-100 transition-all group text-start">
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-deep-navy truncate group-hover:text-art-blue-700">{material.title}</p>
                           <p className="text-[10px] text-immigo-gray-500 truncate">{material.subtitle}</p>
                         </div>
-                        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                        <div className="flex items-center gap-1 ms-2 flex-shrink-0">
                           <span className="text-[9px] font-bold text-art-blue-600 bg-art-blue-50 border border-art-blue-200 rounded px-1 py-0.5">{material.badge}</span>
                           <Download aria-hidden="true" className="w-3 h-3 text-immigo-gray-400 group-hover:text-art-blue-600" />
                         </div>
@@ -254,7 +265,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
 
               {/* Official USCIS Media */}
               <div className="flex min-h-0 flex-1 flex-col">
-                <button type="button" onClick={() => setMediaOpen(p => !p)} aria-expanded={mediaOpen} className="w-full shrink-0 flex items-center justify-between px-1 py-1.5 text-left">
+                <button type="button" onClick={() => setMediaOpen(p => !p)} aria-expanded={mediaOpen} className="w-full shrink-0 flex items-center justify-between px-1 py-1.5 text-start">
                   <span className="flex items-center gap-1.5">
                   <Play className="w-3.5 h-3.5 text-art-blue-600" />
                   <span className="text-xs font-semibold text-deep-navy">{t('workspace.left.officialMedia')}</span>
@@ -275,7 +286,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                           <p className="text-xs font-semibold text-deep-navy truncate group-hover:text-art-blue-700">{t(`workspace.left.media.${item.id}.title`)}</p>
                           <span className="text-[10px] text-immigo-gray-500">{t(`workspace.left.media.${item.id}.type`)}</span>
                         </div>
-                        <ExternalLink className="w-3 h-3 text-immigo-gray-400 group-hover:text-art-blue-600 flex-shrink-0 ml-2" />
+                        <ExternalLink className="w-3 h-3 text-immigo-gray-400 group-hover:text-art-blue-600 flex-shrink-0 ms-2" />
                       </a>
                     </li>
                   ))}
@@ -359,7 +370,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                     <ul className="space-y-1">
                       {reports.map(report => (
                         <li key={report.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border border-immigo-gray-200">
-                          <button type="button" onClick={() => setSelectedReport(report)} className="min-w-0 text-left hover:text-art-blue-700">
+                          <button type="button" onClick={() => setSelectedReport(report)} className="min-w-0 text-start hover:text-art-blue-700">
                             <span className="block text-xs font-semibold">{new Date(`${report.date}T00:00:00`).toLocaleDateString(i18n.language)}</span>
                             <span className="block text-[10px] text-immigo-gray-500">{t('workspace.left.reportItem')}</span>
                           </button>
@@ -378,7 +389,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
       </div>
       {selectedReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-deep-navy/50 p-4" role="presentation" onClick={() => setSelectedReport(null)}>
-          <section role="dialog" aria-modal="true" aria-labelledby="progress-report-title" className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-star-white shadow-xl" onClick={event => event.stopPropagation()}>
+          <section ref={reportModalRef} tabIndex={-1} dir={isArabic ? 'rtl' : 'ltr'} role="dialog" aria-modal="true" aria-labelledby="progress-report-title" className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-star-white shadow-xl outline-none" onClick={event => event.stopPropagation()}>
             <header className="flex items-center justify-between border-b border-immigo-gray-200 px-5 py-4">
               <div>
                 <h2 id="progress-report-title" className="font-bold text-deep-navy">{t('workspace.left.reportTitle')}</h2>
@@ -386,7 +397,7 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
               </div>
               <button type="button" onClick={() => setSelectedReport(null)} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-immigo-gray-600 hover:bg-immigo-gray-100">{t('workspace.left.close')}</button>
             </header>
-            <pre className="flex-1 overflow-y-auto whitespace-pre-wrap p-5 text-sm leading-relaxed text-immigo-gray-700">{selectedReport.report_markdown}</pre>
+            <pre dir="auto" className="flex-1 overflow-y-auto whitespace-pre-wrap p-5 text-sm leading-relaxed text-immigo-gray-700 text-start">{selectedReport.report_markdown}</pre>
             <footer className="flex justify-end border-t border-immigo-gray-200 px-5 py-3">
               <button type="button" onClick={() => printReport(selectedReport)} className="flex items-center gap-2 rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-star-white hover:bg-art-blue-700">
                 <Download className="w-4 h-4" />

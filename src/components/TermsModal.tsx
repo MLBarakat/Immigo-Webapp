@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { termsContent } from '../legal/terms-content';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -8,7 +9,13 @@ interface TermsModalProps {
 }
 
 export const TermsModal: React.FC<TermsModalProps> = ({ onClose }) => {
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === 'ar-SA';
   const modalRef = useFocusTrap(true);
+  const effectiveDate = new Date(termsContent.effectiveDate);
+  const formattedDate = Number.isNaN(effectiveDate.getTime())
+    ? termsContent.effectiveDate
+    : new Intl.DateTimeFormat(i18n.language, { dateStyle: 'long', calendar: 'gregory' }).format(effectiveDate);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -20,18 +27,18 @@ export const TermsModal: React.FC<TermsModalProps> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
-      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="terms-title" className="bg-star-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col transform transition-all duration-300 scale-95 animate-scale-in outline-none">
+      <div dir={isArabic ? 'rtl' : 'ltr'} ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="terms-title" className="bg-star-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col transform transition-all duration-300 scale-95 animate-scale-in outline-none">
         <header className="flex items-center justify-between p-6 border-b border-immigo-gray-200 flex-shrink-0">
           <div>
-            <h2 id="terms-title" className="text-2xl font-bold text-deep-navy font-display">Terms and Conditions</h2>
-            <p className="text-sm text-immigo-gray-600">Last updated: {termsContent.effectiveDate}</p>
+            <h2 id="terms-title" className="text-2xl font-bold text-deep-navy font-display">{t('footer.termsTitle')}</h2>
+            <p className="text-sm text-immigo-gray-600">{t('footer.lastUpdated', { date: formattedDate })}</p>
           </div>
-          <button onClick={onClose} aria-label="Close terms and conditions" className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
+          <button onClick={onClose} aria-label={`${t('close')} ${t('footer.termsTitle')}`} className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
             <X className="w-6 h-6 text-immigo-gray-600" />
           </button>
         </header>
 
-        <main className="p-8 overflow-y-auto prose prose-slate max-w-none">
+        <main dir="auto" className="p-8 overflow-y-auto prose prose-slate max-w-none">
           {termsContent.sections.map((section) => (
             <div key={section.title} className="mb-6">
               <h3 className="text-deep-navy">{section.title}</h3>
@@ -45,7 +52,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({ onClose }) => {
             onClick={onClose}
             className="px-6 py-2 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-art-blue-500 transition-transform transform hover:scale-105"
           >
-            Close
+            {t('close')}
           </button>
         </footer>
       </div>

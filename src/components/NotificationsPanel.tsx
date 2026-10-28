@@ -99,7 +99,8 @@ export function NotificationsPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby="notifications-title"
-        className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col bg-star-white shadow-2xl outline-none dark:bg-gray-800 rtl:left-0 rtl:right-auto"
+        dir={i18n.language === 'ar-SA' ? 'rtl' : 'ltr'}
+        className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col bg-star-white shadow-2xl outline-none dark:bg-gray-800"
         onClick={event => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-immigo-gray-200 p-4 dark:border-gray-700">
@@ -165,7 +166,7 @@ export function NotificationsPanel({
                       <button
                         type="button"
                         onClick={() => onMarkRead(notification.id)}
-                        className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors ${notification.read
+                        className={`flex w-full items-start gap-3 rounded-xl border p-3 text-start transition-colors ${notification.read
                           ? 'border-immigo-gray-200 bg-star-white hover:bg-immigo-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700/50'
                           : 'border-art-blue-200 bg-art-blue-50 hover:bg-art-blue-100 dark:border-art-blue-800 dark:bg-art-blue-900/20 dark:hover:bg-art-blue-900/30'}`}
                       >

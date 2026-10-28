@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Hand, Mic, MessageSquare, Zap, ArrowRight, X } from 'lucide-react';
 import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface WelcomeModalProps {
   userName: string;
@@ -12,15 +13,25 @@ const STEP_KEYS = ['start', 'speak', 'interrupt'] as const;
 const STEP_ICONS = [Mic, MessageSquare, Zap];
 
 export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === 'ar-SA';
   const [step, setStep] = useState(0);
   const { overlayRef, handlePointerDown, handlePointerMove, handlePointerUp } = useDraggableOverlay<HTMLDivElement>();
+  useFocusTrap(true, overlayRef);
   const StepIcon = STEP_ICONS[step];
   const stepKey = STEP_KEYS[step];
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
-      <div ref={overlayRef} className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in">
+      <div ref={overlayRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="welcome-title" dir={isArabic ? 'rtl' : 'ltr'} className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in outline-none">
         <header
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -30,7 +41,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose })
         >
             <div className="flex items-center gap-3">
                 <Hand className="w-6 h-6 text-art-blue-600" />
-                <h2 className="text-xl font-bold text-deep-navy font-display">{t('welcome.title', { name: userName })}</h2>
+                <h2 id="welcome-title" className="text-xl font-bold text-deep-navy font-display">{t('welcome.title', { name: userName })}</h2>
             </div>
             <button onClick={onClose} aria-label={t('welcome.close')} className="p-2 rounded-full hover:bg-immigo-gray-100 transition-colors">
                 <X className="w-5 h-5 text-immigo-gray-600" />

@@ -9,7 +9,8 @@ interface SubscriptionModalProps {
 }
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose }) => {
-  const { t } = useTranslation('settings');
+  const { t, i18n } = useTranslation('settings');
+  const isArabic = i18n.language === 'ar-SA';
   const modalRef = useFocusTrap(isOpen);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
       <div
         ref={modalRef}
         tabIndex={-1}
+        dir={isArabic ? 'rtl' : 'ltr'}
         role="dialog"
         aria-modal="true"
         aria-labelledby="subscription-title"

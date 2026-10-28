@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Check,
@@ -49,7 +49,8 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 export function InviteFriendsModal({ isOpen, onClose }: InviteFriendsModalProps): JSX.Element | null {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
+  const isArabic = i18n.language === 'ar-SA';
   const { user } = useAuth();
   const modalRef = useFocusTrap(isOpen);
   const [copied, setCopied] = useState(false);
@@ -83,6 +84,15 @@ export function InviteFriendsModal({ isOpen, onClose }: InviteFriendsModalProps)
     setCopied(false);
     onClose();
   }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') handleClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleClose, isOpen]);
 
   const handleCopy = useCallback(async (): Promise<void> => {
     const success = await copyText(shareUrl);
@@ -187,6 +197,7 @@ export function InviteFriendsModal({ isOpen, onClose }: InviteFriendsModalProps)
         role="dialog"
         aria-modal="true"
         aria-labelledby="invite-friends-title"
+        dir={isArabic ? 'rtl' : 'ltr'}
         className="flex h-full w-full max-w-lg flex-col overflow-hidden bg-star-white outline-none dark:bg-gray-800 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:shadow-2xl"
         onClick={event => event.stopPropagation()}
       >
@@ -225,6 +236,7 @@ export function InviteFriendsModal({ isOpen, onClose }: InviteFriendsModalProps)
                 value={shareUrl}
                 onFocus={event => event.currentTarget.select()}
                 aria-label={t('invite.linkLabel')}
+                dir="ltr"
                 className="min-w-0 flex-1 rounded-lg border border-immigo-gray-300 bg-star-white px-3 py-2 text-sm text-deep-navy dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
               />
               <button

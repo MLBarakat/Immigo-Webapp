@@ -10,6 +10,24 @@ import { ChatPersistenceService } from '../../services/chatPersistenceService';
 import { fetchDailyProgressStats } from '../../services/liveProgressService';
 import { analytics } from '../../analytics';
 
+type TranscriptResponse = Awaited<ReturnType<ApiClient['postTranscript']>>;
+
+const transcriptResponse = (overrides: Partial<TranscriptResponse> = {}): TranscriptResponse => ({
+  responseText: '',
+  audioData: new ArrayBuffer(0),
+  verdict: null,
+  needsConfirmation: false,
+  nextItemId: null,
+  nextQuestion: null,
+  assistantSegments: [],
+  examRunId: null,
+  examCompleted: false,
+  examReport: null,
+  examStage: null,
+  modeGoalPending: false,
+  ...overrides,
+});
+
 vi.mock('../useWhisper', () => ({
   useWhisper: vi.fn(),
 }));
@@ -163,14 +181,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   it('should keep text-mode responses silent', async () => {
     const syntheticBuffer = new ArrayBuffer(8);
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Welcome to the Immigo interaction matrix layer.',
-    assistantSegments: [],
       audioData: syntheticBuffer,
-      verdict: null,
-      nextItemId: null,
-      nextQuestion: null,
-    });
+    }));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
@@ -196,15 +210,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   });
 
   it('opens the microphone without playing another opening response', async () => {
-    mockApiClient.postSessionStart.mockResolvedValue({
-      responseText: '',
-    assistantSegments: [],
-      audioData: new ArrayBuffer(0),
-      verdict: null,
-      needsConfirmation: false,
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
       nextItemId: 'q-1',
       nextQuestion: 'Question one?',
-    });
+    }));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
         {children}
@@ -225,15 +234,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     // The mic is never guaranteed on this attempt (permission denied / dead
     // device). The conversation status must NOT flip to listening.
     mockStartRecording.mockResolvedValueOnce(false);
-    mockApiClient.postSessionStart.mockResolvedValue({
-      responseText: '',
-    assistantSegments: [],
-      audioData: new ArrayBuffer(0),
-      verdict: null,
-      needsConfirmation: false,
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
       nextItemId: 'q-1',
       nextQuestion: 'Question one?',
-    });
+    }));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
         {children}
@@ -298,15 +302,12 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       accuracyPct: 100,
       missedItemIds: [],
     }));
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Correct. Next question.',
-    assistantSegments: [],
-      audioData: new ArrayBuffer(0),
       verdict: 'correct',
-      needsConfirmation: false,
       nextItemId: 'q-next',
       nextQuestion: 'Next question?',
-    });
+    }));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
@@ -353,15 +354,12 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       accuracyPct: 100,
       missedItemIds: [],
     }));
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Correct. Next question.',
-    assistantSegments: [],
-      audioData: new ArrayBuffer(0),
       verdict: 'correct',
-      needsConfirmation: false,
       nextItemId: 'q-next',
       nextQuestion: 'Next question?',
-    });
+    }));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
         {children}
@@ -401,15 +399,11 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   it('continues the same persisted session when voice is enabled after text practice', async () => {
     vi.mocked(ChatPersistenceService.createSession).mockResolvedValue('text-session');
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'How many senators are there?',
-    assistantSegments: [],
-      audioData: new ArrayBuffer(0),
-      verdict: null,
-      needsConfirmation: false,
       nextItemId: 'q-next',
       nextQuestion: 'How many senators are there?',
-    });
+    }));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
         {children}
@@ -431,15 +425,12 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   it('ignores recognized Polly echo but stops playback for actual barging-in speech', async () => {
     const responseText = "Let's begin. How can people become United States citizens?";
-    mockApiClient.postSessionStart.mockResolvedValue({
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
       responseText,
-    assistantSegments: [],
       audioData: new ArrayBuffer(8),
-      verdict: null,
-      needsConfirmation: false,
       nextItemId: 'q-1',
       nextQuestion: 'How can people become United States citizens?',
-    });
+    }));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
         {children}
@@ -495,15 +486,9 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
           firstSignal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
         });
       })
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(transcriptResponse({
         responseText: 'Interruption response',
-    assistantSegments: [],
-        audioData: new ArrayBuffer(0),
-        verdict: null,
-        needsConfirmation: false,
-        nextItemId: null,
-        nextQuestion: null,
-      });
+      }));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
@@ -561,15 +546,9 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   });
 
   it('persists new text conversation turns in the current browser tab', async () => {
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'A saved assistant reply',
-    assistantSegments: [],
-      audioData: new ArrayBuffer(0),
-      verdict: null,
-      needsConfirmation: false,
-      nextItemId: null,
-      nextQuestion: null,
-    });
+    }));
     const { result } = renderHook(
       () => useConversation({ apiClient: mockApiClient, userId: 'user-session-cache' }),
       { wrapper: ConversationProvider }
@@ -650,14 +629,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   });
 
   it('should submit a committed speech transcript to the LLM automatically', async () => {
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Speech response',
-    assistantSegments: [],
       audioData: new ArrayBuffer(8),
-      verdict: null,
-      nextItemId: null,
-      nextQuestion: null,
-    });
+    }));
     (useWhisper as any).mockReturnValue({
       currentState: 'LISTENING',
       displayTranscript: 'What is my status?',
@@ -694,14 +669,12 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   });
 
   it('should submit the next speech utterance after the transcript is cleared', async () => {
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Speech response',
-    assistantSegments: [],
       audioData: new ArrayBuffer(8),
-      verdict: null,
       nextItemId: 'q-001',
       nextQuestion: 'Practice question',
-    });
+    }));
 
     const emptyWhisperState = {
       currentState: 'LISTENING',
@@ -749,15 +722,11 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   });
 
   it('uses a newly selected mode and language on subsequent turns in the same session', async () => {
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Tutor feedback',
-    assistantSegments: [],
-      audioData: new ArrayBuffer(0),
-      verdict: null,
-      needsConfirmation: false,
       nextItemId: 'q-001',
       nextQuestion: 'Question?',
-    });
+    }));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
         {children}
@@ -799,14 +768,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   it('cleans up active playback when the session ends', async () => {
     mockContextValue.state.isSessionActive = true;
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Speech response',
-    assistantSegments: [],
       audioData: new ArrayBuffer(8),
-      verdict: null,
-      nextItemId: null,
-      nextQuestion: null,
-    });
+    }));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
@@ -835,14 +800,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockAudioInstance.play
       .mockRejectedValueOnce(autoplayBlocked)
       .mockRejectedValueOnce(autoplayBlocked);
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Speech response',
-    assistantSegments: [],
       audioData: new ArrayBuffer(8),
-      verdict: null,
-      nextItemId: null,
-      nextQuestion: null,
-    });
+    }));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
@@ -878,14 +839,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockAudioInstance.play
       .mockRejectedValueOnce(autoplayBlocked)
       .mockResolvedValueOnce(undefined);
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Speech response',
-    assistantSegments: [],
       audioData: new ArrayBuffer(8),
-      verdict: null,
-      nextItemId: null,
-      nextQuestion: null,
-    });
+    }));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
@@ -915,14 +872,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     const autoplayBlocked = new Error('autoplay blocked');
     autoplayBlocked.name = 'NotAllowedError';
     mockAudioInstance.play.mockRejectedValueOnce(autoplayBlocked);
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Speech response',
-    assistantSegments: [],
       audioData: new ArrayBuffer(8),
-      verdict: null,
-      nextItemId: null,
-      nextQuestion: null,
-    });
+    }));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
@@ -957,14 +910,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       const autoplayBlocked = new Error('autoplay blocked');
       autoplayBlocked.name = 'NotAllowedError';
       mockAudioInstance.play.mockRejectedValueOnce(autoplayBlocked);
-      mockApiClient.postTranscript.mockResolvedValue({
+      mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
         responseText: 'Speech response',
-    assistantSegments: [],
         audioData: new ArrayBuffer(8),
-        verdict: null,
-        nextItemId: null,
-        nextQuestion: null,
-      });
+      }));
 
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <ConversationContext.Provider value={mockContextValue}>
@@ -995,14 +944,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     // cleanup path, never the gesture-retry parking flow.
     mockContextValue.state.isSessionActive = true;
     mockAudioInstance.play.mockRejectedValueOnce(new Error('decode failure'));
-    mockApiClient.postTranscript.mockResolvedValue({
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'Speech response',
-    assistantSegments: [],
       audioData: new ArrayBuffer(8),
-      verdict: null,
-      nextItemId: null,
-      nextQuestion: null,
-    });
+    }));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>

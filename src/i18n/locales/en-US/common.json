@@ -103,8 +103,12 @@
   "footer": {
     "disclaimer": "ImmiGO is not affiliated with USCIS and does not provide a legal advice.",
     "terms": "Terms",
-    "privacy": "Privacy"
+    "privacy": "Privacy",
+    "termsTitle": "Terms and Conditions",
+    "privacyTitle": "Privacy Policy",
+    "lastUpdated": "Last updated: {{date}}"
   },
+  "close": "Close",
   "fontSize": {
     "decrease": "Decrease font size",
     "increase": "Increase font size"

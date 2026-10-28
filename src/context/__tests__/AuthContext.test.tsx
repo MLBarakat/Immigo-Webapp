@@ -80,8 +80,9 @@ function createSupabaseMock(initialSession: Session | null = null) {
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
       signOut: vi.fn().mockResolvedValue({ error: null }),
+      updateUser: vi.fn(),
     },
-    from: vi.fn((table: string) => table === 'active_user_sessions' ? activeSessionQuery : undefined),
+    from: vi.fn((table: string): unknown => table === 'active_user_sessions' ? activeSessionQuery : undefined),
     channel: vi.fn(() => channel),
     removeChannel: vi.fn().mockResolvedValue('ok'),
   };
@@ -335,7 +336,7 @@ describe('AuthProvider', () => {
       updated_at: '',
     };
     const userSettingsUpsert = vi.fn().mockResolvedValue({ error: null });
-    const profileUpdate = vi.fn(() => profileQuery);
+    const profileUpdate = vi.fn();
     const profileEqAfterUpdate = vi.fn().mockResolvedValue({ error: null });
     const profileQuery = {
       select: () => profileQuery,

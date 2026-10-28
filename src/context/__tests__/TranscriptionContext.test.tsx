@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import React, { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { TranscriptionProvider, useTranscription } from '../TranscriptionContext';
-import { TokenPatch } from '../../utils/diffReconciliation';
 
 interface WrapperProps {
   readonly children: ReactNode;

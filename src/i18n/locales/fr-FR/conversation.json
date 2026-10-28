@@ -114,6 +114,7 @@
       "consentTitle": "Microphone et voix",
       "consentDescription": "Pour vous entraîner à voix haute, ImmiGO utilise votre microphone. Votre parole est transcrite en texte",
       "consentOnDevice": "sur votre appareil",
+      "consentTranscriptionSent": "et seul le texte obtenu nous est envoyé.",
       "consentAudioPrivacy": "Nous n’enregistrons, ne stockons et ne transmettons pas l’audio, et nous ne créons pas d’empreintes vocales.",
       "consentPrivacyDetails": "Vous pouvez consulter les détails à tout moment dans notre politique de confidentialité.",
       "cancel": "Annuler",

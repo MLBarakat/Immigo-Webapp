@@ -66,7 +66,7 @@ export function LanguageSelector({
       {isOpen && (
         <div
           role="menu"
-          className="absolute top-full right-0 mt-2 w-48 bg-star-white rounded-lg shadow-lg border border-immigo-gray-200 z-50"
+          className="absolute top-full end-0 mt-2 w-48 bg-star-white rounded-lg shadow-lg border border-immigo-gray-200 z-50"
         >
           <ul className="py-1">
             {SUPPORTED_LANGUAGES.map((lang) => {
@@ -77,7 +77,7 @@ export function LanguageSelector({
                     role="menuitem"
                     type="button"
                     onClick={() => handleSelect(lang.code)}
-                    className={`w-full flex items-center gap-3 px-4 py-2 text-sm text-left ${
+                    className={`w-full flex items-center gap-3 px-4 py-2 text-sm text-start ${
                       isSelected ? 'font-bold text-art-blue-600' : 'text-deep-navy'
                     } hover:bg-immigo-gray-100 focus:outline-none focus:bg-immigo-gray-100`}
                   >

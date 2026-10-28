@@ -246,7 +246,7 @@ export function AudioDeviceSettings({
           onClick={() => { void refreshDevices(); }}
           aria-label={t('audio.refresh')}
           title={t('audio.refresh')}
-          className="ml-auto flex-shrink-0 rounded-full p-2 text-immigo-gray-600 hover:bg-immigo-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+          className="ms-auto flex-shrink-0 rounded-full p-2 text-immigo-gray-600 hover:bg-immigo-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
         >
           <RefreshCw className="h-4 w-4" />
         </button>

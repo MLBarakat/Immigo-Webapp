@@ -96,8 +96,12 @@
   "footer": {
     "disclaimer": ".غير تابع لخدمات المواطنة والهجرة الأمريكية ولا يقدم مشورة قانونيةImmiGO",
     "terms": "الشروط",
-    "privacy": "الخصوصية"
+    "privacy": "الخصوصية",
+    "termsTitle": "الشروط والأحكام",
+    "privacyTitle": "سياسة الخصوصية",
+    "lastUpdated": "آخر تحديث: {{date}}"
   },
+  "close": "إغلاق",
   "fontSize": {
     "decrease": "تصغير حجم الخط",
     "increase": "تكبير حجم الخط"

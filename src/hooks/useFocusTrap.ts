@@ -1,7 +1,23 @@
 import { useEffect, useRef } from 'react';
+import type { RefObject } from 'react';
 
-export function useFocusTrap(active: boolean) {
-  const containerRef = useRef<HTMLDivElement>(null);
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'area[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'iframe',
+  'object',
+  'embed',
+  '[contenteditable="true"]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+export function useFocusTrap(active: boolean, externalRef?: RefObject<HTMLDivElement>) {
+  const internalRef = useRef<HTMLDivElement>(null);
+  const containerRef = externalRef ?? internalRef;
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -17,10 +33,8 @@ export function useFocusTrap(active: boolean) {
 
     // Focus the container itself or the first focusable element inside it initially
     // We'll rely on the components to set initial focus if needed, or we can just focus the first element
-    const focusableElements = container.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea:not([disabled]), input[type="text"]:not([disabled]), input[type="radio"]:not([disabled]), input[type="checkbox"]:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-    
+    const focusableElements = container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+
     if (focusableElements.length > 0) {
       focusableElements[0].focus();
     }
@@ -28,9 +42,7 @@ export function useFocusTrap(active: boolean) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
 
-      const focusableElements = container.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), textarea:not([disabled]), input[type="text"]:not([disabled]), input[type="radio"]:not([disabled]), input[type="checkbox"]:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
+      const focusableElements = container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
 
       if (focusableElements.length === 0) return;
 
@@ -61,7 +73,7 @@ export function useFocusTrap(active: boolean) {
         previousFocusRef.current.focus();
       }
     };
-  }, [active]);
+  }, [active, containerRef]);
 
   return containerRef;
 }

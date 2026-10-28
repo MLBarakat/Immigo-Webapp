@@ -36,6 +36,7 @@ import { applyTheme } from './utils/theme';
 import { MIC_CONSENT_VERSION } from './utils/micConsent';
 import { logger } from './logger';
 import useMediaQuery from './hooks/useMediaQuery';
+import { useFocusTrap } from './hooks/useFocusTrap';
 import { useNotifications } from './hooks/useNotifications';
 import { setPreferredInputDeviceId, setPreferredOutputDeviceId } from './utils/audioUtils';
 import { analytics } from './analytics';
@@ -58,8 +59,9 @@ interface ConversationWorkspaceProps {
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
   const { user, profile, logout, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
-  const { t: tConversation } = useTranslation('conversation');
+  const { t: tConversation, i18n } = useTranslation('conversation');
   const { t: tCommon } = useTranslation('common');
+  const isArabic = i18n.language === 'ar-SA';
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [simulationMode, setSimulationMode] = useState<SimulationMode>('standard');
   const [examToResume, setExamToResume] = useState<InProgressMockExam | null>(null);
@@ -117,6 +119,29 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     });
   }, [manager.dailySessionSettings]);
   const managerInitError = (manager as { initError?: string | null }).initError ?? null;
+  const examChoiceRef = useFocusTrap(Boolean(examToResume || isCheckingExam));
+  const examCompleteRef = useFocusTrap(Boolean(manager.examCompletion));
+
+  useEffect(() => {
+    if (!examToResume && !isCheckingExam) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setExamToResume(null);
+      setPendingExamStartText(null);
+      manager.releasePreparedVoiceCapture();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [examToResume, isCheckingExam, manager]);
+
+  useEffect(() => {
+    if (!manager.examCompletion) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') manager.dismissExamCompletion();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [manager]);
 
   const requestSessionStart = async () => {
     if (simulationMode !== 'standard' || !user?.id) {
@@ -388,7 +413,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
             type="button"
             onClick={() => setMobileWorkspace('resources')}
             aria-current={mobileWorkspace === 'resources' ? 'page' : undefined}
-            className={`flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap px-0.5 py-2 text-xs font-semibold leading-none min-[360px]:gap-1.5 min-[360px]:text-[0.8125rem] sm:text-sm ${mobileWorkspace === 'resources' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+            className={`flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap px-0.5 py-2 text-xs font-semibold leading-none min-[360px]:gap-1.5 min-[360px]:text-[0.8125rem] sm:text-sm ${mobileWorkspace === 'resources' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'} ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}
           >
             <BookOpen className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
             <span className="min-w-0 truncate">{tConversation('workspace.mobile.resources')}</span>
@@ -397,7 +422,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
             type="button"
             onClick={() => setMobileWorkspace('interview')}
             aria-current={mobileWorkspace === 'interview' ? 'page' : undefined}
-            className={`flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap px-0.5 py-2 text-xs font-semibold leading-none min-[360px]:gap-1.5 min-[360px]:text-[0.8125rem] sm:text-sm ${mobileWorkspace === 'interview' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+            className={`flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap px-0.5 py-2 text-xs font-semibold leading-none min-[360px]:gap-1.5 min-[360px]:text-[0.8125rem] sm:text-sm ${mobileWorkspace === 'interview' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'} ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}
           >
             <MessageSquare className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
             <span className="min-w-0 truncate">{tConversation('workspace.mobile.interview')}</span>
@@ -406,7 +431,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
             type="button"
             onClick={() => setMobileWorkspace('controls')}
             aria-current={mobileWorkspace === 'controls' ? 'page' : undefined}
-            className={`flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap px-0.5 py-2 text-xs font-semibold leading-none min-[360px]:gap-1.5 min-[360px]:text-[0.8125rem] sm:text-sm ${mobileWorkspace === 'controls' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'}`}
+            className={`flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap px-0.5 py-2 text-xs font-semibold leading-none min-[360px]:gap-1.5 min-[360px]:text-[0.8125rem] sm:text-sm ${mobileWorkspace === 'controls' ? 'text-art-blue-700 bg-art-blue-50' : 'text-immigo-gray-600'} ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}
           >
             <SlidersHorizontal className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
             <span className="min-w-0 truncate">{tConversation('workspace.mobile.controls')}</span>
@@ -550,7 +575,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 
       {(examToResume || isCheckingExam) && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation">
-          <section role="dialog" aria-modal="true" aria-labelledby="mock-exam-choice-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-800">
+          <section ref={examChoiceRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mock-exam-choice-title" dir="ltr" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl outline-none dark:bg-gray-800">
             <h2 id="mock-exam-choice-title" className="text-lg font-bold text-deep-navy dark:text-white">
               {isCheckingExam ? 'Checking your exam…' : 'Continue your mock exam?'}
             </h2>
@@ -575,7 +600,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       )}
       {manager.examCompletion && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation">
-          <section role="dialog" aria-modal="true" aria-labelledby="mock-exam-complete-title" className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-800">
+          <section ref={examCompleteRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mock-exam-complete-title" dir="ltr" className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl outline-none dark:bg-gray-800">
             <h2 id="mock-exam-complete-title" className="text-lg font-bold text-deep-navy dark:text-white">Mock exam complete</h2>
             <p className="mt-3 whitespace-pre-line text-sm text-immigo-gray-700 dark:text-gray-200">{manager.examCompletion.report}</p>
             <p className="mt-3 text-sm text-immigo-gray-700 dark:text-gray-200">Based on this result, {manager.examCompletion.recommendedMode === 'study' ? 'Study Mode' : 'Practice Mode'} may help you most next.</p>
@@ -600,7 +625,9 @@ function AppContent() {
     sessionReplacementError,
     logoutReplacedSession,
   } = useAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === 'ar-SA';
+  const sessionReplacedRef = useFocusTrap(Boolean(sessionReplacementPending));
   const accessToken = session?.access_token;
 
   // Capture invite attribution before authentication so the value survives the
@@ -657,7 +684,7 @@ function AppContent() {
   if (sessionReplacementPending) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="session-replaced-title">
-        <div className="w-full max-w-md rounded-2xl bg-star-white p-6 shadow-2xl dark:bg-gray-800">
+        <div ref={sessionReplacedRef} tabIndex={-1} dir={isArabic ? 'rtl' : 'ltr'} className="w-full max-w-md rounded-2xl bg-star-white p-6 shadow-2xl outline-none dark:bg-gray-800">
           <h2 id="session-replaced-title" className="text-lg font-bold text-deep-navy dark:text-gray-100">
             {t('auth.sessionReplaced.title')}
           </h2>

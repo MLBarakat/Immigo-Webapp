@@ -55,7 +55,8 @@ const SettingRow: React.FC<{ title: string; description: string; children: React
 );
 
 export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, onThemePreview, pollyVoices = [], isDesktop, isSessionActive = false }) => {
-  const { t } = useTranslation('settings');
+  const { t, i18n } = useTranslation('settings');
+  const isArabic = i18n.language === 'ar-SA';
   const defaults = useMemo((): UserSettings => ({ language: 'en-US', theme: 'light', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default', has_seen_welcome: false, notifications_enabled: false, reminder_time: '19:00', input_device_id: null, output_device_id: null }), [pollyVoices]);
   const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings, theme: normalizeTheme(settings.theme ?? defaults.theme) });
   const [saving, setSaving] = useState(false);
@@ -103,7 +104,7 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
 
   return (
     <div className={`fixed inset-0 bg-black bg-opacity-60 flex ${isDesktop ? 'items-center justify-center' : 'items-start'} z-50 p-4`}>
-      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="application-settings-title" className={`bg-star-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${isDesktop ? 'max-w-2xl' : 'max-h-full h-full'} flex flex-col ${isDesktop ? 'max-h-[85vh] overflow-hidden' : ''} outline-none`}>
+      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="application-settings-title" dir={isArabic ? 'rtl' : 'ltr'} className={`bg-star-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${isDesktop ? 'max-w-2xl' : 'max-h-full h-full'} flex flex-col ${isDesktop ? 'max-h-[85vh] overflow-hidden' : ''} outline-none`}>
         <header
           onPointerDown={isDesktop ? handlePointerDown : undefined}
           onPointerMove={isDesktop ? handlePointerMove : undefined}

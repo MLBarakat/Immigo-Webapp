@@ -114,6 +114,7 @@
       "consentTitle": "Microphone & voice",
       "consentDescription": "To practice out loud, ImmiGO uses your microphone. Your speech is transcribed to text",
       "consentOnDevice": "on your device",
+      "consentTranscriptionSent": "and only the resulting text is sent to us.",
       "consentAudioPrivacy": "We do not record, store, or transmit audio, and we do not create voiceprints.",
       "consentPrivacyDetails": "You can review details anytime in our Privacy Policy.",
       "cancel": "Cancel",

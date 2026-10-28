@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, ChevronLeft, Trash2, Download, SlidersHorizontal, AlertTriangle } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Trash2, Download, SlidersHorizontal, AlertTriangle, Wrench } from 'lucide-react';
 import { AppStatus, SimulationMode, TestVersion } from '../context/conversationContextTypes';
 import { fetchQuestionMastery } from '../services/liveProgressService';
 import type { QuestionMastery } from '../services/liveProgressService';
@@ -118,7 +118,7 @@ export function RightPanel({
     >
       {/* The mobile tab bar already names this workspace, so only desktop keeps the panel title. */}
       {!isMobile && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 dark:border-gray-700 bg-star-white dark:bg-gray-800 sticky top-0 z-10">
+        <div className={`flex items-center justify-between px-4 py-3 border-b border-immigo-gray-200 dark:border-gray-700 bg-star-white dark:bg-gray-800 sticky top-0 z-10 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
           <button
             onClick={onToggleCollapse}
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-immigo-gray-100 text-immigo-gray-500 transition-colors"
@@ -216,7 +216,7 @@ export function RightPanel({
         {/* ── Section 2: Session Utilities ── */}
         <section>
           <div className={`mb-2 flex items-center gap-2 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
-            <span className="text-base">???🔧</span>
+            <Wrench className="w-4 h-4 text-art-blue-600" />
             <span className="text-xs font-bold uppercase tracking-widest text-immigo-gray-600">{t('workspace.right.utilities')}</span>
           </div>
 

@@ -192,7 +192,10 @@ describe('i18n configuration and utilities', () => {
       profile: null,
       loading: false,
       initializationError: null,
+      sessionReplacementPending: false,
+      sessionReplacementError: null,
       retryInitialization: vi.fn(),
+      logoutReplacedSession: vi.fn().mockResolvedValue(undefined),
       userSettings: {
         language: 'fr-FR',
         theme: 'light',

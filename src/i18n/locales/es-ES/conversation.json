@@ -114,6 +114,7 @@
       "consentTitle": "Micrófono y voz",
       "consentDescription": "Para practicar en voz alta, ImmiGO utiliza tu micrófono. Tu voz se transcribe a texto",
       "consentOnDevice": "en tu dispositivo",
+      "consentTranscriptionSent": "y solo se nos envía el texto resultante.",
       "consentAudioPrivacy": "No grabamos, almacenamos ni transmitimos audio, y no creamos huellas de voz.",
       "consentPrivacyDetails": "Puedes consultar los detalles en cualquier momento en nuestra Política de privacidad.",
       "cancel": "Cancelar",

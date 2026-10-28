@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Mic, X } from 'lucide-react';
 import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface MicConsentModalProps {
   onAccept: () => void;
@@ -11,11 +12,22 @@ interface MicConsentModalProps {
 }
 
 export const MicConsentModal: React.FC<MicConsentModalProps> = ({ onAccept, onCancel, error }) => {
-  const { t } = useTranslation('conversation');
+  const { t, i18n } = useTranslation('conversation');
+  const isArabic = i18n.language === 'ar-SA';
   const { overlayRef, handlePointerDown, handlePointerMove, handlePointerUp } = useDraggableOverlay<HTMLDivElement>();
+  useFocusTrap(true, overlayRef);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel]);
+
   return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
-      <div ref={overlayRef} role="dialog" aria-modal="true" aria-labelledby="mic-consent-title" className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in">
+      <div ref={overlayRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mic-consent-title" dir={isArabic ? 'rtl' : 'ltr'} className="bg-star-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col transform transition-all duration-300 scale-95 animate-scale-in outline-none">
         <header
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -36,7 +48,7 @@ export const MicConsentModal: React.FC<MicConsentModalProps> = ({ onAccept, onCa
 
         <main className="p-6 text-sm text-immigo-gray-700 leading-relaxed space-y-3">
           <p>
-            {t('workspace.voice.consentDescription')} <strong>{t('workspace.voice.consentOnDevice')}</strong>, and only the resulting text is sent to us.
+            {t('workspace.voice.consentDescription')} <strong>{t('workspace.voice.consentOnDevice')}</strong>, {t('workspace.voice.consentTranscriptionSent')}
           </p>
           <p>
             <strong>{t('workspace.voice.consentAudioPrivacy')}</strong>

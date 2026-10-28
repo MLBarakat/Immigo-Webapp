@@ -114,6 +114,7 @@
       "consentTitle": "الميكروفون والصوت",
       "consentDescription": "للتدرب بصوت عالٍ، يستخدم ImmiGO الميكروفون. يُحوّل كلامك إلى نص",
       "consentOnDevice": "على جهازك",
+      "consentTranscriptionSent": "ولا يُرسل إلينا سوى النص الناتج.",
       "consentAudioPrivacy": "لا نسجّل الصوت أو نخزّنه أو ننقله، ولا ننشئ بصمات صوتية.",
       "consentPrivacyDetails": "يمكنك مراجعة التفاصيل في أي وقت في سياسة الخصوصية.",
       "cancel": "إلغاء",
