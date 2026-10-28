@@ -38,13 +38,12 @@ describe('generateWelcomeBanner — robust fallback, never empty', () => {
   it('returns the model text when the call succeeds', async () => {
     const complete: ModelComplete = vi.fn(async () => 'Welcome! Ready to begin?');
     const adapter = new TurnInterpreterAdapter(complete);
-    expect(await adapter.generateWelcomeBanner({ isNewUser: true })).toBe('Welcome! Ready to begin?');
-  });
+    expect(await adapter.generateWelcomeBanner({ isNewUser: true, isFirstVisitToday: true })).toBe('Welcome! Ready to begin?');  });
 
   it('falls back to a non-empty NEW USER message when the model call throws', async () => {
     const complete: ModelComplete = vi.fn(async () => { throw new Error('fail'); });
     const adapter = new TurnInterpreterAdapter(complete);
-    const text = await adapter.generateWelcomeBanner({ isNewUser: true });
+    const text = await adapter.generateWelcomeBanner({ isNewUser: true, isFirstVisitToday: true });
     expect(text.length).toBeGreaterThan(0);
     expect(text.toLowerCase()).toContain('welcome');
   });
@@ -53,8 +52,9 @@ describe('generateWelcomeBanner — robust fallback, never empty', () => {
     const complete: ModelComplete = vi.fn(async () => { throw new Error('fail'); });
     const adapter = new TurnInterpreterAdapter(complete);
     const text = await adapter.generateWelcomeBanner({
-      isNewUser: false,
-      lifetimeStats: { answered: 10, correct: 8, accuracyPct: 80, recentlyMissedQuestions: [] },
+    isNewUser: false,
+    isFirstVisitToday: false, // or true, depending on the test scenario
+    lifetimeStats: { answered: 10, correct: 8, accuracyPct: 80, recentlyMissedQuestions: [] },
     });
     expect(text).toContain('10 question');
     expect(text).toContain('80%');
