@@ -32,6 +32,7 @@ interface CenterPanelProps {
   onClearMicAccessError?: () => void;
   initError?: string | null;
   isAudioRetryPending?: boolean;
+  onOpenExamReview?: (examId: string) => void;
 }
 
 const STATUS_COLORS: Record<AppStatus, string> = {
@@ -89,6 +90,7 @@ export function CenterPanel({
   onReleasePreparedMic,
   micAccessError,
   onClearMicAccessError,
+  onOpenExamReview,
   initError,
   isAudioRetryPending,
 }: CenterPanelProps) {
@@ -228,6 +230,7 @@ export function CenterPanel({
             onLoadOlder={onLoadOlder}
             hasMore={hasMoreHistory}
             onUserScroll={hideStatusIsland}
+            onOpenExamReview={onOpenExamReview}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">

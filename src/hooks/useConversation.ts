@@ -44,6 +44,14 @@ const SILENCE_NUDGE_DELAY_MS = 15_000;
 // than the previous behavior).
 const GESTURE_RETRY_TIMEOUT_MS = 20_000;
 
+function findLatestMockExamReviewId(messages: readonly Message[]): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const match = /^\[\[MOCK_EXAM_REVIEW:([0-9a-f-]+)\]\]$/i.exec(messages[index].content);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', testVersion = '2020', includeEnglishSimulation = false, preferredLanguage = 'en-US', accountTimezone = 'UTC', bargeIn = 'balanced' }: UseConversationManagerProps) {
   const { t, i18n } = useTranslation('conversation');
   const context = useContext(ConversationContext);
@@ -52,8 +60,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }
   const { state: conversationState, dispatch } = context;
   const [isGeneratingProgressReport, setIsGeneratingProgressReport] = useState(false);
-  const [examCompletion, setExamCompletion] = useState<{ report: string; recommendedMode: SimulationMode } | null>(null);
   const [dailySessionSettings, setDailySessionSettings] = useState<{ mode: SimulationMode; testVersion: TestVersion; includeEnglishSimulation: boolean } | null>(null);
+  const [postExamId, setPostExamId] = useState<string | null>(null);
   const pendingTranscriptClearRef = useRef(false);
   const voiceIdRef = useRef<string | null>(voiceId ?? null);
   const simulationModeRef = useRef<SimulationMode>(simulationMode);
@@ -97,6 +105,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     setCurrentItemId(itemId);
   }, []);
   const examRunIdRef = useRef<string | null>(null);
+  const completedExamIdRef = useRef<string | null>(null);
   const nextExamActionRef = useRef<MockExamAction | undefined>(undefined);
   const modeGoalPendingRef = useRef(false);
   const openingResponseRef = useRef(false);
@@ -580,6 +589,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         });
       }
       if (cachedMessages !== null) {
+        const cachedReviewId = findLatestMockExamReviewId(cachedMessages);
+        if (cachedReviewId) {
+          completedExamIdRef.current = cachedReviewId;
+          setPostExamId(cachedReviewId);
+        }
         skipNextHistoryCacheWriteRef.current = true;
         dispatch({
           type: 'LOAD_HISTORICAL_MESSAGES',
@@ -603,6 +617,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         content: m.content,
         timestamp: m.created_at,
       }));
+      const persistedReviewId = findLatestMockExamReviewId(formattedMessages);
+      if (persistedReviewId) {
+        completedExamIdRef.current = persistedReviewId;
+        setPostExamId(persistedReviewId);
+      }
       // Merge DB results with the instant cache snapshot instead of
       // discarding either side: an empty/stale per-tab cache must never
       // poison hydration, and DB rows must not wipe just-received live turns.
@@ -820,7 +839,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     // Build 6-turn sliding window from recent conversation history
     const slidingWindow = conversationState.conversationHistory
-      .filter(m => !m.id.startsWith('progress-report-'))
+      .filter(m => !m.id.startsWith('progress-report-') && !/^\[\[MOCK_EXAM_REVIEW:[0-9a-f-]+\]\]$/i.test(m.content))
       .slice(-6)
       .map(m => ({ role: m.role, content: m.content }));
 
@@ -849,7 +868,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
             activeSessionId,
             currentItemIdRef.current,
             isConfirmationRetry,
-              { headers: { 'x-correlation-trace-id': traceId }, signal: turnController.signal, voiceId: voiceIdRef.current ?? undefined, simulationMode: simulationModeRef.current, preferredLanguage: preferredLanguageRef.current, openingResponse: isOpeningResponse, testVersion: testVersionRef.current, includeEnglishSimulation: includeEnglishSimulationRef.current, examRunId: examRunIdRef.current, modeGoalResponse: modeGoalPendingRef.current, examAction: nextExamActionRef.current, inputMethod, requestId: traceId }
+              { headers: { 'x-correlation-trace-id': traceId }, signal: turnController.signal, voiceId: voiceIdRef.current ?? undefined, simulationMode: simulationModeRef.current, preferredLanguage: preferredLanguageRef.current, openingResponse: isOpeningResponse, testVersion: testVersionRef.current, includeEnglishSimulation: includeEnglishSimulationRef.current, examRunId: examRunIdRef.current, modeGoalResponse: modeGoalPendingRef.current, examAction: nextExamActionRef.current, inputMethod, requestId: traceId, postExamId: simulationModeRef.current === 'standard' && !examRunIdRef.current ? completedExamIdRef.current : null }
           );
           responseText = res.responseText;
           assistantSegments = Array.isArray(res.assistantSegments) ? res.assistantSegments : [];
@@ -859,9 +878,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           verdict = res.verdict;
           if (res.examRunId !== null) examRunIdRef.current = res.examRunId;
           if (res.examCompleted) examRunIdRef.current = null;
-          if (res.examCompleted && res.examReport) {
-            const accuracy = Number(res.examReport.match(/\((\d+)% accuracy\)/i)?.[1] ?? 100);
-            setExamCompletion({ report: res.examReport, recommendedMode: accuracy < 60 ? 'study' : 'practice' });
+          if (res.examCompleted && res.examReviewId) {
+            completedExamIdRef.current = res.examReviewId;
+            setPostExamId(res.examReviewId);
+            assistantSegments.push(`[[MOCK_EXAM_REVIEW:${res.examReviewId}]]`);
           }
           modeGoalPendingRef.current = res.modeGoalPending;
           if (isOpeningResponse) nextExamActionRef.current = undefined;
@@ -1302,6 +1322,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       return;
     }
 
+    if (completedExamIdRef.current) {
+      nextExamActionRef.current = undefined;
+      await startListeningWithMicGate();
+      return;
+    }
+
     const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const secureAssistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -1572,6 +1598,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [clearAudioPlayback]);
 
   const wipeConversationHistory = useCallback(async () => {
+    completedExamIdRef.current = null;
+    setPostExamId(null);
+    examRunIdRef.current = null;
     historyChangedBeforeHydrationRef.current = true;
     historyClearedBeforeHydrationRef.current = true;
     const activeSessionId = sessionIdRef.current || conversationState.sessionId;
@@ -1625,7 +1654,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       `${t('workspace.transcript.duration')}: ${Math.floor(conversationState.sessionTime / 60).toString().padStart(2, '0')}:${(conversationState.sessionTime % 60).toString().padStart(2, '0')}`,
       `${t('workspace.transcript.exported')}: ${exportedAt.toLocaleString(i18n.language)}`,
       '',
-      ...conversationState.conversationHistory.map((msg: Message) => {
+      ...conversationState.conversationHistory.filter((msg: Message) => !/^\[\[MOCK_EXAM_REVIEW:[0-9a-f-]+\]\]$/i.test(msg.content)).map((msg: Message) => {
         const speaker = t(msg.role === 'assistant' ? 'workspace.transcript.officer' : 'workspace.transcript.user');
         return `[${new Date(msg.timestamp).toLocaleString(i18n.language)}] ${speaker}:\n${msg.content}`;
       }),
@@ -1644,9 +1673,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     analytics.track('transcript_downloaded');
   }, [conversationState.conversationHistory, conversationState.sessionId, conversationState.sessionTime, t, i18n.language]);
 
-  const changeMode = useCallback(async (mode: SimulationMode) => {
+    const changeMode = useCallback(async (mode: SimulationMode) => {
     const activeSessionId = sessionIdRef.current;
-    if (!apiClient || !userId || !activeSessionId) return;
+    if (!apiClient || !userId || !activeSessionId) return false;
     try {
       await ChatPersistenceService.saveDailySessionState(activeSessionId, {
         current_item_id: currentItemIdRef.current,
@@ -1661,6 +1690,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         testVersion: testVersionRef.current,
         includeEnglishSimulation: includeEnglishSimulationRef.current,
       });
+      simulationModeRef.current = mode;
+      completedExamIdRef.current = null;
+      setPostExamId(null);
       modeGoalPendingRef.current = true;
       updateCurrentItemId(response.nextItemId ?? currentItemIdRef.current);
         const segments = Array.isArray(response.assistantSegments) && response.assistantSegments.length
@@ -1679,8 +1711,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         player.onended = () => URL.revokeObjectURL(url);
         void player.play().catch(() => URL.revokeObjectURL(url));
       }
+      return true;
     } catch (error) {
       logger.warn('Could not start the mode goal conversation.', { error: String(error) });
+      return false;
     }
   }, [apiClient, userId, dispatch, updateCurrentItemId]);
 
@@ -1689,9 +1723,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     isVoiceSessionActive: conversationState.isSessionActive && isVoiceSessionActive,
     isGeneratingProgressReport,
     dailySessionSettings,
+    postExamId,
     currentItemId,
-    examCompletion,
-    dismissExamCompletion: () => setExamCompletion(null),
     changeMode,
     isAudioRetryPending,
     currentState,
@@ -1704,7 +1737,13 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     initError: initError ?? null,
     micError: micError ?? null,
     clearMicError,
-    setMockExamAction: (action: MockExamAction) => { nextExamActionRef.current = action; },
+    setMockExamAction: (action: MockExamAction) => {
+      nextExamActionRef.current = action;
+      if (action === 'new' || action === 'resume') {
+        completedExamIdRef.current = null;
+        setPostExamId(null);
+      }
+    },
     ensureVoiceInitialized: ensureInitialized,
     prepareVoiceCapture: prepareMicrophoneAccess,
     releasePreparedVoiceCapture: releasePreparedMicrophone,

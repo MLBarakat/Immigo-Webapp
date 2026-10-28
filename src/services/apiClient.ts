@@ -21,6 +21,19 @@ interface ApiErrorPayload {
 
 export type MockExamAction = 'new' | 'resume';
 
+export interface MockExamFeedback {
+  summary: string;
+  strengths: string[];
+  suggestions: string[];
+  recommendedMode: 'practice' | 'study';
+  recommendationReason: string;
+}
+
+export interface MockExamReview {
+  report: string;
+  feedback: MockExamFeedback;
+}
+
 /**
  * Reduces unknown server payloads to shape metadata for logs. Full bodies
  * can echo user transcripts or PII and must never reach the console.
@@ -161,6 +174,7 @@ export class ApiClient {
     examRunId: string | null;
     examCompleted: boolean;
     examReport: string | null;
+    examReviewId: string | null;
     examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
     modeGoalPending: boolean;
   }> {
@@ -194,6 +208,7 @@ export class ApiClient {
       examRunId?: unknown;
       examCompleted?: unknown;
       examReport?: unknown;
+      examReviewId?: unknown;
       examStage?: unknown;
       modeGoalPending?: unknown;
       error?: string;
@@ -248,6 +263,7 @@ export class ApiClient {
         examRunId: typeof parsedPayload.examRunId === 'string' ? parsedPayload.examRunId : null,
         examCompleted: parsedPayload.examCompleted === true,
         examReport: typeof parsedPayload.examReport === 'string' ? parsedPayload.examReport : null,
+        examReviewId: typeof parsedPayload.examReviewId === 'string' ? parsedPayload.examReviewId : null,
         examStage: parsedPayload.examStage === 'reading' || parsedPayload.examStage === 'writing' || parsedPayload.examStage === 'complete' || parsedPayload.examStage === 'none' ? parsedPayload.examStage : null,
         modeGoalPending: parsedPayload.modeGoalPending === true,
       };
@@ -262,8 +278,8 @@ export class ApiClient {
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     currentItemId?: string | null,
-    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string },
-    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string } = {}
+    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null },
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -275,6 +291,7 @@ export class ApiClient {
     examRunId: string | null;
     examCompleted: boolean;
     examReport: string | null;
+    examReviewId: string | null;
     examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
     modeGoalPending: boolean;
   }> {
@@ -320,6 +337,7 @@ export class ApiClient {
           ...(effectiveOptions.examAction ? { examAction: effectiveOptions.examAction } : {}),
           ...(effectiveOptions.inputMethod ? { inputMethod: effectiveOptions.inputMethod } : {}),
           ...(effectiveOptions.requestId ? { requestId: effectiveOptions.requestId } : {}),
+          ...(effectiveOptions.postExamId ? { postExamConversation: true, postExamId: effectiveOptions.postExamId } : {}),
           ...(effectiveOptions.openingResponse ? { openingResponse: true } : {}),
           ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {})
         },
@@ -331,6 +349,23 @@ export class ApiClient {
       markDocTombstone({ submitErrorAt: new Date().toISOString() });
       throw error;
     }
+  }
+
+  async getMockExamFeedback(examId: string, preferredLanguage: string, signal?: AbortSignal): Promise<MockExamReview> {
+    const response = await this.fetchWithAuth('/transcript', {
+      method: 'POST',
+      signal,
+      body: JSON.stringify({ examReview: true, examId, preferredLanguage }),
+    });
+    const data = await response.json() as Partial<MockExamReview>;
+    const feedback = data.feedback;
+    if (typeof data.report !== 'string' || !feedback || typeof feedback.summary !== 'string'
+      || !Array.isArray(feedback.strengths) || !Array.isArray(feedback.suggestions)
+      || (feedback.recommendedMode !== 'practice' && feedback.recommendedMode !== 'study')
+      || typeof feedback.recommendationReason !== 'string') {
+      throw new ApiError('The exam review response was incomplete.', 500, data);
+    }
+    return { report: data.report, feedback };
   }
 
   async postModeTransition(
@@ -365,6 +400,7 @@ export class ApiClient {
     examRunId: string | null;
     examCompleted: boolean;
     examReport: string | null;
+    examReviewId: string | null;
     examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
   }> {
     logger.info('[ApiClient] Dispatching postSessionStart request:', { sessionId, voiceId: options.voiceId });

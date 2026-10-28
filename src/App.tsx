@@ -27,6 +27,8 @@ import { NotificationsPanel } from './components/NotificationsPanel';
 import { LeftPanel } from './components/LeftPanel';
 import { CenterPanel } from './components/CenterPanel';
 import { RightPanel } from './components/RightPanel';
+import { FeedbackModal } from './components/FeedbackModal';
+import type { MockExamReview } from './services/apiClient';
 import type { SimulationMode, TestVersion } from './context/conversationContextTypes';
 
 import { DisplayUser } from './types/user';
@@ -103,6 +105,10 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     accountTimezone: userSettings.account_timezone || 'UTC',
     bargeIn: userSettings.barge_in,
   });
+  const [activeExamReviewId, setActiveExamReviewId] = useState<string | null>(null);
+  const [examReviewCache, setExamReviewCache] = useState<Record<string, MockExamReview>>({});
+  const [isExamReviewLoading, setIsExamReviewLoading] = useState(false);
+  const [examReviewError, setExamReviewError] = useState<string | null>(null);
   useEffect(() => {
     try {
       localStorage.setItem('immigo_test_version', testVersion);
@@ -120,7 +126,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   }, [manager.dailySessionSettings]);
   const managerInitError = (manager as { initError?: string | null }).initError ?? null;
   const examChoiceRef = useFocusTrap(Boolean(examToResume || isCheckingExam));
-  const examCompleteRef = useFocusTrap(Boolean(manager.examCompletion));
 
   useEffect(() => {
     if (!examToResume && !isCheckingExam) return;
@@ -134,16 +139,59 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [examToResume, isCheckingExam, manager]);
 
-  useEffect(() => {
-    if (!manager.examCompletion) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') manager.dismissExamCompletion();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [manager]);
+  const openExamReview = async (examId: string) => {
+    setActiveExamReviewId(examId);
+    setExamReviewError(null);
+    const cachedReview = examReviewCache[examId];
+    if (cachedReview) return;
+    if (!apiClientInstance) {
+      setExamReviewError(tConversation('workspace.examReview.unavailable'));
+      return;
+    }
+    setIsExamReviewLoading(true);
+    try {
+      const review = await apiClientInstance.getMockExamFeedback(examId, currentLanguageCode);
+      setExamReviewCache(previous => ({ ...previous, [examId]: review }));
+    } catch (error) {
+      logger.warn('Could not generate mock exam feedback.', { examId, error: String(error) });
+      setExamReviewError(tConversation('workspace.examReview.loadFailed'));
+    } finally {
+      setIsExamReviewLoading(false);
+    }
+  };
+
+  const startNewMockExam = () => {
+    setActiveExamReviewId(null);
+    if (simulationMode !== 'standard') setSimulationMode('standard');
+    manager.setMockExamAction('new');
+    manager.startSession();
+  };
+
+  const continueInMode = async (mode: SimulationMode) => {
+    if (mode === 'standard') {
+      startNewMockExam();
+      return;
+    }
+    const changed = await manager.changeMode(mode);
+    if (changed) {
+      setSimulationMode(mode);
+      setActiveExamReviewId(null);
+    }
+  };
+
+  const continueWithGoal = async (goal: string, mode: SimulationMode) => {
+    const changed = await manager.changeMode(mode);
+    if (!changed) return;
+    setSimulationMode(mode);
+    setActiveExamReviewId(null);
+    await manager.sendTextMessage(goal);
+  };
 
   const requestSessionStart = async () => {
+    if (manager.postExamId) {
+      manager.startSession();
+      return;
+    }
     if (simulationMode !== 'standard' || !user?.id) {
       manager.setMockExamAction('new');
       manager.startSession();
@@ -173,7 +221,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   const handleSendTextMessage = async (text: string) => {
-    if (simulationMode === 'standard' && user?.id && !manager.currentItemId) {
+    if (simulationMode === 'standard' && user?.id && !manager.currentItemId && !manager.postExamId) {
       setPendingExamStartText(text);
       setIsCheckingExam(true);
       const unfinishedExam = await MockExamService.getLatestInProgress(user.id, testVersion);
@@ -386,6 +434,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               isAudioRetryPending={manager.isAudioRetryPending}
               onLoadOlder={manager.loadOlderMessages}
               onClearError={manager.clearError}
+              onOpenExamReview={openExamReview}
             />
           )}
           {mobileWorkspace === 'controls' && (
@@ -548,6 +597,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           isAudioRetryPending={manager.isAudioRetryPending}
           onLoadOlder={manager.loadOlderMessages}
           onClearError={manager.clearError}
+          onOpenExamReview={openExamReview}
           onToggleFocus={toggleFocusMode}
           isFocusMode={isFocusMode}
         />
@@ -598,19 +648,19 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           </section>
         </div>
       )}
-      {manager.examCompletion && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation">
-          <section ref={examCompleteRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mock-exam-complete-title" dir="ltr" className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl outline-none dark:bg-gray-800">
-            <h2 id="mock-exam-complete-title" className="text-lg font-bold text-deep-navy dark:text-white">Mock exam complete</h2>
-            <p className="mt-3 whitespace-pre-line text-sm text-immigo-gray-700 dark:text-gray-200">{manager.examCompletion.report}</p>
-            <p className="mt-3 text-sm text-immigo-gray-700 dark:text-gray-200">Based on this result, {manager.examCompletion.recommendedMode === 'study' ? 'Study Mode' : 'Practice Mode'} may help you most next.</p>
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <button type="button" onClick={() => { manager.dismissExamCompletion(); manager.setMockExamAction('new'); manager.startSession(); }} className="rounded-lg border border-immigo-gray-300 px-4 py-2 text-sm font-semibold text-deep-navy hover:bg-immigo-gray-50 dark:text-white">Start a new mock exam</button>
-              <button type="button" onClick={() => { const mode = manager.examCompletion!.recommendedMode; manager.dismissExamCompletion(); handleSimulationModeChange(mode); }} className="rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-art-blue-700">Switch modes and continue</button>
-            </div>
-          </section>
-        </div>
-      )}
+      <FeedbackModal
+        isOpen={Boolean(activeExamReviewId)}
+        onClose={() => setActiveExamReviewId(null)}
+        isLoading={isExamReviewLoading}
+        feedback={activeExamReviewId ? examReviewCache[activeExamReviewId]?.feedback ?? null : null}
+        report={activeExamReviewId ? examReviewCache[activeExamReviewId]?.report ?? null : null}
+        error={examReviewError}
+        onStartPractice={continueInMode}
+        onChooseMode={continueInMode}
+        onSetGoal={continueWithGoal}
+        onStartNewExam={startNewMockExam}
+        onRetry={() => { if (activeExamReviewId) void openExamReview(activeExamReviewId); }}
+      />
     </div>
   );
 }

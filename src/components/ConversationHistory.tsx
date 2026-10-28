@@ -11,6 +11,7 @@ interface ConversationHistoryProps {
   onLoadOlder?: () => void;
   hasMore?: boolean;
   onUserScroll?: () => void;
+  onOpenExamReview?: (examId: string) => void;
 }
 
 export function ConversationHistory({
@@ -20,6 +21,7 @@ export function ConversationHistory({
   onLoadOlder,
   hasMore = false,
   onUserScroll,
+  onOpenExamReview,
 }: ConversationHistoryProps): JSX.Element {
   const { t, i18n } = useTranslation('conversation');
   const conversationRef = useRef<HTMLDivElement>(null);
@@ -83,6 +85,7 @@ export function ConversationHistory({
         const dateKey = messageDate.toDateString();
         const previousDateKey = previousDate?.toDateString();
         const startsNewDay = index === 0 || dateKey !== previousDateKey;
+        const examReviewMatch = msg.role === 'assistant' ? /^\[\[MOCK_EXAM_REVIEW:([0-9a-f-]+)\]\]$/i.exec(msg.content) : null;
 
         return (
           <div key={msg.id}>
@@ -131,7 +134,20 @@ export function ConversationHistory({
                     : 'bg-star-white text-deep-navy rounded-bl-sm border border-immigo-gray-200'
                 }`}
               >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                {examReviewMatch ? (
+                  <div className="min-w-[220px] space-y-2" data-testid="mock-exam-review-card">
+                    <p className="font-semibold text-deep-navy">{t('workspace.examReview.cardTitle')}</p>
+                    <p className="text-xs text-immigo-gray-600">{t('workspace.examReview.cardDescription')}</p>
+                    <button
+                      type="button"
+                      onClick={() => onOpenExamReview?.(examReviewMatch[1])}
+                      disabled={!onOpenExamReview}
+                      className="rounded-lg bg-art-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-art-blue-700 disabled:opacity-60"
+                    >
+                      {t('workspace.examReview.openReview')}
+                    </button>
+                  </div>
+                ) : <p className="whitespace-pre-wrap">{msg.content}</p>}
                 <p className={`text-[10px] mt-1.5 ${msg.role === 'user' ? 'text-immigo-gray-300' : 'text-immigo-gray-400'}`}>
                   {messageDate.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}
                 </p>
