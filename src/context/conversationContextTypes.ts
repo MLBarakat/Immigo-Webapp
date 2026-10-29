@@ -10,11 +10,20 @@ export type AppStatus = 'idle' | 'connecting' | 'listening' | 'processing' | 'sp
 export type SimulationMode = 'standard' | 'practice' | 'study';
 export type TestVersion = '2008' | '2020';
 
+export type MessageAction = {
+  kind: 'exam';
+  examAction: 'new' | 'resume';
+  label: string;
+  variant?: 'primary' | 'secondary';
+};
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  /** Optional in-chat actions rendered with the message (e.g. welcome choices). */
+  actions?: readonly MessageAction[];
 }
 
 export interface LiveSessionStats {
@@ -63,8 +72,9 @@ export type ConversationAction =
   | { type: 'SET_SESSION_ID'; payload: string | null }
   | { type: 'LOAD_HISTORICAL_MESSAGES'; payload: { messages: Message[]; hasMore: boolean; oldestCursor: string | null; replace?: boolean } }
   | { type: 'SET_LIVE_STATS'; payload: LiveSessionStats | null }
-  | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string } }
-  | { type: 'ADD_STANDALONE_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string } };
+  | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[] } }
+  | { type: 'ADD_STANDALONE_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[] } }
+  | { type: 'RESOLVE_MESSAGE_ACTIONS'; payload: { messageId?: string } };
 
 export const initialState: ConversationState = {
   conversationHistory: [],
@@ -119,6 +129,7 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         role: 'assistant',
         content: action.payload.content,
         timestamp: new Date().toISOString(),
+        ...(action.payload.actions?.length ? { actions: action.payload.actions } : {}),
       };
       return {
         ...state,
@@ -133,6 +144,7 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         role: 'assistant',
         content: action.payload.content,
         timestamp: new Date().toISOString(),
+        ...(action.payload.actions?.length ? { actions: action.payload.actions } : {}),
       };
       return { ...state, conversationHistory: [...state.conversationHistory, message] };
     }
@@ -188,10 +200,23 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         transcript: '',
         interimTranscript: '', // Clear speculative holder on prompt dispatch
         errorMessage: null,
-        conversationHistory: [...state.conversationHistory, action.payload.userMessage],
+        conversationHistory: [
+          ...state.conversationHistory.map(msg => msg.actions ? { ...msg, actions: undefined } : msg),
+          action.payload.userMessage,
+        ],
         assistantMessageId: action.payload.assistantMessageId,
       };
     }
+
+    case 'RESOLVE_MESSAGE_ACTIONS':
+      return {
+        ...state,
+        conversationHistory: state.conversationHistory.map(msg => {
+          if (!msg.actions) return msg;
+          if (action.payload.messageId && msg.id !== action.payload.messageId) return msg;
+          return { ...msg, actions: undefined };
+        }),
+      };
 
     case 'RECEIVE_ASSISTANT_CHUNK':
       if (!state.assistantMessageId) return state;

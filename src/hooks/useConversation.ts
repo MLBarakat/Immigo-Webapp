@@ -4,9 +4,10 @@ import { ConversationContext } from '../context/conversationContextTypes';
 import { SimulationMode, TestVersion } from '../context/conversationContextTypes';
 import { ApiClient, ApiError } from '../services/apiClient';
 import type { MockExamAction } from '../services/apiClient';
-import { Message } from '../context/conversationContextTypes';
+import { Message, MessageAction } from '../context/conversationContextTypes';
 import { ChatPersistenceService } from '../services/chatPersistenceService';
 import { fetchDailyProgressStats } from '../services/liveProgressService';
+import { MockExamService } from '../services/mockExamService';
 import { useWhisper } from './useWhisper';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
@@ -1282,7 +1283,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [finalTranscript, sendTextMessage]);
 
-  const initiateSession = useCallback(async () => {
+  const initiateSession = useCallback(async (forceSessionStart = false) => {
     // Unlock audible playback while still inside the Start-tap gesture.
     unlockAudioPlayback();
     historyChangedBeforeHydrationRef.current = true;
@@ -1337,7 +1338,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ type: 'SET_SESSION_ID', payload: newSessionId });
     }
 
-    if (continuingTextSession && currentItemIdRef.current) {
+    if (continuingTextSession && currentItemIdRef.current && !forceSessionStart) {
       await startListeningWithMicGate();
       return;
     }
@@ -1548,6 +1549,66 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [conversationState.sessionId, conversationState.sessionTime, apiClient, dispatch, stopRecording, clearAudioPlayback, updateCurrentItemId]);
 
+  /**
+   * Microphone control: activate voice capture only. It deliberately does not
+   * call postSessionStart, resume/abandon a mock exam, grade anything, or move
+   * the current question. The first spoken utterance is still a normal turn.
+   */
+  const startVoiceMode = useCallback(async () => {
+    unlockAudioPlayback();
+    historyChangedBeforeHydrationRef.current = true;
+    if (!voiceSessionRef.current) {
+      voiceSessionRef.current = true;
+      setIsVoiceSessionActive(true);
+      processedTranscriptRef.current = '';
+      pendingTranscriptClearRef.current = false;
+      if (!conversationState.isSessionActive) dispatch({ type: 'START_SESSION' });
+      openingResponseRef.current = !currentItemIdRef.current;
+    }
+    await startListeningWithMicGate();
+  }, [conversationState.isSessionActive, dispatch, startListeningWithMicGate]);
+
+  /**
+   * Microphone control: deactivate voice capture only. The conversation, the
+   * active mock exam, its current question, and all scoring state stay intact.
+   */
+  const stopVoiceMode = useCallback(() => {
+    if (silenceNudgeTimerRef.current !== null) {
+      window.clearTimeout(silenceNudgeTimerRef.current);
+      silenceNudgeTimerRef.current = null;
+    }
+    silenceNudgeControllerRef.current?.abort();
+    silenceNudgeControllerRef.current = null;
+    stopRecording();
+    voiceSessionRef.current = false;
+    setIsVoiceSessionActive(false);
+
+    const hasConversation = latestConversationHistoryRef.current.length > 0
+      || currentItemIdRef.current !== null
+      || examRunIdRef.current !== null
+      || completedExamIdRef.current !== null
+      || Boolean(sessionIdRef.current || conversationState.sessionId);
+    if (!hasConversation) {
+      dispatch({ type: 'END_SESSION' });
+    } else if (conversationState.appStatus === 'listening' || conversationState.appStatus === 'connecting') {
+      dispatch({ type: 'SET_STATUS', payload: 'idle' });
+    }
+  }, [conversationState.appStatus, conversationState.sessionId, dispatch, stopRecording]);
+
+  /**
+   * Welcome-card choice: explicitly resume today's unfinished exam or abandon
+   * it in favour of a fresh one. This is the only path that changes exam
+   * identity; the microphone never does.
+   */
+  const chooseWelcomeAction = useCallback(async (examAction: MockExamAction, messageId: string) => {
+    dispatch({ type: 'RESOLVE_MESSAGE_ACTIONS', payload: { messageId } });
+    simulationModeRef.current = 'standard';
+    nextExamActionRef.current = examAction;
+    completedExamIdRef.current = null;
+    setPostExamId(null);
+    await initiateSession(true);
+  }, [dispatch, initiateSession]);
+
   useEffect(() => {
     if (conversationState.isSessionActive) {
       intervalRef.current = window.setInterval(() => dispatch({ type: 'TICK_SESSION_TIMER' }), 1000);
@@ -1564,10 +1625,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [conversationState.isSessionActive, dispatch]);
 
   // On-screen welcome banner (TEXT ONLY, never spoken): fetched once when the
-  // app loads, independent of tapping "Start Session". Displayed as a plain
+  // app loads, independent of tapping the microphone. Displayed as a plain
   // chat message — no audio, no mute-gate, no recording side effects at all.
-  // No paired user message: this is the very first thing in the conversation,
-  // so there must be nothing (not even an empty bubble) before it.
+  // The unfinished-exam check belongs here too: the welcome area asks which
+  // direction to take, and the choices render as buttons in the chat instead
+  // of a blocking dialog or a side effect of the microphone control.
   useEffect(() => {
     if (!apiClient || !userId) return;
 
@@ -1580,17 +1642,15 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       hasFetchedWelcomeBannerRef.current = false;
     }
 
-    if (hasFetchedWelcomeBannerRef.current || conversationState.conversationHistory.length > 0) return;
+    if (hasFetchedWelcomeBannerRef.current) return;
     // Key by user + calendar date (in the account timezone) so the banner
     // shows at most once per day, even across tabs and page refreshes.
     // On logout, AuthContext clears this key so the next login gets a fresh banner.
     const localDate = localSessionDateRef.current || ChatPersistenceService.getSessionDate(accountTimezoneRef.current);
     const storageKey = `welcome-banner-shown:${userId}:${localDate}`;
+    let shouldFetchBanner = conversationState.conversationHistory.length === 0;
     try {
-      if (localStorage.getItem(storageKey) === 'done') {
-        hasFetchedWelcomeBannerRef.current = true;
-        return;
-      }
+      if (localStorage.getItem(storageKey) === 'done') shouldFetchBanner = false;
     } catch {
       // Storage unavailable — fall through to in-memory guard only.
     }
@@ -1601,29 +1661,93 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     // force the second mount to fetch again. The one-shot ref above is the
     // authority; the userId check prevents a stale response crossing accounts.
     void (async () => {
-      try {
-        const { message } = await apiClient.fetchWelcomeBanner({ localDate });
-        if (welcomeBannerUserIdRef.current !== userId) return;
-        if (latestConversationHistoryRef.current.length > 0) return;
-        const assistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId, content: message } });
+      let bannerMessage: string | null = null;
+      let bannerFetched = false;
+
+      if (shouldFetchBanner) {
+        try {
+          const { message } = await apiClient.fetchWelcomeBanner({ localDate });
+          if (welcomeBannerUserIdRef.current !== userId) return;
+          bannerMessage = message;
+          bannerFetched = true;
+        } catch (error: unknown) {
+          if (welcomeBannerUserIdRef.current !== userId) return;
+          // Non-fatal: the welcome banner is a nice-to-have, not required to
+          // start practicing. Log and move on; no user-facing error needed.
+          logger.error('Welcome banner fetch failed (non-fatal).', undefined, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const unfinishedExam = await MockExamService.getLatestInProgress(userId, testVersionRef.current);
+      if (welcomeBannerUserIdRef.current !== userId) return;
+      if (latestConversationHistoryRef.current.some(message =>
+        message.actions?.some(action => action.kind === 'exam')
+      )) return;
+
+      let content = bannerMessage;
+      let actions: MessageAction[] | undefined;
+
+      if (unfinishedExam) {
+        const remaining = Math.max(0, unfinishedExam.question_ids.length - unfinishedExam.current_index);
+        const summary = unfinishedExam.english_stage === 'reading' || unfinishedExam.english_stage === 'writing'
+          ? t('workspace.welcome.resumeEnglish', {
+              version: unfinishedExam.test_version,
+              stage: unfinishedExam.english_stage,
+            })
+          : t('workspace.welcome.resumeCivics', {
+              version: unfinishedExam.test_version,
+              remaining,
+            });
+        content = content ? `${content}\n\n${summary}` : summary;
+        actions = [
+          {
+            kind: 'exam',
+            examAction: 'resume',
+            label: t('workspace.welcome.continueExam'),
+            variant: 'primary',
+          },
+          {
+            kind: 'exam',
+            examAction: 'new',
+            label: t('workspace.welcome.startNewExam'),
+            variant: 'secondary',
+          },
+        ];
+      } else if (bannerFetched) {
+        actions = [{
+          kind: 'exam',
+          examAction: 'new',
+          label: t('workspace.welcome.startMockExam'),
+          variant: 'primary',
+        }];
+      }
+
+      if (!content) {
+        // Nothing to show. If the banner request failed, allow a later mount
+        // to retry it; an existing exam card is not retried in this mount.
+        if (!bannerFetched && !unfinishedExam) hasFetchedWelcomeBannerRef.current = false;
+        return;
+      }
+
+      // Keep this message when hydration settles: without this flag a database
+      // replace can wipe the banner card immediately after it appears.
+      historyChangedBeforeHydrationRef.current = true;
+      const assistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      dispatch({
+        type: 'ADD_ASSISTANT_MESSAGE',
+        payload: { assistantMessageId, content, ...(actions?.length ? { actions } : {}) },
+      });
+      if (bannerFetched) {
         try {
           localStorage.setItem(storageKey, 'done');
         } catch {
           // Best-effort only.
         }
-      } catch (error: unknown) {
-        if (welcomeBannerUserIdRef.current !== userId) return;
-        // Non-fatal: the welcome banner is a nice-to-have, not required to
-        // start practicing. Log and move on; no user-facing error needed.
-        // Do not mark done so a later mount can retry.
-        hasFetchedWelcomeBannerRef.current = false;
-        logger.error('Welcome banner fetch failed (non-fatal).', undefined, {
-          error: error instanceof Error ? error.message : String(error),
-        });
       }
     })();
-  }, [apiClient, userId, dispatch, conversationState.conversationHistory.length, accountTimezone]);
+  }, [apiClient, userId, dispatch, conversationState.conversationHistory.length, accountTimezone, t]);
 
   const stopRecordingRef = useRef(stopRecording);
   useEffect(() => {
@@ -1786,6 +1910,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         setPostExamId(null);
       }
     },
+    chooseWelcomeAction,
+    startVoiceMode,
+    stopVoiceMode,
     ensureVoiceInitialized: ensureInitialized,
     prepareVoiceCapture: prepareMicrophoneAccess,
     releasePreparedVoiceCapture: releasePreparedMicrophone,

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Message } from '../context/conversationContextTypes';
+import { Message, MessageAction } from '../context/conversationContextTypes';
 import { DisplayUser } from '../types/user';
 import ImmigoLogo from '../assets/immigo_logo.png';
 
@@ -12,6 +12,7 @@ interface ConversationHistoryProps {
   hasMore?: boolean;
   onUserScroll?: () => void;
   onOpenExamReview?: (examId: string) => void;
+  onMessageAction?: (messageId: string, action: MessageAction) => void;
 }
 
 export function ConversationHistory({
@@ -22,6 +23,7 @@ export function ConversationHistory({
   hasMore = false,
   onUserScroll,
   onOpenExamReview,
+  onMessageAction,
 }: ConversationHistoryProps): JSX.Element {
   const { t, i18n } = useTranslation('conversation');
   const conversationRef = useRef<HTMLDivElement>(null);
@@ -148,6 +150,25 @@ export function ConversationHistory({
                     </button>
                   </div>
                 ) : <p className="whitespace-pre-wrap">{msg.content}</p>}
+                {msg.actions && msg.actions.length > 0 && (
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-testid="message-actions">
+                    {msg.actions.map(action => (
+                      <button
+                        key={`${action.kind}-${action.examAction}`}
+                        type="button"
+                        onClick={() => onMessageAction?.(msg.id, action)}
+                        disabled={!onMessageAction}
+                        className={
+                          action.variant === 'secondary'
+                            ? 'rounded-lg border border-immigo-gray-300 px-4 py-2 text-sm font-semibold text-deep-navy transition hover:bg-immigo-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-white dark:hover:bg-gray-700'
+                            : 'rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-art-blue-700 disabled:cursor-not-allowed disabled:opacity-60'
+                        }
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <p className={`text-[10px] mt-1.5 ${msg.role === 'user' ? 'text-immigo-gray-300' : 'text-immigo-gray-400'}`}>
                   {messageDate.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}
                 </p>

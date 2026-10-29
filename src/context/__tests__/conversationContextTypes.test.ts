@@ -22,6 +22,48 @@ describe('microphone-gated listening status', () => {
   });
 });
 
+describe('in-chat message actions', () => {
+  const actions = [
+    { kind: 'exam' as const, examAction: 'resume' as const, label: 'Continue exam', variant: 'primary' as const },
+    { kind: 'exam' as const, examAction: 'new' as const, label: 'Start a new exam', variant: 'secondary' as const },
+  ];
+
+  it('keeps actions on the welcome message until they are resolved', () => {
+    const withWelcome = conversationReducer(initialState, {
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: 'welcome', content: 'Choose a direction', actions },
+    });
+    expect(withWelcome.conversationHistory[0].actions).toEqual(actions);
+
+    const resolved = conversationReducer(withWelcome, {
+      type: 'RESOLVE_MESSAGE_ACTIONS',
+      payload: { messageId: 'welcome' },
+    });
+    expect(resolved.conversationHistory[0].actions).toBeUndefined();
+  });
+
+  it('clears welcome actions once the user starts a turn', () => {
+    const withWelcome = conversationReducer(initialState, {
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: 'welcome', content: 'Choose a direction', actions },
+    });
+    const sent = conversationReducer(withWelcome, {
+      type: 'SEND_MESSAGE_START',
+      payload: {
+        userMessage: {
+          id: 'user-1',
+          role: 'user',
+          content: 'I am ready',
+          timestamp: '2026-01-01T00:00:00.000Z',
+        },
+        assistantMessageId: 'assistant-1',
+      },
+    });
+
+    expect(sent.conversationHistory[0].actions).toBeUndefined();
+  });
+});
+
 describe('assistant message lifecycle', () => {
   it('retains a recognized interim transcript when an empty pause update arrives', () => {
     const recognized = conversationReducer(initialState, {

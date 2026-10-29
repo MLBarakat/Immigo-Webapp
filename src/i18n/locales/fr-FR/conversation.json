@@ -154,6 +154,13 @@
       "keepChatting": "Continuer la conversation",
       "modes": { "standard": "Entretien standard", "practice": "Mode pratique", "study": "Mode étude" }
     },
+    "welcome": {
+      "resumeCivics": "Vous avez un examen blanc {{version}} inachevé. Il reste {{remaining}} questions de civisme. Comment souhaitez-vous continuer ?",
+      "resumeEnglish": "Vous avez un examen blanc {{version}} inachevé, prêt à reprendre l’entraînement d’anglais ({{stage}}). Comment souhaitez-vous continuer ?",
+      "continueExam": "Continuer l’examen",
+      "startNewExam": "Commencer un nouvel examen",
+      "startMockExam": "Commencer un examen blanc"
+    },
     "right": {
       "title": "Configuration et commandes",
       "collapse": "Réduire le panneau",

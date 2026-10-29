@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, KeyboardEvent, ChangeEvent } 
 import { useTranslation } from 'react-i18next';
 import { ConversationHistory } from './ConversationHistory';
 import { VoiceHub } from './VoiceHub';
-import { AppStatus, Message } from '../context/conversationContextTypes';
+import { AppStatus, Message, MessageAction } from '../context/conversationContextTypes';
 import { DisplayUser } from '../types/user';
 
 interface CenterPanelProps {
@@ -33,6 +33,7 @@ interface CenterPanelProps {
   initError?: string | null;
   isAudioRetryPending?: boolean;
   onOpenExamReview?: (examId: string) => void;
+  onMessageAction?: (messageId: string, action: MessageAction) => void;
 }
 
 const STATUS_COLORS: Record<AppStatus, string> = {
@@ -91,6 +92,7 @@ export function CenterPanel({
   micAccessError,
   onClearMicAccessError,
   onOpenExamReview,
+  onMessageAction,
   initError,
   isAudioRetryPending,
 }: CenterPanelProps) {
@@ -231,6 +233,7 @@ export function CenterPanel({
             hasMore={hasMoreHistory}
             onUserScroll={hideStatusIsland}
             onOpenExamReview={onOpenExamReview}
+            onMessageAction={onMessageAction}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">

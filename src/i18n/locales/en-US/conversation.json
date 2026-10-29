@@ -154,6 +154,13 @@
       "keepChatting": "Keep chatting",
       "modes": { "standard": "Standard Interview", "practice": "Practice Mode", "study": "Study Mode" }
     },
+    "welcome": {
+      "resumeCivics": "You have an unfinished {{version}} mock exam. {{remaining}} civics questions are left. How would you like to continue?",
+      "resumeEnglish": "You have an unfinished {{version}} mock exam that is ready to continue with English {{stage}} practice. How would you like to continue?",
+      "continueExam": "Continue exam",
+      "startNewExam": "Start a new exam",
+      "startMockExam": "Start a mock exam"
+    },
     "right": {
       "title": "Configuration & Control",
       "collapse": "Collapse panel",

@@ -8,6 +8,7 @@ import { useWhisper } from '../useWhisper';
 import { ApiClient, ApiError } from '../../services/apiClient';
 import { ChatPersistenceService } from '../../services/chatPersistenceService';
 import { fetchDailyProgressStats } from '../../services/liveProgressService';
+import { MockExamService } from '../../services/mockExamService';
 import { analytics } from '../../analytics';
 
 type TranscriptResponse = Awaited<ReturnType<ApiClient['postTranscript']>>;
@@ -40,6 +41,12 @@ vi.mock('../../analytics', () => ({
 
 vi.mock('../../services/liveProgressService', () => ({
   fetchDailyProgressStats: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../../services/mockExamService', () => ({
+  MockExamService: {
+    getLatestInProgress: vi.fn().mockResolvedValue(null),
+  },
 }));
 
 vi.mock('../../logger', () => ({
@@ -127,6 +134,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       }),
     } as unknown as Mocked<ApiClient>;
     vi.mocked(ChatPersistenceService.createSession).mockResolvedValue(null);
+    vi.mocked(MockExamService.getLatestInProgress).mockResolvedValue(null);
 
     // 1. FIXED: Inject a resilient, runtime mock for the global HTMLAudioElement tracking fixture
     mockAudioInstance = {
@@ -586,6 +594,119 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       payload: expect.objectContaining({ content: 'Welcome back!' }),
     }));
     expect(localStorage.getItem(storageKey)).toBe('done');
+  });
+
+  it('offers continue/new exam choices in the welcome banner instead of a pop-up', async () => {
+    vi.mocked(MockExamService.getLatestInProgress).mockResolvedValue({
+      id: 'exam-1',
+      test_version: '2020',
+      current_index: 12,
+      question_ids: Array.from({ length: 20 }, (_, index) => `q-${index}`),
+      correct_count: 10,
+      incorrect_count: 2,
+      include_english_simulation: false,
+      english_stage: 'none',
+    });
+    const storageKey = 'welcome-banner-shown:user-exam:2026-10-26';
+    localStorage.removeItem(storageKey);
+    mockApiClient.fetchWelcomeBanner = vi.fn().mockResolvedValue({ message: 'Welcome back!', isNewUser: false });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-exam', accountTimezone: 'UTC' }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({
+        content: expect.stringContaining('8 civics questions are left'),
+        actions: expect.arrayContaining([
+          expect.objectContaining({ examAction: 'resume', label: 'Continue exam' }),
+          expect.objectContaining({ examAction: 'new', label: 'Start a new exam' }),
+        ]),
+      }),
+    })));
+    expect(MockExamService.getLatestInProgress).toHaveBeenCalledWith('user-exam', '2020');
+  });
+
+  it('activates voice mode without starting or resuming a mock exam', async () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-voice' }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      await result.current.startVoiceMode();
+    });
+
+    expect(mockApiClient.postSessionStart).not.toHaveBeenCalled();
+    expect(mockApiClient.postTranscript).not.toHaveBeenCalled();
+    expect(mockStartRecording).toHaveBeenCalledOnce();
+  });
+
+  it('deactivates voice mode without closing the conversation or the current exam', async () => {
+    mockContextValue.state = {
+      ...mockContextValue.state,
+      isSessionActive: true,
+      sessionId: 'active-session',
+    };
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-voice' }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.stopVoiceMode();
+    });
+
+    expect(mockStopRecording).toHaveBeenCalledOnce();
+    expect(mockApiClient.completeSession).not.toHaveBeenCalled();
+    expect(ChatPersistenceService.closeSession).not.toHaveBeenCalled();
+    expect(mockDispatch).not.toHaveBeenCalledWith({ type: 'END_SESSION' });
+  });
+
+  it('starts the chosen exam from the welcome card with an explicit exam action', async () => {
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
+      nextItemId: 'q-1',
+      nextQuestion: 'Question one?',
+    }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-exam-choice' }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      await result.current.chooseWelcomeAction('resume', 'welcome-message');
+    });
+
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'RESOLVE_MESSAGE_ACTIONS',
+      payload: { messageId: 'welcome-message' },
+    });
+    expect(mockApiClient.postSessionStart).toHaveBeenCalledWith(
+      'daily-session',
+      expect.objectContaining({ examAction: 'resume', simulationMode: 'standard' })
+    );
   });
 
   it('persists new text conversation turns in the current browser tab', async () => {

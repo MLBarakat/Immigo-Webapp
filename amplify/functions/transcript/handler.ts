@@ -1339,7 +1339,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; selecting the first question without a spoken response.`);
       if (simulationMode === 'standard') {
         const exam = await startOrResumeMockExam(
-          token, userId, parsedBody.sessionId, testVersion, includeEnglishSimulation, parsedBody.examAction ?? 'new', traceId
+          token, userId, parsedBody.sessionId, testVersion, includeEnglishSimulation, parsedBody.examAction ?? 'resume', traceId
         );
         examRunId = exam.id;
         if (exam.english_stage === 'reading' || exam.english_stage === 'writing') {
@@ -1389,7 +1389,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       let resumedEnglish: { section: Exclude<MockExamStage, 'none' | 'complete'>; prompt: string; index: number } | null = null;
       if (simulationMode === 'standard' && !askedItem) {
         const exam = await startOrResumeMockExam(
-          token, userId, parsedBody.sessionId, testVersion, includeEnglishSimulation, parsedBody.examAction ?? 'new', traceId
+          token, userId, parsedBody.sessionId, testVersion, includeEnglishSimulation, parsedBody.examAction ?? 'resume', traceId
         );
         examRunId = exam.id;
         if (exam.english_stage === 'reading' || exam.english_stage === 'writing') {

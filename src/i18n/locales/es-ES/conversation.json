@@ -154,6 +154,13 @@
       "keepChatting": "Seguir conversando",
       "modes": { "standard": "Entrevista estándar", "practice": "Modo práctica", "study": "Modo estudio" }
     },
+    "welcome": {
+      "resumeCivics": "Tienes un examen de práctica {{version}} sin terminar. Quedan {{remaining}} preguntas de civismo. ¿Cómo quieres continuar?",
+      "resumeEnglish": "Tienes un examen de práctica {{version}} sin terminar y listo para continuar con la práctica de inglés {{stage}}. ¿Cómo quieres continuar?",
+      "continueExam": "Continuar el examen",
+      "startNewExam": "Empezar un examen nuevo",
+      "startMockExam": "Empezar un examen de práctica"
+    },
     "right": {
       "title": "Configuración y controles",
       "collapse": "Contraer panel",

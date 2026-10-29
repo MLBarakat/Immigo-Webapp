@@ -30,6 +30,31 @@ describe('ConversationHistory', () => {
     expect(screen.getByText('Thursday, January 2, 2025')).toBeTruthy();
   });
 
+  it('renders in-chat actions and reports the chosen one', () => {
+    const onMessageAction = vi.fn();
+    render(
+      <ConversationHistory
+        messages={[{
+          ...message('welcome', '2025-01-01T12:00:00.000Z'),
+          content: 'You have an unfinished exam.',
+          actions: [
+            { kind: 'exam', examAction: 'resume', label: 'Continue exam', variant: 'primary' },
+            { kind: 'exam', examAction: 'new', label: 'Start a new exam', variant: 'secondary' },
+          ],
+        }]}
+        displayUser={displayUser}
+        interimTranscript=""
+        onMessageAction={onMessageAction}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue exam' }));
+    expect(onMessageAction).toHaveBeenCalledWith(
+      'welcome',
+      expect.objectContaining({ kind: 'exam', examAction: 'resume' })
+    );
+  });
+
   it('scrolls to the latest message when a new message is appended', () => {
     const { rerender } = render(
       <ConversationHistory messages={[message('first', '2025-01-01T12:00:00.000Z')]} displayUser={displayUser} interimTranscript="" />

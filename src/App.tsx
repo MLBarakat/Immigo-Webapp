@@ -8,7 +8,6 @@ import { TranscriptionProvider } from './context/TranscriptionContext';
 import { ConversationProvider } from './context/ConversationContext';
 import { useConversation } from './hooks/useConversation';
 import { ApiClient } from './services/apiClient';
-import { MockExamService, InProgressMockExam } from './services/mockExamService';
 
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
@@ -29,7 +28,7 @@ import { CenterPanel } from './components/CenterPanel';
 import { RightPanel } from './components/RightPanel';
 import { FeedbackModal } from './components/FeedbackModal';
 import type { MockExamReview } from './services/apiClient';
-import type { SimulationMode, TestVersion } from './context/conversationContextTypes';
+import type { MessageAction, SimulationMode, TestVersion } from './context/conversationContextTypes';
 
 import { DisplayUser } from './types/user';
 import { UserSettings, FontSize, ThemeOption } from './types/settings';
@@ -66,9 +65,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const isArabic = i18n.language === 'ar-SA';
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [simulationMode, setSimulationMode] = useState<SimulationMode>('standard');
-  const [examToResume, setExamToResume] = useState<InProgressMockExam | null>(null);
-  const [pendingExamStartText, setPendingExamStartText] = useState<string | null>(null);
-  const [isCheckingExam, setIsCheckingExam] = useState(false);
   const [testVersion, setTestVersion] = useState<TestVersion>(() => {
     try { return localStorage.getItem('immigo_test_version') === '2008' ? '2008' : '2020'; }
     catch { return '2020'; }
@@ -125,19 +121,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     });
   }, [manager.dailySessionSettings]);
   const managerInitError = (manager as { initError?: string | null }).initError ?? null;
-  const examChoiceRef = useFocusTrap(Boolean(examToResume || isCheckingExam));
-
-  useEffect(() => {
-    if (!examToResume && !isCheckingExam) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setExamToResume(null);
-      setPendingExamStartText(null);
-      manager.releasePreparedVoiceCapture();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [examToResume, isCheckingExam, manager]);
 
   const openExamReview = async (examId: string) => {
     setActiveExamReviewId(examId);
@@ -187,59 +170,14 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     await manager.sendTextMessage(goal);
   };
 
-  const requestSessionStart = async () => {
-    if (examToResume || isCheckingExam) return;
-    if (manager.postExamId) {
-      manager.startSession();
-      return;
-    }
-    if (simulationMode !== 'standard' || !user?.id) {
-      manager.setMockExamAction('new');
-      manager.startSession();
-      return;
-    }
-    setIsCheckingExam(true);
-    try {
-      const unfinishedExam = await MockExamService.getLatestInProgress(user.id, testVersion);
-      if (unfinishedExam) {
-        setExamToResume(unfinishedExam);
-        return;
-      }
-    } finally {
-      setIsCheckingExam(false);
-    }
-    manager.setMockExamAction('new');
-    manager.startSession();
+  const handleWelcomeAction = (messageId: string, action: MessageAction) => {
+    if (action.kind !== 'exam') return;
+    setActiveExamReviewId(null);
+    setSimulationMode('standard');
+    void manager.chooseWelcomeAction(action.examAction, messageId);
   };
 
-  const chooseExamAction = (action: 'new' | 'resume') => {
-    setExamToResume(null);
-    manager.setMockExamAction(action);
-    if (pendingExamStartText !== null) {
-      const text = pendingExamStartText;
-      setPendingExamStartText(null);
-      void manager.sendTextMessage(text);
-    } else {
-      manager.startSession();
-    }
-  };
-
-  const handleSendTextMessage = async (text: string) => {
-    if (simulationMode === 'standard' && user?.id && !manager.currentItemId && !manager.postExamId) {
-      setPendingExamStartText(text);
-      setIsCheckingExam(true);
-      try {
-        const unfinishedExam = await MockExamService.getLatestInProgress(user.id, testVersion);
-        if (unfinishedExam) {
-          setExamToResume(unfinishedExam);
-          return;
-        }
-      } finally {
-        setIsCheckingExam(false);
-      }
-      setPendingExamStartText(null);
-      manager.setMockExamAction('new');
-    }
+  const handleSendTextMessage = (text: string) => {
     void manager.sendTextMessage(text);
   };
 
@@ -424,13 +362,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               appStatus={manager.appStatus}
               isModelLoading={manager.isModelLoading}
               isVadReady={manager.isVadReady}
-              isSessionActive={manager.isSessionActive}
+              isSessionActive={manager.isVoiceSessionActive}
               isVoiceSessionActive={manager.isVoiceSessionActive}
               errorMessage={manager.errorMessage}
               hasMoreHistory={manager.hasMoreHistory}
               onSendMessage={handleSendTextMessage}
-              onStartSession={requestSessionStart}
-              onEndSession={manager.endSession}
+              onStartSession={manager.startVoiceMode}
+              onEndSession={manager.stopVoiceMode}
               micConsentVersion={userSettings.mic_consent_version}
               onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
               onPrepareMic={manager.prepareVoiceCapture}
@@ -442,6 +380,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               onLoadOlder={manager.loadOlderMessages}
               onClearError={manager.clearError}
               onOpenExamReview={openExamReview}
+              onMessageAction={handleWelcomeAction}
             />
           )}
           {mobileWorkspace === 'controls' && (
@@ -494,31 +433,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           </button>
         </nav>
         <Footer />
-        {(examToResume || isCheckingExam) && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation">
-            <section ref={examChoiceRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mock-exam-choice-title" dir="ltr" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl outline-none dark:bg-gray-800">
-              <h2 id="mock-exam-choice-title" className="text-lg font-bold text-deep-navy dark:text-white">
-                {isCheckingExam ? 'Checking your exam…' : 'Continue your mock exam?'}
-              </h2>
-              {isCheckingExam ? (
-                <p className="mt-2 text-sm text-immigo-gray-600 dark:text-gray-300">Looking for an unfinished exam in this question bank.</p>
-              ) : (
-                <>
-                  <p className="mt-2 text-sm text-immigo-gray-600 dark:text-gray-300">
-                    {examToResume?.english_stage === 'reading' || examToResume?.english_stage === 'writing'
-                      ? `Your previous ${examToResume.test_version} exam has finished the civics section and is ready to continue with English ${examToResume.english_stage} practice.`
-                      : `Your previous ${examToResume?.test_version} exam has ${Math.max(0, examToResume?.question_ids.length ?? 0) - (examToResume?.current_index ?? 0)} civics questions remaining. You can continue it or begin a new exam.`}
-                  </p>
-                  <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                    <button type="button" onClick={() => chooseExamAction('resume')} className="rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-art-blue-700">Continue exam</button>
-                    <button type="button" onClick={() => chooseExamAction('new')} className="rounded-lg border border-immigo-gray-300 px-4 py-2 text-sm font-semibold text-deep-navy hover:bg-immigo-gray-50 dark:text-white">Start a new exam</button>
-                    <button type="button" onClick={() => { setExamToResume(null); setPendingExamStartText(null); manager.releasePreparedVoiceCapture(); }} className="rounded-lg px-4 py-2 text-sm text-immigo-gray-600 hover:bg-immigo-gray-100 dark:text-gray-300">Cancel</button>
-                  </div>
-                </>
-              )}
-            </section>
-          </div>
-        )}
         <FeedbackModal
           isOpen={Boolean(activeExamReviewId)}
           onClose={() => setActiveExamReviewId(null)}
@@ -625,13 +539,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           appStatus={manager.appStatus}
           isModelLoading={manager.isModelLoading}
           isVadReady={manager.isVadReady}
-          isSessionActive={manager.isSessionActive}
+          isSessionActive={manager.isVoiceSessionActive}
           isVoiceSessionActive={manager.isVoiceSessionActive}
           errorMessage={manager.errorMessage}
           hasMoreHistory={manager.hasMoreHistory}
           onSendMessage={handleSendTextMessage}
-          onStartSession={requestSessionStart}
-          onEndSession={manager.endSession}
+          onStartSession={manager.startVoiceMode}
+          onEndSession={manager.stopVoiceMode}
           micConsentVersion={userSettings.mic_consent_version}
           onMicConsent={async () => { await updateUserSettings({ mic_consent_version: MIC_CONSENT_VERSION }); }}
           onPrepareMic={manager.prepareVoiceCapture}
@@ -643,6 +557,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onLoadOlder={manager.loadOlderMessages}
           onClearError={manager.clearError}
           onOpenExamReview={openExamReview}
+          onMessageAction={handleWelcomeAction}
           onToggleFocus={toggleFocusMode}
           isFocusMode={isFocusMode}
         />
@@ -668,31 +583,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
 
       <Footer />
 
-      {(examToResume || isCheckingExam) && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation">
-          <section ref={examChoiceRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mock-exam-choice-title" dir="ltr" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl outline-none dark:bg-gray-800">
-            <h2 id="mock-exam-choice-title" className="text-lg font-bold text-deep-navy dark:text-white">
-              {isCheckingExam ? 'Checking your exam…' : 'Continue your mock exam?'}
-            </h2>
-            {isCheckingExam ? (
-              <p className="mt-2 text-sm text-immigo-gray-600 dark:text-gray-300">Looking for an unfinished exam in this question bank.</p>
-            ) : (
-              <>
-                <p className="mt-2 text-sm text-immigo-gray-600 dark:text-gray-300">
-                  {examToResume?.english_stage === 'reading' || examToResume?.english_stage === 'writing'
-                    ? `Your previous ${examToResume.test_version} exam has finished the civics section and is ready to continue with English ${examToResume.english_stage} practice.`
-                    : `Your previous ${examToResume?.test_version} exam has ${Math.max(0, examToResume?.question_ids.length ?? 0) - (examToResume?.current_index ?? 0)} civics questions remaining. You can continue it or begin a new exam.`}
-                </p>
-                <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                  <button type="button" onClick={() => chooseExamAction('resume')} className="rounded-lg bg-art-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-art-blue-700">Continue exam</button>
-                  <button type="button" onClick={() => chooseExamAction('new')} className="rounded-lg border border-immigo-gray-300 px-4 py-2 text-sm font-semibold text-deep-navy hover:bg-immigo-gray-50 dark:text-white">Start a new exam</button>
-                  <button type="button" onClick={() => { setExamToResume(null); setPendingExamStartText(null); manager.releasePreparedVoiceCapture(); }} className="rounded-lg px-4 py-2 text-sm text-immigo-gray-600 hover:bg-immigo-gray-100 dark:text-gray-300">Cancel</button>
-                </div>
-              </>
-            )}
-          </section>
-        </div>
-      )}
       <FeedbackModal
         isOpen={Boolean(activeExamReviewId)}
         onClose={() => setActiveExamReviewId(null)}
