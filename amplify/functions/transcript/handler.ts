@@ -810,13 +810,22 @@ async function submitEnglishExercise(
   inputMethod: 'text' | 'voice',
   requestId: string,
   traceId: string,
-): Promise<{ segments: string[]; stage: MockExamStage; completed: boolean; report: string | null; prompt: string | null }> {
+): Promise<{ segments: string[]; stage: MockExamStage; completed: boolean; report: string | null; prompt: string | null } | null> {
   const db = getUserScopedSupabase(token);
   const { data, error } = await db.from('mock_exams')
     .select('id,test_version,status,question_ids,current_index,correct_count,incorrect_count,include_english_simulation,english_stage,reading_prompt_ids,writing_prompt_ids,reading_passed,writing_passed,report_markdown')
     .eq('id', examId).eq('user_id', userId).maybeSingle();
   if (error || !data) throw new Error(`English exercise state is unavailable: ${error?.message ?? 'exam not found'}`);
   const exam = data as MockExamRow & { report_markdown: string | null };
+  if (exam.english_stage === 'none') {
+    // The exam is still in its civics phase. This utterance is a CIVICS ANSWER,
+    // not an English exercise submission. Return null so the caller falls
+    // through to the normal turn/grading path — an active exam id alone must
+    // never route a civics turn into this handler. The stage only moves
+    // none -> reading -> writing -> complete, so no English submission can
+    // exist yet and the idempotency lookup below would be wasted work.
+    return null;
+  }
   const priorRequest = await db.from('mock_exam_english_answers').select('section,feedback')
     .eq('exam_id', exam.id).eq('request_id', requestId).maybeSingle();
   if (priorRequest.data) {
@@ -838,7 +847,7 @@ async function submitEnglishExercise(
   }
   if (exam.status !== 'in_progress') throw new Error('This mock exam is no longer in progress.');
   if (exam.english_stage !== 'reading' && exam.english_stage !== 'writing') {
-    throw new Error(`Mock exam is not waiting for an English exercise (stage=${exam.english_stage}).`);
+    throw new Error(`Mock exam is not in an English exercise stage (stage=${exam.english_stage}).`);
   }
   const section = exam.english_stage as EnglishExerciseSection;
   if ((section === 'writing' && inputMethod !== 'text') || (section === 'reading' && inputMethod !== 'voice')) {
@@ -1294,12 +1303,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const askedItem = getItem(parsedBody.currentItemId, testVersion);
 
-    if (generatedAssistantText) {
-      // Mode-change goal consent is handled above without grading the utterance.
-    } else if (simulationMode === 'standard' && examRunId && parsedBody.sessionStart !== true) {
-      const englishResult = await submitEnglishExercise(
+    // In standard mode an active mock exam may be in its English reading/writing
+    // phase, in which case this utterance is an exercise submission. The exam's
+    // persisted stage decides this — `examRunId` alone only means an exam is
+    // active and stays set for the whole civics phase too. Resolve the stage
+    // BEFORE the launch chain so a civics answer falls through to normal grading
+    // instead of being rejected by the English-exercise handler (stage=none).
+    let englishResult: Awaited<ReturnType<typeof submitEnglishExercise>> = null;
+    if (!generatedAssistantText
+      && simulationMode === 'standard'
+      && examRunId
+      && parsedBody.sessionStart !== true) {
+      englishResult = await submitEnglishExercise(
         token, userId, examRunId, cleanedTranscript, parsedBody.inputMethod ?? 'voice', parsedBody.requestId ?? traceId, traceId
       );
+    }
+
+    if (generatedAssistantText) {
+      // Mode-change goal consent is handled above without grading the utterance.
+    } else if (englishResult) {
       assistantSegments = englishResult.segments.filter(Boolean);
       generatedAssistantText = assistantSegments.join('\n');
       examStage = englishResult.stage;

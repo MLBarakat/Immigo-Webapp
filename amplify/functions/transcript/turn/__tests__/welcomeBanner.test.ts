@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { buildWelcomeBannerPrompt, TurnInterpreterAdapter, type ModelComplete } from '../turn-interpreter';
 import type { WelcomeBannerContext } from '../types';
 
-describe('buildWelcomeBannerPrompt — two cases only, text-only (no TTS hygiene)', () => {
+describe('buildWelcomeBannerPrompt — user-type cases, text-only (no TTS hygiene)', () => {
   it('new-user case: no stats needed, instructs purpose + encouragement', () => {
     const ctx: WelcomeBannerContext = {
       isNewUser: true,
@@ -18,15 +18,17 @@ describe('buildWelcomeBannerPrompt — two cases only, text-only (no TTS hygiene
     expect(system).not.toContain('parenthetical math');
   });
 
-  it('returning-user case: includes lifetime stats and recently-missed questions', () => {
+  it('first-visit-today case: includes lifetime stats and recently-missed questions', () => {
     const ctx: WelcomeBannerContext = {
       isNewUser: false,
-      isFirstVisitToday: false, // or true, depending on the scenario tested
+      // Recently-missed questions are only supplied for the first visit of the
+      // day (that branch is where the "suggested focus" lives).
+      isFirstVisitToday: true,
       lifetimeStats: {
-        answered: 10,
-        correct: 8,
-        accuracyPct: 80,
-        recentlyMissedQuestions: ['q1'], // or whatever existing data was present
+        answered: 42,
+        correct: 30,
+        accuracyPct: 71,
+        recentlyMissedQuestions: ['Name one power of the U.S. Congress.'],
       },
     };
     const { system, user } = buildWelcomeBannerPrompt(ctx);
@@ -39,11 +41,26 @@ describe('buildWelcomeBannerPrompt — two cases only, text-only (no TTS hygiene
   it('returning user with no missed questions on file still produces a valid prompt', () => {
     const ctx: WelcomeBannerContext = {
       isNewUser: false,
-      isFirstVisitToday: false,
+      isFirstVisitToday: true,
       lifetimeStats: { answered: 5, correct: 5, accuracyPct: 100, recentlyMissedQuestions: [] },
     };
     const { user } = buildWelcomeBannerPrompt(ctx);
     expect(user).toContain('No specific recently-missed questions on file.');
+  });
+
+  it('returning user who already practiced today gets the back-for-more case', () => {
+    const ctx: WelcomeBannerContext = {
+      isNewUser: false,
+      isFirstVisitToday: false,
+      lifetimeStats: { answered: 12, correct: 9, accuracyPct: 75, recentlyMissedQuestions: ['q-unused'] },
+    };
+    const { user } = buildWelcomeBannerPrompt(ctx);
+    expect(user).toContain('RETURNING USER — BACK FOR MORE TODAY.');
+    expect(user).toContain('12 questions answered');
+    expect(user).toContain('75% accuracy');
+    // The back-for-more branch intentionally omits the missed-question list.
+    expect(user).not.toContain('q-unused');
+    expect(user).not.toContain('No specific recently-missed questions on file.');
   });
 });
 
@@ -65,9 +82,9 @@ describe('generateWelcomeBanner — robust fallback, never empty', () => {
     const complete: ModelComplete = vi.fn(async () => { throw new Error('fail'); });
     const adapter = new TurnInterpreterAdapter(complete);
     const text = await adapter.generateWelcomeBanner({
-    isNewUser: false,
-    isFirstVisitToday: false, // or true, depending on the test scenario
-    lifetimeStats: { answered: 10, correct: 8, accuracyPct: 80, recentlyMissedQuestions: [] },
+      isNewUser: false,
+      isFirstVisitToday: true,
+      lifetimeStats: { answered: 10, correct: 8, accuracyPct: 80, recentlyMissedQuestions: [] },
     });
     expect(text).toContain('10 question');
     expect(text).toContain('80%');

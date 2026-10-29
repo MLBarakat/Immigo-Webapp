@@ -140,8 +140,9 @@ export class ApiClient {
       const errorPayload = errorData as ApiErrorPayload;
       const errorMessage = errorPayload?.error || errorPayload?.message || 'An unknown network API error occurred.';
 
-      logger.error(`API Error Response: ${response.status} captured on request to ${fullUrl}`, undefined, {
+      logger.error(`API Error Response: ${response.status} captured on request to ${fullUrl}`, {
         status: response.status,
+        errorMessage: errorMessage.slice(0, 500),
         responseShape: summarizePayloadForLog(errorData),
       });
 
@@ -187,8 +188,19 @@ export class ApiClient {
         signal: options.signal,
       });
     } catch (err) {
-      logger.error('[ApiClient] transcript endpoint network/CORS exception:', undefined, {
-        error: err instanceof Error ? err.message : String(err)
+      if (err instanceof ApiError) {
+        // fetchWithAuth already parsed the server's JSON body. This is an HTTP
+        // error from the backend (e.g. a Lambda 500), NOT a CORS/network
+        // failure — surface the real message instead of mislabelling it.
+        logger.error('[ApiClient] transcript endpoint server error:', {
+          status: err.status,
+          error: err.message,
+          payloadShape: summarizePayloadForLog(err.data),
+        });
+        throw err;
+      }
+      logger.error('[ApiClient] transcript endpoint network/CORS exception:', {
+        error: err instanceof Error ? err.message : String(err),
       });
       throw err;
     }

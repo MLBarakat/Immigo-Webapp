@@ -112,8 +112,12 @@ frontend:
             fi
           done
 
-        # 6. Run Vite production build (Vite auto-copies public/ → dist/)
-        - npm run build
+        # 6. Run Vite production build (Vite auto-copies public/ → dist/).
+        # Force NODE_ENV: the Amplify build shell can inherit "development",
+        # which makes React resolve its development runtime. That keeps
+        # StrictMode's mount -> cleanup -> mount cycle active in production
+        # (duplicate effect-driven requests) and ships dev-only warnings.
+        - NODE_ENV=production npm run build
   artifacts:
     baseDirectory: dist
     files:

@@ -545,6 +545,49 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(sessionStorage.getItem('immigo_conversation_user-cache_2026-10-26')).toBe(JSON.stringify([cachedMessage]));
   });
 
+  it('fetches the welcome banner only once when StrictMode double-mounts the effect', async () => {
+    const storageKey = 'welcome-banner-shown:user-welcome:2026-10-26';
+    localStorage.removeItem(storageKey);
+    let resolveBanner!: (value: { message: string; isNewUser: boolean }) => void;
+    mockApiClient.fetchWelcomeBanner = vi.fn(
+      () => new Promise<{ message: string; isNewUser: boolean }>((resolve) => {
+        resolveBanner = resolve;
+      })
+    );
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <React.StrictMode>
+        <ConversationContext.Provider value={mockContextValue}>
+          {children}
+        </ConversationContext.Provider>
+      </React.StrictMode>
+    );
+
+    renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-welcome', accountTimezone: 'UTC' }),
+      { wrapper }
+    );
+
+    // The deployed bundle has shipped React's development runtime, so
+    // StrictMode's setup -> cleanup -> setup cycle is real in the field. The
+    // hydration layout effect used to clear the one-shot guard in between,
+    // producing a second POST 1 ms after the first.
+    await waitFor(() => expect(mockApiClient.fetchWelcomeBanner).toHaveBeenCalledTimes(1));
+    expect(mockApiClient.fetchWelcomeBanner).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveBanner({ message: 'Welcome back!', isNewUser: true });
+      await Promise.resolve();
+    });
+
+    expect(mockApiClient.fetchWelcomeBanner).toHaveBeenCalledTimes(1);
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({ content: 'Welcome back!' }),
+    }));
+    expect(localStorage.getItem(storageKey)).toBe('done');
+  });
+
   it('persists new text conversation turns in the current browser tab', async () => {
     mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'A saved assistant reply',

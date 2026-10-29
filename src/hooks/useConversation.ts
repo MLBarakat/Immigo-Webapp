@@ -131,6 +131,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // recording side effects), so it must not re-fire on every render or on
   // every session start/end.
   const hasFetchedWelcomeBannerRef = useRef(false);
+  // The welcome banner is once per authenticated user, not once per effect
+  // run. Tracking the owner lets a different user get a fresh banner without
+  // resetting the guard on incidental re-runs (timezone sync, StrictMode's
+  // mount -> cleanup -> mount cycle), which previously fired duplicate POSTs.
+  const welcomeBannerUserIdRef = useRef<string | null>(null);
   // True while Polly audio is actively playing; paired with the playback node
   // to constrain interruption handling to audible assistant speech.
   const isPollyPlayingRef = useRef<boolean>(false);
@@ -554,7 +559,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // history when no local snapshot exists, or to retain its pagination cursor.
   useLayoutEffect(() => {
     hydratedHistoryUserIdRef.current = null;
-    hasFetchedWelcomeBannerRef.current = false;
     if (!userId) return;
 
     let isMounted = true;
@@ -1565,7 +1569,18 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // No paired user message: this is the very first thing in the conversation,
   // so there must be nothing (not even an empty bubble) before it.
   useEffect(() => {
-    if (!apiClient || !userId || hasFetchedWelcomeBannerRef.current || conversationState.conversationHistory.length > 0) return;
+    if (!apiClient || !userId) return;
+
+    // A different authenticated user owns a different banner. Reset only on a
+    // genuine user change — never on an incidental re-run (timezone sync, auth
+    // re-render, or StrictMode's mount -> cleanup -> mount cycle), each of
+    // which used to fire a duplicate POST before the first one resolved.
+    if (welcomeBannerUserIdRef.current !== userId) {
+      welcomeBannerUserIdRef.current = userId;
+      hasFetchedWelcomeBannerRef.current = false;
+    }
+
+    if (hasFetchedWelcomeBannerRef.current || conversationState.conversationHistory.length > 0) return;
     // Key by user + calendar date (in the account timezone) so the banner
     // shows at most once per day, even across tabs and page refreshes.
     // On logout, AuthContext clears this key so the next login gets a fresh banner.
@@ -1581,11 +1596,14 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
     hasFetchedWelcomeBannerRef.current = true;
 
-    let cancelled = false;
+    // Deliberately no cleanup/cancel flag: StrictMode mounts this effect twice,
+    // and cancelling the first request would either suppress the banner or
+    // force the second mount to fetch again. The one-shot ref above is the
+    // authority; the userId check prevents a stale response crossing accounts.
     void (async () => {
       try {
         const { message } = await apiClient.fetchWelcomeBanner({ localDate });
-        if (cancelled) return;
+        if (welcomeBannerUserIdRef.current !== userId) return;
         if (latestConversationHistoryRef.current.length > 0) return;
         const assistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId, content: message } });
@@ -1595,7 +1613,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           // Best-effort only.
         }
       } catch (error: unknown) {
-        if (cancelled) return;
+        if (welcomeBannerUserIdRef.current !== userId) return;
         // Non-fatal: the welcome banner is a nice-to-have, not required to
         // start practicing. Log and move on; no user-facing error needed.
         // Do not mark done so a later mount can retry.
@@ -1605,9 +1623,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         });
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [apiClient, userId, dispatch, conversationState.conversationHistory.length, accountTimezone]);
 
   const stopRecordingRef = useRef(stopRecording);

@@ -109,6 +109,11 @@ class ProductionTelemetryLogger {
       resolvedContext = { component: componentOrContext, ...context };
     } else if (componentOrContext && typeof componentOrContext === 'object') {
       resolvedContext = componentOrContext as LogContext;
+    } else if (context) {
+      // Callers commonly pass `undefined` as the component slot and the real
+      // fields as the third argument. Dropping that context made production
+      // ERROR lines (e.g. API 500 details) unreadable in the field.
+      resolvedContext = context;
     }
 
     const entry: LogEntry = {
