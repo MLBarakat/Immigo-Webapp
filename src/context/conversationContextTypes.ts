@@ -62,7 +62,7 @@ export type ConversationAction =
   | { type: 'TICK_SESSION_TIMER' }
   | { type: 'SET_LANGUAGE'; payload: string }
   | { type: 'SEND_MESSAGE_START'; payload: { userMessage: Message; assistantMessageId: string } }
-  | { type: 'RECEIVE_ASSISTANT_CHUNK'; payload: { content: string } }
+  | { type: 'RECEIVE_ASSISTANT_CHUNK'; payload: { content: string; assistantMessageId?: string } }
   | { type: 'FINISH_ASSISTANT_RESPONSE' }
   | { type: 'SEND_MESSAGE_FAILURE'; payload: { error: string; userMessageId: string; assistantMessageId: string } }
   | { type: 'SEND_MESSAGE_ROLLBACK'; payload: { userMessageId: string; assistantMessageId: string } }
@@ -218,15 +218,17 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         }),
       };
 
-    case 'RECEIVE_ASSISTANT_CHUNK':
-      if (!state.assistantMessageId) return state;
+    case 'RECEIVE_ASSISTANT_CHUNK': {
+      const targetId = action.payload.assistantMessageId ?? state.assistantMessageId;
+      if (!targetId) return state;
       return {
         ...state,
         appStatus: 'speaking',
         conversationHistory: state.conversationHistory.map(msg =>
-          msg.id === state.assistantMessageId ? { ...msg, content: msg.content + action.payload.content } : msg
+          msg.id === targetId ? { ...msg, content: msg.content + action.payload.content } : msg
         ),
       };
+    }
 
     case 'FINISH_ASSISTANT_RESPONSE':
       return {

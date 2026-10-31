@@ -24,6 +24,7 @@ const transcriptResponse = (overrides: Partial<TranscriptResponse> = {}): Transc
   examRunId: null,
   examCompleted: false,
   examReport: null,
+  examReviewId: null,
   examStage: null,
   modeGoalPending: false,
   ...overrides,
@@ -210,8 +211,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     // 2. FIXED: Assert absolute execution alignment matching echo suppression gates
     expect(mockStopRecording).not.toHaveBeenCalled();
     expect(mockAudioInstance.play).not.toHaveBeenCalled();
-    // Text-mode reveal advances one word per 80ms interval; allow generous
-    // headroom so a loaded CI machine cannot time out the chain spuriously.
+    // Text-mode answers render in full (no typewriter); the turn still settles.
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
     }, { timeout: 4000 });
@@ -483,6 +483,193 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     act(() => userSpeechStart());
     rerender();
     await waitFor(() => expect(mockAudioInstance.pause).toHaveBeenCalledOnce());
+  });
+
+  it('renders a text-mode answer in full without the word typewriter', async () => {
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'First part.\nNext question?',
+      assistantSegments: ['First part.', 'Next question?'],
+    }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendTextMessage('A typed answer');
+    });
+
+    // Typing is not voice: the whole answer appears at once, no chunking.
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: expect.any(String), content: 'First part.' },
+    });
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({ content: 'Next question?' }),
+    });
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: 'RECEIVE_ASSISTANT_CHUNK',
+    }));
+    expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+  });
+
+  it('reveals the next-question bubble only when its turn in the Polly track arrives', async () => {
+    mockContextValue.state = { ...mockContextValue.state, isSessionActive: true };
+    mockAudioInstance.duration = 4;
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'First part.\nNext question?',
+      assistantSegments: ['First part.', 'Next question?'],
+      audioData: new ArrayBuffer(8),
+    }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendTextMessage('A spoken answer', 'voice');
+    });
+
+    // At the start of the track only the reply bubble exists; the question
+    // bubble must not pop up ahead of the voice.
+    await act(async () => new Promise(resolve => setTimeout(resolve, 70)));
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+    }));
+
+    // Jump near the end of the shared Polly track: the question bubble is
+    // created now and keeps receiving word chunks for its own segment.
+    mockAudioInstance.currentTime = 3.9;
+    await act(async () => new Promise(resolve => setTimeout(resolve, 150)));
+    const standalone = (mockDispatch.mock.calls as Array<[any]>)
+      .map(([action]) => action)
+      .find(action => action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE');
+    expect(standalone).toBeDefined();
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'RECEIVE_ASSISTANT_CHUNK',
+      payload: { assistantMessageId: standalone.payload.assistantMessageId, content: expect.any(String) },
+    });
+
+    act(() => {
+      mockAudioInstance.onended?.();
+    });
+  });
+
+  it('stops Polly and settles the answer when the user types during playback', async () => {
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
+      responseText: 'Welcome. Tell me about your day.',
+      audioData: new ArrayBuffer(8),
+      nextItemId: 'q-1',
+    }));
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'Understood.',
+    }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+    expect(mockAudioInstance.play).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      await result.current.sendTextMessage('Hold on, let me type this instead.');
+    });
+
+    // Text is a barge-in: audible Polly is cut and the turn settles.
+    expect(mockAudioInstance.pause).toHaveBeenCalled();
+    expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: expect.any(String), content: 'Understood.' },
+    });
+  });
+
+  it('silences Polly when voice mode is deactivated but finishes the answer as a typewriter, then settles idle', async () => {
+    mockAudioInstance.duration = 4;
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
+      responseText: 'One two three four five six.',
+      audioData: new ArrayBuffer(8),
+      nextItemId: 'q-1',
+    }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+    const dispatchedActions = (): Array<{ type: string; payload?: any }> =>
+      (mockDispatch.mock.calls as Array<[any]>).map(([action]) => action);
+    const chunksBeforeStop = dispatchedActions()
+      .filter(action => action.type === 'RECEIVE_ASSISTANT_CHUNK').length;
+
+    act(() => {
+      result.current.stopVoiceMode();
+    });
+
+    // Mic off silences Polly immediately, without truncating the answer.
+    expect(mockAudioInstance.pause).toHaveBeenCalled();
+    expect(mockDispatch).not.toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+
+    // The remaining words keep typing themselves out at a reading pace…
+    await waitFor(() => {
+      const chunksAfterStop = dispatchedActions()
+        .filter(action => action.type === 'RECEIVE_ASSISTANT_CHUNK').length;
+      expect(chunksAfterStop).toBeGreaterThan(chunksBeforeStop);
+    }, { timeout: 2000 });
+
+    // …and the turn settles as idle once the last word lands.
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+      expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_STATUS', payload: 'idle' });
+    }, { timeout: 3000 });
+  });
+
+  it('loads recent history across sessions and paginates older pages without a session filter', async () => {
+    vi.mocked(ChatPersistenceService.loadRecentMessages).mockResolvedValueOnce({
+      messages: [
+        { id: 'm-1', role: 'user', content: 'Hi', created_at: '2026-10-26T09:00:00.000Z' },
+        { id: 'm-2', role: 'assistant', content: 'Hello', created_at: '2026-10-26T09:00:01.000Z' },
+      ],
+      hasMore: true,
+      oldestCursor: '2026-10-26T09:00:00.000Z',
+    } as Awaited<ReturnType<typeof ChatPersistenceService.loadRecentMessages>>);
+
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-history' }),
+      { wrapper: ConversationProvider }
+    );
+
+    await waitFor(() => {
+      expect(ChatPersistenceService.loadRecentMessages).toHaveBeenCalledWith('user-history', 50);
+      expect(result.current.conversationHistory).toHaveLength(2);
+    });
+    expect(ChatPersistenceService.loadRecentMessages).not.toHaveBeenCalledWith(
+      'user-history', 50, expect.anything()
+    );
+
+    await act(async () => {
+      await result.current.loadOlderMessages();
+    });
+
+    expect(ChatPersistenceService.loadOlderMessages).toHaveBeenCalledWith(
+      'user-history',
+      '2026-10-26T09:00:00.000Z',
+      25
+    );
   });
 
   it('cancels an in-flight text response when the user sends an interrupting message', async () => {

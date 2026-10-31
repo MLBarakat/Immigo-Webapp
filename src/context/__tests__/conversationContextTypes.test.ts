@@ -124,4 +124,26 @@ describe('assistant message lifecycle', () => {
       'Progress report',
     ]);
   });
+
+  it('appends streamed chunks to an explicitly targeted standalone bubble', () => {
+    const withPendingReply = conversationReducer(initialState, {
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: 'reply-1', content: 'The answer' },
+    });
+    const withQuestion = conversationReducer(withPendingReply, {
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: 'question-1', content: 'What next?' },
+    });
+    const streamed = conversationReducer(withQuestion, {
+      type: 'RECEIVE_ASSISTANT_CHUNK',
+      payload: { assistantMessageId: 'question-1', content: ' Really.' },
+    });
+
+    // The explicit target lets the next-question bubble keep receiving words
+    // while the pending reply bubble is no longer the active stream target.
+    expect(streamed.conversationHistory.map(message => message.content)).toEqual([
+      'The answer',
+      'What next? Really.',
+    ]);
+  });
 });

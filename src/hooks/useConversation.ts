@@ -33,10 +33,19 @@ interface UseConversationManagerProps {
 }
 
 interface AssistantReveal {
-  words: string[];
-  revealedWords: number;
+  // One entry per assistant segment (the first bubble is the pending assistant
+  // message; later segments are standalone bubbles). Revealing proceeds across
+  // bubbles in order, so the "next question" bubble appears only once the
+  // previous bubble's words are all spoken.
+  bubbles: Array<{ messageId: string; words: string[]; created: boolean }>;
+  /** Cumulative word count at the end of each bubble (index == bubble index). */
+  wordCounts: number[];
+  totalWords: number;
+  revealedGlobal: number;
   timerId: number;
   audioNode: HTMLAudioElement | null;
+  /** The current reveal step; reused when audio is released but text continues. */
+  tick: () => void;
 }
 
 const SILENCE_NUDGE_DELAY_MS = 15_000;
@@ -150,70 +159,143 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const activePollyTextRef = useRef('');
   const speechStartedDuringPollyRef = useRef(false);
   const assistantRevealRef = useRef<AssistantReveal | null>(null);
+  const isLoadingOlderRef = useRef(false);
+
+  /**
+   * Settles a completed assistant turn. Voice mode drives the typewriter; when
+   * the mic is already off by the time the turn ends, settle to 'idle' instead
+   * of falsely advertising 'listening'.
+   */
+  const finishAssistantTurn = useCallback(() => {
+    dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+    // FINISH restores 'listening' whenever the session is active; if voice
+    // mode was deactivated mid-response that would misrepresent the mic state.
+    if (!voiceSessionRef.current) {
+      dispatch({ type: 'SET_STATUS', payload: 'idle' });
+    }
+  }, [dispatch]);
 
   const stopAssistantReveal = useCallback((complete = false) => {
     const reveal = assistantRevealRef.current;
     if (!reveal) return;
     window.clearInterval(reveal.timerId);
-    if (complete && reveal.revealedWords < reveal.words.length) {
-      dispatch({
-        type: 'RECEIVE_ASSISTANT_CHUNK',
-        payload: { content: ` ${reveal.words.slice(reveal.revealedWords).join(' ')}` },
-      });
+    if (complete) {
+      // Flush whatever remains of every bubble so no assistant bubble is left
+      // truncated when the turn is forced to finish early (audio ended,
+      // autoplay-blocked, gesture-retry cancelled, …).
+      for (let i = 0; i < reveal.bubbles.length; i += 1) {
+        const bubble = reveal.bubbles[i];
+        const startIdx = i === 0 ? 0 : reveal.wordCounts[i - 1];
+        const revealedInBubble = Math.max(0, Math.min(bubble.words.length, reveal.revealedGlobal - startIdx));
+        const remaining = bubble.words.slice(revealedInBubble);
+        if (remaining.length === 0) continue;
+        if (!bubble.created) {
+          bubble.created = true;
+          if (i === 0) {
+            dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: remaining.join(' ') } });
+          } else {
+            dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: remaining.join(' ') } });
+          }
+        } else {
+          dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { assistantMessageId: bubble.messageId, content: ` ${remaining.join(' ')}` } });
+        }
+      }
     }
     assistantRevealRef.current = null;
   }, [dispatch]);
 
-  const startAssistantReveal = useCallback((messageId: string, content: string, audioNode: HTMLAudioElement | null = null) => {
+  const startAssistantReveal = useCallback((messageId: string, segments: readonly string[], audioNode: HTMLAudioElement | null = null) => {
     stopAssistantReveal();
-    const words = content.trim().split(/\s+/).filter(Boolean);
-    if (words.length === 0) return;
-    dispatch({
-      type: 'ADD_ASSISTANT_MESSAGE',
-      payload: { assistantMessageId: messageId, content: words[0] },
-    });
-    if (words.length === 1) {
-      if (!audioNode) {
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
-        if (activeAssistantMessageIdRef.current === messageId) activeAssistantMessageIdRef.current = null;
-      }
-      return;
-    }
+    const bubbles: Array<{ messageId: string; words: string[]; created: boolean }> = segments
+      .map((segment, index) => ({
+        messageId: index === 0 ? messageId : `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        words: segment.trim().split(/\s+/).filter(Boolean),
+        created: false,
+      }))
+      .filter(bubble => bubble.words.length > 0);
+    if (bubbles.length === 0) return;
 
+    let cumulative = 0;
+    const wordCounts = bubbles.map(bubble => (cumulative += bubble.words.length));
     const reveal: AssistantReveal = {
-      words,
-      revealedWords: 1,
+      bubbles,
+      wordCounts,
+      totalWords: cumulative,
+      revealedGlobal: 0,
       timerId: 0,
       audioNode,
+      tick: () => {},
     };
-    reveal.timerId = window.setInterval(() => {
+
+    // Reveal the next word across the ordered bubbles. The bubble is created on
+    // its first word, so a later "next question" bubble does not exist in the
+    // chat until its turn in the speech comes up.
+    const commitNextWord = () => {
+      const globalIndex = reveal.revealedGlobal;
+      const bubbleIndex = reveal.wordCounts.findIndex(end => globalIndex < end);
+      const startIdx = bubbleIndex === 0 ? 0 : reveal.wordCounts[bubbleIndex - 1];
+      const bubble = reveal.bubbles[bubbleIndex];
+      const word = bubble.words[globalIndex - startIdx];
+      if (!bubble.created) {
+        bubble.created = true;
+        if (bubbleIndex === 0) {
+          dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: word } });
+        } else {
+          dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: word } });
+        }
+      } else {
+        dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { assistantMessageId: bubble.messageId, content: ` ${word}` } });
+      }
+      reveal.revealedGlobal = globalIndex + 1;
+    };
+
+    const runTick = () => {
       if (assistantRevealRef.current !== reveal) return;
       let targetWordCount: number;
       if (reveal.audioNode) {
-        const duration = reveal.audioNode.duration;
-        if (!Number.isFinite(duration) || duration <= 0) return;
-        targetWordCount = Math.min(
-          words.length,
-          Math.max(1, Math.floor((reveal.audioNode.currentTime / duration) * words.length) + 1)
-        );
+        const audio = reveal.audioNode;
+        // Hold the reveal until the track is genuinely advancing. A parked or
+        // blocked turn (the first word is already on screen) must never type
+        // ahead of the voice, and a buffering stall must not race it either.
+        if (audio.paused || audio.currentTime <= 0) return;
+        const duration = audio.duration;
+        if (Number.isFinite(duration) && duration > 0) {
+          // Reveal each word when its spoken interval begins, proportional to
+          // how much of the shared track has played. The word count spans all
+          // bubbles, so a later next-question bubble no longer stretches the
+          // first bubble's words across the whole track.
+          targetWordCount = Math.min(
+            reveal.totalWords,
+            Math.max(1, Math.floor((audio.currentTime / duration) * reveal.totalWords) + 1)
+          );
+        } else {
+          // Metadata can lag behind playback; keep words flowing steadily
+          // until the duration is known, then resync on the next tick.
+          targetWordCount = reveal.revealedGlobal + 1;
+        }
       } else {
-        targetWordCount = reveal.revealedWords + 1;
+        targetWordCount = reveal.revealedGlobal + 1;
       }
-      if (targetWordCount > reveal.revealedWords) {
-        dispatch({
-          type: 'RECEIVE_ASSISTANT_CHUNK',
-          payload: { content: ` ${words.slice(reveal.revealedWords, targetWordCount).join(' ')}` },
-        });
-        reveal.revealedWords = targetWordCount;
+
+      while (reveal.revealedGlobal < targetWordCount && reveal.revealedGlobal < reveal.totalWords) {
+        commitNextWord();
       }
-      if (!audioNode && reveal.revealedWords >= words.length) {
+
+      // Without audio the reveal is self-terminating; with audio, onended owns
+      // the finish (so the last words are never cut short).
+      if (!reveal.audioNode && reveal.revealedGlobal >= reveal.totalWords) {
         stopAssistantReveal();
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        finishAssistantTurn();
         if (activeAssistantMessageIdRef.current === messageId) activeAssistantMessageIdRef.current = null;
       }
-    }, audioNode ? 50 : 80);
+    };
+    reveal.tick = runTick;
+    reveal.timerId = window.setInterval(runTick, audioNode ? 50 : 80);
     assistantRevealRef.current = reveal;
-  }, [dispatch, stopAssistantReveal]);
+    // Create the first bubble (with its first word) immediately; later words
+    // and bubbles wait for the voice to reach them.
+    commitNextWord();
+  }, [dispatch, stopAssistantReveal, finishAssistantTurn]);
 
   // At most one Polly turn may be parked awaiting a gesture replay; the ref
   // holds its cancel function so any playback teardown (barge-in, session
@@ -226,11 +308,15 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     cancel?.(reason);
   }, []);
 
-  const clearAudioPlayback = useCallback(() => {
-    // A parked gesture-retry turn belongs to the playback being cleared.
-    dismissPendingAudioRetry('playback cleared');
+  /**
+   * Releases every Polly playback resource without touching the text reveal.
+   * Used when the mic is turned off mid-response: the voice stops immediately
+   * while the answer keeps typing itself out.
+   */
+  const releaseAudioPlayback = useCallback((reason: string) => {
+    // A parked gesture-retry turn belongs to the playback being released.
+    dismissPendingAudioRetry(reason);
     audioPlaybackGenerationRef.current += 1;
-    stopAssistantReveal();
     if (interruptionTimerRef.current !== null) {
       window.clearTimeout(interruptionTimerRef.current);
       interruptionTimerRef.current = null;
@@ -257,7 +343,25 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     isPollyPlayingRef.current = false;
     isAssistantAudioActiveRef.current = false;
-  }, [stopAssistantReveal, dismissPendingAudioRetry]);
+  }, [dismissPendingAudioRetry]);
+
+  const clearAudioPlayback = useCallback(() => {
+    releaseAudioPlayback('playback cleared');
+    stopAssistantReveal();
+  }, [releaseAudioPlayback, stopAssistantReveal]);
+
+  /**
+   * Converts the in-flight reveal to a text-paced finish after its audio has
+   * been released. The remaining words keep appearing at a readable rhythm and
+   * the turn settles itself when the last word lands.
+   */
+  const continueRevealWithoutAudio = useCallback(() => {
+    const reveal = assistantRevealRef.current;
+    if (!reveal || !reveal.audioNode) return;
+    window.clearInterval(reveal.timerId);
+    reveal.audioNode = null;
+    reveal.timerId = window.setInterval(reveal.tick, 80);
+  }, []);
 
   /**
    * Logs a Polly playback readiness snapshot: payload size + the exact
@@ -302,9 +406,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     isAssistantAudioActiveRef.current = false;
     isPollyPlayingRef.current = false;
     stopAssistantReveal(true);
-    dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+    finishAssistantTurn();
     clearAudioPlayback();
-  }, [dispatch, stopAssistantReveal, clearAudioPlayback]);
+  }, [stopAssistantReveal, finishAssistantTurn, clearAudioPlayback]);
 
   /**
    * Fix 2 safety net (iOS autoplay): when play() is rejected with
@@ -615,7 +719,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         setDailySessionSettings({ mode: dailySession.current_mode as SimulationMode, testVersion: dailySession.test_version, includeEnglishSimulation: dailySession.include_english_simulation });
       }
       dispatch({ type: 'SET_SESSION_ID', payload: dailySession.id });
-      const payload = await ChatPersistenceService.loadRecentMessages(userId, 100, dailySession.id);
+      const payload = await ChatPersistenceService.loadRecentMessages(userId, 50);
       if (!isMounted) return;
       const formattedMessages: Message[] = payload.messages.map(m => ({
         id: m.id,
@@ -684,13 +788,17 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
   const loadOlderMessages = useCallback(async () => {
     if (!userId || !conversationState.oldestMessageCursor || !conversationState.hasMoreHistory) return;
+    // The IntersectionObserver can fire repeatedly while a page is in flight;
+    // coalesce so scroll gestures never issue duplicate cursor queries.
+    if (isLoadingOlderRef.current) return;
+    isLoadingOlderRef.current = true;
 
     try {
+      // No session filter: scrolling keeps walking back across previous days.
       const payload = await ChatPersistenceService.loadOlderMessages(
         userId,
         conversationState.oldestMessageCursor,
-        25,
-        conversationState.sessionId
+        25
       );
       const formattedMessages: Message[] = payload.messages.map(m => ({
         id: m.id,
@@ -698,11 +806,14 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         content: m.content,
         timestamp: m.created_at,
       }));
+      // Guard against duplicate rows at the cursor boundary.
+      const existingIds = new Set(latestConversationHistoryRef.current.map(m => m.id));
+      const freshMessages = formattedMessages.filter(m => !existingIds.has(m.id));
 
       dispatch({
         type: 'LOAD_HISTORICAL_MESSAGES',
         payload: {
-          messages: formattedMessages,
+          messages: freshMessages,
           hasMore: payload.hasMore,
           oldestCursor: payload.oldestCursor,
           replace: false
@@ -710,8 +821,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       });
     } catch (err) {
       logger.error('Failed to load older messages:', undefined, { error: String(err) });
+    } finally {
+      isLoadingOlderRef.current = false;
     }
-  }, [userId, conversationState.oldestMessageCursor, conversationState.hasMoreHistory, conversationState.sessionId, dispatch]);
+  }, [userId, conversationState.oldestMessageCursor, conversationState.hasMoreHistory, dispatch]);
 
   const generatePeriodicProgressReport = useCallback(async (activeSessionId: string) => {
     if (!apiClient) return;
@@ -765,6 +878,14 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
     hasSentSilenceNudgeRef.current = false;
     historyChangedBeforeHydrationRef.current = true;
+
+    // Sending text while the assistant is still speaking counts as a
+    // barge-in: cut Polly and freeze the answer where it was revealed, then
+    // process the user's new turn.
+    if (isPollyPlayingRef.current || isAssistantAudioActiveRef.current || assistantRevealRef.current) {
+      clearAudioPlayback();
+      finishAssistantTurn();
+    }
 
     const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const secureUserMessageId = `user-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -977,14 +1098,19 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
 
       if (!conversationState.isSessionActive || !voiceSessionRef.current) {
-        dispatch({ type: 'SET_STATUS', payload: 'speaking' });
-        startAssistantReveal(secureAssistantMessageId, displaySegments[0] ?? responseText);
+        // Text mode renders the whole answer at once: the word-by-word
+        // typewriter is reserved for voice mode where it tracks Polly.
+        dispatch({
+          type: 'ADD_ASSISTANT_MESSAGE',
+          payload: { assistantMessageId: secureAssistantMessageId, content: displaySegments[0] ?? responseText },
+        });
         for (const segment of displaySegments.slice(1)) {
           dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: {
             assistantMessageId: `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             content: segment,
           } });
         }
+        finishAssistantTurn();
         activeTurnControllerRef.current = null;
         activeAssistantMessageIdRef.current = null;
         return;
@@ -1003,13 +1129,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       audioPlaybackUrlRef.current = audioBlobUrl;
       activePollyTextRef.current = responseText;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
-      startAssistantReveal(secureAssistantMessageId, displaySegments[0] ?? responseText, audioPlaybackNode);
-      for (const segment of displaySegments.slice(1)) {
-        dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: {
-          assistantMessageId: `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          content: segment,
-        } });
-      }
+      // One shared Polly track covers every segment; the reveal walks bubbles
+      // in order so the next-question bubble only appears once the previous
+      // bubble's words have been spoken.
+      startAssistantReveal(secureAssistantMessageId, displaySegments, audioPlaybackNode);
 
       // Keep capture active during playback so VAD can recognize a real
       // interruption; browser echo cancellation and the barge-in holdoff
@@ -1067,7 +1190,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         isAssistantAudioActiveRef.current = false;
         stopAssistantReveal(true);
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        finishAssistantTurn();
         clearAudioPlayback();
 
         // Keep the mute gate active for a short debounce period after playback
@@ -1112,7 +1235,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         activeTurnControllerRef.current = null;
       }
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, generatePeriodicProgressReport, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, generatePeriodicProgressReport, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId]);
 
   const requestSilenceNudge = useCallback(async () => {
     const currentItemId = currentItemIdRef.current;
@@ -1154,7 +1277,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       audioPlaybackUrlRef.current = audioUrl;
       activePollyTextRef.current = response.responseText;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
-      startAssistantReveal(assistantMessageId, response.responseText, audioNode);
+      startAssistantReveal(assistantMessageId, [response.responseText], audioNode);
       isPollyPlayingRef.current = true;
       isAssistantAudioActiveRef.current = true;
       void startRecording();
@@ -1162,7 +1285,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         isAssistantAudioActiveRef.current = false;
         stopAssistantReveal(true);
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        finishAssistantTurn();
         clearAudioPlayback();
         pollyMuteGateTimerRef.current = window.setTimeout(() => {
           isPollyPlayingRef.current = false;
@@ -1206,7 +1329,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     } finally {
       if (silenceNudgeControllerRef.current === controller) silenceNudgeControllerRef.current = null;
     }
-  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, startRecording, startListeningWithMicGate, clearAudioPlayback, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, updateCurrentItemId]);
+  }, [apiClient, conversationState.sessionId, userId, dispatch, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, startRecording, startListeningWithMicGate, clearAudioPlayback, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, updateCurrentItemId]);
 
   useEffect(() => {
     if (displayTranscript.trim()) {
@@ -1431,7 +1554,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       activePollyTextRef.current = res.responseText;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
       activeAssistantMessageIdRef.current = secureAssistantMessageId;
-      startAssistantReveal(secureAssistantMessageId, res.responseText, audioPlaybackNode);
+      startAssistantReveal(secureAssistantMessageId, [res.responseText], audioPlaybackNode);
 
       isPollyPlayingRef.current = true;
       isAssistantAudioActiveRef.current = true;
@@ -1477,7 +1600,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
         isAssistantAudioActiveRef.current = false;
         stopAssistantReveal(true);
-        dispatch({ type: 'FINISH_ASSISTANT_RESPONSE' });
+        finishAssistantTurn();
         clearAudioPlayback();
         pollyMuteGateTimerRef.current = window.setTimeout(() => {
           isPollyPlayingRef.current = false;
@@ -1494,7 +1617,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       });
       await startListeningWithMicGate();
     }
-  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId]);
+  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId]);
 
   const terminateSession = useCallback(async () => {
     if (silenceNudgeTimerRef.current !== null) {
@@ -1571,6 +1694,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   /**
    * Microphone control: deactivate voice capture only. The conversation, the
    * active mock exam, its current question, and all scoring state stay intact.
+   * If Polly is speaking, its voice is silenced immediately; the in-flight
+   * answer keeps revealing word by word and then settles the turn as idle.
    */
   const stopVoiceMode = useCallback(() => {
     if (silenceNudgeTimerRef.current !== null) {
@@ -1579,9 +1704,28 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
     silenceNudgeControllerRef.current?.abort();
     silenceNudgeControllerRef.current = null;
+
+    const hadParkedRetry = pendingAudioRetryRef.current !== null;
+    const hadPollyPlayback = isPollyPlayingRef.current
+      || isAssistantAudioActiveRef.current
+      || audioPlaybackRef.current !== null
+      || Boolean(assistantRevealRef.current?.audioNode);
+
     stopRecording();
     voiceSessionRef.current = false;
     setIsVoiceSessionActive(false);
+
+    if (hadPollyPlayback || hadParkedRetry) {
+      // Muting the mic must mute Polly right away, but the current answer is
+      // not truncated: its remaining words continue as a paced typewriter.
+      releaseAudioPlayback('voice mode deactivated');
+    }
+    if (assistantRevealRef.current) {
+      continueRevealWithoutAudio();
+    } else if (hadPollyPlayback || hadParkedRetry) {
+      // A parked retry is flushed to full text when released; settle the turn.
+      finishAssistantTurn();
+    }
 
     const hasConversation = latestConversationHistoryRef.current.length > 0
       || currentItemIdRef.current !== null
@@ -1593,7 +1737,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     } else if (conversationState.appStatus === 'listening' || conversationState.appStatus === 'connecting') {
       dispatch({ type: 'SET_STATUS', payload: 'idle' });
     }
-  }, [conversationState.appStatus, conversationState.sessionId, dispatch, stopRecording]);
+  }, [conversationState.appStatus, conversationState.sessionId, dispatch, stopRecording, releaseAudioPlayback, continueRevealWithoutAudio, finishAssistantTurn]);
 
   /**
    * Welcome-card choice: explicitly resume today's unfinished exam or abandon
