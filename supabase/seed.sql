@@ -1,0 +1,3 @@
+-- Intentionally empty.
+-- E2E users are created through the Supabase Admin API by scripts/seed-e2e-user.mjs.
+-- Do not put real credentials or production data in this file.

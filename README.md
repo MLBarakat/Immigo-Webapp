@@ -4,7 +4,7 @@ ImmiGO is a React and TypeScript web application for practicing the USCIS N-400 
 
 ## Features
 
-- Email authentication with AWS Amplify Auth.
+- Email authentication with Supabase Auth.
 - Voice practice with browser audio capture, voice activity detection, transcription, and Polly speech playback.
 - Text chat as an alternative to voice practice.
 - Server-authoritative civics answer grading with support for partial answers, confirmations, hints, repeats, and progress questions.
@@ -27,7 +27,7 @@ ImmiGO is a React and TypeScript web application for practicing the USCIS N-400 
 ```text
 Browser
   |
-  | React UI, Amplify Auth, Supabase client, audio/VAD pipeline
+  | React UI, Supabase Auth/session, Supabase client, audio/VAD pipeline
   |
   +--> API Gateway REST API
          |
@@ -39,7 +39,7 @@ Browser
                                       +--> Bedrock / Polly
 ```
 
-The frontend loads the API URL from the generated `amplify_outputs.json` file. `VITE_API_BASE_URL` can override it for local or alternate environments. Lambda resources and API Gateway wiring are defined in `amplify/backend.ts`; each function's runtime configuration is in its domain's `resource.ts`.
+The frontend loads the API URL from the generated `amplify_outputs.json` file when it exists. A fresh clone can build without that generated file, and `VITE_API_BASE_URL` can override the URL for local or alternate environments. Lambda resources and API Gateway wiring are defined in `amplify/backend.ts`; each function's runtime configuration is in its domain's `resource.ts`.
 
 ## Prerequisites
 
@@ -91,10 +91,14 @@ For a local Amplify backend, use the Amplify environment workflow for the target
 | `npm run dev` | Start the Vite development server |
 | `npm run build` | Run the build TypeScript check and create the Vite production build |
 | `npm run lint` | Run ESLint with warnings treated as errors |
+| `npm run typecheck:test` | Type-check source, tests, and function tests |
+| `npm run verify` | Run the full merge gate: governance, lint, typecheck, coverage, build |
+| `npm run verify:governance` | Check the feature registry, skipped tests, and agent docs |
 | `npm test` | Run the Vitest suite once |
 | `npm run test:watch` | Run Vitest in watch mode |
-| `npm run test:coverage` | Run Vitest with coverage |
+| `npm run test:coverage` | Run Vitest with coverage thresholds |
 | `npm run test:e2e` | Run Playwright end-to-end tests |
+| `npm run eval:civics` | Run the civics grading benchmark |
 | `npm run deploy` | Build the frontend and run `amplify push` |
 | `npm run preview` | Serve the production build locally |
 
@@ -104,6 +108,27 @@ Run a focused test file directly when iterating:
 npx vitest run path/to/file.test.ts
 npx playwright test tests/e2e/transcription_flow.spec.ts
 ```
+
+## Governance And The Agent Contract
+
+Every AI coding tool and human contributor follows `AGENTS.md`. It is the canonical contract. Tool-specific files (`CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/`) are thin adapters that point back to it.
+
+The repository protects behavior with a machine-readable feature registry:
+
+- `docs/features.json` maps each active or protected feature to its entry points, invariants, and tests.
+- `docs/FEATURES.md` is the human-readable version.
+- `docs/CONSTITUTION.md` records non-negotiable product and architecture rules.
+- `docs/TESTING.md`, `docs/CHANGE_POLICY.md`, `docs/MIGRATIONS.md`, and `docs/REVIEW_CHECKLIST.md` define the workflow.
+- `docs/adr/` records accepted architecture decisions.
+- `docs/archive/` is historical and must not be followed.
+
+Before a pull request is reviewable:
+
+```bash
+npm run verify
+```
+
+A behavior change also needs a failing test first, an updated feature registry entry, and the change receipt from `AGENTS.md`. Do not delete, skip, or weaken a feature test to make CI pass.
 
 ## Backend Routes
 
@@ -133,7 +158,7 @@ Backend configuration is supplied through Amplify resource definitions and deplo
 ```text
 src/                         React application, services, hooks, contexts, and UI
 amplify/backend.ts           Amplify and API Gateway orchestration
-amplify/auth/                Amplify email authentication
+amplify/auth/                Amplify auth resource (not the user auth provider)
 amplify/storage/             Amplify storage definition
 amplify/functions/           Lambda resources, handlers, and transcript logic
 supabase/migrations/         Database schema and security migrations
@@ -141,6 +166,7 @@ tests/unit/                  Unit tests
 tests/integration/           Supabase and API integration tests
 tests/e2e/                   Playwright browser tests
 public/                      VAD and ONNX runtime assets
+eval/civics/                 Civics grading benchmark and golden set
 eval/stt/                    Speech-to-text evaluation runner and scoring tools
 ```
 
@@ -190,7 +216,7 @@ Before deploying:
 1. Confirm the target AWS and Supabase environment.
 2. Apply pending Supabase migrations.
 3. Confirm Bedrock model access, Polly permissions, and backend environment values.
-4. Run `npm run lint`, `npm test`, and `npm run build`.
+4. Run `npm run verify`.
 5. Deploy with the repository's approved Amplify workflow or `npm run deploy`.
 
 ## Troubleshooting

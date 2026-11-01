@@ -146,11 +146,17 @@ amplifyconfiguration*
 
 # Lock files
 yarn.lock
-.github/copilot-instructions.md
-REMEDIATION_PLAN.md
-REMEDIATION_AUDIT.md
+
+# Test and coverage artifacts
+test-results/
+playwright-report/
+blob-report/
+junit.xml
+
+# External historical source packs and generated assets
 /ImmiGO-SpecKit
 /eval/stt/clips
-/.agents
 /public/models
 /.tmp
+# SpecKit command prompts are external tooling, not project instructions
+/.agents/commands

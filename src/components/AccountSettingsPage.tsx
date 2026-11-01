@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ApiClient } from '../services/apiClient';
 import { ArrowLeft, User, Lock, Share2, AlertTriangle, X, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import amplifyOutputs from '../../amplify_outputs.json';
+import { amplifyOutputs } from '../config/amplifyOutputs';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
 import { getDefaultTimeZoneForState, getTimeZoneLabel, US_STATES, US_TIME_ZONES } from '../utils/usLocation';
@@ -53,8 +53,7 @@ export const AccountSettingsPage = ({ onNavigateBack, isDesktop }: AccountSettin
     setDeleting(true);
     setDeleteError(null);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const dynamicGatewayUrl = (amplifyOutputs as any)?.custom?.apiBaseUrl;
+      const dynamicGatewayUrl = amplifyOutputs?.custom?.apiBaseUrl;
       const client = new ApiClient(session.access_token, dynamicGatewayUrl);
       await client.deleteAccount();
       await logout();

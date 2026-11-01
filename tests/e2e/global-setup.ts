@@ -24,15 +24,24 @@ async function globalSetup(config: FullConfig) {
   try {
     await page.goto(baseURL);
     const emailInput = page.getByTestId('auth-email');
-    if (await emailInput.isVisible({ timeout: 5000 })) {
+    if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
       await emailInput.fill(email);
       await page.getByTestId('auth-password').fill(password);
       await page.getByTestId('auth-submit').click();
-      await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+      await page.getByTestId('auth-email').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {});
     }
+
+    const stillOnAuthPage = await page
+      .getByTestId('auth-email')
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
+    if (stillOnAuthPage) {
+      throw new Error(
+        'E2E global setup could not authenticate. Start local Supabase, apply migrations, and run "npm run seed:e2e" before the suite.',
+      );
+    }
+
     await context.storageState({ path: storagePath });
-  } catch (e) {
-    console.warn('Global setup: could not generate storage state:', e);
   } finally {
     await browser.close();
   }
