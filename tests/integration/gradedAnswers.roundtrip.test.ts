@@ -24,6 +24,7 @@ const jwt = process.env.TEST_USER_JWT;
 const ready = RUN && !!url && !!anon && !!jwt;
 
 // describe.skipIf keeps the suite green locally/CI without credentials.
+// ALLOW_SKIP: live Supabase round-trip; run with RUN_DB_ROUNDTRIP=1 plus SUPABASE_URL, SUPABASE_ANON_KEY, and TEST_USER_JWT. Owner: backend/data.
 describe.skipIf(!ready)('graded_answers round-trip (live Supabase)', () => {
   let db: SupabaseClient;
   const createdIds: string[] = [];

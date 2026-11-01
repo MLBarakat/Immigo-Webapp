@@ -1,9 +1,9 @@
-import amplifyOutputs from '../../amplify_outputs.json';
+import { apiBaseUrl } from '../config/amplifyOutputs';
 import { logger } from '../logger';
 import { markDocTombstone } from '../utils/docTombstone';
 import type { SimulationMode, TestVersion } from '../context/conversationContextTypes';
 
-const API_BASE_URL = (amplifyOutputs as { custom?: { apiBaseUrl?: string; API_URL?: string } }).custom?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_BASE_URL || '';
 // NOTE: no VITE_API_KEY here by design. A key baked into the web bundle is
 // public to anyone who downloads the JS, so it cannot serve as a secret.
 // The backend does not validate X-API-Key; requests authenticate with the

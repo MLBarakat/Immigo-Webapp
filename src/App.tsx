@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { BookOpen, MessageSquare, SlidersHorizontal } from 'lucide-react';
 import { Amplify } from 'aws-amplify';
 import { useTranslation } from 'react-i18next';
-import amplifyOutputs from '../amplify_outputs.json';
+import { amplifyOutputs } from './config/amplifyOutputs';
 
 import { TranscriptionProvider } from './context/TranscriptionContext';
 import { ConversationProvider } from './context/ConversationContext';
@@ -47,7 +47,7 @@ import { APP_VOICES, getDefaultVoiceId, normalizeVoiceId } from './constants/voi
 
 try {
   if (amplifyOutputs) {
-    Amplify.configure(amplifyOutputs);
+    Amplify.configure(amplifyOutputs as Parameters<typeof Amplify.configure>[0]);
     logger.info('AWS Amplify Gen 2 ecosystem parameters successfully bound to runtime execution context.');
   }
 } catch (configError) {
@@ -637,8 +637,7 @@ function AppContent() {
   const apiClientInstance = useMemo(() => {
     if (!accessToken) return null;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const dynamicGatewayUrl = (amplifyOutputs as any)?.custom?.apiBaseUrl;
+      const dynamicGatewayUrl = amplifyOutputs?.custom?.apiBaseUrl;
       return new ApiClient(accessToken, dynamicGatewayUrl);
     } catch (error) {
       logger.error('Client layer initialization crash exception', undefined, { error: String(error) });

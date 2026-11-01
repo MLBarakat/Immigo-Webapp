@@ -1,0 +1,26 @@
+---
+description: ImmiGO canonical engineering contract
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# ImmiGO Cursor Rules
+
+The canonical contract is [`AGENTS.md`](../../AGENTS.md). Read it first. This file is a thin adapter.
+
+## Non-negotiables
+
+- Supabase Auth/Postgres/RLS own auth and user data; Amplify Gen 2 owns backend hosting, API Gateway, Lambda, and storage.
+- Handlers are raw API Gateway handlers. No Express, `serverless-http`, or new framework.
+- Civics grading is server-side.
+- Preserve API contracts, RLS, i18n/RTL, accessibility, and cleanup behavior.
+- Tests exercise production code; never copy production logic into a test.
+- Never delete, skip, or weaken a feature test to make CI pass.
+- No secrets in `VITE_*`, client code, logs, tests, or commits.
+- No new runtime dependency without approval.
+
+## Workflow
+
+Identify the feature ID in `docs/features.json`, read the mapped tests, add a failing test, make the smallest fix, run `npm run verify`, update the registry, and attach the change receipt from `AGENTS.md`.
+
+Stop and ask for protected behavior, schema, auth, API contract, dependency, or broad refactor changes.

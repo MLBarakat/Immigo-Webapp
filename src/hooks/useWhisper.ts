@@ -1,7 +1,8 @@
 import { useEffect, useRef, useCallback, useState, useId } from 'react';
 import { logger } from '../logger';
 import { MicVAD } from '@ricky0123/vad-web';
-import { useTranscription, TranscriptionState } from '../context/TranscriptionContext';
+import { useTranscription } from '../context/TranscriptionContext';
+import type { TranscriptionState } from '../context/transcriptionReducer';
 import { reconcileTranscripts } from '../utils/diffReconciliation';
 import { createMicrophoneStream } from '../utils/audioUtils';
 import { conditionAudio } from '../utils/audioConditioning';

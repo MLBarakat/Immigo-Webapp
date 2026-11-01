@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { TEST_USER_EMAIL, TEST_USER_PASSWORD } from './fixtures/auth';
 
 test.describe('Auth flow', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});

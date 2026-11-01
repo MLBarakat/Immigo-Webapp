@@ -1,0 +1,428 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-10-31",
+  "policy": {
+    "canonicalContract": "AGENTS.md",
+    "constitution": "docs/CONSTITUTION.md",
+    "humanRegistry": "docs/FEATURES.md",
+    "requireTestsForStatuses": ["active", "protected", "experimental"],
+    "protectedChangeRequires": [
+      "spec delta",
+      "failing test",
+      "explicit human approval",
+      "test update in the same change"
+    ]
+  },
+  "features": [
+    {
+      "id": "F-01",
+      "title": "Authentication and session ownership",
+      "status": "protected",
+      "summary": "Supabase Auth, server-validated bearer tokens, RLS-backed ownership, and single-active-device session replacement.",
+      "entryPoints": [
+        "src/context/AuthContext.tsx",
+        "src/context/authContextTypes.ts",
+        "src/hooks/useAuth.ts",
+        "src/components/AuthPage.tsx",
+        "src/supabaseClient.ts"
+      ],
+      "tests": [
+        "src/context/__tests__/AuthContext.test.tsx",
+        "src/components/__tests__/AuthPage.test.tsx",
+        "tests/e2e/auth.spec.ts",
+        "tests/e2e/lifecycle.spec.ts"
+      ],
+      "invariants": [
+        "Supabase Auth is the only user authentication provider.",
+        "Protected backend routes validate the Supabase bearer token server-side.",
+        "Ownership is enforced by RLS and user-scoped queries, not by the client.",
+        "Single-active-device session replacement is intentional.",
+        "Auth state changes must not unmount a live transcription session without cleanup."
+      ]
+    },
+    {
+      "id": "F-02",
+      "title": "Transcription FSM and reconciliation",
+      "status": "protected",
+      "summary": "The browser VAD/Whisper state machine, speculative text handling, Whisper truth-ledger merging, and recovery behavior.",
+      "entryPoints": [
+        "src/context/TranscriptionContext.tsx",
+        "src/context/transcriptionReducer.ts",
+        "src/utils/diffReconciliation.ts",
+        "src/hooks/useWhisper.ts",
+        "src/workers/whisper.worker.ts"
+      ],
+      "tests": [
+        "tests/unit/transcription_state.test.ts",
+        "src/context/__tests__/TranscriptionContext.test.tsx",
+        "tests/unit/diff_reconciliation.test.ts",
+        "src/utils/__tests__/diffReconciliation.test.ts",
+        "tests/e2e/transcription_flow.spec.ts",
+        "tests/e2e/voice-roundtrip.spec.ts"
+      ],
+      "invariants": [
+        "Browser speech is speculative; Whisper is the truth ledger.",
+        "Invalid FSM transitions return the previous state.",
+        "WHISPER_COMPLETE merges browser and Whisper text and returns to LISTENING.",
+        "Recovery is FAILED -> RECOVERING -> LISTENING.",
+        "SESSION_END clears speculative text and the active trace ID.",
+        "Token-level reconciliation must not drop or duplicate committed text."
+      ]
+    },
+    {
+      "id": "F-03",
+      "title": "Audio capture and playback lifecycle",
+      "status": "protected",
+      "summary": "Microphone consent, VAD, audio ring buffer, barge-in, Polly playback, device preferences, and cleanup.",
+      "entryPoints": [
+        "src/hooks/useVAD.ts",
+        "src/hooks/useWhisper.ts",
+        "src/utils/AudioRingBuffer.ts",
+        "src/utils/audioConditioning.ts",
+        "src/utils/audioUtils.ts",
+        "src/utils/bargeIn.ts",
+        "src/utils/micConsent.ts"
+      ],
+      "tests": [
+        "tests/unit/audio_ring_buffer.test.ts",
+        "src/utils/__tests__/audioConditioning.test.ts",
+        "src/utils/__tests__/audioUtils.test.ts",
+        "src/utils/__tests__/bargeIn.test.ts",
+        "src/hooks/__tests__/useWhisper.test.tsx",
+        "tests/e2e/voice-errors.spec.ts",
+        "tests/e2e/voice-permission-denied.spec.ts",
+        "tests/e2e/lifecycle.spec.ts"
+      ],
+      "invariants": [
+        "Microphone access is user-initiated and consent-gated.",
+        "Workers, audio nodes, media streams, timers, and subscriptions are released on teardown.",
+        "Barge-in must not leave two playback paths active.",
+        "Device preferences are applied before the next session starts.",
+        "Long-running audio work stays out of synchronous Lambda requests."
+      ]
+    },
+    {
+      "id": "F-04",
+      "title": "Conversation modes and mock exams",
+      "status": "protected",
+      "summary": "Standard interview, practice, study, and mock-exam flows, including English reading/writing stages and exam review.",
+      "entryPoints": [
+        "src/hooks/useConversation.ts",
+        "src/context/ConversationContext.tsx",
+        "src/services/mockExamService.ts",
+        "amplify/functions/transcript/english-exercises.ts"
+      ],
+      "tests": [
+        "src/hooks/__tests__/useConversation.test.tsx",
+        "src/components/__tests__/ConversationHub.test.tsx",
+        "src/components/__tests__/CenterPanel.test.tsx",
+        "amplify/functions/transcript/__tests__/english-exercises.test.ts",
+        "amplify/functions/transcript/__tests__/mock-exam-routing.test.ts",
+        "tests/e2e/text-roundtrip.spec.ts",
+        "tests/e2e/edge-cases.spec.ts"
+      ],
+      "invariants": [
+        "Mode changes do not lose persisted history or corrupt the active exam run.",
+        "Mock-exam reading/writing stages and stable prompt selections are preserved.",
+        "Mock-exam review is server-generated; the client does not invent scores.",
+        "Standard interview, practice, and study modes preserve their turn semantics."
+      ]
+    },
+    {
+      "id": "F-05",
+      "title": "Civics grading and turn policy",
+      "status": "protected",
+      "summary": "Server-authoritative civics grading, answer matching, confirmations, hints, repeats, progress questions, and question-bank routing.",
+      "entryPoints": [
+        "amplify/functions/transcript/turn/turn-policy.ts",
+        "amplify/functions/transcript/turn/turn-interpreter.ts",
+        "amplify/functions/transcript/turn/matching.ts",
+        "amplify/functions/transcript/turn/bank.ts",
+        "amplify/functions/transcript/handler.ts",
+        "amplify/functions/transcript/civics-bank.2020-128.json",
+        "amplify/functions/transcript/civics-bank.2008-100.json"
+      ],
+      "tests": [
+        "amplify/functions/transcript/turn/__tests__/turn-policy.test.ts",
+        "amplify/functions/transcript/turn/__tests__/turn-policy.flow.test.ts",
+        "amplify/functions/transcript/turn/__tests__/turn-policy.confirmation.test.ts",
+        "amplify/functions/transcript/turn/__tests__/turn-interpreter.test.ts",
+        "amplify/functions/transcript/turn/__tests__/turn-interpreter.transcript-fixes.test.ts",
+        "amplify/functions/transcript/turn/__tests__/turn-interpreter.prompts.test.ts",
+        "amplify/functions/transcript/turn/__tests__/matching.test.ts",
+        "amplify/functions/transcript/turn/__tests__/bank.test.ts",
+        "amplify/functions/transcript/turn/__tests__/welcomeBanner.test.ts",
+        "amplify/functions/transcript/__tests__/ssml.test.ts",
+        "eval/civics/__tests__/civics-eval.test.ts"
+      ],
+      "invariants": [
+        "Civics answers are graded server-side.",
+        "Partial answers, confirmations, hints, repeats, progress questions, and ungraded current-answer questions remain distinct.",
+        "graded_answers is the authoritative record for progress reports.",
+        "A grading change requires an eval run and a reviewed prompt change.",
+        "Question-bank IDs and test-version routing remain stable."
+      ]
+    },
+    {
+      "id": "F-06",
+      "title": "Progress reports and daily learning",
+      "status": "protected",
+      "summary": "Daily progress report aggregation from persisted messages and graded answers, including Bedrock generation and upsert.",
+      "entryPoints": [
+        "amplify/functions/aggregateSession/handler.ts",
+        "src/services/liveProgressService.ts",
+        "src/components/LeftPanel.tsx"
+      ],
+      "tests": [
+        "src/services/__tests__/liveProgressService.test.ts",
+        "amplify/functions/aggregateSession/__tests__/handler.test.ts",
+        "tests/e2e/network-chaos.spec.ts"
+      ],
+      "invariants": [
+        "Reports are generated from persisted messages and authoritative graded answers.",
+        "The Lambda never overrides recorded verdicts with model judgment.",
+        "A session with no messages and no graded answers returns an empty report without calling Bedrock.",
+        "The report includes the educational disclaimer and is upserted by (user_id, date).",
+        "Bedrock or database failures return a typed error, not a fabricated report."
+      ]
+    },
+    {
+      "id": "F-07",
+      "title": "History persistence and pagination",
+      "status": "protected",
+      "summary": "Conversation persistence, ordered history loading, infinite scroll, and transcript download.",
+      "entryPoints": [
+        "src/services/chatPersistenceService.ts",
+        "src/components/ConversationHistory.tsx",
+        "src/hooks/useConversation.ts"
+      ],
+      "tests": [
+        "src/services/__tests__/chatPersistenceService.test.ts",
+        "src/components/__tests__/ConversationHistory.test.tsx",
+        "tests/e2e/infinite-scroll.spec.ts",
+        "tests/e2e/text-roundtrip.spec.ts"
+      ],
+      "invariants": [
+        "Messages remain ordered and are never dropped or duplicated by pagination.",
+        "History is user-scoped and RLS-protected.",
+        "Loading older messages preserves scroll position and the active session.",
+        "Transcript download reflects the persisted conversation."
+      ]
+    },
+    {
+      "id": "F-08",
+      "title": "Settings and preferences",
+      "status": "protected",
+      "summary": "User settings persistence for theme, font size, language, voice, audio devices, notifications, and accessibility.",
+      "entryPoints": [
+        "src/services/userSettingsService.ts",
+        "src/components/ApplicationSettingsModal.tsx",
+        "src/components/FontSizeSelector.tsx",
+        "src/utils/fontSize.ts",
+        "src/utils/theme.ts"
+      ],
+      "tests": [
+        "src/components/__tests__/ApplicationSettingsModal.test.tsx",
+        "src/components/__tests__/FontSizeSelector.test.tsx",
+        "src/utils/__tests__/fontSize.test.ts",
+        "tests/e2e/settings-persistence.spec.ts"
+      ],
+      "invariants": [
+        "Settings persist per user and survive reloads.",
+        "Theme and font-size previews do not commit until saved.",
+        "Language, voice, audio-device, notification, and accessibility preference keys remain stable.",
+        "Invalid or missing settings fall back to documented defaults."
+      ]
+    },
+    {
+      "id": "F-09",
+      "title": "Internationalization and RTL",
+      "status": "protected",
+      "summary": "English, Spanish, French, and Arabic localization, RTL layout, and language persistence.",
+      "entryPoints": [
+        "src/i18n/index.ts",
+        "src/i18n/I18nProvider.tsx",
+        "src/components/LanguageSelector.tsx"
+      ],
+      "tests": [
+        "src/i18n/__tests__/i18n.test.tsx",
+        "src/components/__tests__/RtlOverlays.test.tsx",
+        "src/components/__tests__/PanelHeaders.test.tsx"
+      ],
+      "invariants": [
+        "English, Spanish, French, and Arabic remain supported.",
+        "Arabic renders RTL; layout, icons, and overlays respect direction.",
+        "New user-facing strings live in locale files, not components.",
+        "Language changes persist and do not reset the active session."
+      ]
+    },
+    {
+      "id": "F-10",
+      "title": "Accessibility and responsive layout",
+      "status": "protected",
+      "summary": "Semantic controls, keyboard access, focus management, reduced motion, touch targets, and responsive desktop/mobile layouts.",
+      "entryPoints": [
+        "src/hooks/useFocusTrap.ts",
+        "src/components/MobileMenuOverlay.tsx",
+        "src/components/CenterPanel.tsx",
+        "src/components/Header.tsx",
+        "src/components/Footer.tsx"
+      ],
+      "tests": [
+        "src/components/__tests__/MobileMenuOverlay.test.tsx",
+        "src/components/__tests__/WelcomeModal.test.tsx",
+        "src/components/__tests__/PanelHeaders.test.tsx",
+        "tests/e2e/visual-regression.spec.ts",
+        "tests/e2e/performance.spec.ts"
+      ],
+      "invariants": [
+        "Interactive controls are semantic, labelled, keyboard reachable, and have visible focus.",
+        "Modals trap focus, restore focus on close, and close on Escape where appropriate.",
+        "Layout works at narrow and wide widths without horizontal overflow.",
+        "Reduced-motion preferences are respected.",
+        "Touch targets remain usable on mobile."
+      ]
+    },
+    {
+      "id": "F-11",
+      "title": "Account settings and deletion",
+      "status": "protected",
+      "summary": "Profile and password updates plus authenticated, cascading account deletion.",
+      "entryPoints": [
+        "src/components/AccountSettingsPage.tsx",
+        "amplify/functions/deleteAccount/handler.ts"
+      ],
+      "tests": [
+        "src/components/__tests__/AccountSettingsPage.test.tsx",
+        "amplify/functions/deleteAccount/__tests__/handler.test.ts",
+        "tests/e2e/settings-persistence.spec.ts"
+      ],
+      "invariants": [
+        "Profile and password updates are authenticated and user-scoped.",
+        "Account deletion requires a valid bearer token and deletes only the caller.",
+        "Deletion uses the service-role key server-side only.",
+        "Deletion failures return a safe error and do not claim success.",
+        "Cascade deletion removes user-owned data."
+      ]
+    },
+    {
+      "id": "F-12",
+      "title": "Notifications and feedback",
+      "status": "active",
+      "summary": "User-scoped notifications, read state, notification preferences, and feedback submission.",
+      "entryPoints": [
+        "src/hooks/useNotifications.ts",
+        "src/components/NotificationsPanel.tsx",
+        "src/components/FeedbackModal.tsx",
+        "src/services/feedbackService.ts"
+      ],
+      "tests": [
+        "src/hooks/__tests__/useNotifications.test.tsx",
+        "src/components/__tests__/FeedbackModal.test.tsx"
+      ],
+      "invariants": [
+        "Notifications are user-scoped and respect notification preferences.",
+        "Read/unread and clear-all state remain consistent.",
+        "Feedback submission does not expose transcripts or PII beyond the intended payload.",
+        "Feedback failures are visible to the user, not swallowed."
+      ]
+    },
+    {
+      "id": "F-13",
+      "title": "API contracts and backend functions",
+      "status": "protected",
+      "summary": "The three API Gateway routes, their request/response contracts, auth behavior, and Lambda boundaries.",
+      "entryPoints": [
+        "src/services/apiClient.ts",
+        "amplify/functions/transcript/handler.ts",
+        "amplify/functions/aggregateSession/handler.ts",
+        "amplify/functions/deleteAccount/handler.ts",
+        "amplify/backend.ts"
+      ],
+      "tests": [
+        "src/services/__tests__/apiClient.test.ts",
+        "amplify/functions/aggregateSession/__tests__/handler.test.ts",
+        "amplify/functions/deleteAccount/__tests__/handler.test.ts",
+        "tests/integration/websocket_api.test.ts"
+      ],
+      "invariants": [
+        "Routes remain POST /transcript, POST /complete-session, and POST /delete-account.",
+        "Request/response shapes and status codes are contracts.",
+        "Every protected route validates the bearer token before work.",
+        "Invalid input returns 400; missing/invalid auth returns 401; downstream failure returns 500.",
+        "Backend handlers remain raw API Gateway handlers; no Express layer."
+      ]
+    },
+    {
+      "id": "F-14",
+      "title": "Database schema and RLS",
+      "status": "protected",
+      "summary": "Supabase migrations, RLS policies, constraints, indexes, and generated-type alignment.",
+      "entryPoints": [
+        "supabase/migrations"
+      ],
+      "tests": [
+        "tests/integration/migrations.test.ts",
+        "tests/integration/gradedAnswers.roundtrip.test.ts"
+      ],
+      "invariants": [
+        "Migrations are the only schema source of truth.",
+        "Every user-owned table has RLS enabled and owner-scoped policies.",
+        "Schema changes are expand/contract and include a rollback plan.",
+        "Generated TypeScript types stay in sync with migrations.",
+        "The live round-trip test remains available behind RUN_DB_ROUNDTRIP=1."
+      ]
+    },
+    {
+      "id": "F-15",
+      "title": "Security and privacy boundaries",
+      "status": "protected",
+      "summary": "Secret handling, server-side authorization, input validation, log redaction, and safe error responses.",
+      "entryPoints": [
+        "src/supabaseClient.ts",
+        "src/logger.ts",
+        "amplify/functions/transcript/handler.ts",
+        "amplify/functions/aggregateSession/handler.ts",
+        "amplify/functions/deleteAccount/handler.ts"
+      ],
+      "tests": [
+        "src/services/__tests__/apiClient.test.ts",
+        "src/__tests__/logger.test.ts",
+        "src/context/__tests__/AuthContext.test.tsx",
+        "amplify/functions/deleteAccount/__tests__/handler.test.ts",
+        "tests/integration/migrations.test.ts"
+      ],
+      "invariants": [
+        "Secrets never enter VITE_* variables, client code, logs, tests, or commits.",
+        "Authorization is enforced server-side and by RLS.",
+        "Logs exclude tokens, raw authorization headers, transcripts, and unnecessary PII.",
+        "External input is validated at the boundary.",
+        "Error responses do not leak stack traces or secrets."
+      ]
+    },
+    {
+      "id": "F-16",
+      "title": "Observability and error handling",
+      "status": "active",
+      "summary": "Structured logging, correlation context, error boundaries, typed API errors, and loading/retry states.",
+      "entryPoints": [
+        "src/logger.ts",
+        "src/ErrorBoundary.tsx",
+        "src/services/apiClient.ts",
+        "src/components/AppLoadingOverlay.tsx"
+      ],
+      "tests": [
+        "src/__tests__/logger.test.ts",
+        "src/__tests__/ErrorBoundary.test.tsx",
+        "src/services/__tests__/apiClient.test.ts",
+        "tests/e2e/voice-errors.spec.ts"
+      ],
+      "invariants": [
+        "Errors are logged with operation and correlation context, not raw payloads.",
+        "The error boundary renders a recovery path instead of a blank screen.",
+        "API failures surface a typed error and a user-visible message.",
+        "Loading, empty, error, and retry states remain distinct."
+      ]
+    }
+  ]
+}

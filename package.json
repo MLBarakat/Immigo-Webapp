@@ -16,6 +16,9 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "seed:e2e": "node scripts/seed-e2e-user.mjs",
+    "verify:governance": "node scripts/check-feature-coverage.mjs && node scripts/check-skipped-tests.mjs && node scripts/check-agent-docs.mjs",
+    "verify": "npm run verify:governance && npm run lint && npm run typecheck:test && npm run test:coverage && npm run build",
     "eval:civics": "vitest run eval/civics/__tests__/civics-eval.test.ts"
   },
   "dependencies": {

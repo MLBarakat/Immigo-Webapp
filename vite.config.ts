@@ -64,6 +64,40 @@ export default defineConfig({
       'dist',
       'tests/e2e/**/*',
     ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'html'],
+      reportsDirectory: './coverage',
+      all: true,
+      include: [
+        'src/**/*.{ts,tsx}',
+        'amplify/functions/**/*.ts',
+      ],
+      exclude: [
+        '**/*.d.ts',
+        '**/__tests__/**',
+        '**/*.test.*',
+        '**/*.spec.*',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        'src/types/**',
+        'src/workers/**',
+        'amplify/functions/**/resource.ts',
+        'public/**',
+        'eval/**',
+        'tests/**',
+        '**/*.config.*',
+        'scripts/**',
+      ],
+      thresholds: {
+        // Ratchet baseline measured on 2026-10-31. Raise these as coverage
+        // improves; never lower them without explicit approval.
+        statements: 55,
+        branches: 64,
+        functions: 59,
+        lines: 55,
+      },
+    },
   },
 
   build: {
