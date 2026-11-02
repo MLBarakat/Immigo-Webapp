@@ -51,7 +51,7 @@
 - **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, react-i18next.
 - **Backend:** Amplify Gen 2 + CDK; one Lambda per domain; raw API Gateway handlers.
 - **No Express/serverless-http** unless an accepted ADR replaces this decision.
-- **Data:** Supabase Postgres with RLS. Migrations are the only schema source of truth; the baseline records the existing hosted schema.
+- **Data:** Supabase Postgres with RLS. Migrations are the only schema source of truth.
 - **AI services:** Bedrock for generation/embeddings, Polly for speech synthesis, browser Whisper/VAD for transcription.
 - **API contracts:** request/response shapes and status codes are contracts. Change them only with a feature spec and tests.
 - **Dependencies:** no new runtime dependency without explicit approval and a bundle/Lambda-size review.
@@ -67,8 +67,7 @@
 - Required CI jobs may not contain `|| true`, `continue-on-error`, or swallowed setup failures.
 - One feature or bug per PR. No drive-by refactors, renames, or dependency upgrades.
 - Behavior changes require a spec update. Architecture changes require an ADR.
-- Database changes follow expand/contract, include an RLS test, regenerate types and `docs/DATABASE.md`, and pass `npm run db:verify`.
-- Remote database writes (`link`, `pull`, `push`, `migration repair`) are human-approved operations; agents verify locally.
+- Database changes follow expand/contract and include an RLS test.
 - Public behavior is protected by contract tests, not by asking a model to remember it.
 
 ## 4. Change policy

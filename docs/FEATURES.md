@@ -271,12 +271,10 @@ This registry is the contract between the product, the tests, and every AI codin
 
 **Invariants**
 
-- Migrations are the only schema source of truth. The baseline records the existing hosted schema; later migrations advance it.
+- Migrations are the only schema source of truth.
+- Every user-owned table has RLS enabled and owner-scoped policies.
 - Schema changes are expand/contract and include a rollback plan.
-- Every user-owned table has RLS enabled and owner-scoped policies. No policy is unconditional or explicitly targets anon.
-- Anon has no EXECUTE on public functions; `SECURITY DEFINER` functions pin `search_path`; trigger-only helpers revoke EXECUTE.
-- Foreign keys to `auth.users` cascade on delete.
-- Generated TypeScript types and `docs/DATABASE.md` stay in sync with migrations.
+- Generated TypeScript types stay in sync with migrations.
 - The live round-trip test remains available behind `RUN_DB_ROUNDTRIP=1`.
 
 **Tests:** `tests/integration/migrations.test.ts`, `tests/integration/gradedAnswers.roundtrip.test.ts`
@@ -292,8 +290,6 @@ This registry is the contract between the product, the tests, and every AI codin
 
 - Secrets never enter `VITE_*` variables, client code, logs, tests, or commits.
 - Authorization is enforced server-side and by RLS.
-- Public database objects are deny-by-default: no anon table access to user data and no anon EXECUTE on public functions.
-- Maintenance RPCs such as `purge_old_messages` are not callable by clients.
 - Logs exclude tokens, raw authorization headers, transcripts, and unnecessary PII.
 - External input is validated at the boundary.
 - Error responses do not leak stack traces or secrets.

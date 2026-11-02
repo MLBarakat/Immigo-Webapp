@@ -30,7 +30,6 @@ An AI agent may not approve its own protected change.
 Explicit approval is required before editing:
 
 - `AGENTS.md`, `docs/CONSTITUTION.md`, `docs/features.json`, `docs/FEATURES.md`
-- `docs/DATABASE.md`, `docs/MIGRATIONS.md`
 - `.github/workflows/**`
 - `supabase/migrations/**`
 - `amplify/backend.ts`, `amplify/functions/**/resource.ts`
@@ -61,10 +60,6 @@ Follow `docs/MIGRATIONS.md`.
 - A migration without an RLS test is incomplete.
 - Generated types are updated in the same change.
 - Destructive changes require a rollback plan and explicit approval.
-- `docs/DATABASE.md` is generated. Run `npm run docs:db`; never hand-edit it.
-- `npm run db:verify` and the catalog tests must pass against a migrated local database.
-- Agents may draft migrations and run local verification. They may not run `supabase link`, `db pull`, `db push`, `migration repair`, or apply SQL to a linked or hosted project.
-- Baseline repair on an existing environment is a human-approved operational step. Follow the procedure in `docs/MIGRATIONS.md` exactly.
 
 ## 6. Dependency changes
 

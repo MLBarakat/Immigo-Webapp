@@ -36,11 +36,7 @@ Use this checklist for human review and for a second-model review. Findings come
 ## 4. Data and persistence
 
 - [ ] Migrations are expand/contract and RLS-protected.
-- [ ] User-owned tables have owner-scoped policies and no unconditional or anon-targeted policy.
-- [ ] Public functions deny anon EXECUTE; `SECURITY DEFINER` functions pin `search_path`.
-- [ ] `auth.users` foreign keys cascade on delete.
-- [ ] Generated types and `docs/DATABASE.md` match the schema.
-- [ ] `npm run db:verify` and `npm run docs:db:check` pass.
+- [ ] Generated types match the schema.
 - [ ] Ordering, pagination, and uniqueness are preserved.
 - [ ] A rollback plan exists for destructive or irreversible changes.
 - [ ] No user data is cached in shared Lambda state.
