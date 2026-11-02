@@ -102,7 +102,9 @@
       "conversationAria": "Interview conversation",
       "loadingOlder": "Loading earlier messages…",
       "officer": "Officer",
-      "user": "You"
+      "user": "You",
+      "jumpToLatest": "Jump to latest",
+      "jumpToLatestAria": "Jump to latest message"
     },
     "voice": {
       "region": "Voice Interaction Hub",

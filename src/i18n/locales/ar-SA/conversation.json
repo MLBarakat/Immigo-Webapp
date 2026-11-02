@@ -102,7 +102,9 @@
       "conversationAria": "محادثة المقابلة",
       "loadingOlder": "جارٍ تحميل الرسائل السابقة…",
       "officer": "الموظف",
-      "user": "أنت"
+      "user": "أنت",
+      "jumpToLatest": "الانتقال إلى الأحدث",
+      "jumpToLatestAria": "الانتقال إلى أحدث رسالة"
     },
     "voice": {
       "region": "مركز التفاعل الصوتي",

@@ -102,7 +102,9 @@
       "conversationAria": "Conversation de l’entretien",
       "loadingOlder": "Chargement des anciens messages…",
       "officer": "Agent",
-      "user": "Vous"
+      "user": "Vous",
+      "jumpToLatest": "Aller au dernier",
+      "jumpToLatestAria": "Aller au dernier message"
     },
     "voice": {
       "region": "Centre d’interaction vocale",

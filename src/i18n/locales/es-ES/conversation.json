@@ -102,7 +102,9 @@
       "conversationAria": "Conversación de la entrevista",
       "loadingOlder": "Cargando mensajes anteriores…",
       "officer": "Oficial",
-      "user": "Tú"
+      "user": "Tú",
+      "jumpToLatest": "Ir al último",
+      "jumpToLatestAria": "Ir al último mensaje"
     },
     "voice": {
       "region": "Centro de interacción por voz",

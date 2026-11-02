@@ -160,4 +160,60 @@ describe('ConversationHistory', () => {
     // stays on the same message: 120 + (700 - 500) = 320.
     expect(log.scrollTop).toBe(320);
   });
+
+  it('shows a jump-to-latest button when scrolled away from the bottom', () => {
+    render(
+      <ConversationHistory messages={[message('latest', '2025-01-01T12:01:00.000Z')]} displayUser={displayUser} interimTranscript="" />
+    );
+
+    const log = screen.getByRole('log');
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(log, 'clientHeight', { configurable: true, value: 400 });
+    Object.defineProperty(log, 'scrollTop', { configurable: true, get: () => 50, set: vi.fn() });
+    log.scrollTo = vi.fn();
+
+    // Fire the scroll handler explicitly since jsdom does not fire scroll events
+    // for programmatic scrollTop assignments.
+    fireEvent.scroll(log);
+
+    const button = screen.getByTestId('jump-to-latest');
+    expect(button).toBeTruthy();
+    expect(button?.getAttribute('aria-label')).toBe('Jump to latest message');
+  });
+
+  it('hides the button when scrolled to the bottom threshold', () => {
+    render(
+      <ConversationHistory messages={[message('latest', '2025-01-01T12:01:00.000Z')]} displayUser={displayUser} interimTranscript="" />
+    );
+
+    const log = screen.getByRole('log');
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(log, 'clientHeight', { configurable: true, value: 595 });
+    Object.defineProperty(log, 'scrollTop', { configurable: true, get: () => 0, set: vi.fn() });
+
+    // Re-fire scroll so the new distances are evaluated.
+    fireEvent.scroll(log);
+
+    expect(screen.queryByTestId('jump-to-latest')).toBeFalsy();
+  });
+
+  it('scrolls to latest when the jump-to-latest button is clicked', () => {
+    render(
+      <ConversationHistory messages={[message('latest', '2025-01-01T12:01:00.000Z')]} displayUser={displayUser} interimTranscript="" />
+    );
+
+    const log = screen.getByRole('log');
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(log, 'clientHeight', { configurable: true, value: 400 });
+    Object.defineProperty(log, 'scrollTop', { configurable: true, get: () => 50, set: vi.fn() });
+    log.scrollTo = vi.fn();
+
+    // Trigger scroll so the button becomes visible.
+    fireEvent.scroll(log);
+
+    const button = screen.getByTestId('jump-to-latest');
+    fireEvent.click(button);
+
+    expect(log.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 600, behavior: 'smooth' }));
+  });
 });

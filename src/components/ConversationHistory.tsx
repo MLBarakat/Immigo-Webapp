@@ -1,8 +1,14 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ChevronDown } from 'lucide-react';
 import { Message, MessageAction } from '../context/conversationContextTypes';
 import { DisplayUser } from '../types/user';
 import ImmigoLogo from '../assets/immigo_logo.png';
+
+// Threshold in pixels below the bottom at which we still consider the user
+// "at the latest message". Accounts for sub-pixel rounding and rubber-band
+// overshoot on touch devices.
+const BOTTOM_THRESHOLD = 8;
 
 interface ConversationHistoryProps {
   messages: readonly Message[];
@@ -31,8 +37,23 @@ export function ConversationHistory({
   const previousLastMessageRef = useRef<{ id: string; content: string } | null>(null);
   const previousFirstIdRef = useRef<string | null>(null);
   const previousHeightRef = useRef<number>(0);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const lastMessage = messages.at(-1) ?? null;
   const firstMessage = messages.at(0) ?? null;
+
+  const checkIfAtBottom = useCallback(() => {
+    const viewport = conversationRef.current;
+    if (!viewport) return;
+    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    setIsAtBottom(distanceFromBottom <= BOTTOM_THRESHOLD);
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    const viewport = conversationRef.current;
+    if (!viewport) return;
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+    setIsAtBottom(true);
+  }, []);
 
   useLayoutEffect(() => {
     const viewport = conversationRef.current;
@@ -67,15 +88,17 @@ export function ConversationHistory({
   }, [onLoadOlder, hasMore]);
 
   return (
-    <div
-      ref={conversationRef}
-      className="h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-4 pt-14 pb-5 space-y-5 sm:px-6"
-      role="log"
-      data-testid="conversation-history-log"
-      aria-label={t('workspace.center.conversationAria')}
-      onWheel={onUserScroll}
-      onTouchMove={onUserScroll}
-    >
+    <div className="relative h-full min-h-0">
+      <div
+        ref={conversationRef}
+        className="h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-4 pt-14 pb-5 space-y-5 sm:px-6"
+        role="log"
+        data-testid="conversation-history-log"
+        aria-label={t('workspace.center.conversationAria')}
+        onScroll={checkIfAtBottom}
+        onWheel={onUserScroll}
+        onTouchMove={onUserScroll}
+      >
       {/* Top Sentinel for Infinite Scroll Upward */}
       <div ref={topSentinelRef} className="h-1 w-full">
         {hasMore && <span className="text-xs text-immigo-gray-400 italic flex justify-center py-1">{t('workspace.center.loadingOlder')}</span>}
@@ -192,7 +215,22 @@ export function ConversationHistory({
           </div>
         </div>
       )}
+      </div>
 
+      {/* Jump-to-latest button — appears when scrolled up, disappears at bottom */}
+      {isAtBottom ? null : messages.length > 0 ? (
+        <button
+          type="button"
+          onClick={jumpToLatest}
+          aria-label={t('workspace.center.jumpToLatestAria')}
+          title={t('workspace.center.jumpToLatest')}
+          data-testid="jump-to-latest"
+          className="absolute left-1/2 bottom-4 z-20 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-immigo-gray-200 bg-star-white px-3.5 py-2 text-xs font-semibold text-art-blue-600 shadow-md ring-1 ring-immigo-gray-100 transition-colors hover:bg-art-blue-50 focus:outline-none focus:ring-2 focus:ring-art-blue-500 sm:px-4"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">{t('workspace.center.jumpToLatest')}</span>
+        </button>
+      ) : null}
     </div>
   );
 }
