@@ -25,14 +25,14 @@ export type Database = {
           Tables: {
             "active_user_sessions": {
                   Row: {
-                    "device_id": string,"updated_at": string,"user_id": string
+                    "created_at": string,"device_id": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "device_id": string,"updated_at"?: string,"user_id": string
+                    "created_at"?: string,"device_id": string,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "device_id"?: string,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"device_id"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
@@ -53,28 +53,28 @@ export type Database = {
                   ]
                 },"feedback": {
                   Row: {
-                    "app_version": string | null,"category": string,"created_at": string,"email": string | null,"id": string,"include_diagnostics": boolean,"locale": string | null,"message": string,"status": string,"user_agent": string | null,"user_id": string
+                    "app_version": string | null,"category": string,"created_at": string,"email": string | null,"id": string,"include_diagnostics": boolean,"locale": string | null,"message": string,"status": string,"updated_at": string,"user_agent": string | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "app_version"?: string | null,"category": string,"created_at"?: string,"email"?: string | null,"id"?: string,"include_diagnostics"?: boolean,"locale"?: string | null,"message": string,"status"?: string,"user_agent"?: string | null,"user_id": string
+                    "app_version"?: string | null,"category": string,"created_at"?: string,"email"?: string | null,"id"?: string,"include_diagnostics"?: boolean,"locale"?: string | null,"message": string,"status"?: string,"updated_at"?: string,"user_agent"?: string | null,"user_id": string
                   }
                   Update: {
-                    "app_version"?: string | null,"category"?: string,"created_at"?: string,"email"?: string | null,"id"?: string,"include_diagnostics"?: boolean,"locale"?: string | null,"message"?: string,"status"?: string,"user_agent"?: string | null,"user_id"?: string
+                    "app_version"?: string | null,"category"?: string,"created_at"?: string,"email"?: string | null,"id"?: string,"include_diagnostics"?: boolean,"locale"?: string | null,"message"?: string,"status"?: string,"updated_at"?: string,"user_agent"?: string | null,"user_id"?: string
                   }
                   Relationships: [
                     
                   ]
                 },"graded_answers": {
                   Row: {
-                    "confidence": number | null,"created_at": string,"id": string,"item_id": string,"session_id": string | null,"simulation_mode": string,"test_version": string,"used_hint": boolean,"user_id": string,"verdict": string
+                    "confidence": number | null,"created_at": string,"id": string,"item_id": string,"session_id": string | null,"simulation_mode": string,"test_version": string,"updated_at": string,"used_hint": boolean,"user_id": string,"verdict": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "confidence"?: number | null,"created_at"?: string,"id"?: string,"item_id": string,"session_id"?: string | null,"simulation_mode"?: string,"test_version"?: string,"used_hint"?: boolean,"user_id": string,"verdict": string
+                    "confidence"?: number | null,"created_at"?: string,"id"?: string,"item_id": string,"session_id"?: string | null,"simulation_mode"?: string,"test_version"?: string,"updated_at"?: string,"used_hint"?: boolean,"user_id": string,"verdict": string
                   }
                   Update: {
-                    "confidence"?: number | null,"created_at"?: string,"id"?: string,"item_id"?: string,"session_id"?: string | null,"simulation_mode"?: string,"test_version"?: string,"used_hint"?: boolean,"user_id"?: string,"verdict"?: string
+                    "confidence"?: number | null,"created_at"?: string,"id"?: string,"item_id"?: string,"session_id"?: string | null,"simulation_mode"?: string,"test_version"?: string,"updated_at"?: string,"used_hint"?: boolean,"user_id"?: string,"verdict"?: string
                   }
                   Relationships: [
                     {
@@ -87,14 +87,14 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
-                    "content": string,"created_at": string,"id": string,"role": string,"session_id": string,"user_id": string
+                    "content": string,"created_at": string,"id": string,"role": string,"session_id": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "content": string,"created_at"?: string,"id"?: string,"role": string,"session_id": string,"user_id": string
+                    "content": string,"created_at"?: string,"id"?: string,"role": string,"session_id": string,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "content"?: string,"created_at"?: string,"id"?: string,"role"?: string,"session_id"?: string,"user_id"?: string
+                    "content"?: string,"created_at"?: string,"id"?: string,"role"?: string,"session_id"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -107,14 +107,14 @@ isOneToOne: false
                   ]
                 },"mock_exam_answers": {
                   Row: {
-                    "created_at": string,"exam_id": string,"id": string,"item_id": string,"user_id": string,"verdict": string
+                    "created_at": string,"exam_id": string,"id": string,"item_id": string,"updated_at": string,"user_id": string,"verdict": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"exam_id": string,"id"?: string,"item_id": string,"user_id": string,"verdict": string
+                    "created_at"?: string,"exam_id": string,"id"?: string,"item_id": string,"updated_at"?: string,"user_id": string,"verdict": string
                   }
                   Update: {
-                    "created_at"?: string,"exam_id"?: string,"id"?: string,"item_id"?: string,"user_id"?: string,"verdict"?: string
+                    "created_at"?: string,"exam_id"?: string,"id"?: string,"item_id"?: string,"updated_at"?: string,"user_id"?: string,"verdict"?: string
                   }
                   Relationships: [
                     {
@@ -127,14 +127,14 @@ isOneToOne: false
                   ]
                 },"mock_exam_english_answers": {
                   Row: {
-                    "created_at": string,"exam_id": string,"feedback": string,"id": string,"prompt_id": string,"prompt_index": number,"request_id": string,"response_text": string,"section": string,"user_id": string,"verdict": string
+                    "created_at": string,"exam_id": string,"feedback": string,"id": string,"prompt_id": string,"prompt_index": number,"request_id": string,"response_text": string,"section": string,"updated_at": string,"user_id": string,"verdict": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"exam_id": string,"feedback": string,"id"?: string,"prompt_id": string,"prompt_index": number,"request_id": string,"response_text": string,"section": string,"user_id": string,"verdict": string
+                    "created_at"?: string,"exam_id": string,"feedback": string,"id"?: string,"prompt_id": string,"prompt_index": number,"request_id": string,"response_text": string,"section": string,"updated_at"?: string,"user_id": string,"verdict": string
                   }
                   Update: {
-                    "created_at"?: string,"exam_id"?: string,"feedback"?: string,"id"?: string,"prompt_id"?: string,"prompt_index"?: number,"request_id"?: string,"response_text"?: string,"section"?: string,"user_id"?: string,"verdict"?: string
+                    "created_at"?: string,"exam_id"?: string,"feedback"?: string,"id"?: string,"prompt_id"?: string,"prompt_index"?: number,"request_id"?: string,"response_text"?: string,"section"?: string,"updated_at"?: string,"user_id"?: string,"verdict"?: string
                   }
                   Relationships: [
                     {
@@ -167,28 +167,28 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "created_at": string | null,"full_name": string | null,"id": string,"language": string | null,"updated_at": string | null
+                    "created_at": string,"full_name": string | null,"id": string,"language": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string | null,"full_name"?: string | null,"id": string,"language"?: string | null,"updated_at"?: string | null
+                    "created_at"?: string,"full_name"?: string | null,"id": string,"language"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string | null,"full_name"?: string | null,"id"?: string,"language"?: string | null,"updated_at"?: string | null
+                    "created_at"?: string,"full_name"?: string | null,"id"?: string,"language"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     
                   ]
                 },"session_reports": {
                   Row: {
-                    "analytics_data": Json | null,"created_at": string | null,"id": string,"session_id": string | null,"user_id": string | null
+                    "analytics_data": Json | null,"created_at": string,"id": string,"session_id": string | null,"updated_at": string,"user_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "analytics_data"?: Json | null,"created_at"?: string | null,"id"?: string,"session_id"?: string | null,"user_id"?: string | null
+                    "analytics_data"?: Json | null,"created_at"?: string,"id"?: string,"session_id"?: string | null,"updated_at"?: string,"user_id"?: string | null
                   }
                   Update: {
-                    "analytics_data"?: Json | null,"created_at"?: string | null,"id"?: string,"session_id"?: string | null,"user_id"?: string | null
+                    "analytics_data"?: Json | null,"created_at"?: string,"id"?: string,"session_id"?: string | null,"updated_at"?: string,"user_id"?: string | null
                   }
                   Relationships: [
                     
@@ -209,14 +209,14 @@ isOneToOne: false
                   ]
                 },"user_settings": {
                   Row: {
-                    "account_timezone": string | null,"ai_voice_id": string,"barge_in": string,"barge_in_sensitivity": number,"created_at": string | null,"font_size": string,"has_seen_welcome": boolean | null,"input_device_id": string | null,"language": string,"live_feedback_enabled": boolean,"location_state": string | null,"mic_consent_version": string | null,"mic_mode": string,"notifications_enabled": boolean,"output_device_id": string | null,"progress_report_frequency": string,"reminder_time": string,"theme": string,"updated_at": string | null,"user_id": string
+                    "account_timezone": string | null,"ai_voice_id": string,"barge_in": string,"barge_in_sensitivity": number,"created_at": string,"font_size": string,"has_seen_welcome": boolean | null,"input_device_id": string | null,"language": string,"live_feedback_enabled": boolean,"location_state": string | null,"mic_consent_version": string | null,"mic_mode": string,"notifications_enabled": boolean,"output_device_id": string | null,"progress_report_frequency": string,"reminder_time": string,"theme": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "account_timezone"?: string | null,"ai_voice_id"?: string,"barge_in"?: string,"barge_in_sensitivity"?: number,"created_at"?: string | null,"font_size"?: string,"has_seen_welcome"?: boolean | null,"input_device_id"?: string | null,"language"?: string,"live_feedback_enabled"?: boolean,"location_state"?: string | null,"mic_consent_version"?: string | null,"mic_mode"?: string,"notifications_enabled"?: boolean,"output_device_id"?: string | null,"progress_report_frequency"?: string,"reminder_time"?: string,"theme"?: string,"updated_at"?: string | null,"user_id": string
+                    "account_timezone"?: string | null,"ai_voice_id"?: string,"barge_in"?: string,"barge_in_sensitivity"?: number,"created_at"?: string,"font_size"?: string,"has_seen_welcome"?: boolean | null,"input_device_id"?: string | null,"language"?: string,"live_feedback_enabled"?: boolean,"location_state"?: string | null,"mic_consent_version"?: string | null,"mic_mode"?: string,"notifications_enabled"?: boolean,"output_device_id"?: string | null,"progress_report_frequency"?: string,"reminder_time"?: string,"theme"?: string,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "account_timezone"?: string | null,"ai_voice_id"?: string,"barge_in"?: string,"barge_in_sensitivity"?: number,"created_at"?: string | null,"font_size"?: string,"has_seen_welcome"?: boolean | null,"input_device_id"?: string | null,"language"?: string,"live_feedback_enabled"?: boolean,"location_state"?: string | null,"mic_consent_version"?: string | null,"mic_mode"?: string,"notifications_enabled"?: boolean,"output_device_id"?: string | null,"progress_report_frequency"?: string,"reminder_time"?: string,"theme"?: string,"updated_at"?: string | null,"user_id"?: string
+                    "account_timezone"?: string | null,"ai_voice_id"?: string,"barge_in"?: string,"barge_in_sensitivity"?: number,"created_at"?: string,"font_size"?: string,"has_seen_welcome"?: boolean | null,"input_device_id"?: string | null,"language"?: string,"live_feedback_enabled"?: boolean,"location_state"?: string | null,"mic_consent_version"?: string | null,"mic_mode"?: string,"notifications_enabled"?: boolean,"output_device_id"?: string | null,"progress_report_frequency"?: string,"reminder_time"?: string,"theme"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     

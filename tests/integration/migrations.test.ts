@@ -217,6 +217,68 @@ describe('supabase schema and RLS', () => {
     }
   });
 
+  // `sessions` is intentionally excluded: it models a learning window with
+  // started_at/ended_at/local_date and has no meaningful created_at/updated_at.
+  it('gives every public table except sessions uniform created_at/updated_at columns', async () => {
+    const detail = await query<{
+      relname: string;
+      attname: string;
+      attnotnull: boolean;
+      default_expr: string | null;
+    }>(`
+      select c.relname, a.attname, a.attnotnull,
+             pg_get_expr(d.adbin, d.adrelid) as default_expr
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      join pg_attribute a on a.attrelid = c.oid
+        and a.attname in ('created_at', 'updated_at')
+        and a.attnum > 0 and not a.attisdropped
+      left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+      where n.nspname = 'public' and c.relkind in ('r', 'p')
+      order by c.relname, a.attname
+    `);
+
+    const tables = await query<{ relname: string }>(`
+      select c.relname
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind in ('r', 'p')
+        and c.relname <> 'sessions'
+      order by c.relname
+    `);
+
+    // Any BEFORE UPDATE row trigger counts as updated_at maintenance.
+    const triggerRows = await query<{ relname: string; tgname: string }>(`
+      select c.relname, t.tgname
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and not t.tgisinternal
+        and (t.tgtype::int & 2) = 2   -- BEFORE
+        and (t.tgtype::int & 16) = 16 -- UPDATE
+    `);
+
+    for (const table of tables) {
+      const columns = detail.filter((column) => column.relname === table.relname);
+      expect(
+        columns.map((column) => column.attname).sort(),
+        `${table.relname} must have both created_at and updated_at`,
+      ).toEqual(['created_at', 'updated_at']);
+      for (const column of columns) {
+        expect(column.attnotnull, `${table.relname}.${column.attname} must be NOT NULL`).toBe(true);
+        expect(column.default_expr, `${table.relname}.${column.attname} must default to now()`).toBe(
+          'now()',
+        );
+      }
+
+      expect(
+        triggerRows.filter((trigger) => trigger.relname === table.relname).length,
+        `${table.relname} must maintain updated_at on update`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
   it('keeps the maintenance purge RPC out of client roles', async () => {
     const rows = await query<{
       anon_can_execute: boolean;

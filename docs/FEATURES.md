@@ -276,6 +276,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - Every user-owned table has RLS enabled and owner-scoped policies. No policy is unconditional or explicitly targets anon.
 - Anon has no EXECUTE on public functions; `SECURITY DEFINER` functions pin `search_path`; trigger-only helpers revoke EXECUTE.
 - Foreign keys to `auth.users` cascade on delete.
+- Every public table except `sessions` keeps NOT NULL `created_at`/`updated_at` with an on-update trigger.
 - Generated TypeScript types and `docs/DATABASE.md` stay in sync with migrations.
 - The live round-trip test remains available behind `RUN_DB_ROUNDTRIP=1`.
 

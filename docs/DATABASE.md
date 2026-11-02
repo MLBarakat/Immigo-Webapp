@@ -9,6 +9,7 @@
 | --- | --- |
 | 20261101133556 | remote_schema |
 | 20261102120000 | security_hardening |
+| 20261102130000 | uniform_timestamps |
 
 ## Tables
 
@@ -21,6 +22,7 @@ Row level security: **enabled**
 | `user_id` | `uuid` | no |  |
 | `device_id` | `uuid` | no |  |
 | `updated_at` | `timestamp with time zone` | no | `now()` |
+| `created_at` | `timestamp with time zone` | no | `now()` |
 
 Policies:
 
@@ -86,6 +88,7 @@ Row level security: **enabled**
 | `include_diagnostics` | `boolean` | no | `true` |
 | `status` | `text` | no | `'new'::text` |
 | `created_at` | `timestamp with time zone` | no | `now()` |
+| `updated_at` | `timestamp with time zone` | no | `now()` |
 
 Policies:
 
@@ -120,6 +123,7 @@ Row level security: **enabled**
 | `test_version` | `text` | no | `'2020'::text` |
 | `confidence` | `smallint` | yes |  |
 | `used_hint` | `boolean` | no | `false` |
+| `updated_at` | `timestamp with time zone` | no | `now()` |
 
 Policies:
 
@@ -151,6 +155,7 @@ Row level security: **enabled**
 | `role` | `text` | no |  |
 | `content` | `text` | no |  |
 | `created_at` | `timestamp with time zone` | no | `now()` |
+| `updated_at` | `timestamp with time zone` | no | `now()` |
 
 Policies:
 
@@ -181,6 +186,7 @@ Row level security: **enabled**
 | `item_id` | `text` | no |  |
 | `verdict` | `text` | no |  |
 | `created_at` | `timestamp with time zone` | no | `now()` |
+| `updated_at` | `timestamp with time zone` | no | `now()` |
 
 Policies:
 
@@ -215,6 +221,7 @@ Row level security: **enabled**
 | `verdict` | `text` | no |  |
 | `feedback` | `text` | no |  |
 | `created_at` | `timestamp with time zone` | no | `now()` |
+| `updated_at` | `timestamp with time zone` | no | `now()` |
 
 Policies:
 
@@ -285,8 +292,8 @@ Row level security: **enabled**
 | `id` | `uuid` | no |  |
 | `full_name` | `text` | yes |  |
 | `language` | `character varying` | yes |  |
-| `created_at` | `timestamp with time zone` | yes |  |
-| `updated_at` | `timestamp with time zone` | yes |  |
+| `created_at` | `timestamp with time zone` | no | `now()` |
+| `updated_at` | `timestamp with time zone` | no | `now()` |
 
 Policies:
 
@@ -313,8 +320,9 @@ Row level security: **enabled**
 | `id` | `uuid` | no | `gen_random_uuid()` |
 | `user_id` | `uuid` | yes |  |
 | `session_id` | `uuid` | yes |  |
-| `created_at` | `timestamp with time zone` | yes | `now()` |
+| `created_at` | `timestamp with time zone` | no | `now()` |
 | `analytics_data` | `jsonb` | yes |  |
+| `updated_at` | `timestamp with time zone` | no | `now()` |
 
 Policies:
 
@@ -383,8 +391,8 @@ Row level security: **enabled**
 | `barge_in_sensitivity` | `double precision` | no | `0.5` |
 | `progress_report_frequency` | `text` | no | `'per_session'::text` |
 | `font_size` | `text` | no | `'default'::text` |
-| `updated_at` | `timestamp with time zone` | yes | `now()` |
-| `created_at` | `timestamp with time zone` | yes |  |
+| `updated_at` | `timestamp with time zone` | no | `now()` |
+| `created_at` | `timestamp with time zone` | no | `now()` |
 | `has_seen_welcome` | `boolean` | yes | `false` |
 | `barge_in` | `text` | no | `'balanced'::text` |
 | `language` | `text` | no | `'en-US'::text` |
