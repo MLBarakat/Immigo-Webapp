@@ -158,5 +158,3 @@ junit.xml
 /eval/stt/clips
 /public/models
 /.tmp
-# SpecKit command prompts are external tooling, not project instructions
-/.agents/commands

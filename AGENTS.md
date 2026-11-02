@@ -13,8 +13,9 @@
 3. `docs/FEATURES.md` and `docs/features.json` — the protected feature registry.
 4. The spec and test map for the feature ID you are changing.
 5. `docs/ARCHITECTURE.md` and the relevant ADR.
-6. The tests that protect the behavior.
-7. The code.
+6. `docs/DATABASE.md` — generated tables, policies, functions, and grants.
+7. The tests that protect the behavior.
+8. The code.
 
 ## Project snapshot
 
@@ -31,6 +32,8 @@
 
 - Auth is server-authoritative. Protected routes validate the Supabase bearer token; never trust the client.
 - Supabase RLS is the data security boundary. Schema changes need a migration, an RLS test, and generated-type updates.
+- Database objects are deny-by-default: RLS on every user-owned table, owner-scoped policies, no anon EXECUTE, pinned `search_path` on `SECURITY DEFINER` functions, and cascading `auth.users` foreign keys.
+- `docs/DATABASE.md` is generated from a migrated local database. Never hand-edit it.
 - Secrets never enter `VITE_*` variables, client code, logs, tests, or commits.
 - Preserve API request/response shapes unless the feature spec explicitly changes them.
 - Civics grading is server-side. The client never decides correctness.
@@ -49,13 +52,23 @@
 
 ## Commands
 
-- `npm run verify` — governance checks, lint, typecheck, unit/integration with coverage, build.
+- `npm run verify` — governance, database, docs, lint, typecheck, unit/integration with coverage, and build. Requires a migrated local Supabase database.
 - `npm run verify:governance` — feature registry, skipped-test, and agent-doc checks.
+- `npm run db:verify` — catalog checks for RLS, owner policies, function grants, `search_path`, and cascades.
+- `npm run docs:db` — regenerate `docs/DATABASE.md` from the local database.
+- `npm run docs:db:check` — fail when `docs/DATABASE.md` is stale.
 - `npm run test:e2e` — full Playwright suite.
 - `npm run eval:civics` — civics grading benchmark.
 - `npx vitest run path/to/file.test.ts` — focused test while iterating.
 
 Do not invent commands. If one is missing, ask.
+
+## Database governance
+
+- Local commands only: `npx supabase start`, `npx supabase db reset`, `npm run db:verify`, and `npm run docs:db`.
+- An agent may read the catalog, write a migration, and run local verification.
+- An agent must not run `supabase link`, `db pull`, `db push`, `migration repair`, or apply SQL to a linked or hosted project. Those are human-approved operational steps.
+- Existing environments are cut over with the baseline repair procedure in `docs/MIGRATIONS.md`. Do not improvise a repair.
 
 ## Never
 
@@ -64,6 +77,8 @@ Do not invent commands. If one is missing, ask.
 - Change a test expectation without a spec/behavior change.
 - Do a drive-by refactor, rename, or dependency upgrade.
 - Touch auth, schema, API contracts, CI, or governance files without explicit approval.
+- Run `supabase link`, `db pull`, `db push`, or `migration repair` against a linked or hosted project.
+- Edit an applied migration. Add a new one.
 - Use `any`, `@ts-ignore`, `eslint-disable`, or `|| true` to bypass a failure.
 - Push directly to `main` or `dev`.
 
@@ -72,6 +87,7 @@ Do not invent commands. If one is missing, ask.
 - A protected behavior or feature status would change.
 - A test fails and you cannot explain why.
 - You need a new dependency, schema change, auth change, or API contract change.
+- A migration would touch a linked or hosted project, or the baseline repair is required.
 - The repo and the docs disagree.
 - The task requires deleting a feature or a protected test.
 - The task requires a broad refactor without characterization tests.
@@ -83,6 +99,7 @@ Do not invent commands. If one is missing, ask.
 - `npm run verify` passes.
 - No new skipped tests, no new `any`, no secrets.
 - Feature registry/spec updated.
+- Schema changes include generated types and regenerated `docs/DATABASE.md`.
 - Change receipt attached.
 - Documentation updated when behavior or architecture changed.
 
@@ -104,6 +121,7 @@ Docs updated:
 
 - `docs/CONSTITUTION.md` — invariants and governance.
 - `docs/ARCHITECTURE.md` — actual runtime architecture and boundaries.
+- `docs/DATABASE.md` — generated database reference.
 - `docs/FEATURES.md` — human-readable feature registry.
 - `docs/features.json` — machine-readable registry used by CI.
 - `docs/TESTING.md` — test levels, rules, and coverage policy.

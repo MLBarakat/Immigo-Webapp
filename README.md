@@ -45,6 +45,7 @@ The frontend loads the API URL from the generated `amplify_outputs.json` file wh
 
 - Node.js 20 or newer
 - npm
+- Docker and the Supabase CLI for local database verification
 - An AWS account and Amplify CLI access
 - A Supabase project with the repository migrations applied
 - Bedrock model access for the configured Claude and Titan models
@@ -92,12 +93,16 @@ For a local Amplify backend, use the Amplify environment workflow for the target
 | `npm run build` | Run the build TypeScript check and create the Vite production build |
 | `npm run lint` | Run ESLint with warnings treated as errors |
 | `npm run typecheck:test` | Type-check source, tests, and function tests |
-| `npm run verify` | Run the full merge gate: governance, lint, typecheck, coverage, build |
+| `npm run verify` | Run the full merge gate: governance, database, docs, lint, typecheck, coverage, build |
 | `npm run verify:governance` | Check the feature registry, skipped tests, and agent docs |
+| `npm run db:verify` | Check RLS, policy, function-grant, search-path, and cascade invariants |
+| `npm run docs:db` | Regenerate `docs/DATABASE.md` from the local database |
+| `npm run docs:db:check` | Fail when `docs/DATABASE.md` is stale |
 | `npm test` | Run the Vitest suite once |
 | `npm run test:watch` | Run Vitest in watch mode |
 | `npm run test:coverage` | Run Vitest with coverage thresholds |
 | `npm run test:e2e` | Run Playwright end-to-end tests |
+| `npm run seed:e2e` | Create or refresh the local E2E Supabase user |
 | `npm run eval:civics` | Run the civics grading benchmark |
 | `npm run deploy` | Build the frontend and run `amplify push` |
 | `npm run preview` | Serve the production build locally |
@@ -109,6 +114,43 @@ npx vitest run path/to/file.test.ts
 npx playwright test tests/e2e/transcription_flow.spec.ts
 ```
 
+For local end-to-end tests, put the local Supabase URL and keys in `.env.e2e`
+(copy them from `npx supabase status -o env`), then run these commands from the
+repository root:
+
+```bash
+npx supabase start
+npx supabase db reset
+npm run seed:e2e
+npx playwright install chromium
+npm run test:e2e
+```
+
+`playwright.config.ts` loads `.env.e2e` before starting Vite, so the dev server
+uses the same local project as the tests. `seed:e2e` and Playwright both refuse
+a non-local Supabase URL unless `E2E_ALLOW_REMOTE=true` is set deliberately.
+Variables already set in the shell take precedence over both env files.
+
+## Database
+
+`supabase/migrations/` is the only schema source of truth. `20261101133556_remote_schema.sql` is a baseline that records the existing hosted schema; later migrations advance it.
+
+Local database workflow:
+
+```bash
+npx supabase start
+npx supabase db reset
+npm run db:verify
+npm run docs:db
+npm run verify
+```
+
+`supabase db reset` applies every migration to a fresh local database. Never run it against a hosted project.
+
+An existing hosted or staging project that predates the baseline needs a one-time migration-history repair, not a schema replay. Follow `docs/MIGRATIONS.md` exactly.
+
+`docs/DATABASE.md` is generated from the migrated local database. Do not edit it by hand; run `npm run docs:db` after a schema change. CI starts a local Supabase stack and runs `supabase db reset` before `npm run verify`.
+
 ## Governance And The Agent Contract
 
 Every AI coding tool and human contributor follows `AGENTS.md`. It is the canonical contract. Tool-specific files (`CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/`) are thin adapters that point back to it.
@@ -118,7 +160,7 @@ The repository protects behavior with a machine-readable feature registry:
 - `docs/features.json` maps each active or protected feature to its entry points, invariants, and tests.
 - `docs/FEATURES.md` is the human-readable version.
 - `docs/CONSTITUTION.md` records non-negotiable product and architecture rules.
-- `docs/TESTING.md`, `docs/CHANGE_POLICY.md`, `docs/MIGRATIONS.md`, and `docs/REVIEW_CHECKLIST.md` define the workflow.
+- `docs/TESTING.md`, `docs/CHANGE_POLICY.md`, `docs/MIGRATIONS.md`, `docs/REVIEW_CHECKLIST.md`, and `docs/DATABASE.md` define the workflow.
 - `docs/adr/` records accepted architecture decisions.
 - `docs/archive/` is historical and must not be followed.
 

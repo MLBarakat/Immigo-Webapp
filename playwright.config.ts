@@ -51,9 +51,6 @@ if (supabaseIsLocal && projectRef) {
   );
 }
 
-const baseURL = process.env.E2E_BASE_URL || 'http://localhost:3000';
-const useExternalServer = Boolean(process.env.E2E_BASE_URL);
-
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
