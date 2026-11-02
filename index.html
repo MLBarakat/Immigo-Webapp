@@ -11,7 +11,7 @@
       default-src 'self';
       script-src 'self' 'wasm-unsafe-eval' blob:;
       worker-src 'self' blob:;
-      connect-src 'self' wss: https://*.amazonaws.com https://*.supabase.co;
+      connect-src 'self' wss: ws://127.0.0.1:54321 ws://localhost:54321 http://127.0.0.1:54321 http://localhost:54321 https://*.amazonaws.com https://*.supabase.co;
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src 'self' data: https://fonts.gstatic.com;
       img-src 'self' data: blob:;

@@ -1,67 +1,253 @@
 // @vitest-environment node
 //
-// A zero-infrastructure guard: it reads supabase/migrations and fails if the
-// schema the code depends on isn't defined. This is exactly the check that would
-// have caught the missing `graded_answers` migration in a prior iteration —
-// the handler and aggregateSession both read/write that table, but nothing
-// compile-checks a table that only exists in SQL.
-import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+// Behavioral schema guard. It reads the live local database after migrations
+// have been applied, so it checks what PostgreSQL actually enforces instead of
+// matching the text of a particular migration file.
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Client, type QueryResultRow } from 'pg';
 
-const MIGRATIONS_DIR = resolve(__dirname, '../../supabase/migrations');
+const connectionString =
+  process.env.SUPABASE_DB_URL ||
+  process.env.DATABASE_URL ||
+  'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 
-function allMigrationSql(): string {
-  return readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith('.sql'))
-    .map((f) => readFileSync(resolve(MIGRATIONS_DIR, f), 'utf-8'))
-    .join('\n');
+let client: Client;
+
+beforeAll(async () => {
+  client = new Client({ connectionString });
+  await client.connect();
+}, 30000);
+
+afterAll(async () => {
+  await client.end();
+});
+
+async function query<T extends QueryResultRow>(
+  sql: string,
+  params: unknown[] = [],
+): Promise<T[]> {
+  const result = await client.query<T>(sql, params);
+  return result.rows;
 }
 
-describe('supabase migrations define the schema the code relies on', () => {
-  const sql = allMigrationSql().toLowerCase();
+describe('supabase schema and RLS', () => {
+  it('enables row level security on every public table', async () => {
+    const rows = await query<{ relname: string }>(`
+      select c.relname
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and c.relkind in ('r', 'p')
+        and not c.relrowsecurity
+      order by 1
+    `);
 
-  it('defines the graded_answers table', () => {
-    expect(sql).toMatch(/create table[\s\S]*graded_answers/);
+    expect(rows.map((row) => row.relname)).toEqual([]);
   });
 
-  it('graded_answers has RLS enabled', () => {
-    expect(sql).toMatch(/alter table\s+graded_answers\s+enable row level security/);
+  it('defines graded_answers with an owner-scoped policy', async () => {
+    const tables = await query<{ exists: boolean }>(`
+      select to_regclass('public.graded_answers') is not null as exists
+    `);
+    expect(tables[0]?.exists).toBe(true);
+
+    const policies = await query<{ qual: string | null }>(`
+      select qual
+      from pg_policies
+      where schemaname = 'public' and tablename = 'graded_answers' and cmd in ('SELECT', 'ALL')
+    `);
+    expect(policies.some((policy) => policy.qual?.includes('auth.uid()'))).toBe(true);
   });
 
-  it('graded_answers has an owner-scoped policy', () => {
-    // auth.uid() = user_id somewhere in a policy on graded_answers
-    expect(sql).toContain('auth.uid() = user_id');
+  it('restricts active_user_sessions to the authenticated owner', async () => {
+    const policies = await query<{
+      cmd: string;
+      qual: string | null;
+      with_check: string | null;
+    }>(`
+      select cmd, qual, with_check
+      from pg_policies
+      where schemaname = 'public' and tablename = 'active_user_sessions'
+    `);
+
+    expect(policies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cmd: 'SELECT',
+          qual: expect.stringContaining('auth.uid()'),
+        }),
+        expect.objectContaining({
+          cmd: 'INSERT',
+          with_check: expect.stringContaining('auth.uid()'),
+        }),
+        expect.objectContaining({
+          cmd: 'UPDATE',
+          qual: expect.stringContaining('auth.uid()'),
+          with_check: expect.stringContaining('auth.uid()'),
+        }),
+      ]),
+    );
   });
 
-  it('still defines the pre-existing sessions and messages tables', () => {
-    expect(sql).toMatch(/create table[\s\S]*sessions/);
-    expect(sql).toMatch(/create table[\s\S]*messages/);
+  it('persists mock exam English columns and request uniqueness', async () => {
+    const columns = await query<{ column_name: string }>(`
+      select column_name
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'mock_exams'
+        and column_name in ('english_stage', 'reading_prompt_ids', 'writing_prompt_ids')
+    `);
+    expect(columns.map((column) => column.column_name).sort()).toEqual([
+      'english_stage',
+      'reading_prompt_ids',
+      'writing_prompt_ids',
+    ]);
+
+    const indexes = await query<{ indexdef: string }>(`
+      select indexdef
+      from pg_indexes
+      where schemaname = 'public' and tablename = 'mock_exam_english_answers'
+    `);
+    expect(
+      indexes.some(
+        (index) =>
+          index.indexdef.includes('UNIQUE') &&
+          index.indexdef.includes('exam_id') &&
+          index.indexdef.includes('request_id'),
+      ),
+    ).toBe(true);
+
+    const rls = await query<{ relrowsecurity: boolean }>(`
+      select relrowsecurity
+      from pg_class
+      where oid = 'public.mock_exam_english_answers'::regclass
+    `);
+    expect(rls[0]?.relrowsecurity).toBe(true);
   });
 
-  it('defines the single-active-device session table with row-level security', () => {
-    expect(sql).toMatch(/create table if not exists active_user_sessions/);
-    expect(sql).toMatch(/alter table active_user_sessions enable row level security/);
+  it('defines question_mastery as a security-invoker view', async () => {
+    const rows = await query<{ reloptions: string[] | null }>(`
+      select reloptions
+      from pg_class
+      where oid = 'public.question_mastery'::regclass
+    `);
+    expect(rows[0]?.reloptions).toContain('security_invoker=true');
   });
 
-  it('restricts active session reads and claims to the authenticated owner', () => {
-    expect(sql).toMatch(/on active_user_sessions[\s\S]*for select[\s\S]*using \(auth\.uid\(\) = user_id\)/);
-    expect(sql).toMatch(/on active_user_sessions[\s\S]*for insert[\s\S]*with check \(auth\.uid\(\) = user_id\)/);
-    expect(sql).toMatch(/on active_user_sessions[\s\S]*for update[\s\S]*using \(auth\.uid\(\) = user_id\)[\s\S]*with check \(auth\.uid\(\) = user_id\)/);
+  it('creates a profile for every new auth user with a safe search_path', async () => {
+    const triggers = await query<{ tgname: string }>(`
+      select t.tgname
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'auth' and c.relname = 'users' and not t.tgisinternal
+    `);
+    expect(triggers.map((trigger) => trigger.tgname)).toContain('on_auth_user_created');
+
+    const functions = await query<{ proconfig: string[] | null }>(`
+      select proconfig
+      from pg_proc
+      where oid = to_regprocedure('public.handle_new_user()')
+    `);
+    expect(
+      (functions[0]?.proconfig ?? []).some((setting) => setting.startsWith('search_path=')),
+    ).toBe(true);
   });
 
-  it('publishes active session ownership changes to Supabase Realtime', () => {
-    expect(sql).toContain("tablename = 'active_user_sessions'");
-    expect(sql).toMatch(/alter publication supabase_realtime add table public\.active_user_sessions/);
+  it('keeps profiles private to their owner', async () => {
+    const policies = await query<{
+      roles: string[];
+      qual: string | null;
+      cmd: string;
+    }>(`
+      select roles::text[] as roles, qual, cmd
+      from pg_policies
+      where schemaname = 'public' and tablename = 'profiles' and cmd in ('SELECT', 'ALL')
+    `);
+
+    expect(policies.length).toBeGreaterThan(0);
+    for (const policy of policies) {
+      expect(policy.roles).not.toContain('public');
+      expect(policy.qual).toContain('auth.uid()');
+    }
   });
 
-  it('persists mock exam English sections, stable prompt selections, and answer attempts', () => {
-    expect(sql).toMatch(/add column if not exists english_stage/);
-    expect(sql).toMatch(/add column if not exists reading_prompt_ids/);
-    expect(sql).toMatch(/add column if not exists writing_prompt_ids/);
-    expect(sql).toMatch(/create table if not exists mock_exam_english_answers/);
-    expect(sql).toMatch(/unique \(exam_id, section, prompt_index\)/);
-    expect(sql).toMatch(/alter table mock_exam_english_answers enable row level security/);
-    expect(sql).toMatch(/users own mock exam english answers/);
+  it('enables RLS and owner policies on session_reports with a cascading FK', async () => {
+    const rls = await query<{ relrowsecurity: boolean }>(`
+      select relrowsecurity
+      from pg_class
+      where oid = 'public.session_reports'::regclass
+    `);
+    expect(rls[0]?.relrowsecurity).toBe(true);
+
+    const policies = await query<{ cmd: string }>(`
+      select cmd
+      from pg_policies
+      where schemaname = 'public' and tablename = 'session_reports'
+    `);
+    expect(policies.map((policy) => policy.cmd).sort()).toEqual([
+      'DELETE',
+      'INSERT',
+      'SELECT',
+      'UPDATE',
+    ]);
+
+    const foreignKeys = await query<{ confdeltype: string }>(`
+      select confdeltype
+      from pg_constraint
+      where conrelid = 'public.session_reports'::regclass and contype = 'f'
+    `);
+    expect(foreignKeys.some((foreignKey) => foreignKey.confdeltype === 'c')).toBe(true);
+  });
+
+  it('does not expose mutating functions to anon', async () => {
+    const rows = await query<{ proname: string; anon_can_execute: boolean }>(`
+      select p.proname,
+             has_function_privilege('anon', p.oid, 'EXECUTE') as anon_can_execute
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'
+        and p.proname in ('purge_old_messages', 'handle_new_user', 'match_progress_reports')
+      order by 1
+    `);
+
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row.anon_can_execute).toBe(false);
+    }
+  });
+
+  it('keeps the maintenance purge RPC out of client roles', async () => {
+    const rows = await query<{
+      anon_can_execute: boolean;
+      authenticated_can_execute: boolean;
+      service_role_can_execute: boolean;
+    }>(`
+      select has_function_privilege('anon', p.oid, 'EXECUTE') as anon_can_execute,
+             has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_can_execute,
+             has_function_privilege('service_role', p.oid, 'EXECUTE') as service_role_can_execute
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'
+        and p.oid = to_regprocedure('public.purge_old_messages()')
+    `);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({
+      anon_can_execute: false,
+      authenticated_can_execute: false,
+      service_role_can_execute: true,
+    });
+  });
+
+  it('keeps the daily session RPC available to authenticated users', async () => {
+    const rows = await query<{ allowed: boolean }>(`
+      select has_function_privilege(
+        'authenticated',
+        'public.get_or_create_daily_learning_session(uuid,text)',
+        'EXECUTE'
+      ) as allowed
+    `);
+    expect(rows[0]?.allowed).toBe(true);
   });
 });

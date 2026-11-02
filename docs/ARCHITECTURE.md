@@ -28,7 +28,7 @@ API Gateway (REST)
 - **Auth provider:** Supabase Auth (`src/context/AuthContext.tsx`, `src/supabaseClient.ts`).
 - **Amplify Auth is not the user auth provider.** Amplify Gen 2 provides backend resources, hosting, API Gateway, Lambda, and storage.
 - **Authorization:** Supabase RLS. Client queries are user-scoped; backend routes validate the bearer token and scope queries by `user_id`.
-- **Schema:** `supabase/migrations/` is the source of truth. Generated TypeScript types should be kept in sync with migrations.
+- **Schema:** `supabase/migrations/` is the source of truth. The first migration is a baseline of the existing hosted schema; later migrations advance it. Generated TypeScript types and `docs/DATABASE.md` stay in sync with migrations, and `npm run db:verify` checks catalog-level RLS, grant, and cascade invariants.
 - **Single active device:** `active_user_sessions` plus Realtime signals session replacement. Preserve this behavior.
 
 ## 3. Backend functions
@@ -97,5 +97,6 @@ Contract changes require:
 - `docs/adr/0002-supabase-auth-and-rls.md` — Supabase Auth/Postgres/RLS; Amplify for backend hosting.
 - `docs/adr/0003-server-authoritative-grading.md` — grading is server-side.
 - `docs/adr/0004-verification-and-release-policy.md` — `npm run verify` gate and feature contracts.
+- `docs/adr/0005-supabase-baseline-and-db-governance.md` — schema baseline, security hardening, and database governance.
 
 Do not reverse an accepted ADR without a new ADR and explicit approval.

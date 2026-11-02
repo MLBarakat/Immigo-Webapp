@@ -18,7 +18,10 @@
     "test:e2e": "playwright test",
     "seed:e2e": "node scripts/seed-e2e-user.mjs",
     "verify:governance": "node scripts/check-feature-coverage.mjs && node scripts/check-skipped-tests.mjs && node scripts/check-agent-docs.mjs",
-    "verify": "npm run verify:governance && npm run lint && npm run typecheck:test && npm run test:coverage && npm run build",
+    "db:verify": "node scripts/db-verify.mjs",
+    "docs:db": "node scripts/generate-db-docs.mjs",
+    "docs:db:check": "node scripts/generate-db-docs.mjs --check",
+    "verify": "npm run verify:governance && npm run db:verify && npm run docs:db:check && npm run lint && npm run typecheck:test && npm run test:coverage && npm run build",
     "eval:civics": "vitest run eval/civics/__tests__/civics-eval.test.ts"
   },
   "dependencies": {
@@ -50,6 +53,7 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20.12.12",
+    "@types/pg": "^8.23.1",
     "@types/prop-types": "^15.7.15",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
@@ -68,6 +72,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.6",
     "jsdom": "^24.1.0",
+    "pg": "^8.23.1",
     "postcss": "^8.4.38",
     "rimraf": "^5.0.7",
     "tailwindcss": "^3.4.3",

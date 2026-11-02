@@ -26,8 +26,11 @@ Tests must exercise production code. Re-implementing production logic inside a t
 
 | Command | Use |
 |---|---|
-| `npm run verify` | The merge gate: governance, lint, typecheck, unit/integration with coverage, build |
+| `npm run verify` | The merge gate: governance, database, docs, lint, typecheck, unit/integration with coverage, build |
 | `npm run verify:governance` | Registry, skipped-test, and agent-doc checks |
+| `npm run db:verify` | Catalog checks for RLS, policies, function grants, search paths, and cascades |
+| `npm run docs:db` | Regenerate `docs/DATABASE.md` from the local database |
+| `npm run docs:db:check` | Fail when `docs/DATABASE.md` is stale |
 | `npx vitest run path/to/file.test.ts` | Focused test while iterating |
 | `npm run test:coverage` | Unit/integration with coverage thresholds |
 | `npm run test:e2e` | Full Playwright suite |
@@ -37,6 +40,8 @@ Tests must exercise production code. Re-implementing production logic inside a t
 | `npm run build` | Production TypeScript and Vite build |
 
 Do not invent commands. If a needed command is missing, add it to `package.json` and document it here in the same change.
+
+`npm run verify` now runs against a migrated local Supabase database. Start the stack with `npx supabase start` and apply migrations with `npx supabase db reset` before running it.
 
 ## 4. Red-green workflow
 
@@ -115,12 +120,12 @@ Rules:
 
 ## 11. CI
 
-Required CI runs `npm run verify`. A required job may not contain `|| true`, `continue-on-error`, or a swallowed setup failure. E2E and evals are separate jobs and may be scheduled or path-filtered, but they must still fail honestly.
+Required CI runs `npm run verify`. The job starts a local Supabase stack and runs `supabase db reset` before the gate. A required job may not contain `|| true`, `continue-on-error`, or a swallowed setup failure. E2E and evals are separate jobs and may be scheduled or path-filtered, but they must still fail honestly.
 
 ## 12. Roadmap
 
 1. Keep the coverage ratchet moving upward after each feature.
 2. Add mutation testing for the civics policy and transcription reducer.
 3. Add contract tests for the transcript handler's request/response boundary.
-4. Add an RLS test harness that runs migrations against a disposable Postgres.
+4. Expand the RLS harness with role-based anon/authenticated behavioral tests against the disposable local database.
 5. Add a nightly E2E smoke job against staging with a seeded user.
