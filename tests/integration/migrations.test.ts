@@ -59,6 +59,49 @@ describe('supabase schema and RLS', () => {
     expect(policies.some((policy) => policy.qual?.includes('auth.uid()'))).toBe(true);
   });
 
+  it('adds durable learning-goal fields to owner-scoped user settings', async () => {
+    const columns = await query<{ column_name: string; is_nullable: string }>(`
+      select column_name, is_nullable
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'user_settings'
+        and column_name in ('learning_goal', 'weekly_graded_answer_target')
+      order by column_name
+    `);
+
+    expect(columns).toEqual([
+      { column_name: 'learning_goal', is_nullable: 'YES' },
+      { column_name: 'weekly_graded_answer_target', is_nullable: 'YES' },
+    ]);
+
+    const policies = await query<{ qual: string | null; with_check: string | null }>(`
+      select qual, with_check
+      from pg_policies
+      where schemaname = 'public' and tablename = 'user_settings' and cmd = 'ALL'
+    `);
+    expect(policies.some(
+      (policy) => policy.qual?.includes('auth.uid()') && policy.with_check?.includes('auth.uid()'),
+    )).toBe(true);
+
+    const rls = await query<{ relrowsecurity: boolean }>(`
+      select relrowsecurity
+      from pg_class
+      where oid = 'public.user_settings'::regclass
+    `);
+    expect(rls[0]?.relrowsecurity).toBe(true);
+
+    const constraints = await query<{ definition: string }>(`
+      select pg_get_constraintdef(oid) as definition
+      from pg_constraint
+      where conrelid = 'public.user_settings'::regclass
+        and conname in ('user_settings_learning_goal_length_check', 'user_settings_weekly_target_positive_check')
+    `);
+    expect(constraints.map((row) => row.definition)).toEqual(expect.arrayContaining([
+      expect.stringContaining('learning_goal'),
+      expect.stringContaining('weekly_graded_answer_target'),
+    ]));
+  });
+
   it('restricts active_user_sessions to the authenticated owner', async () => {
     const policies = await query<{
       cmd: string;

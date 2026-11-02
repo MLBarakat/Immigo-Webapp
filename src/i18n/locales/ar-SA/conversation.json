@@ -61,8 +61,30 @@
       "answerAccuracy": "دقة الإجابة",
       "englishClarity": "وضوح اللغة الإنجليزية",
       "responseCompleteness": "اكتمال الإجابة",
+      "notMeasuredYet": "لم يُقَس بعد",
       "questions": "الأسئلة",
       "questionsAnswered": "تمت الإجابة عن {{count}}",
+      "weeklyProgress": {
+        "title": "هدف التعلم الأسبوعي",
+        "settings": "تعديل الأهداف",
+        "loading": "جارٍ تحميل تقدم هذا الأسبوع…",
+        "error": "تعذّر تحميل التقدم الأسبوعي.",
+        "countWithTarget": "{{count}} من {{target}} إجابة مُقيّمة",
+        "countWithoutTarget": "{{count}} إجابة مُقيّمة هذا الأسبوع",
+        "savedFocus": "مجال التركيز المحفوظ",
+        "applyFocus": "تطبيق مجال التركيز المحفوظ",
+        "confirmTitle": "هل تريد استخدام مجال التركيز المحفوظ؟",
+        "confirmDescription": "هل تريد إرسال «{{goal}}» إلى ImmiGO في {{mode}} كرسالتك التالية؟",
+        "applyFailed": "تعذّر إرسال مجال التركيز المحفوظ. راجع المحادثة وحاول مرة أخرى.",
+        "cancel": "إلغاء",
+        "applying": "جارٍ التطبيق…",
+        "confirmApply": "استخدام مجال التركيز",
+        "modes": {
+          "practice": "وضع التدريب",
+          "study": "وضع الدراسة",
+          "standard": "مقابلة قياسية"
+        }
+      },
       "previousReports": "تقارير التقدم السابقة",
       "reportsLoading": "جارٍ تحميل التقارير…",
       "reportsLoadError": "تعذّر تحميل تقارير التقدم.",
@@ -128,11 +150,11 @@
       "audioRetryPending": "اضغط في أي مكان لسماع الإجابة"
     },
     "examReview": {
-      "cardTitle": "مراجعة امتحانك جاهزة",
+      "cardTitle": "مراجعة مقابلتك القياسية جاهزة",
       "cardDescription": "اطّلع على ما أتقنته واختر ما تريد التدرب عليه لاحقًا.",
       "openReview": "راجع هذا الامتحان",
-      "title": "مراجعة امتحانك التجريبي",
-      "subtitle": "مراجعة هذا الامتحان فقط",
+      "title": "مراجعة مقابلتك القياسية",
+      "subtitle": "مراجعة هذه المقابلة فقط",
       "close": "إغلاق مراجعة الامتحان",
       "loadingTitle": "جارٍ إعداد مراجعتك…",
       "loadingBody": "يراجع مدربك نتائج هذا الامتحان.",
@@ -152,16 +174,16 @@
       "goalPlaceholder": "مثلًا: ساعدني على تذكّر فروع الحكومة.",
       "goalMode": "تدرّب على هذا الهدف في",
       "useGoal": "استخدم هذا الهدف",
-      "newExam": "ابدأ امتحانًا تجريبيًا جديدًا",
+      "newExam": "ابدأ مقابلة قياسية جديدة",
       "keepChatting": "تابع المحادثة",
       "modes": { "standard": "المقابلة القياسية", "practice": "وضع التدريب", "study": "وضع الدراسة" }
     },
     "welcome": {
-      "resumeCivics": "لديك امتحان تجريبي {{version}} غير مكتمل. بقيت {{remaining}} أسئلة مدنية. كيف تود المتابعة؟",
-      "resumeEnglish": "لديك امتحان تجريبي {{version}} غير مكتمل وجاهز لمتابعة تدريب الإنجليزية {{stage}}. كيف تود المتابعة؟",
-      "continueExam": "متابعة الامتحان",
-      "startNewExam": "بدء امتحان جديد",
-      "startMockExam": "بدء امتحان تجريبي"
+      "resumeCivics": "لديك مقابلة قياسية {{version}} غير مكتملة. بقيت {{remaining}} أسئلة مدنية. كيف تود المتابعة؟",
+      "resumeEnglish": "لديك مقابلة قياسية {{version}} غير مكتملة وجاهزة لمتابعة تدريب الإنجليزية {{stage}}. كيف تود المتابعة؟",
+      "continueExam": "متابعة المقابلة",
+      "startNewExam": "بدء مقابلة جديدة",
+      "startMockExam": "بدء مقابلة قياسية"
     },
     "right": {
       "title": "الإعدادات وعناصر التحكم",
@@ -172,6 +194,18 @@
       "downloadTitle": "تنزيل نص المقابلة",
       "simulationModes": "أوضاع المحاكاة",
       "modeLegend": "وضع محاكاة المقابلة",
+      "checkingInterview": "جارٍ التحقق من وجود مقابلة قياسية غير مكتملة…",
+      "interviewCheckFailed": "تعذّر التحقق من وجود مقابلة قياسية غير مكتملة. أوقفنا تغيير الوضع مؤقتًا لحماية تقدمك.",
+      "interviewActionFailed": "تعذّر تحديث المقابلة. لم يتغير وضعك الحالي أو تقدمك. حاول مرة أخرى.",
+      "tryAgain": "حاول مرة أخرى",
+      "pauseInterviewTitle": "هل تريد إيقاف هذه المقابلة القياسية مؤقتًا؟",
+      "pauseInterviewDescription": "سيُحفظ تقدمك ويمكنك متابعة المقابلة لاحقًا.",
+      "unfinishedInterviewTitle": "لديك مقابلة قياسية غير مكتملة",
+      "unfinishedInterviewDescription": "هل تريد متابعتها أم بدء مقابلة جديدة؟ ستظل المقابلة غير المكتملة محفوظة.",
+      "stayInInterview": "البقاء في المقابلة",
+      "switchToMode": "التبديل إلى {{mode}}",
+      "startNewInterview": "بدء مقابلة جديدة",
+      "resumeInterview": "متابعة المقابلة",
       "standard": {
         "label": "مقابلة عادية",
         "description": "تجربة مقابلة واقعية لدى USCIS"

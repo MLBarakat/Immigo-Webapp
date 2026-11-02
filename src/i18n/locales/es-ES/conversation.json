@@ -61,8 +61,30 @@
       "answerAccuracy": "Precisión de respuestas",
       "englishClarity": "Claridad en inglés",
       "responseCompleteness": "Completitud de respuestas",
+      "notMeasuredYet": "Aún no se mide",
       "questions": "Preguntas",
       "questionsAnswered": "{{count}} respondidas",
+      "weeklyProgress": {
+        "title": "Objetivo de aprendizaje semanal",
+        "settings": "Editar objetivos",
+        "loading": "Cargando el progreso de esta semana…",
+        "error": "No se pudo cargar el progreso semanal.",
+        "countWithTarget": "{{count}} de {{target}} respuestas evaluadas",
+        "countWithoutTarget": "{{count}} respuestas evaluadas esta semana",
+        "savedFocus": "Enfoque guardado",
+        "applyFocus": "Aplicar enfoque guardado",
+        "confirmTitle": "¿Usar tu enfoque guardado?",
+        "confirmDescription": "¿Enviar «{{goal}}» a ImmiGO en {{mode}} como tu próximo mensaje?",
+        "applyFailed": "No se pudo enviar el enfoque guardado. Revisa la conversación e inténtalo de nuevo.",
+        "cancel": "Cancelar",
+        "applying": "Aplicando…",
+        "confirmApply": "Usar este enfoque",
+        "modes": {
+          "practice": "Modo de práctica",
+          "study": "Modo de estudio",
+          "standard": "Entrevista estándar"
+        }
+      },
       "previousReports": "Informes de progreso anteriores",
       "reportsLoading": "Cargando informes…",
       "reportsLoadError": "No se pudieron cargar los informes de progreso.",
@@ -128,11 +150,11 @@
       "audioRetryPending": "Toca en cualquier lugar para escuchar la respuesta"
     },
     "examReview": {
-      "cardTitle": "Tu revisión del examen está lista",
+      "cardTitle": "Tu revisión de la entrevista estándar está lista",
       "cardDescription": "Consulta tus aciertos y elige qué practicar después.",
       "openReview": "Revisar este examen",
-      "title": "Revisión de tu examen de práctica",
-      "subtitle": "Revisión de este examen solamente",
+      "title": "Revisión de tu entrevista estándar",
+      "subtitle": "Revisión de esta entrevista únicamente",
       "close": "Cerrar revisión del examen",
       "loadingTitle": "Preparando tu revisión…",
       "loadingBody": "Tu tutor está revisando los resultados de este examen.",
@@ -152,16 +174,16 @@
       "goalPlaceholder": "Por ejemplo, ayúdame a recordar las ramas del gobierno.",
       "goalMode": "Practicar este objetivo en",
       "useGoal": "Usar este objetivo",
-      "newExam": "Empezar un nuevo examen de práctica",
+      "newExam": "Empezar una nueva entrevista estándar",
       "keepChatting": "Seguir conversando",
       "modes": { "standard": "Entrevista estándar", "practice": "Modo práctica", "study": "Modo estudio" }
     },
     "welcome": {
-      "resumeCivics": "Tienes un examen de práctica {{version}} sin terminar. Quedan {{remaining}} preguntas de civismo. ¿Cómo quieres continuar?",
-      "resumeEnglish": "Tienes un examen de práctica {{version}} sin terminar y listo para continuar con la práctica de inglés {{stage}}. ¿Cómo quieres continuar?",
-      "continueExam": "Continuar el examen",
-      "startNewExam": "Empezar un examen nuevo",
-      "startMockExam": "Empezar un examen de práctica"
+      "resumeCivics": "Tienes una entrevista estándar {{version}} sin terminar. Quedan {{remaining}} preguntas de civismo. ¿Cómo quieres continuar?",
+      "resumeEnglish": "Tienes una entrevista estándar {{version}} sin terminar y lista para continuar con la práctica de inglés {{stage}}. ¿Cómo quieres continuar?",
+      "continueExam": "Continuar entrevista",
+      "startNewExam": "Empezar una entrevista nueva",
+      "startMockExam": "Empezar una entrevista estándar"
     },
     "right": {
       "title": "Configuración y controles",
@@ -172,6 +194,18 @@
       "downloadTitle": "Descargar transcripción",
       "simulationModes": "Modos de simulación",
       "modeLegend": "Modo de simulación de entrevista",
+      "checkingInterview": "Buscando una entrevista estándar sin terminar…",
+      "interviewCheckFailed": "No pudimos comprobar si hay una entrevista estándar sin terminar. Los cambios de modo están pausados para proteger tu progreso.",
+      "interviewActionFailed": "No pudimos actualizar la entrevista. Tu modo y progreso actuales no han cambiado. Inténtalo de nuevo.",
+      "tryAgain": "Intentar de nuevo",
+      "pauseInterviewTitle": "¿Pausar esta entrevista estándar?",
+      "pauseInterviewDescription": "El progreso de la entrevista se guardará y podrás retomarla más tarde.",
+      "unfinishedInterviewTitle": "Tienes una entrevista estándar sin terminar",
+      "unfinishedInterviewDescription": "¿Quieres retomarla o empezar otra? La entrevista sin terminar seguirá guardada.",
+      "stayInInterview": "Seguir en la entrevista",
+      "switchToMode": "Cambiar a {{mode}}",
+      "startNewInterview": "Empezar otra",
+      "resumeInterview": "Retomar entrevista",
       "standard": {
         "label": "Entrevista estándar",
         "description": "Experiencia realista de entrevista de USCIS"

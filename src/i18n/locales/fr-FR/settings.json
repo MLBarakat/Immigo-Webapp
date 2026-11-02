@@ -56,6 +56,16 @@
     "weekly": "Hebdomadaire",
     "monthly": "Mensuel"
   },
+  "learningGoals": {
+    "title": "Objectifs d’apprentissage",
+    "description": "Enregistrez un axe de travail pour les modes Pratique et Étude et suivez votre activité hebdomadaire si vous le souhaitez.",
+    "focusLabel": "Axe d’apprentissage",
+    "focusTooLong": "Votre axe d’apprentissage doit contenir au maximum 300 caractères.",
+    "targetLabel": "Objectif hebdomadaire de réponses évaluées",
+    "targetDescription": "Facultatif. Laissez vide pour désactiver l’objectif hebdomadaire. Les réponses de tous les modes sont comptées.",
+    "targetPlaceholder": "Suggestion : 20",
+    "targetInvalid": "Saisissez un nombre entier supérieur à zéro."
+  },
   "audio": {
     "title": "Microphone et test audio",
     "description": "Choisissez les appareils utilisés par ImmiGO et testez-les avant votre session.",

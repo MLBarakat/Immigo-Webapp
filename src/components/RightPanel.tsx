@@ -4,12 +4,19 @@ import { ChevronRight, ChevronLeft, Trash2, Download, SlidersHorizontal, AlertTr
 import { AppStatus, SimulationMode, TestVersion } from '../context/conversationContextTypes';
 import { fetchQuestionMastery } from '../services/liveProgressService';
 import type { QuestionMastery } from '../services/liveProgressService';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface RightPanelProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   simulationMode: SimulationMode;
-  onSimulationModeChange: (mode: SimulationMode) => void;
+  onSimulationModeChange: (mode: SimulationMode) => void | boolean | Promise<void | boolean>;
+  hasUnfinishedStandardInterview?: boolean;
+  isCheckingStandardInterview?: boolean;
+  standardInterviewLookupFailed?: boolean;
+  onRetryStandardInterviewLookup?: () => void;
+  onResumeStandardInterview?: () => void | boolean | Promise<void | boolean>;
+  onStartNewStandardInterview?: () => void | boolean | Promise<void | boolean>;
   testVersion: TestVersion;
   onTestVersionChange: (version: TestVersion) => void;
   includeEnglishSimulation: boolean;
@@ -30,6 +37,12 @@ export function RightPanel({
   onToggleCollapse,
   simulationMode,
   onSimulationModeChange,
+  hasUnfinishedStandardInterview = false,
+  isCheckingStandardInterview = false,
+  standardInterviewLookupFailed = false,
+  onRetryStandardInterviewLookup,
+  onResumeStandardInterview,
+  onStartNewStandardInterview,
   testVersion,
   onTestVersionChange,
   includeEnglishSimulation,
@@ -45,6 +58,13 @@ export function RightPanel({
   const { t, i18n } = useTranslation('conversation');
   const isArabic = i18n.language === 'ar-SA';
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [modeDecision, setModeDecision] = useState<
+    { type: 'pause'; mode: SimulationMode } | { type: 'resume' } | null
+  >(null);
+  const [modeDecisionError, setModeDecisionError] = useState(false);
+  const [isApplyingModeDecision, setIsApplyingModeDecision] = useState(false);
+  const [modeChangeError, setModeChangeError] = useState(false);
+  const modeDecisionRef = useFocusTrap(Boolean(modeDecision));
   const [questionMasteryResult, setQuestionMasteryResult] = useState<{
     key: string;
     value: QuestionMastery | null;
@@ -62,6 +82,55 @@ export function RightPanel({
     return () => { active = false; };
   }, [userId, currentItemId, testVersion]);
   const isRequestInFlight = appStatus === 'processing' || appStatus === 'speaking';
+  const isModeUnavailable = isCheckingStandardInterview || standardInterviewLookupFailed;
+
+  useEffect(() => {
+    if (!modeDecision) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isApplyingModeDecision) setModeDecision(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modeDecision, isApplyingModeDecision]);
+
+  const handleModeSelection = (mode: SimulationMode) => {
+    if (mode === simulationMode || isModeUnavailable) return;
+    if (hasUnfinishedStandardInterview && mode === 'standard') {
+      setModeDecisionError(false);
+      setModeChangeError(false);
+      setModeDecision({ type: 'resume' });
+      return;
+    }
+    if (hasUnfinishedStandardInterview && simulationMode === 'standard') {
+      setModeDecisionError(false);
+      setModeChangeError(false);
+      setModeDecision({ type: 'pause', mode });
+      return;
+    }
+    setModeChangeError(false);
+    void (async () => {
+      try {
+        setModeChangeError((await onSimulationModeChange(mode)) === false);
+      } catch {
+        setModeChangeError(true);
+      }
+    })();
+  };
+
+  const applyModeDecision = async (action: () => void | boolean | Promise<void | boolean>) => {
+    if (isApplyingModeDecision) return;
+    setIsApplyingModeDecision(true);
+    setModeDecisionError(false);
+    try {
+      const applied = await action();
+      if (applied !== false) setModeDecision(null);
+      else setModeDecisionError(true);
+    } catch {
+      setModeDecisionError(true);
+    } finally {
+      setIsApplyingModeDecision(false);
+    }
+  };
 
   const handleClearRequest = () => {
     if (conversationLength === 0) return;
@@ -143,7 +212,7 @@ export function RightPanel({
             <span className="text-xs font-bold uppercase tracking-widest text-immigo-gray-600">{t('workspace.right.simulationModes')}</span>
           </div>
 
-          <fieldset className="space-y-1.5">
+          <fieldset className="space-y-1.5" disabled={isModeUnavailable}>
             <legend className="sr-only">{t('workspace.right.modeLegend')}</legend>
             {MODE_IDS.map(modeId => {
               const isSelected = simulationMode === modeId;
@@ -177,13 +246,31 @@ export function RightPanel({
                     name="simulation-mode"
                     value={modeId}
                     checked={isSelected}
-                    onChange={() => onSimulationModeChange(modeId)}
+                    onChange={() => handleModeSelection(modeId)}
                     className="sr-only"
                   />
                 </label>
               );
             })}
           </fieldset>
+          {isCheckingStandardInterview && (
+            <p className="mt-2 text-[11px] text-immigo-gray-500" role="status">{t('workspace.right.checkingInterview')}</p>
+          )}
+          {standardInterviewLookupFailed && (
+            <div className="mt-2 text-[11px] text-art-red-600" role="alert">
+              <p>{t('workspace.right.interviewCheckFailed')}</p>
+              {onRetryStandardInterviewLookup && (
+                <button type="button" onClick={onRetryStandardInterviewLookup} className="mt-1 font-semibold underline">
+                  {t('workspace.right.tryAgain')}
+                </button>
+              )}
+            </div>
+          )}
+          {modeChangeError && (
+            <p className="mt-2 text-[11px] text-art-red-600" role="alert">
+              {t('workspace.right.interviewActionFailed')}
+            </p>
+          )}
           <div className="mt-3 space-y-2 rounded-lg border border-immigo-gray-200 p-2.5">
             <fieldset>
               <legend className="mb-1.5 text-[11px] font-semibold text-immigo-gray-600">{t('workspace.right.testVersion')}</legend>
@@ -267,6 +354,63 @@ export function RightPanel({
           </div>
         </section>
       </div>
+      {modeDecision && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-deep-navy/50 p-4" role="presentation" onClick={() => { if (!isApplyingModeDecision) setModeDecision(null); }}>
+          <section
+            ref={modeDecisionRef}
+            tabIndex={-1}
+            dir={isArabic ? 'rtl' : 'ltr'}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="standard-interview-decision-title"
+            className="w-full max-w-md rounded-xl bg-star-white p-5 shadow-xl outline-none"
+            onClick={event => event.stopPropagation()}
+          >
+            <h2 id="standard-interview-decision-title" className="text-base font-bold text-deep-navy">
+              {modeDecision.type === 'pause'
+                ? t('workspace.right.pauseInterviewTitle')
+                : t('workspace.right.unfinishedInterviewTitle')}
+            </h2>
+            <p className="mt-2 text-sm text-immigo-gray-600">
+              {modeDecision.type === 'pause'
+                ? t('workspace.right.pauseInterviewDescription')
+                : t('workspace.right.unfinishedInterviewDescription')}
+            </p>
+            {modeDecisionError && (
+              <p className="mt-2 text-sm text-art-red-600" role="alert">
+                {t('workspace.right.interviewActionFailed')}
+              </p>
+            )}
+            {modeDecision.type === 'pause' ? (
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button type="button" disabled={isApplyingModeDecision} onClick={() => setModeDecision(null)} className="min-h-10 rounded-lg border border-immigo-gray-300 px-3 py-2 text-sm font-semibold text-immigo-gray-700 disabled:opacity-50">
+                  {t('workspace.right.stayInInterview')}
+                </button>
+                <button
+                  type="button"
+                  disabled={isApplyingModeDecision}
+                  onClick={() => { void applyModeDecision(() => onSimulationModeChange(modeDecision.mode)); }}
+                  className="min-h-10 rounded-lg bg-art-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-art-blue-700 disabled:opacity-50"
+                >
+                  {t('workspace.right.switchToMode', { mode: t(`workspace.right.${modeDecision.mode}.label`) })}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button type="button" disabled={isApplyingModeDecision} onClick={() => setModeDecision(null)} className="min-h-10 rounded-lg border border-immigo-gray-300 px-3 py-2 text-sm font-semibold text-immigo-gray-700 disabled:opacity-50">
+                  {t('workspace.right.cancel')}
+                </button>
+                <button type="button" disabled={isApplyingModeDecision} onClick={() => { void applyModeDecision(() => onStartNewStandardInterview?.()); }} className="min-h-10 rounded-lg border border-immigo-gray-300 px-3 py-2 text-sm font-semibold text-immigo-gray-700 disabled:opacity-50">
+                  {t('workspace.right.startNewInterview')}
+                </button>
+                <button type="button" disabled={isApplyingModeDecision} onClick={() => { void applyModeDecision(() => onResumeStandardInterview?.()); }} className="min-h-10 rounded-lg bg-art-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-art-blue-700 disabled:opacity-50">
+                  {t('workspace.right.resumeInterview')}
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </aside>
   );
 }

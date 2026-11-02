@@ -103,9 +103,9 @@
     },
     {
       "id": "F-04",
-      "title": "Conversation modes and mock exams",
+      "title": "Conversation modes and Standard Interviews",
       "status": "protected",
-      "summary": "Standard interview, practice, study, and mock-exam flows, including English reading/writing stages and exam review.",
+      "summary": "Standard Interview, Practice, and Study workflows, including preserved unfinished-interview choices, English reading/writing stages, and interview review.",
       "entryPoints": [
         "src/hooks/useConversation.ts",
         "src/context/ConversationContext.tsx",
@@ -114,6 +114,7 @@
       ],
       "tests": [
         "src/hooks/__tests__/useConversation.test.tsx",
+        "src/services/__tests__/mockExamService.test.ts",
         "src/components/__tests__/ConversationHub.test.tsx",
         "src/components/__tests__/CenterPanel.test.tsx",
         "amplify/functions/transcript/__tests__/english-exercises.test.ts",
@@ -122,9 +123,12 @@
         "tests/e2e/edge-cases.spec.ts"
       ],
       "invariants": [
+        "Standard Interview is the user-facing name for the existing scored interview flow; internal identifiers and scoring behavior remain unchanged.",
         "Mode changes do not lose persisted history or corrupt the active exam run.",
-        "Mock-exam reading/writing stages and stable prompt selections are preserved.",
-        "Mock-exam review is server-generated; the client does not invent scores.",
+        "Leaving an unfinished Standard Interview requires confirmation; its progress remains saved.",
+        "Returning to an unfinished Standard Interview explicitly offers resume or start new.",
+        "Interview reading/writing stages and stable prompt selections are preserved.",
+        "Interview review is server-generated; the client does not invent scores.",
         "Standard interview, practice, and study modes preserve their turn semantics."
       ]
     },
@@ -170,20 +174,32 @@
       "summary": "Daily progress report aggregation from persisted messages and graded answers, including Bedrock generation and upsert.",
       "entryPoints": [
         "amplify/functions/aggregateSession/handler.ts",
+        "amplify/functions/aggregateSession/reportFormat.ts",
         "src/services/liveProgressService.ts",
-        "src/components/LeftPanel.tsx"
+        "src/components/LeftPanel.tsx",
+        "src/App.tsx"
       ],
       "tests": [
         "src/services/__tests__/liveProgressService.test.ts",
+        "src/components/__tests__/PanelHeaders.test.tsx",
         "amplify/functions/aggregateSession/__tests__/handler.test.ts",
+        "eval/reports/__tests__/reports-eval.test.ts",
         "tests/e2e/network-chaos.spec.ts"
       ],
       "invariants": [
         "Reports are generated from persisted messages and authoritative graded answers.",
         "The Lambda never overrides recorded verdicts with model judgment.",
+        "All report numbers are rendered from recorded grading facts; Bedrock supplies qualitative commentary only.",
+        "Category ratings are not inferred from transcript prose or copied forward as scores.",
+        "A report's displayed date and grading facts refer to the account-local session date.",
+        "English Clarity uses transcript-only grammar, word-choice, and coherence criteria; numeric scores stay hidden until calibrated.",
+        "Response Completeness uses explicit question-specific criteria independent of correctness; numeric scores stay hidden until validated.",
         "A session with no messages and no graded answers returns an empty report without calling Bedrock.",
         "The report includes the educational disclaimer and is upserted by (user_id, date).",
-        "Bedrock or database failures return a typed error, not a fabricated report."
+        "Bedrock or database failures return a typed error, not a fabricated report.",
+        "Weekly progress counts persisted graded answers from Monday through the current account-local date in the account time zone, across all three modes and all verdicts.",
+        "A weekly target is optional and disabled when unset; the learning-goal card distinguishes an unset target from zero progress.",
+        "Applying a saved focus in Practice or Study requires confirmation and sends it through the existing conversation message flow."
       ]
     },
     {
@@ -217,12 +233,15 @@
       "entryPoints": [
         "src/services/userSettingsService.ts",
         "src/components/ApplicationSettingsModal.tsx",
+        "src/components/LeftPanel.tsx",
         "src/components/FontSizeSelector.tsx",
         "src/utils/fontSize.ts",
         "src/utils/theme.ts"
       ],
       "tests": [
         "src/components/__tests__/ApplicationSettingsModal.test.tsx",
+        "src/services/__tests__/userSettingsService.test.ts",
+        "src/components/__tests__/PanelHeaders.test.tsx",
         "src/components/__tests__/FontSizeSelector.test.tsx",
         "src/utils/__tests__/fontSize.test.ts",
         "tests/e2e/settings-persistence.spec.ts"
@@ -231,6 +250,9 @@
         "Settings persist per user and survive reloads.",
         "Theme and font-size previews do not commit until saved.",
         "Language, voice, audio-device, notification, and accessibility preference keys remain stable.",
+        "One account-level learning focus and an optional weekly graded-answer target persist with the user's settings.",
+        "The suggested weekly target is 20, but remains unset until the user chooses one.",
+        "The target week is Monday through Sunday in the account time zone and counts answers from every mode.",
         "Invalid or missing settings fall back to documented defaults."
       ]
     },
@@ -242,7 +264,15 @@
       "entryPoints": [
         "src/i18n/index.ts",
         "src/i18n/I18nProvider.tsx",
-        "src/components/LanguageSelector.tsx"
+        "src/components/LanguageSelector.tsx",
+        "src/i18n/locales/en-US/conversation.json",
+        "src/i18n/locales/en-US/settings.json",
+        "src/i18n/locales/es-ES/conversation.json",
+        "src/i18n/locales/es-ES/settings.json",
+        "src/i18n/locales/fr-FR/conversation.json",
+        "src/i18n/locales/fr-FR/settings.json",
+        "src/i18n/locales/ar-SA/conversation.json",
+        "src/i18n/locales/ar-SA/settings.json"
       ],
       "tests": [
         "src/i18n/__tests__/i18n.test.tsx",
@@ -263,6 +293,7 @@
       "summary": "Semantic controls, keyboard access, focus management, reduced motion, touch targets, and responsive desktop/mobile layouts.",
       "entryPoints": [
         "src/hooks/useFocusTrap.ts",
+        "src/components/RightPanel.tsx",
         "src/components/MobileMenuOverlay.tsx",
         "src/components/CenterPanel.tsx",
         "src/components/Header.tsx",
@@ -369,6 +400,7 @@
         "Migrations are the only schema source of truth. The baseline records the existing hosted schema; later migrations advance it.",
         "Schema changes are expand/contract and include a rollback plan.",
         "Every user-owned table has RLS enabled and owner-scoped policies. No policy is unconditional or explicitly targets anon.",
+        "user_settings.learning_goal is nullable and limited to 300 non-whitespace characters; weekly_graded_answer_target is nullable and positive when set.",
         "Anon has no EXECUTE on public functions; SECURITY DEFINER functions pin search_path; trigger-only helpers revoke EXECUTE.",
         "Foreign keys to auth.users cascade on delete.",
         "Every public table except sessions keeps NOT NULL created_at/updated_at with an on-update trigger.",

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "qualitative strengths and next steps",
+    "markdown": "# Daily Report\n\n## Overall Session Summary\nYou stayed focused on the civics topics and explained your reasoning clearly.\n\n## What Went Well\nYour answer about the branches of government was easy to follow.\n\n## What to Practice Next\nReview how national and state responsibilities differ.",
+    "accepted": true,
+    "reason": "Qualitative feedback without unverified numerical claims is allowed."
+  },
+  {
+    "name": "fabricated category score",
+    "markdown": "## Category Breakdown & Scores\nAmerican Government: 85/100",
+    "accepted": false,
+    "reason": "The model may not invent category scores or score sections."
+  },
+  {
+    "name": "fabricated numeric rating",
+    "markdown": "## Overall Session Summary\nYour clarity score: 4.",
+    "accepted": false,
+    "reason": "Numeric scores and ratings must come from calibrated recorded data."
+  },
+  {
+    "name": "unrecorded practice count",
+    "markdown": "## What Went Well\nYou practiced 3 topics with confidence.",
+    "accepted": false,
+    "reason": "Numbers in a report must be assembled from authoritative recorded facts."
+  },
+  {
+    "name": "unmeasured clarity category",
+    "markdown": "English Clarity: 92%",
+    "accepted": false,
+    "reason": "English Clarity is qualitative-only until its rubric is calibrated."
+  },
+  {
+    "name": "unmeasured completeness category",
+    "markdown": "Response Completeness: 7/10",
+    "accepted": false,
+    "reason": "Response Completeness remains unscored until its criteria are validated."
+  }
+]

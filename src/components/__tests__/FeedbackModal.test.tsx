@@ -54,6 +54,7 @@ describe('FeedbackModal', () => {
     const onStartPractice = vi.fn();
     render(<FeedbackModal {...baseProps} onStartPractice={onStartPractice} />);
 
+    expect(screen.getByRole('heading', { name: 'Your Standard Interview review' })).toBeDefined();
     expect(screen.getByText(feedback.summary)).toBeDefined();
     expect(screen.getByText('Good recall of the three branches')).toBeDefined();
     expect(screen.getByText('Review the Bill of Rights')).toBeDefined();

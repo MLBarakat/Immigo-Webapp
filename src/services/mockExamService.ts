@@ -28,8 +28,8 @@ export class MockExamService {
       if (error) throw error;
       return data as InProgressMockExam | null;
     } catch (error) {
-      logger.warn('Could not load the previous mock exam; the next exam will start fresh.', { error: String(error) });
-      return null;
+      logger.error('Could not check for an unfinished Standard Interview.', undefined, { error: String(error) });
+      throw error;
     }
   }
 }

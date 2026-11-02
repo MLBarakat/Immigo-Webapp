@@ -10,6 +10,7 @@
 | 20261101133556 | remote_schema |
 | 20261102120000 | security_hardening |
 | 20261102130000 | uniform_timestamps |
+| 20261103120000 | durable_learning_goals |
 
 ## Tables
 
@@ -403,6 +404,8 @@ Row level security: **enabled**
 | `output_device_id` | `text` | yes |  |
 | `location_state` | `text` | yes |  |
 | `account_timezone` | `text` | yes |  |
+| `learning_goal` | `text` | yes |  |
+| `weekly_graded_answer_target` | `integer` | yes |  |
 
 Policies:
 

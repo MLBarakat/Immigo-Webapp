@@ -4,7 +4,7 @@
 // round-trip, no Bedrock call, no Titan embedding. Every committed grade is
 // already written to graded_answers in real time (persistGradedAnswer), so
 // this is a plain arithmetic read, essentially free, safe to refresh after
-// every single question. Daily stats use the shared device-local date session,
+// every single question. Daily stats use the shared account-local date session,
 // so typing, voice, mode changes, and other devices accumulate together. This
 // is deliberately SEPARATE from the narrative
 // progress report (aggregateSession), which is the expensive, LLM-generated
@@ -75,6 +75,63 @@ export function getUtcDayBounds(now = new Date()): { start: string; end: string 
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   return { start: start.toISOString(), end: end.toISOString() };
+}
+
+export function getAccountWeekRange(
+  accountTimezone = 'UTC',
+  now = new Date(),
+): { start: string; end: string } {
+  const end = ChatPersistenceService.getSessionDate(accountTimezone, now);
+  const endDate = new Date(`${end}T00:00:00.000Z`);
+  const daysSinceMonday = (endDate.getUTCDay() + 6) % 7;
+  const startDate = new Date(endDate.getTime() - daysSinceMonday * 24 * 60 * 60 * 1000);
+
+  return {
+    start: startDate.toISOString().slice(0, 10),
+    end,
+  };
+}
+
+/**
+ * Counts committed graded answers across every mode in the account-local week.
+ */
+export async function fetchWeeklyProgressStats(
+  userId: string,
+  accountTimezone = 'UTC',
+  now = new Date(),
+): Promise<LiveSessionStats> {
+  if (!userId) throw new Error('Weekly progress requires an authenticated user.');
+
+  const { start, end } = getAccountWeekRange(accountTimezone, now);
+  const supabase = getSupabaseClient();
+  const { data: sessions, error: sessionsError } = await supabase
+    .from('sessions')
+    .select('id')
+    .eq('user_id', userId)
+    .gte('local_date', start)
+    .lte('local_date', end);
+
+  if (sessionsError) {
+    logger.error('[LiveProgress] Failed to load weekly sessions:', undefined, { error: sessionsError.message });
+    throw new Error('Weekly progress could not be loaded. Please try again.');
+  }
+
+  const sessionIds = (sessions ?? []).map((session) => session.id);
+  if (sessionIds.length === 0) return computeLiveStats([]);
+
+  const { data, error } = await supabase
+    .from('graded_answers')
+    .select('item_id, verdict')
+    .eq('user_id', userId)
+    .in('session_id', sessionIds)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    logger.error('[LiveProgress] Failed to load weekly graded answers:', undefined, { error: error.message });
+    throw new Error('Weekly progress could not be loaded. Please try again.');
+  }
+
+  return computeLiveStats((data ?? []) as GradedRow[]);
 }
 
 /**

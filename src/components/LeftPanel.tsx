@@ -14,9 +14,10 @@ import {
   GraduationCap,
   Video,
 } from 'lucide-react';
-import { LiveSessionStats } from '../context/conversationContextTypes';
-import { fetchProgressReports, ProgressReport } from '../services/liveProgressService';
+import { LiveSessionStats, SimulationMode } from '../context/conversationContextTypes';
+import { fetchProgressReports, fetchWeeklyProgressStats, ProgressReport } from '../services/liveProgressService';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { logger } from '../logger';
 
 interface LeftPanelProps {
   isCollapsed: boolean;
@@ -24,12 +25,24 @@ interface LeftPanelProps {
   liveStats: LiveSessionStats | null;
   conversationLength: number;
   userId?: string;
+  accountTimezone?: string;
+  learningGoal?: string | null;
+  weeklyGradedAnswerTarget?: number | null;
+  simulationMode?: SimulationMode;
+  canApplySavedFocus?: boolean;
+  onOpenSettings?: () => void;
+  onApplySavedFocus?: (goal: string) => Promise<boolean>;
   isGeneratingProgressReport?: boolean;
   isMobile?: boolean;
 }
 
 // Circular progress ring component
-function CircularProgress({ pct, color, label }: { pct: number | null; color: string; label: string }) {
+function CircularProgress({ pct, color, label, notMeasuredLabel }: {
+  pct: number | null;
+  color: string;
+  label: string;
+  notMeasuredLabel: string;
+}) {
   const r = 20;
   const circ = 2 * Math.PI * r;
   const offset = pct === null ? circ : circ - (pct / 100) * circ;
@@ -52,7 +65,10 @@ function CircularProgress({ pct, color, label }: { pct: number | null; color: st
           {pct === null ? '—' : `${pct}%`}
         </span>
       </div>
-      <span className="text-xs text-immigo-gray-600 leading-tight">{label}</span>
+      <span className="text-xs text-immigo-gray-600 leading-tight">
+        {label}
+        {pct === null && <span className="mt-0.5 block text-[10px] text-immigo-gray-400">{notMeasuredLabel}</span>}
+      </span>
     </div>
   );
 }
@@ -69,7 +85,22 @@ const USCIS_MEDIA = [
   { id: 'resourceCenter', url: 'https://www.uscis.gov/citizenship' },
 ];
 
-export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversationLength, userId, isGeneratingProgressReport = false, isMobile = false }: LeftPanelProps) {
+export function LeftPanel({
+  isCollapsed,
+  onToggleCollapse,
+  liveStats,
+  conversationLength,
+  userId,
+  accountTimezone = 'UTC',
+  learningGoal,
+  weeklyGradedAnswerTarget,
+  simulationMode = 'standard',
+  canApplySavedFocus = false,
+  onOpenSettings,
+  onApplySavedFocus,
+  isGeneratingProgressReport = false,
+  isMobile = false,
+}: LeftPanelProps) {
   const { t, i18n } = useTranslation('conversation');
   const isArabic = i18n.language === 'ar-SA';
   const [knowledgeBankOpen, setKnowledgeBankOpen] = useState(true);
@@ -82,6 +113,49 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
   const [reportsError, setReportsError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<ProgressReport | null>(null);
   const reportModalRef = useFocusTrap(Boolean(selectedReport));
+  const [weeklyStats, setWeeklyStats] = useState<{ userId: string; stats: LiveSessionStats } | null>(null);
+  const [weeklyLoading, setWeeklyLoading] = useState(Boolean(userId));
+  const [weeklyError, setWeeklyError] = useState(false);
+  const [weeklyRetry, setWeeklyRetry] = useState(0);
+  const [savedFocusConfirmationOpen, setSavedFocusConfirmationOpen] = useState(false);
+  const [applyingSavedFocus, setApplyingSavedFocus] = useState(false);
+  const [savedFocusApplyFailed, setSavedFocusApplyFailed] = useState(false);
+  const focusConfirmationRef = useFocusTrap(savedFocusConfirmationOpen);
+  const visibleWeeklyStats = weeklyStats && userId && weeklyStats.userId === userId
+    ? weeklyStats.stats
+    : null;
+  const weeklyProgressLoading = weeklyLoading || (Boolean(userId) && !visibleWeeklyStats && !weeklyError);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    let isMounted = true;
+    const refreshWeeklyProgress = async () => {
+      setWeeklyLoading(true);
+      setWeeklyError(false);
+      try {
+        const stats = await fetchWeeklyProgressStats(userId, accountTimezone);
+        if (isMounted) setWeeklyStats({ userId, stats });
+      } catch (error) {
+        logger.error('Could not load weekly learning progress.', { error: String(error) });
+        if (isMounted) setWeeklyError(true);
+      } finally {
+        if (isMounted) setWeeklyLoading(false);
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void refreshWeeklyProgress();
+    };
+
+    void refreshWeeklyProgress();
+    const refreshTimer = window.setInterval(() => void refreshWeeklyProgress(), 30_000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      isMounted = false;
+      window.clearInterval(refreshTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [userId, accountTimezone, weeklyRetry]);
 
   useEffect(() => {
     if (!selectedReport) return;
@@ -91,6 +165,34 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedReport]);
+
+  useEffect(() => {
+    if (!savedFocusConfirmationOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !applyingSavedFocus) {
+        setSavedFocusConfirmationOpen(false);
+        setSavedFocusApplyFailed(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [savedFocusConfirmationOpen, applyingSavedFocus]);
+
+  const confirmSavedFocus = async () => {
+    if (!learningGoal?.trim() || !onApplySavedFocus) return;
+    setApplyingSavedFocus(true);
+    setSavedFocusApplyFailed(false);
+    try {
+      const applied = await onApplySavedFocus(learningGoal.trim());
+      if (applied) setSavedFocusConfirmationOpen(false);
+      else setSavedFocusApplyFailed(true);
+    } catch (error) {
+      logger.error('Could not apply the saved learning focus.', { error: String(error) });
+      setSavedFocusApplyFailed(true);
+    } finally {
+      setApplyingSavedFocus(false);
+    }
+  };
 
   const loadReports = useCallback(async () => {
     if (!userId) return;
@@ -325,9 +427,9 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                   <p className="text-[11px] text-immigo-gray-400 italic px-1 py-2">{t('workspace.left.metricsStart')}</p>
                 ) : (
                   <div className="space-y-1.5">
-                    <CircularProgress pct={accuracy} color="#2563EB" label={t('workspace.left.answerAccuracy')} />
-                    <CircularProgress pct={null} color="#16a34a" label={t('workspace.left.englishClarity')} />
-                    <CircularProgress pct={null} color="#d97706" label={t('workspace.left.responseCompleteness')} />
+                    <CircularProgress pct={accuracy} color="#2563EB" label={t('workspace.left.answerAccuracy')} notMeasuredLabel={t('workspace.left.notMeasuredYet')} />
+                    <CircularProgress pct={null} color="#16a34a" label={t('workspace.left.englishClarity')} notMeasuredLabel={t('workspace.left.notMeasuredYet')} />
+                    <CircularProgress pct={null} color="#d97706" label={t('workspace.left.responseCompleteness')} notMeasuredLabel={t('workspace.left.notMeasuredYet')} />
 
                     {/* Questions progress bar */}
                     <div className="mt-1">
@@ -345,6 +447,80 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
                   </div>
                 )}
               </div>
+
+              {userId && (
+                <section className="shrink-0 border-t border-immigo-gray-200 px-1 py-2" aria-labelledby="weekly-learning-progress-title">
+                <div className={`flex items-center justify-between gap-2 ${isArabic ? 'flex-row-reverse' : ''}`}>
+                  <h3 id="weekly-learning-progress-title" className="text-xs font-semibold text-deep-navy">
+                    {t('workspace.left.weeklyProgress.title')}
+                  </h3>
+                  {onOpenSettings && (
+                    <button
+                      type="button"
+                      onClick={onOpenSettings}
+                      className="text-[10px] font-semibold text-art-blue-700 underline"
+                    >
+                      {t('workspace.left.weeklyProgress.settings')}
+                    </button>
+                  )}
+                </div>
+                {weeklyProgressLoading && <p className="py-1 text-[11px] text-immigo-gray-500" role="status">{t('workspace.left.weeklyProgress.loading')}</p>}
+                {weeklyError && (
+                  <div className="py-1" role="alert">
+                    <p className="text-[11px] text-art-red-600">{t('workspace.left.weeklyProgress.error')}</p>
+                    <button type="button" onClick={() => setWeeklyRetry((attempt) => attempt + 1)} className="text-[11px] font-semibold text-art-blue-700 underline">
+                      {t('workspace.left.tryAgain')}
+                    </button>
+                  </div>
+                )}
+                {!weeklyProgressLoading && !weeklyError && visibleWeeklyStats && (
+                  <>
+                    <p className="py-1 text-[11px] text-immigo-gray-600">
+                      {weeklyGradedAnswerTarget
+                        ? t('workspace.left.weeklyProgress.countWithTarget', {
+                          count: visibleWeeklyStats.answered,
+                          target: weeklyGradedAnswerTarget,
+                        })
+                        : t('workspace.left.weeklyProgress.countWithoutTarget', { count: visibleWeeklyStats.answered })}
+                    </p>
+                    {weeklyGradedAnswerTarget && (
+                      <div
+                        role="progressbar"
+                        aria-label={t('workspace.left.weeklyProgress.title')}
+                        aria-valuemin={0}
+                        aria-valuemax={weeklyGradedAnswerTarget}
+                        aria-valuenow={Math.min(visibleWeeklyStats.answered, weeklyGradedAnswerTarget)}
+                        className="h-2 overflow-hidden rounded-full bg-immigo-gray-200"
+                      >
+                        <div
+                          className="h-full rounded-full bg-art-blue-600 transition-all"
+                          style={{ width: `${Math.min(100, (visibleWeeklyStats.answered / weeklyGradedAnswerTarget) * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+                {learningGoal?.trim() && (
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                    <p className="min-w-0 flex-1 truncate text-[11px] text-immigo-gray-600" title={learningGoal}>
+                      {t('workspace.left.weeklyProgress.savedFocus')}: {learningGoal}
+                    </p>
+                    {simulationMode !== 'standard' && canApplySavedFocus && onApplySavedFocus && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSavedFocusApplyFailed(false);
+                          setSavedFocusConfirmationOpen(true);
+                        }}
+                        className="text-[10px] font-semibold text-art-blue-700 underline"
+                      >
+                        {t('workspace.left.weeklyProgress.applyFocus')}
+                      </button>
+                    )}
+                  </div>
+                )}
+                </section>
+              )}
 
               {/* Previous Progress Reports */}
               <div className="flex min-h-0 flex-1 flex-col border-t border-immigo-gray-200 pt-1">
@@ -387,6 +563,68 @@ export function LeftPanel({ isCollapsed, onToggleCollapse, liveStats, conversati
           )}
         </section>
       </div>
+      {savedFocusConfirmationOpen && learningGoal?.trim() && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-deep-navy/50 p-4"
+          role="presentation"
+          onClick={() => {
+            if (!applyingSavedFocus) {
+              setSavedFocusConfirmationOpen(false);
+              setSavedFocusApplyFailed(false);
+            }
+          }}
+        >
+          <section
+            ref={focusConfirmationRef}
+            tabIndex={-1}
+            dir={isArabic ? 'rtl' : 'ltr'}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="saved-focus-confirmation-title"
+            aria-describedby="saved-focus-confirmation-description"
+            className="w-full max-w-md rounded-xl bg-star-white p-5 shadow-xl outline-none"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="saved-focus-confirmation-title" className="font-bold text-deep-navy">
+              {t('workspace.left.weeklyProgress.confirmTitle')}
+            </h2>
+            <p id="saved-focus-confirmation-description" className="mt-2 text-sm text-immigo-gray-600">
+              {t('workspace.left.weeklyProgress.confirmDescription', {
+                goal: learningGoal.trim(),
+                mode: t(`workspace.left.weeklyProgress.modes.${simulationMode}`),
+              })}
+            </p>
+            {savedFocusApplyFailed && (
+              <p className="mt-2 text-sm text-art-red-600" role="alert">
+                {t('workspace.left.weeklyProgress.applyFailed')}
+              </p>
+            )}
+            <footer className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={applyingSavedFocus}
+                onClick={() => {
+                  setSavedFocusConfirmationOpen(false);
+                  setSavedFocusApplyFailed(false);
+                }}
+                className="rounded-md px-3 py-2 text-sm font-semibold text-immigo-gray-700 hover:bg-immigo-gray-100 disabled:opacity-60"
+              >
+                {t('workspace.left.weeklyProgress.cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={applyingSavedFocus}
+                onClick={() => void confirmSavedFocus()}
+                className="rounded-md bg-art-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {applyingSavedFocus
+                  ? t('workspace.left.weeklyProgress.applying')
+                  : t('workspace.left.weeklyProgress.confirmApply')}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
       {selectedReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-deep-navy/50 p-4" role="presentation" onClick={() => setSelectedReport(null)}>
           <section ref={reportModalRef} tabIndex={-1} dir={isArabic ? 'rtl' : 'ltr'} role="dialog" aria-modal="true" aria-labelledby="progress-report-title" className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-star-white shadow-xl outline-none" onClick={event => event.stopPropagation()}>

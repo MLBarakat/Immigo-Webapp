@@ -61,8 +61,30 @@
       "answerAccuracy": "Exactitude des réponses",
       "englishClarity": "Clarté en anglais",
       "responseCompleteness": "Exhaustivité des réponses",
+      "notMeasuredYet": "Pas encore mesuré",
       "questions": "Questions",
       "questionsAnswered": "{{count}} répondues",
+      "weeklyProgress": {
+        "title": "Objectif d’apprentissage hebdomadaire",
+        "settings": "Modifier les objectifs",
+        "loading": "Chargement de la progression de la semaine…",
+        "error": "Impossible de charger la progression hebdomadaire.",
+        "countWithTarget": "{{count}} sur {{target}} réponses évaluées",
+        "countWithoutTarget": "{{count}} réponses évaluées cette semaine",
+        "savedFocus": "Axe enregistré",
+        "applyFocus": "Appliquer l’axe enregistré",
+        "confirmTitle": "Utiliser votre axe enregistré ?",
+        "confirmDescription": "Envoyer « {{goal}} » à ImmiGO en {{mode}} comme prochain message ?",
+        "applyFailed": "L’axe enregistré n’a pas pu être envoyé. Vérifiez la conversation et réessayez.",
+        "cancel": "Annuler",
+        "applying": "Application…",
+        "confirmApply": "Utiliser cet axe",
+        "modes": {
+          "practice": "Mode Pratique",
+          "study": "Mode Étude",
+          "standard": "Entretien standard"
+        }
+      },
       "previousReports": "Rapports de progression précédents",
       "reportsLoading": "Chargement des rapports…",
       "reportsLoadError": "Impossible de charger les rapports de progression.",
@@ -128,11 +150,11 @@
       "audioRetryPending": "Touchez n'importe où pour entendre la réponse"
     },
     "examReview": {
-      "cardTitle": "Votre bilan d’examen est prêt",
+      "cardTitle": "Le bilan de votre entretien standard est prêt",
       "cardDescription": "Consultez vos points forts et choisissez la suite de votre entraînement.",
       "openReview": "Consulter cet examen",
-      "title": "Bilan de votre examen blanc",
-      "subtitle": "Bilan de cet examen uniquement",
+      "title": "Bilan de votre entretien standard",
+      "subtitle": "Bilan de cet entretien uniquement",
       "close": "Fermer le bilan",
       "loadingTitle": "Préparation de votre bilan…",
       "loadingBody": "Votre coach examine les résultats de cet examen.",
@@ -152,16 +174,16 @@
       "goalPlaceholder": "Par exemple, aidez-moi à retenir les branches du gouvernement.",
       "goalMode": "Travailler cet objectif en mode",
       "useGoal": "Utiliser cet objectif",
-      "newExam": "Commencer un nouvel examen blanc",
+      "newExam": "Commencer un nouvel entretien standard",
       "keepChatting": "Continuer la conversation",
       "modes": { "standard": "Entretien standard", "practice": "Mode pratique", "study": "Mode étude" }
     },
     "welcome": {
-      "resumeCivics": "Vous avez un examen blanc {{version}} inachevé. Il reste {{remaining}} questions de civisme. Comment souhaitez-vous continuer ?",
-      "resumeEnglish": "Vous avez un examen blanc {{version}} inachevé, prêt à reprendre l’entraînement d’anglais ({{stage}}). Comment souhaitez-vous continuer ?",
-      "continueExam": "Continuer l’examen",
-      "startNewExam": "Commencer un nouvel examen",
-      "startMockExam": "Commencer un examen blanc"
+      "resumeCivics": "Vous avez un entretien standard {{version}} inachevé. Il reste {{remaining}} questions de civisme. Comment souhaitez-vous continuer ?",
+      "resumeEnglish": "Vous avez un entretien standard {{version}} inachevé, prêt à reprendre l’entraînement d’anglais ({{stage}}). Comment souhaitez-vous continuer ?",
+      "continueExam": "Reprendre l’entretien",
+      "startNewExam": "Commencer un nouvel entretien",
+      "startMockExam": "Commencer un entretien standard"
     },
     "right": {
       "title": "Configuration et commandes",
@@ -172,6 +194,18 @@
       "downloadTitle": "Télécharger la transcription",
       "simulationModes": "Modes de simulation",
       "modeLegend": "Mode de simulation d’entretien",
+      "checkingInterview": "Recherche d’un entretien standard inachevé…",
+      "interviewCheckFailed": "Impossible de vérifier si un entretien standard est inachevé. Les changements de mode sont suspendus pour protéger votre progression.",
+      "interviewActionFailed": "Impossible de mettre à jour l’entretien. Votre mode et votre progression n’ont pas changé. Réessayez.",
+      "tryAgain": "Réessayer",
+      "pauseInterviewTitle": "Mettre cet entretien standard en pause ?",
+      "pauseInterviewDescription": "Votre progression sera enregistrée et vous pourrez reprendre plus tard.",
+      "unfinishedInterviewTitle": "Vous avez un entretien standard inachevé",
+      "unfinishedInterviewDescription": "Souhaitez-vous le reprendre ou en commencer un nouveau ? L’entretien inachevé restera enregistré.",
+      "stayInInterview": "Rester dans l’entretien",
+      "switchToMode": "Passer en mode {{mode}}",
+      "startNewInterview": "Commencer un nouveau",
+      "resumeInterview": "Reprendre l’entretien",
       "standard": {
         "label": "Entretien standard",
         "description": "Expérience réaliste d’entretien USCIS"

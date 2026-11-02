@@ -22,7 +22,8 @@
     "docs:db": "node scripts/generate-db-docs.mjs",
     "docs:db:check": "node scripts/generate-db-docs.mjs --check",
     "verify": "npm run verify:governance && npm run db:verify && npm run docs:db:check && npm run lint && npm run typecheck:test && npm run test:coverage && npm run build",
-    "eval:civics": "vitest run eval/civics/__tests__/civics-eval.test.ts"
+    "eval:civics": "vitest run eval/civics/__tests__/civics-eval.test.ts",
+    "eval:reports": "vitest run eval/reports/__tests__/reports-eval.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1113.0",

@@ -31,7 +31,7 @@ This registry is the contract between the product, the tests, and every AI codin
 | F-01 | Authentication and session ownership | protected | `src/context/AuthContext.tsx` |
 | F-02 | Transcription FSM and reconciliation | protected | `src/context/TranscriptionContext.tsx` |
 | F-03 | Audio capture and playback lifecycle | protected | `src/hooks/useVAD.ts` |
-| F-04 | Conversation modes and mock exams | protected | `src/hooks/useConversation.ts` |
+| F-04 | Conversation modes and Standard Interviews | protected | `src/hooks/useConversation.ts` |
 | F-05 | Civics grading and turn policy | protected | `amplify/functions/transcript/turn/` |
 | F-06 | Progress reports and daily learning | protected | `amplify/functions/aggregateSession/handler.ts` |
 | F-07 | History persistence and pagination | protected | `src/services/chatPersistenceService.ts` |
@@ -99,19 +99,22 @@ This registry is the contract between the product, the tests, and every AI codin
 
 ---
 
-## F-04 — Conversation modes and mock exams
+## F-04 — Conversation modes and Standard Interviews
 
 **Status:** protected  
 **Entry points:** `src/hooks/useConversation.ts`, `src/context/ConversationContext.tsx`, `src/services/mockExamService.ts`, `amplify/functions/transcript/english-exercises.ts`
 
 **Invariants**
 
-- Standard interview, practice, study, and mock-exam modes preserve their turn semantics.
+- Standard Interview is the user-facing name for the existing scored interview flow; internal identifiers and scoring behavior remain unchanged.
+- Standard Interview, Practice, and Study workflows preserve their turn semantics.
 - Mode changes do not lose persisted history or corrupt the active exam run.
-- Mock-exam reading/writing stages and stable prompt selections are preserved.
-- A mock-exam review is server-generated; the client renders it without inventing scores.
+- Leaving an unfinished Standard Interview requires confirmation; its progress remains saved.
+- Returning to an unfinished Standard Interview explicitly offers resume or start new.
+- Reading/writing stages and stable prompt selections are preserved.
+- An interview review is server-generated; the client renders it without inventing scores.
 
-**Tests:** `src/hooks/__tests__/useConversation.test.tsx`, `src/components/__tests__/ConversationHub.test.tsx`, `src/components/__tests__/CenterPanel.test.tsx`, `amplify/functions/transcript/__tests__/english-exercises.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `tests/e2e/text-roundtrip.spec.ts`, `tests/e2e/edge-cases.spec.ts`
+**Tests:** `src/hooks/__tests__/useConversation.test.tsx`, `src/services/__tests__/mockExamService.test.ts`, `src/components/__tests__/ConversationHub.test.tsx`, `src/components/__tests__/CenterPanel.test.tsx`, `amplify/functions/transcript/__tests__/english-exercises.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `tests/e2e/text-roundtrip.spec.ts`, `tests/e2e/edge-cases.spec.ts`
 
 ---
 
@@ -135,17 +138,25 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-06 — Progress reports and daily learning
 
 **Status:** protected  
-**Entry points:** `amplify/functions/aggregateSession/handler.ts`, `src/services/liveProgressService.ts`, `src/components/LeftPanel.tsx`
+**Entry points:** `amplify/functions/aggregateSession/handler.ts`, `amplify/functions/aggregateSession/reportFormat.ts`, `src/services/liveProgressService.ts`, `src/components/LeftPanel.tsx`, `src/App.tsx`
 
 **Invariants**
 
 - Reports are generated from persisted messages and authoritative graded answers.
 - The Lambda never overrides recorded verdicts with model judgment.
+- All report numbers are rendered from recorded grading facts; Bedrock supplies qualitative commentary only.
+- Category ratings are not inferred from transcript prose or copied forward as scores.
+- A report's displayed date and grading facts refer to the account-local session date.
+- English Clarity is planned as transcript-only grammar, word-choice, and coherence feedback; its numeric score stays hidden until calibrated.
+- Response Completeness is planned against explicit question-specific criteria, independently of correctness, and remains unscored until validated.
 - A session with no messages and no graded answers returns an empty report without calling Bedrock.
 - The report includes the educational disclaimer and is upserted by `(user_id, date)`.
 - Bedrock or database failures return a typed error, not a fabricated report.
+- Weekly progress counts persisted graded answers from Monday through the current account-local date in the account time zone, across all three modes and all verdicts.
+- A weekly target is optional and disabled when unset; the learning-goal card distinguishes an unset target from zero progress.
+- Applying a saved focus in Practice or Study requires confirmation and sends it through the existing conversation message flow.
 
-**Tests:** `src/services/__tests__/liveProgressService.test.ts`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `tests/e2e/network-chaos.spec.ts`
+**Tests:** `src/services/__tests__/liveProgressService.test.ts`, `src/components/__tests__/PanelHeaders.test.tsx`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `eval/reports/__tests__/reports-eval.test.ts`, `tests/e2e/network-chaos.spec.ts`
 
 ---
 
@@ -168,23 +179,26 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-08 — Settings and preferences
 
 **Status:** protected  
-**Entry points:** `src/services/userSettingsService.ts`, `src/components/ApplicationSettingsModal.tsx`, `src/components/FontSizeSelector.tsx`, `src/utils/fontSize.ts`, `src/utils/theme.ts`
+**Entry points:** `src/services/userSettingsService.ts`, `src/components/ApplicationSettingsModal.tsx`, `src/components/LeftPanel.tsx`, `src/components/FontSizeSelector.tsx`, `src/utils/fontSize.ts`, `src/utils/theme.ts`
 
 **Invariants**
 
 - Settings persist per user and survive reloads.
 - Theme and font-size previews do not commit until saved.
 - Language, voice, audio-device, notification, and accessibility preferences keep their existing keys.
+- One account-level learning focus and an optional weekly graded-answer target persist with the user's settings.
+- The suggested weekly target is 20, but remains unset until the user chooses one.
+- The target week is Monday through Sunday in the account time zone and counts answers from every mode.
 - Invalid or missing settings fall back to documented defaults.
 
-**Tests:** `src/components/__tests__/ApplicationSettingsModal.test.tsx`, `src/components/__tests__/FontSizeSelector.test.tsx`, `src/utils/__tests__/fontSize.test.ts`, `tests/e2e/settings-persistence.spec.ts`
+**Tests:** `src/components/__tests__/ApplicationSettingsModal.test.tsx`, `src/services/__tests__/userSettingsService.test.ts`, `src/components/__tests__/PanelHeaders.test.tsx`, `src/components/__tests__/FontSizeSelector.test.tsx`, `src/utils/__tests__/fontSize.test.ts`, `tests/e2e/settings-persistence.spec.ts`
 
 ---
 
 ## F-09 — Internationalization and RTL
 
 **Status:** protected  
-**Entry points:** `src/i18n/index.ts`, `src/i18n/I18nProvider.tsx`, `src/components/LanguageSelector.tsx`
+**Entry points:** `src/i18n/index.ts`, `src/i18n/I18nProvider.tsx`, `src/components/LanguageSelector.tsx`, `src/i18n/locales/{en-US,es-ES,fr-FR,ar-SA}/{conversation,settings}.json`
 
 **Invariants**
 
@@ -200,7 +214,7 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-10 — Accessibility and responsive layout
 
 **Status:** protected  
-**Entry points:** `src/hooks/useFocusTrap.ts`, `src/components/MobileMenuOverlay.tsx`, `src/components/CenterPanel.tsx`, `src/components/Header.tsx`, `src/components/Footer.tsx`
+**Entry points:** `src/hooks/useFocusTrap.ts`, `src/components/RightPanel.tsx`, `src/components/MobileMenuOverlay.tsx`, `src/components/CenterPanel.tsx`, `src/components/Header.tsx`, `src/components/Footer.tsx`
 
 **Invariants**
 
@@ -278,6 +292,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - Foreign keys to `auth.users` cascade on delete.
 - Every public table except `sessions` keeps NOT NULL `created_at`/`updated_at` with an on-update trigger.
 - Generated TypeScript types and `docs/DATABASE.md` stay in sync with migrations.
+- `user_settings.learning_goal` is nullable and limited to 300 non-whitespace characters; `weekly_graded_answer_target` is nullable and positive when set.
 - The live round-trip test remains available behind `RUN_DB_ROUNDTRIP=1`.
 
 **Tests:** `tests/integration/migrations.test.ts`, `tests/integration/gradedAnswers.roundtrip.test.ts`

@@ -7,6 +7,12 @@ import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 import bank from '../transcript/civics-bank.2020-128.json';
 import bank2008 from '../transcript/civics-bank.2008-100.json';
+import {
+  buildDailyProgressReport,
+  DAILY_REPORT_SYSTEM_PROMPT,
+  DAILY_REPORT_PROMPT_VERSION,
+  getQualitativeReportContext,
+} from './reportFormat';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const modelId = process.env.DEFAULT_MODEL_ID || 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
@@ -233,7 +239,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       previousReportMarkdown = latestReport.report_markdown;
     }
 
-    // 2b. Fetch authoritative per-answer verdicts for the full UTC day.
+    // 2b. Fetch authoritative per-answer verdicts for this account-local session.
     const { data: gradedRows, error: gradedErr } = await db
       .from('graded_answers')
       .select('item_id, verdict, created_at, simulation_mode, test_version')
@@ -273,58 +279,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return `- ${mode}: ${modeCorrect}/${rows.length} correct (${Math.round(modeCorrect * 100 / rows.length)}%)`;
     });
 
-    const scoreFacts = answered > 0
-      ? [
-          'AUTHORITATIVE GRADING FACTS (computed from recorded verdicts — do NOT alter):',
-          `- Questions graded today: ${answered}`,
-          `- Correct: ${correct}`,
-          `- Partial: ${partial}`,
-          `- Incorrect: ${incorrect}`,
-          `- Accuracy: ${accuracyPct}% (correct / graded)`,
-          '- Results by mode:',
-          ...modeBreakdown,
-          missed.length
-            ? `- Missed or partial questions:\n${missed.join('\n')}`
-            : '- No missed questions today.',
-        ].join('\n')
-      : 'AUTHORITATIVE GRADING FACTS: No civics questions were graded today (e.g., the user only asked progress/assist questions). Do not report new numeric scores; inherit the previous report and note that no questions were practiced today.';
-
     console.log(`[Aggregator-Grade] [${traceId}] answered=${answered} correct=${correct} partial=${partial} incorrect=${incorrect} accuracy=${accuracyPct}%`);
 
     // 3. Build Bedrock Evaluation Prompt
-    const evaluationSystemPrompt = `You are an expert USCIS N-400 Naturalization Exam Evaluator.
-Your task is to analyze the candidate's civics practice transcript and generate/update their UTC Daily Progress Report in Markdown format.
-
-USCIS N-400 Examination Categories:
-1. American Government (Principles of Democracy, System of Government, Rights and Responsibilities)
-2. American History (Colonial Period & Independence, 1800s, Recent American History & Other Important Historical Information)
-3. Integrated Civics (Geography, Symbols, Holidays)
-
-Instructions:
-- The "AUTHORITATIVE GRADING FACTS" block (computed from recorded per-answer verdicts) is the source of truth for this session's accuracy, counts, and which questions were missed. Report those numbers and the missed-question list EXACTLY; never override them with your own judgment of the transcript.
-- These authoritative facts include results by mode and an overall total. Preserve both; never hide differences between Standard Interview, Practice, and Study Mode.
-- Some questions require a current answer and are intentionally ungraded until an authoritative current answer is available. Do not infer a score for those turns from the transcript.
-- Evaluate the candidate's performance in categories practiced today, across all of today's sessions.
-- For categories NOT practiced today, inherit the previous scores and feedback from the Previous Progress Report.
-- Output a clean, structured Markdown report including:
-  - Overall Session Summary
-  - Category Breakdown & Scores (e.g. American Government: 85/100, American History: 70/100, Integrated Civics: 90/100)
-  - Key Strengths
-  - Specific Weak Spots & Failed Questions
-  - Recommended Next Review Topics`;
+    const previousQualitativeContext = getQualitativeReportContext(previousReportMarkdown);
 
     const bedrockEvaluationPayload = {
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: 800,
       temperature: 0.3,
-      system: evaluationSystemPrompt,
+      system: DAILY_REPORT_SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
           content: [
             {
               type: 'text',
-              text: `Previous Progress Report:\n${previousReportMarkdown}\n\n${scoreFacts}\n\nToday's Conversation Transcript (for qualitative context only):\n${sessionTranscript}\n\nPlease generate the updated Living Daily Progress Report for local date ${today}. Report the authoritative accuracy, mode breakdown, and counts EXACTLY as given, and list the missed questions exactly. Do not invent numbers that contradict the authoritative facts.`
+              text: `Previous qualitative report context:\n${previousQualitativeContext || 'No previous qualitative notes are available.'}\n\nToday's Conversation Transcript:\n${sessionTranscript}\n\nPlease write qualitative observations for the account-local calendar date ${today}. Do not repeat scores, ratings, percentages, counts, or category breakdowns; the server adds recorded results separately.`
             }
           ]
         }
@@ -338,21 +309,21 @@ Instructions:
       body: JSON.stringify(bedrockEvaluationPayload)
     });
 
+    console.log(`[Aggregator-Model] [${traceId}] model=${modelId} promptVersion=${DAILY_REPORT_PROMPT_VERSION}`);
     const bedrockResponse = await bedrockClient.send(bedrockCommand);
     const bodyString = Buffer.from(bedrockResponse.body).toString('utf-8');
     const parsedData = JSON.parse(bodyString) as BedrockResponseShape;
     const rawReportMarkdown = parsedData.content?.[0]?.text?.trim() || '';
 
-    if (!rawReportMarkdown) {
-      throw new Error('Evaluation Exception: Bedrock returned empty report text.');
-    }
-
-    const reportMarkdown = [
-      rawReportMarkdown,
-      '',
-      '---',
-      '*Disclaimer: ImmiGO is an independent educational study aid and is not affiliated with or endorsed by USCIS or the U.S. Government. ImmiGO does not provide legal advice, immigration counsel, or statutory eligibility evaluations. Official civics study materials are available at uscis.gov.*',
-    ].join('\n');
+    const reportMarkdown = buildDailyProgressReport(rawReportMarkdown, {
+      answered,
+      correct,
+      partial,
+      incorrect,
+      accuracyPct,
+      modeBreakdown,
+      missedQuestions: missed,
+    });
 
     console.log(`[Aggregator-Execution] Generated progress report (${reportMarkdown.length} chars)`);
 

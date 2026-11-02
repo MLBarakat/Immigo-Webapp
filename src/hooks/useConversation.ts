@@ -8,6 +8,7 @@ import { Message, MessageAction } from '../context/conversationContextTypes';
 import { ChatPersistenceService } from '../services/chatPersistenceService';
 import { fetchDailyProgressStats } from '../services/liveProgressService';
 import { MockExamService } from '../services/mockExamService';
+import type { InProgressMockExam } from '../services/mockExamService';
 import { useWhisper } from './useWhisper';
 import { analytics } from '../analytics';
 import { logger } from '../logger';
@@ -72,6 +73,15 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const [isGeneratingProgressReport, setIsGeneratingProgressReport] = useState(false);
   const [dailySessionSettings, setDailySessionSettings] = useState<{ mode: SimulationMode; testVersion: TestVersion; includeEnglishSimulation: boolean } | null>(null);
   const [postExamId, setPostExamId] = useState<string | null>(null);
+  const [standardInterviewLookup, setStandardInterviewLookup] = useState<{
+    key: string;
+    status: 'checking' | 'ready' | 'error';
+    exam: InProgressMockExam | null;
+  } | null>(null);
+  const standardInterviewLookupRequestRef = useRef<{
+    key: string;
+    promise: Promise<InProgressMockExam | null | undefined>;
+  } | null>(null);
   const pendingTranscriptClearRef = useRef(false);
   const voiceIdRef = useRef<string | null>(voiceId ?? null);
   const simulationModeRef = useRef<SimulationMode>(simulationMode);
@@ -94,6 +104,61 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     bargeInRef.current = bargeIn;
   }, [bargeIn]);
   const accountTimezoneRef = useRef(accountTimezone || 'UTC');
+  const standardInterviewLookupKey = userId ? `${userId}:${testVersion}` : null;
+  const standardInterviewLookupMatches = standardInterviewLookupKey !== null
+    && standardInterviewLookup?.key === standardInterviewLookupKey;
+  const hasUnfinishedStandardInterview = standardInterviewLookupMatches
+    && standardInterviewLookup?.status === 'ready'
+    && standardInterviewLookup.exam !== null;
+  const isCheckingStandardInterview = standardInterviewLookupKey !== null
+    && (!standardInterviewLookupMatches || standardInterviewLookup?.status === 'checking');
+  const standardInterviewLookupFailed = standardInterviewLookupMatches
+    && standardInterviewLookup?.status === 'error';
+
+  const refreshStandardInterviewLookup = useCallback(async (): Promise<InProgressMockExam | null | undefined> => {
+    if (!userId) {
+      setStandardInterviewLookup(null);
+      standardInterviewLookupRequestRef.current = null;
+      return null;
+    }
+
+    const key = `${userId}:${testVersion}`;
+    if (standardInterviewLookupRequestRef.current?.key === key) {
+      return standardInterviewLookupRequestRef.current.promise;
+    }
+
+    setStandardInterviewLookup({ key, status: 'checking', exam: null });
+    const request = MockExamService.getLatestInProgress(userId, testVersion)
+      .then(exam => {
+        if (standardInterviewLookupRequestRef.current?.promise === request) {
+          setStandardInterviewLookup({ key, status: 'ready', exam });
+        }
+        return exam;
+      })
+      .catch(() => {
+        if (standardInterviewLookupRequestRef.current?.promise === request) {
+          setStandardInterviewLookup({ key, status: 'error', exam: null });
+        }
+        return undefined;
+      });
+    standardInterviewLookupRequestRef.current = { key, promise: request };
+    void request.then(() => {
+      if (standardInterviewLookupRequestRef.current?.promise === request) {
+        standardInterviewLookupRequestRef.current = null;
+      }
+    });
+    return request;
+  }, [testVersion, userId]);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) void refreshStandardInterviewLookup();
+    });
+    return () => {
+      active = false;
+    };
+  }, [refreshStandardInterviewLookup]);
 
   const intervalRef = useRef<number | null>(null);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
@@ -1406,7 +1471,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [finalTranscript, sendTextMessage]);
 
-  const initiateSession = useCallback(async (forceSessionStart = false) => {
+  const initiateSession = useCallback(async (forceSessionStart = false): Promise<boolean> => {
     // Unlock audible playback while still inside the Start-tap gesture.
     unlockAudioPlayback();
     historyChangedBeforeHydrationRef.current = true;
@@ -1455,7 +1520,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const fallbackSession = await ChatPersistenceService.getOrCreateDailySession(userId, localDate, accountTimezoneRef.current);
       newSessionId = fallbackSession?.id ?? null;
       if (!voiceSessionRef.current) {
-        return;
+        return false;
       }
       sessionIdRef.current = newSessionId;
       dispatch({ type: 'SET_SESSION_ID', payload: newSessionId });
@@ -1463,20 +1528,20 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     if (continuingTextSession && currentItemIdRef.current && !forceSessionStart) {
       await startListeningWithMicGate();
-      return;
+      return true;
     }
 
     // Select the current question before opening the microphone, but leave
     // the first response to the user rather than speaking another opener.
     if (!apiClient) {
       await startListeningWithMicGate();
-      return;
+      return false;
     }
 
     if (completedExamIdRef.current) {
       nextExamActionRef.current = undefined;
       await startListeningWithMicGate();
-      return;
+      return true;
     }
 
     const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
@@ -1508,7 +1573,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     try {
       const res = await attemptSessionStart();
-      if (!voiceSessionRef.current) return;
+      if (!voiceSessionRef.current) return false;
 
       updateCurrentItemId(res.nextItemId);
       examRunIdRef.current = res.examRunId;
@@ -1531,7 +1596,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           ...describeAudioEnvironment(),
         });
         await startListeningWithMicGate();
-        return;
+        return true;
       }
 
       if (userId && newSessionId) {
@@ -1609,13 +1674,15 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           resumeVAD();
         }, 300);
       };
+      return true;
     } catch (error: unknown) {
-      if (!voiceSessionRef.current) return;
+      if (!voiceSessionRef.current) return false;
       logger.error('Silent session question setup failed after retry; continuing to listen without a startup response.', undefined, {
         error: error instanceof Error ? error.message : String(error),
         traceId,
       });
       await startListeningWithMicGate();
+      return false;
     }
   }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId]);
 
@@ -1744,14 +1811,35 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
    * it in favour of a fresh one. This is the only path that changes exam
    * identity; the microphone never does.
    */
-  const chooseWelcomeAction = useCallback(async (examAction: MockExamAction, messageId: string) => {
-    dispatch({ type: 'RESOLVE_MESSAGE_ACTIONS', payload: { messageId } });
+  const startStandardInterview = useCallback(async (examAction: MockExamAction): Promise<boolean> => {
+    if (!apiClient || !userId) return false;
+    const previousMode = simulationModeRef.current;
     simulationModeRef.current = 'standard';
     nextExamActionRef.current = examAction;
     completedExamIdRef.current = null;
     setPostExamId(null);
-    await initiateSession(true);
-  }, [dispatch, initiateSession]);
+    try {
+      const started = await initiateSession(true);
+      if (!started) {
+        simulationModeRef.current = previousMode;
+        nextExamActionRef.current = undefined;
+        return false;
+      }
+      standardInterviewLookupRequestRef.current = null;
+      await refreshStandardInterviewLookup();
+      return true;
+    } catch (error) {
+      simulationModeRef.current = previousMode;
+      nextExamActionRef.current = undefined;
+      throw error;
+    }
+  }, [apiClient, userId, initiateSession, refreshStandardInterviewLookup]);
+
+  const chooseWelcomeAction = useCallback(async (examAction: MockExamAction, messageId: string): Promise<boolean> => {
+    const started = await startStandardInterview(examAction);
+    if (started) dispatch({ type: 'RESOLVE_MESSAGE_ACTIONS', payload: { messageId } });
+    return started;
+  }, [dispatch, startStandardInterview]);
 
   useEffect(() => {
     if (conversationState.isSessionActive) {
@@ -1775,7 +1863,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   // direction to take, and the choices render as buttons in the chat instead
   // of a blocking dialog or a side effect of the microphone control.
   useEffect(() => {
-    if (!apiClient || !userId) return;
+    if (!apiClient || !userId || isCheckingStandardInterview) return;
 
     // A different authenticated user owns a different banner. Reset only on a
     // genuine user change — never on an incidental re-run (timezone sync, auth
@@ -1824,7 +1912,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         }
       }
 
-      const unfinishedExam = await MockExamService.getLatestInProgress(userId, testVersionRef.current);
+      const unfinishedExam = standardInterviewLookupMatches
+        ? standardInterviewLookup?.exam ?? null
+        : null;
       if (welcomeBannerUserIdRef.current !== userId) return;
       if (latestConversationHistoryRef.current.some(message =>
         message.actions?.some(action => action.kind === 'exam')
@@ -1859,7 +1949,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
             variant: 'secondary',
           },
         ];
-      } else if (bannerFetched) {
+      } else if (bannerFetched && !standardInterviewLookupFailed) {
         actions = [{
           kind: 'exam',
           examAction: 'new',
@@ -1891,7 +1981,18 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         }
       }
     })();
-  }, [apiClient, userId, dispatch, conversationState.conversationHistory.length, accountTimezone, t]);
+  }, [
+    apiClient,
+    userId,
+    dispatch,
+    conversationState.conversationHistory.length,
+    accountTimezone,
+    t,
+    isCheckingStandardInterview,
+    standardInterviewLookupMatches,
+    standardInterviewLookup,
+    standardInterviewLookupFailed,
+  ]);
 
   const stopRecordingRef = useRef(stopRecording);
   useEffect(() => {
@@ -2035,6 +2136,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     dailySessionSettings,
     postExamId,
     currentItemId,
+    hasUnfinishedStandardInterview,
+    isCheckingStandardInterview,
+    standardInterviewLookupFailed,
+    refreshStandardInterviewLookup,
+    startStandardInterview,
     changeMode,
     isAudioRetryPending,
     currentState,

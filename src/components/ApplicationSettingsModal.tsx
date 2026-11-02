@@ -28,6 +28,8 @@ interface ApplicationSettingsModalProps {
 }
 
 const THEME_OPTION_VALUES: ThemeOption[] = ['light', 'dark'];
+const MAX_LEARNING_GOAL_LENGTH = 300;
+const MAX_WEEKLY_TARGET = 2_147_483_647;
 
 const FONT_SIZE_NAME_KEYS: Record<CanonicalFontSize, string> = {
   'extra-small': 'font.extraSmall',
@@ -57,7 +59,7 @@ const SettingRow: React.FC<{ title: string; description: string; children: React
 export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> = ({ isOpen, onClose, settings, onSave, onThemePreview, pollyVoices = [], isDesktop, isSessionActive = false }) => {
   const { t, i18n } = useTranslation('settings');
   const isArabic = i18n.language === 'ar-SA';
-  const defaults = useMemo((): UserSettings => ({ language: 'en-US', theme: 'light', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default', has_seen_welcome: false, notifications_enabled: false, reminder_time: '19:00', input_device_id: null, output_device_id: null }), [pollyVoices]);
+  const defaults = useMemo((): UserSettings => ({ language: 'en-US', theme: 'light', ai_voice_id: pollyVoices[0]?.id ?? 'Joanna', live_feedback_enabled: true, mic_mode: 'voice_activity', barge_in: 'balanced', progress_report_frequency: 'weekly', font_size: 'default', has_seen_welcome: false, notifications_enabled: false, reminder_time: '19:00', input_device_id: null, output_device_id: null, learning_goal: null, weekly_graded_answer_target: null }), [pollyVoices]);
   const [draft, setDraft] = useState<UserSettings>({ ...defaults, ...settings, theme: normalizeTheme(settings.theme ?? defaults.theme) });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,9 +89,26 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
   }, []);
 
   const handleSave = useCallback(async () => {
+    const learningGoal = draft.learning_goal?.trim() ?? '';
+    const weeklyTarget = draft.weekly_graded_answer_target ?? null;
+    if (learningGoal.length > MAX_LEARNING_GOAL_LENGTH) {
+      setError(t('learningGoals.focusTooLong'));
+      return;
+    }
+    if (weeklyTarget !== null && (
+      !Number.isSafeInteger(weeklyTarget) || weeklyTarget < 1 || weeklyTarget > MAX_WEEKLY_TARGET
+    )) {
+      setError(t('learningGoals.targetInvalid'));
+      return;
+    }
+
     setSaving(true);
     try {
-      await onSave(draft);
+      await onSave({
+        ...draft,
+        learning_goal: learningGoal || null,
+        weekly_graded_answer_target: weeklyTarget,
+      });
       setError(null);
       onThemePreview(null);
       onClose();
@@ -133,6 +152,43 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
               ))}
             </div>
           </SettingRow>
+
+          <hr className="border-immigo-gray-200 dark:border-gray-700" />
+
+          <section className="space-y-3">
+            <div>
+              <h3 className="font-semibold text-deep-navy dark:text-gray-100">{t('learningGoals.title')}</h3>
+              <p className="text-sm text-immigo-gray-600 dark:text-gray-300">{t('learningGoals.description')}</p>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-deep-navy dark:text-gray-100">{t('learningGoals.focusLabel')}</span>
+              <textarea
+                aria-label={t('learningGoals.focusLabel')}
+                value={draft.learning_goal ?? ''}
+                maxLength={MAX_LEARNING_GOAL_LENGTH}
+                onChange={(event) => handleDraftChange('learning_goal', event.target.value)}
+                className="min-h-20 w-full rounded-lg border-2 border-immigo-gray-300 bg-immigo-gray-100 p-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-deep-navy dark:text-gray-100">{t('learningGoals.targetLabel')}</span>
+              <input
+                aria-label={t('learningGoals.targetLabel')}
+                type="number"
+                min={1}
+                max={MAX_WEEKLY_TARGET}
+                step={1}
+                placeholder={t('learningGoals.targetPlaceholder')}
+                value={draft.weekly_graded_answer_target ?? ''}
+                onChange={(event) => handleDraftChange(
+                  'weekly_graded_answer_target',
+                  event.target.value === '' ? null : Number(event.target.value),
+                )}
+                className="w-full rounded-lg border-2 border-immigo-gray-300 bg-immigo-gray-100 p-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+              />
+              <span className="block text-xs text-immigo-gray-500">{t('learningGoals.targetDescription')}</span>
+            </label>
+          </section>
 
           {!isDesktop && (
             <>

@@ -35,6 +35,10 @@ export interface UserSettings {
   location_state?: string | null;
   /** IANA time zone that defines the user's daily learning-session boundary. */
   account_timezone?: string | null;
+  /** Optional account-level learning focus shared by Practice and Study modes. */
+  learning_goal?: string | null;
+  /** Optional weekly graded-answer target; null means tracking is disabled. */
+  weekly_graded_answer_target?: number | null;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -54,4 +58,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   output_device_id: null,
   location_state: null,
   account_timezone: 'UTC',
+  learning_goal: null,
+  weekly_graded_answer_target: null,
 };

@@ -35,6 +35,7 @@ Tests must exercise production code. Re-implementing production logic inside a t
 | `npm run test:coverage` | Unit/integration with coverage thresholds |
 | `npm run test:e2e` | Full Playwright suite |
 | `npm run eval:civics` | Civics grading benchmark |
+| `npm run eval:reports` | Synthetic daily-report integrity golden set |
 | `npm run lint` | ESLint with warnings as errors |
 | `npm run typecheck:test` | TypeScript check for source and tests |
 | `npm run build` | Production TypeScript and Vite build |
@@ -107,6 +108,7 @@ Rules:
 ## 9. Evals
 
 - `npm run eval:civics` protects grading quality.
+- `npm run eval:reports` checks daily-report formatting against synthetic qualitative and adversarial outputs; numeric results must be assembled from recorded grading facts.
 - A prompt, model, or matching change requires an eval run.
 - Eval thresholds are reviewed with the prompt change, not adjusted afterward to fit the output.
 - Evals are not a substitute for deterministic contract tests.

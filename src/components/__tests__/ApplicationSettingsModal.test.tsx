@@ -84,4 +84,30 @@ describe('ApplicationSettingsModal', () => {
 
     expect(screen.getByText('Text Size')).toBeDefined();
   });
+
+  it('lets the user save a durable learning focus and an optional weekly target', async () => {
+    const { onSave } = renderSettings(false);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Learning focus' }), {
+      target: { value: 'Review the branches of government' },
+    });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Weekly graded-answer target' }), {
+      target: { value: '20' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0]).toMatchObject({
+      learning_goal: 'Review the branches of government',
+      weekly_graded_answer_target: 20,
+    });
+  });
+
+  it('suggests 20 answers without enabling a weekly target by default', () => {
+    renderSettings(false);
+    const target = screen.getByRole('spinbutton', { name: 'Weekly graded-answer target' }) as HTMLInputElement;
+
+    expect(target.value).toBe('');
+    expect(target.placeholder).toBe('Suggested: 20');
+  });
 });

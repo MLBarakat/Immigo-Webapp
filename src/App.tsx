@@ -143,16 +143,21 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     }
   };
 
-  const startNewMockExam = () => {
+  const startStandardInterview = async (action: 'new' | 'resume' = 'new') => {
     setActiveExamReviewId(null);
-    if (simulationMode !== 'standard') setSimulationMode('standard');
-    manager.setMockExamAction('new');
-    manager.startSession();
+    try {
+      const started = await manager.startStandardInterview(action);
+      if (started) setSimulationMode('standard');
+      return started;
+    } catch (error) {
+      logger.error('Could not start the Standard Interview.', undefined, { error: String(error) });
+      return false;
+    }
   };
 
   const continueInMode = async (mode: SimulationMode) => {
     if (mode === 'standard') {
-      startNewMockExam();
+      await startStandardInterview('new');
       return;
     }
     const changed = await manager.changeMode(mode);
@@ -162,29 +167,46 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     }
   };
 
-  const continueWithGoal = async (goal: string, mode: SimulationMode) => {
+  const continueWithGoal = async (goal: string, mode: SimulationMode): Promise<boolean> => {
     const changed = await manager.changeMode(mode);
-    if (!changed) return;
+    if (!changed) return false;
     setSimulationMode(mode);
     setActiveExamReviewId(null);
     await manager.sendTextMessage(goal);
+    return true;
   };
 
-  const handleWelcomeAction = (messageId: string, action: MessageAction) => {
+  const applySavedLearningFocus = async (goal: string): Promise<boolean> => {
+    if (simulationMode === 'standard' || !manager.sessionId || !user?.id) return false;
+    return continueWithGoal(goal, simulationMode);
+  };
+
+  const handleWelcomeAction = async (messageId: string, action: MessageAction) => {
     if (action.kind !== 'exam') return;
-    setActiveExamReviewId(null);
-    setSimulationMode('standard');
-    void manager.chooseWelcomeAction(action.examAction, messageId);
+    try {
+      const started = await manager.chooseWelcomeAction(action.examAction, messageId);
+      if (started) {
+        setActiveExamReviewId(null);
+        setSimulationMode('standard');
+      }
+    } catch (error) {
+      logger.error('Could not start the Standard Interview from the welcome card.', undefined, { error: String(error) });
+    }
   };
 
   const handleSendTextMessage = (text: string) => {
     void manager.sendTextMessage(text);
   };
 
-  const handleSimulationModeChange = (mode: SimulationMode) => {
-    if (mode === simulationMode) return;
+  const handleSimulationModeChange = async (mode: SimulationMode): Promise<boolean> => {
+    if (mode === simulationMode) return true;
+    if (manager.sessionId && user?.id) {
+      const changed = await manager.changeMode(mode);
+      if (!changed) return false;
+    }
     setSimulationMode(mode);
-    if (manager.sessionId && user?.id) void manager.changeMode(mode);
+    setActiveExamReviewId(null);
+    return true;
   };
 
   // ── UI State ──
@@ -351,6 +373,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               liveStats={manager.liveStats}
               conversationLength={manager.conversationHistory.length}
               userId={user?.id}
+              accountTimezone={userSettings.account_timezone || 'UTC'}
+              learningGoal={userSettings.learning_goal}
+              weeklyGradedAnswerTarget={userSettings.weekly_graded_answer_target}
+              simulationMode={simulationMode}
+              canApplySavedFocus={Boolean(manager.sessionId && user?.id)}
+              onApplySavedFocus={applySavedLearningFocus}
+              onOpenSettings={() => setShowAppSettings(true)}
               isGeneratingProgressReport={manager.isGeneratingProgressReport}
             />
           )}
@@ -390,6 +419,12 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               onToggleCollapse={() => setMobileWorkspace('interview')}
               simulationMode={simulationMode}
               onSimulationModeChange={handleSimulationModeChange}
+              hasUnfinishedStandardInterview={manager.hasUnfinishedStandardInterview}
+              isCheckingStandardInterview={manager.isCheckingStandardInterview}
+              standardInterviewLookupFailed={manager.standardInterviewLookupFailed}
+              onRetryStandardInterviewLookup={() => { void manager.refreshStandardInterviewLookup(); }}
+              onResumeStandardInterview={() => { void startStandardInterview('resume'); }}
+              onStartNewStandardInterview={() => { void startStandardInterview('new'); }}
               testVersion={testVersion}
               onTestVersionChange={setTestVersion}
               includeEnglishSimulation={includeEnglishSimulation}
@@ -443,7 +478,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onStartPractice={continueInMode}
           onChooseMode={continueInMode}
           onSetGoal={continueWithGoal}
-          onStartNewExam={startNewMockExam}
+          onStartNewExam={startStandardInterview}
           onRetry={() => { if (activeExamReviewId) void openExamReview(activeExamReviewId); }}
         />
       </div>
@@ -528,6 +563,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           liveStats={manager.liveStats}
           conversationLength={manager.conversationHistory.length}
           userId={user?.id}
+          accountTimezone={userSettings.account_timezone || 'UTC'}
+          learningGoal={userSettings.learning_goal}
+          weeklyGradedAnswerTarget={userSettings.weekly_graded_answer_target}
+          simulationMode={simulationMode}
+          canApplySavedFocus={Boolean(manager.sessionId && user?.id)}
+          onApplySavedFocus={applySavedLearningFocus}
+          onOpenSettings={() => setShowAppSettings(true)}
           isGeneratingProgressReport={manager.isGeneratingProgressReport}
         />
 
@@ -568,6 +610,12 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onToggleCollapse={() => setRightCollapsed(p => !p)}
           simulationMode={simulationMode}
           onSimulationModeChange={handleSimulationModeChange}
+          hasUnfinishedStandardInterview={manager.hasUnfinishedStandardInterview}
+          isCheckingStandardInterview={manager.isCheckingStandardInterview}
+          standardInterviewLookupFailed={manager.standardInterviewLookupFailed}
+          onRetryStandardInterviewLookup={() => { void manager.refreshStandardInterviewLookup(); }}
+          onResumeStandardInterview={() => { void startStandardInterview('resume'); }}
+          onStartNewStandardInterview={() => { void startStandardInterview('new'); }}
           testVersion={testVersion}
           onTestVersionChange={setTestVersion}
           includeEnglishSimulation={includeEnglishSimulation}
@@ -593,7 +641,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         onStartPractice={continueInMode}
         onChooseMode={continueInMode}
         onSetGoal={continueWithGoal}
-        onStartNewExam={startNewMockExam}
+        onStartNewExam={startStandardInterview}
         onRetry={() => { if (activeExamReviewId) void openExamReview(activeExamReviewId); }}
       />
     </div>

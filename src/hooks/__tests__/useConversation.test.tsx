@@ -813,12 +813,37 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       payload: expect.objectContaining({
         content: expect.stringContaining('8 civics questions are left'),
         actions: expect.arrayContaining([
-          expect.objectContaining({ examAction: 'resume', label: 'Continue exam' }),
-          expect.objectContaining({ examAction: 'new', label: 'Start a new exam' }),
+          expect.objectContaining({ examAction: 'resume', label: 'Resume interview' }),
+          expect.objectContaining({ examAction: 'new', label: 'Start a new interview' }),
         ]),
       }),
     })));
     expect(MockExamService.getLatestInProgress).toHaveBeenCalledWith('user-exam', '2020');
+  });
+
+  it('surfaces and retries unfinished Standard Interview lookup failures', async () => {
+    vi.mocked(MockExamService.getLatestInProgress).mockRejectedValueOnce(new Error('Database unavailable'));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(
+      () => useConversation({ apiClient: null, userId: 'user-interview-check' }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.standardInterviewLookupFailed).toBe(true));
+    expect(result.current.isCheckingStandardInterview).toBe(false);
+    expect(result.current.hasUnfinishedStandardInterview).toBe(false);
+
+    vi.mocked(MockExamService.getLatestInProgress).mockResolvedValueOnce(null);
+    await act(async () => {
+      await result.current.refreshStandardInterviewLookup();
+    });
+
+    expect(result.current.standardInterviewLookupFailed).toBe(false);
+    expect(result.current.isCheckingStandardInterview).toBe(false);
   });
 
   it('activates voice mode without starting or resuming a mock exam', async () => {

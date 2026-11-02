@@ -61,8 +61,30 @@
       "answerAccuracy": "Answer Accuracy",
       "englishClarity": "English Clarity",
       "responseCompleteness": "Response Completeness",
+      "notMeasuredYet": "Not measured yet",
       "questions": "Questions",
       "questionsAnswered": "{{count}} answered",
+      "weeklyProgress": {
+        "title": "Weekly learning goal",
+        "settings": "Edit goals",
+        "loading": "Loading this week's progress…",
+        "error": "Weekly progress could not be loaded.",
+        "countWithTarget": "{{count}} of {{target}} graded answers",
+        "countWithoutTarget": "{{count}} graded answers this week",
+        "savedFocus": "Saved focus",
+        "applyFocus": "Apply saved focus",
+        "confirmTitle": "Use your saved focus?",
+        "confirmDescription": "Send “{{goal}}” to ImmiGO in {{mode}} as your next message?",
+        "applyFailed": "The saved focus could not be sent. Check the conversation and try again.",
+        "cancel": "Cancel",
+        "applying": "Applying…",
+        "confirmApply": "Use this focus",
+        "modes": {
+          "practice": "Practice Mode",
+          "study": "Study Mode",
+          "standard": "Standard Interview"
+        }
+      },
       "previousReports": "Previous Progress Reports",
       "reportsLoading": "Loading reports…",
       "reportsLoadError": "Progress reports could not be loaded.",
@@ -128,11 +150,11 @@
       "audioRetryPending": "Tap anywhere to hear the answer"
     },
     "examReview": {
-      "cardTitle": "Your exam review is ready",
+      "cardTitle": "Your Standard Interview review is ready",
       "cardDescription": "See what went well and choose what to practice next.",
       "openReview": "Review this exam",
-      "title": "Your mock exam review",
-      "subtitle": "A review of this exam only",
+      "title": "Your Standard Interview review",
+      "subtitle": "A review of this interview only",
       "close": "Close exam review",
       "loadingTitle": "Putting your review together…",
       "loadingBody": "Your coach is looking at this exam’s results.",
@@ -152,16 +174,16 @@
       "goalPlaceholder": "For example, help me remember the branches of government.",
       "goalMode": "Practice this goal in",
       "useGoal": "Use this goal",
-      "newExam": "Start a new mock exam",
+      "newExam": "Start a new Standard Interview",
       "keepChatting": "Keep chatting",
       "modes": { "standard": "Standard Interview", "practice": "Practice Mode", "study": "Study Mode" }
     },
     "welcome": {
-      "resumeCivics": "You have an unfinished {{version}} mock exam. {{remaining}} civics questions are left. How would you like to continue?",
-      "resumeEnglish": "You have an unfinished {{version}} mock exam that is ready to continue with English {{stage}} practice. How would you like to continue?",
-      "continueExam": "Continue exam",
-      "startNewExam": "Start a new exam",
-      "startMockExam": "Start a mock exam"
+      "resumeCivics": "You have an unfinished {{version}} Standard Interview. {{remaining}} civics questions are left. How would you like to continue?",
+      "resumeEnglish": "You have an unfinished {{version}} Standard Interview that is ready to continue with English {{stage}} practice. How would you like to continue?",
+      "continueExam": "Resume interview",
+      "startNewExam": "Start a new interview",
+      "startMockExam": "Start a Standard Interview"
     },
     "right": {
       "title": "Configuration & Control",
@@ -172,6 +194,18 @@
       "downloadTitle": "Download Transcript",
       "simulationModes": "Simulation Modes",
       "modeLegend": "Interview simulation mode",
+      "checkingInterview": "Checking for an unfinished Standard Interview…",
+      "interviewCheckFailed": "We couldn't check for an unfinished Standard Interview. Mode changes are paused to protect your progress.",
+      "interviewActionFailed": "We couldn't update the interview. Your current mode and progress are unchanged. Please try again.",
+      "tryAgain": "Try again",
+      "pauseInterviewTitle": "Pause this Standard Interview?",
+      "pauseInterviewDescription": "Your interview progress will be saved. You can resume it later.",
+      "unfinishedInterviewTitle": "You have an unfinished Standard Interview",
+      "unfinishedInterviewDescription": "Would you like to resume it or start a new one? The unfinished interview will remain saved.",
+      "stayInInterview": "Stay in interview",
+      "switchToMode": "Switch to {{mode}}",
+      "startNewInterview": "Start new",
+      "resumeInterview": "Resume interview",
       "standard": {
         "label": "Standard Interview",
         "description": "Real USCIS interview experience"

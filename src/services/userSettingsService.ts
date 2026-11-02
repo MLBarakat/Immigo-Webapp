@@ -25,6 +25,8 @@ export interface UserSettingsRow {
   output_device_id: string | null;
   location_state?: string | null;
   account_timezone?: string | null;
+  learning_goal: string | null;
+  weekly_graded_answer_target: number | null;
   updated_at: string;
 }
 
@@ -47,6 +49,8 @@ export function userSettingsRowToSettings(row: UserSettingsRow): Partial<UserSet
     output_device_id: row.output_device_id ?? null,
     ...(row.location_state ? { location_state: row.location_state } : {}),
     ...(row.account_timezone ? { account_timezone: row.account_timezone } : {}),
+    learning_goal: row.learning_goal ?? null,
+    weekly_graded_answer_target: row.weekly_graded_answer_target ?? null,
   };
 }
 
@@ -70,6 +74,8 @@ function settingsToRow(userId: string, settings: UserSettings): Omit<UserSetting
     output_device_id: settings.output_device_id ?? null,
     location_state: settings.location_state ?? null,
     account_timezone: settings.account_timezone ?? null,
+    learning_goal: settings.learning_goal?.trim() || null,
+    weekly_graded_answer_target: settings.weekly_graded_answer_target ?? null,
   };
 }
 
