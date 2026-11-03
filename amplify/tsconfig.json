@@ -11,5 +11,14 @@
     "paths": {
       "$amplify/*": ["../.amplify/generated/*"]
     }
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ]
 }
