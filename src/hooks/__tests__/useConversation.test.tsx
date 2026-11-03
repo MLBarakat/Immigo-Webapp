@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mocked, type MockedFunction } from 'vitest';
-import { renderHook, act, waitFor, fireEvent } from '@testing-library/react';
+import { renderHook, act, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import React from 'react';
 import { useConversation } from '../useConversation';
 import { ConversationContext, conversationReducer } from '../../context/conversationContextTypes';
@@ -163,6 +163,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
   });
 
   afterEach(() => {
+    // Unmount while the URL stub is still installed: the hook's teardown
+    // revokes its blob URL, and a throwing unmount would leave stale hooks
+    // alive to consume the next test's mocks.
+    cleanup();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -1296,6 +1300,156 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       type: 'ADD_ASSISTANT_MESSAGE',
       payload: expect.objectContaining({ content: responseText }),
     }));
+  });
+
+  it('keeps an active voice session in voice mode when a resume decision is captured', async () => {
+    vi.mocked(MockExamService.getLatestInProgress).mockResolvedValue({
+      id: 'exam-1',
+      test_version: '2020',
+      current_index: 3,
+      question_ids: ['q-1', 'q-2', 'q-3', 'q-4'],
+      correct_count: 2,
+      incorrect_count: 1,
+      include_english_simulation: false,
+      english_stage: 'none',
+    });
+    const responseText = "Let's continue your Standard Interview from where you left off.\n\nQuestion four?";
+    // Standard Interview starts are text-only openings from the server: no audio.
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
+      responseText,
+      audioData: new ArrayBuffer(0),
+      nextItemId: 'q-4',
+      nextQuestion: 'Question four?',
+      examRunId: 'exam-1',
+    }));
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'Correct. Next question.',
+      verdict: 'correct',
+      nextItemId: 'q-5',
+      nextQuestion: 'Question five?',
+      examRunId: 'exam-1',
+    }));
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-voice-resume' }),
+      { wrapper: ConversationProvider }
+    );
+
+    await waitFor(() => expect(result.current.hasUnfinishedStandardInterview).toBe(true));
+    await act(async () => {
+      await result.current.startVoiceMode();
+    });
+    expect(result.current.isVoiceSessionActive).toBe(true);
+    mockStartRecording.mockClear();
+    mockAudioInstance.play.mockClear();
+
+    await act(async () => {
+      await result.current.startStandardInterview('resume');
+    });
+
+    // The decision captured the mode it found: voice stays voice, the mic is
+    // reopened, and the text-only opening is fully visible in the chat.
+    expect(result.current.isVoiceSessionActive).toBe(true);
+    expect(mockStartRecording).toHaveBeenCalled();
+    expect(mockAudioInstance.play).not.toHaveBeenCalled();
+    expect(result.current.conversationHistory.some(
+      message => message.role === 'assistant' && message.content === responseText
+    )).toBe(true);
+
+    // The opening is done: the next spoken turn is graded as an answer rather
+    // than being treated as another greeting.
+    await act(async () => {
+      await result.current.sendTextMessage('One hundred', 'voice');
+    });
+    const transcriptOptions = mockApiClient.postTranscript.mock.calls.at(-1)?.[5];
+    expect(transcriptOptions).toEqual(expect.objectContaining({
+      openingResponse: false,
+      inputMethod: 'voice',
+    }));
+  });
+
+  it('shows the full AI opening in voice mode when greeting playback fails', async () => {
+    const responseText = "Let's begin your Standard Interview.\n\nQuestion one?";
+    const spokenText = responseText.replace(/\s+/g, ' ');
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
+      responseText,
+      audioData: new ArrayBuffer(8),
+      nextItemId: 'q-1',
+      nextQuestion: 'Question one?',
+    }));
+    mockAudioInstance.play.mockRejectedValueOnce(new Error('Unable to decode audio'));
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-voice-audio-failure' }),
+      { wrapper: ConversationProvider }
+    );
+
+    await act(async () => {
+      await result.current.startVoiceMode();
+      await result.current.startStandardInterview('new');
+    });
+
+    // A failed Polly turn must degrade to the complete text answer instead of
+    // leaving the chat empty/truncated, and the voice session must stay live.
+    await waitFor(() => {
+      const assistantContent = result.current.conversationHistory
+        .filter(message => message.role === 'assistant')
+        .map(message => message.content)
+        .join(' ');
+      expect(assistantContent).toBe(spokenText);
+    });
+    expect(result.current.appStatus).toBe('listening');
+    expect(result.current.isVoiceSessionActive).toBe(true);
+  });
+
+  it('shows the AI opening after a welcome-card decision even with existing history', async () => {
+    localStorage.removeItem('welcome-banner-shown:user-welcome-decision:2026-10-26');
+    vi.mocked(ChatPersistenceService.loadRecentMessages).mockResolvedValueOnce({
+      messages: [{
+        id: 'old-1',
+        session_id: 'old-session',
+        user_id: 'user-welcome-decision',
+        role: 'assistant',
+        content: 'Yesterday we practiced the Bill of Rights.',
+        audio_url: null,
+        created_at: '2026-10-25T18:00:00.000Z',
+      }],
+      hasMore: false,
+      oldestCursor: null,
+    });
+    const responseText = "Let's begin your Standard Interview.\n\nQuestion one?";
+    mockApiClient.fetchWelcomeBanner = vi.fn().mockResolvedValue({
+      message: 'Welcome back!',
+      isNewUser: false,
+    });
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
+      responseText,
+      audioData: new ArrayBuffer(0),
+      nextItemId: 'q-1',
+      nextQuestion: 'Question one?',
+    }));
+
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-welcome-decision' }),
+      { wrapper: ConversationProvider }
+    );
+
+    await waitFor(() => expect(
+      result.current.conversationHistory.some(message => message.actions?.length)
+    ).toBe(true));
+    const welcome = result.current.conversationHistory.find(message => message.actions?.length);
+    expect(welcome).toBeDefined();
+
+    await act(async () => {
+      await result.current.chooseWelcomeAction('new', welcome!.id);
+    });
+
+    await waitFor(() => expect(
+      result.current.conversationHistory.some(message => message.content === responseText)
+    ).toBe(true));
+    expect(result.current.conversationHistory.some(
+      message => message.content === 'Yesterday we practiced the Bill of Rights.'
+    )).toBe(true);
+    expect(result.current.isVoiceSessionActive).toBe(false);
+    expect(mockStartRecording).not.toHaveBeenCalled();
   });
 
   it('persists new text conversation turns in the current browser tab', async () => {

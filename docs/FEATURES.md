@@ -113,7 +113,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - Leaving an unfinished Standard Interview requires confirmation; its progress remains saved.
 - Returning to an unfinished Standard Interview explicitly offers resume or start new.
 - The AI welcome appears once per account-local date even when prior conversation history is present; existing history is preserved.
-- Starting or resuming a Standard Interview immediately displays a contextual opening and the current question without activating the microphone or Polly playback.
+- Capturing a resume or start-new decision never activates or deactivates voice mode: a text conversation stays text-only, and an active voice session keeps its microphone and playback.
+- Starting or resuming a Standard Interview immediately displays the contextual opening and current question in the chat area; when greeting audio is unavailable or fails, the full text is shown instead.
 - Detailed progress reports refresh silently after every ten scored civics answers in the active Standard Interview.
 - Reading/writing stages and stable prompt selections are preserved.
 - An interview review is server-generated; the client renders it without inventing scores.

@@ -1832,20 +1832,20 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
 
     if (continuingTextSession && currentItemIdRef.current && !forceSessionStart) {
-      await startListeningWithMicGate();
+      if (activateVoice) await startListeningWithMicGate();
       return true;
     }
 
     // Select the current question before opening the microphone, but leave
     // the first response to the user rather than speaking another opener.
     if (!apiClient) {
-      await startListeningWithMicGate();
+      if (activateVoice) await startListeningWithMicGate();
       return false;
     }
 
     if (completedExamIdRef.current) {
       nextExamActionRef.current = undefined;
-      await startListeningWithMicGate();
+      if (activateVoice) await startListeningWithMicGate();
       return true;
     }
 
@@ -1909,8 +1909,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         if (!res.responseText.trim()) {
           throw new Error('Standard Interview session start returned no opening response.');
         }
-        voiceSessionRef.current = false;
-        setIsVoiceSessionActive(false);
+        // Text mode never owns the microphone. If the user explicitly started
+        // voice during this request, leave that choice alone.
         openingResponseRef.current = false;
         if (userId && newSessionId) {
           void ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', res.responseText);
@@ -1923,6 +1923,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         return true;
       }
 
+      // Nothing to show or speak: keep the active voice session listening.
       if (!res.responseText && res.audioData.byteLength === 0) {
         logger.info('[AUDIO-DIAG] Session start returned no greeting audio; skipping greeting playback.', {
           traceId,
@@ -1930,12 +1931,30 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           responseTextLength: res.responseText?.length ?? 0,
           ...describeAudioEnvironment(),
         });
-        await startListeningWithMicGate();
+        if (activateVoice) await startListeningWithMicGate();
         return true;
       }
 
       if (userId && newSessionId) {
         void ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', res.responseText);
+      }
+
+      // Voice mode prefers Polly, but a text-only opening must still appear in
+      // the chat area instead of being dropped because audio is unavailable.
+      if (res.audioData.byteLength === 0) {
+        logger.info('[AUDIO-DIAG] Session start returned text without greeting audio; showing it as text.', {
+          traceId,
+          responseTextLength: res.responseText.length,
+          ...describeAudioEnvironment(),
+        });
+        dispatch({
+          type: 'ADD_ASSISTANT_MESSAGE',
+          payload: { assistantMessageId: secureAssistantMessageId, content: res.responseText },
+        });
+        openingResponseRef.current = false;
+        finishAssistantTurn();
+        if (activateVoice) await startListeningWithMicGate();
+        return true;
       }
 
       // Keep capture active during playback for barge-in. The assistant bubble
@@ -1954,6 +1973,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       activePollyTextRef.current = res.responseText;
       dispatch({ type: 'SET_STATUS', payload: 'speaking' });
       activeAssistantMessageIdRef.current = secureAssistantMessageId;
+      // The opening has been delivered; the next user turn is an answer, not
+      // another opening/greeting.
+      openingResponseRef.current = false;
       startAssistantReveal(secureAssistantMessageId, [res.responseText], audioPlaybackNode);
 
       isPollyPlayingRef.current = true;
@@ -1992,8 +2014,14 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           errorMessage: error instanceof Error ? error.message : String(error),
           traceId,
         });
-        clearAudioPlayback();
-        void startRecording();
+        // Playback failed after the response was already paid for: degrade to
+        // the complete text answer (never a truncated or missing bubble) and
+        // hand the turn back to the still-active voice session.
+        completeBlockedAudioTurnAsText(traceId, error);
+        if (voiceSessionRef.current) {
+          resumeVAD();
+          void startRecording();
+        }
       });
 
       audioPlaybackNode.onended = () => {
@@ -2018,8 +2046,6 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         traceId,
       });
       if (!activateVoice) {
-        voiceSessionRef.current = false;
-        setIsVoiceSessionActive(false);
         dispatch({ type: 'SET_STATUS', payload: 'error' });
         return false;
       }
@@ -2156,6 +2182,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
    */
   const startStandardInterview = useCallback(async (examAction: MockExamAction): Promise<boolean> => {
     if (!apiClient || !userId) return false;
+    // Capturing the resume/new decision must never change the user's chosen
+    // input mode: a text conversation stays text, an active voice session
+    // stays voice (and keeps its microphone and Polly playback).
+    const preserveVoiceMode = voiceSessionRef.current;
     const previousMode = simulationModeRef.current;
     simulationModeRef.current = 'standard';
     const resumedExam = examAction === 'resume' && standardInterviewLookup?.status === 'ready'
@@ -2168,7 +2198,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     completedExamIdRef.current = null;
     setPostExamId(null);
     try {
-      const started = await initiateSession(true, false);
+      const started = await initiateSession(true, preserveVoiceMode);
       if (!started) {
         simulationModeRef.current = previousMode;
         nextExamActionRef.current = undefined;
