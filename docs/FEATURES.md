@@ -85,24 +85,25 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-03 — Audio capture and playback lifecycle
 
 **Status:** protected  
-**Entry points:** `src/hooks/useVAD.ts`, `src/hooks/useWhisper.ts`, `src/utils/AudioRingBuffer.ts`, `src/utils/audioConditioning.ts`, `src/utils/audioUtils.ts`, `src/utils/bargeIn.ts`, `src/utils/micConsent.ts`
+**Entry points:** `src/hooks/useConversation.ts`, `src/hooks/useVAD.ts`, `src/hooks/useWhisper.ts`, `src/utils/AudioRingBuffer.ts`, `src/utils/audioConditioning.ts`, `src/utils/audioUtils.ts`, `src/utils/bargeIn.ts`, `src/utils/micConsent.ts`
 
 **Invariants**
 
 - Microphone access is user-initiated and consent-gated.
 - Workers, audio nodes, media streams, timers, and subscriptions are released on session end, unmount, and visibility changes.
 - Barge-in must not leave two playback paths active.
+- Spoken progress summaries are queued until the current assistant response and post-playback AEC settle window are complete; active user speech defers them.
 - Device preferences are applied before the next session starts.
 - Long-running audio work stays out of synchronous Lambda requests.
 
-**Tests:** `tests/unit/audio_ring_buffer.test.ts`, `src/utils/__tests__/audioConditioning.test.ts`, `src/utils/__tests__/audioUtils.test.ts`, `src/utils/__tests__/bargeIn.test.ts`, `src/hooks/__tests__/useWhisper.test.tsx`, `tests/e2e/voice-errors.spec.ts`, `tests/e2e/voice-permission-denied.spec.ts`, `tests/e2e/lifecycle.spec.ts`
+**Tests:** `tests/unit/audio_ring_buffer.test.ts`, `src/utils/__tests__/audioConditioning.test.ts`, `src/utils/__tests__/audioUtils.test.ts`, `src/utils/__tests__/bargeIn.test.ts`, `src/hooks/__tests__/useWhisper.test.tsx`, `src/hooks/__tests__/useConversation.test.tsx`, `tests/e2e/voice-errors.spec.ts`, `tests/e2e/voice-permission-denied.spec.ts`, `tests/e2e/lifecycle.spec.ts`
 
 ---
 
 ## F-04 — Conversation modes and Standard Interviews
 
 **Status:** protected  
-**Entry points:** `src/hooks/useConversation.ts`, `src/context/ConversationContext.tsx`, `src/services/mockExamService.ts`, `amplify/functions/transcript/english-exercises.ts`
+**Entry points:** `src/hooks/useConversation.ts`, `src/context/ConversationContext.tsx`, `src/services/mockExamService.ts`, `amplify/functions/transcript/handler.ts`, `amplify/functions/transcript/english-exercises.ts`
 
 **Invariants**
 
@@ -111,8 +112,14 @@ This registry is the contract between the product, the tests, and every AI codin
 - Mode changes do not lose persisted history or corrupt the active exam run.
 - Leaving an unfinished Standard Interview requires confirmation; its progress remains saved.
 - Returning to an unfinished Standard Interview explicitly offers resume or start new.
+- The AI welcome appears once per account-local date even when prior conversation history is present; existing history is preserved.
+- Starting or resuming a Standard Interview immediately displays a contextual opening and the current question without activating the microphone or Polly playback.
+- Detailed progress reports refresh silently after every ten scored civics answers in the active Standard Interview.
 - Reading/writing stages and stable prompt selections are preserved.
 - An interview review is server-generated; the client renders it without inventing scores.
+- The completed-exam review presents the interview report, score breakdown, question outcomes, strengths, focus areas, and one explicit next-step decision.
+- Dismissing the review is not a decision; a saved decision is immutable, and Practice/Study choices require a learning focus that updates the account goal atomically.
+- A saved next-step decision is shown consistently in the report and remains distinct from the follow-on action, which can be retried without changing the saved decision.
 
 **Tests:** `src/hooks/__tests__/useConversation.test.tsx`, `src/services/__tests__/mockExamService.test.ts`, `src/components/__tests__/ConversationHub.test.tsx`, `src/components/__tests__/CenterPanel.test.tsx`, `amplify/functions/transcript/__tests__/english-exercises.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `tests/e2e/text-roundtrip.spec.ts`, `tests/e2e/edge-cases.spec.ts`
 
@@ -138,7 +145,7 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-06 — Progress reports and daily learning
 
 **Status:** protected  
-**Entry points:** `amplify/functions/aggregateSession/handler.ts`, `amplify/functions/aggregateSession/reportFormat.ts`, `src/services/liveProgressService.ts`, `src/components/LeftPanel.tsx`, `src/App.tsx`
+**Entry points:** `amplify/functions/aggregateSession/handler.ts`, `amplify/functions/aggregateSession/reportFormat.ts`, `src/services/liveProgressService.ts`, `src/hooks/useConversation.ts`, `src/components/LeftPanel.tsx`, `src/App.tsx`
 
 **Invariants**
 
@@ -155,8 +162,11 @@ This registry is the contract between the product, the tests, and every AI codin
 - Weekly progress counts persisted graded answers from Monday through the current account-local date in the account time zone, across all three modes and all verdicts.
 - A weekly target is optional and disabled when unset; the learning-goal card distinguishes an unset target from zero progress.
 - Applying a saved focus in Practice or Study requires confirmation and sends it through the existing conversation message flow.
+- Detailed reports refresh silently every ten account-local daily graded answers in Practice and Study.
+- Practice and Study show a one-line factual summary after each assistant response, based only on recorded daily grading counts; summaries are not persisted as conversation context.
+- When voice is active, Polly speaks that summary only after the current response and AEC settle window; active user speech defers it.
 
-**Tests:** `src/services/__tests__/liveProgressService.test.ts`, `src/components/__tests__/PanelHeaders.test.tsx`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `eval/reports/__tests__/reports-eval.test.ts`, `tests/e2e/network-chaos.spec.ts`
+**Tests:** `src/services/__tests__/liveProgressService.test.ts`, `src/hooks/__tests__/useConversation.test.tsx`, `src/components/__tests__/PanelHeaders.test.tsx`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `eval/reports/__tests__/reports-eval.test.ts`, `tests/e2e/network-chaos.spec.ts`
 
 ---
 
@@ -273,8 +283,10 @@ This registry is the contract between the product, the tests, and every AI codin
 - Every protected route validates the bearer token before work.
 - Invalid input returns `400`; missing/invalid auth returns `401`; downstream failure returns `500`.
 - Backend handlers remain raw API Gateway handlers; no Express layer.
+- `POST /transcript` accepts a validated speech-only progress-summary request and returns Polly audio without creating a user transcript or grading turn.
+- The completed-exam review response includes server-generated scorecard and question-outcome data; the client validates and presents those facts without calculating scores.
 
-**Tests:** `src/services/__tests__/apiClient.test.ts`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `amplify/functions/deleteAccount/__tests__/handler.test.ts`, `tests/integration/websocket_api.test.ts`
+**Tests:** `src/services/__tests__/apiClient.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `amplify/functions/deleteAccount/__tests__/handler.test.ts`, `tests/integration/websocket_api.test.ts`
 
 ---
 
@@ -293,9 +305,10 @@ This registry is the contract between the product, the tests, and every AI codin
 - Every public table except `sessions` keeps NOT NULL `created_at`/`updated_at` with an on-update trigger.
 - Generated TypeScript types and `docs/DATABASE.md` stay in sync with migrations.
 - `user_settings.learning_goal` is nullable and limited to 300 non-whitespace characters; `weekly_graded_answer_target` is nullable and positive when set.
+- Completed interview decisions are constrained to supported choices, saved once through an authenticated owner-scoped transaction, and immutable thereafter; Practice/Study decisions atomically synchronize the account learning goal.
 - The live round-trip test remains available behind `RUN_DB_ROUNDTRIP=1`.
 
-**Tests:** `tests/integration/migrations.test.ts`, `tests/integration/gradedAnswers.roundtrip.test.ts`
+**Tests:** `tests/integration/migrations.test.ts`, `tests/integration/gradedAnswers.roundtrip.test.ts`, `tests/integration/mockExamReviewDecision.test.ts`
 
 ---
 

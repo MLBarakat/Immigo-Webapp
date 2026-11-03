@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mocked } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mocked, type MockedFunction } from 'vitest';
 import { renderHook, act, waitFor, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { useConversation } from '../useConversation';
 import { ConversationContext, conversationReducer } from '../../context/conversationContextTypes';
 import { ConversationProvider } from '../../context/ConversationContext';
 import { useWhisper } from '../useWhisper';
+import type { TranscriptionState } from '../../context/transcriptionReducer';
 import { ApiClient, ApiError } from '../../services/apiClient';
 import { ChatPersistenceService } from '../../services/chatPersistenceService';
 import { fetchDailyProgressStats } from '../../services/liveProgressService';
@@ -12,6 +13,13 @@ import { MockExamService } from '../../services/mockExamService';
 import { analytics } from '../../analytics';
 
 type TranscriptResponse = Awaited<ReturnType<ApiClient['postTranscript']>>;
+type ConversationAction = Parameters<typeof conversationReducer>[1];
+type AssistantMessageAction = Extract<ConversationAction, {
+  type: 'ADD_ASSISTANT_MESSAGE' | 'ADD_STANDALONE_ASSISTANT_MESSAGE' | 'RECEIVE_ASSISTANT_CHUNK';
+}>;
+type StandaloneAssistantAction = Extract<ConversationAction, {
+  type: 'ADD_STANDALONE_ASSISTANT_MESSAGE';
+}>;
 
 const transcriptResponse = (overrides: Partial<TranscriptResponse> = {}): TranscriptResponse => ({
   responseText: '',
@@ -75,7 +83,7 @@ vi.mock('../../services/chatPersistenceService', () => ({
 
 describe('Orchestration Hook Runtime Validation: useConversation', () => {
   // Functional execution context tracker references
-  let mockDispatch: any;
+  let mockDispatch: MockedFunction<(action: ConversationAction) => void>;
   let mockStartRecording: any;
   let mockStopRecording: any;
   let mockApiClient: Mocked<ApiClient>;
@@ -84,7 +92,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
-    mockDispatch = vi.fn((action: Parameters<typeof conversationReducer>[1]) => {
+    mockDispatch = vi.fn((action: ConversationAction) => {
       if (action.type === 'SET_INTERIM_TRANSCRIPT') {
         mockContextValue.state = conversationReducer(mockContextValue.state, action);
       } else if (
@@ -129,6 +137,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       postTranscript: vi.fn(),
       postSessionStart: vi.fn(),
       postSilenceNudge: vi.fn(),
+      synthesizeSpeechText: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
       completeSession: vi.fn().mockResolvedValue({
         date: '2026-10-12',
         reportMarkdown: 'Overall Session Summary\nYou answered ten questions.',
@@ -299,12 +308,12 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(result.current.interimTranscript).toBe('I think the answer is the executive branch');
   });
 
-  it('generates and displays a committed progress report after every ten graded answers', async () => {
+  it('refreshes detailed progress reports silently and shows a brief Practice summary after each answer', async () => {
     mockContextValue.state.sessionId = 'report-session';
     let statsReadCount = 0;
     vi.mocked(fetchDailyProgressStats).mockImplementation(async () => ({
-      answered: Math.max(0, statsReadCount++),
-      correct: Math.max(0, statsReadCount - 1),
+      answered: ++statsReadCount,
+      correct: statsReadCount,
       incorrect: 0,
       partial: 0,
       accuracyPct: 100,
@@ -322,7 +331,11 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         {children}
       </ConversationContext.Provider>
     );
-    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient, userId: 'user-1' }), { wrapper });
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'practice',
+    }), { wrapper });
 
     for (let answer = 0; answer < 10; answer += 1) {
       await act(async () => {
@@ -332,21 +345,316 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
     await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledOnce());
     await waitFor(() => {
-      expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
-        payload: expect.objectContaining({
-          content: expect.stringContaining('You answered ten questions.'),
-        }),
-      }));
+      const progressSummaries = mockDispatch.mock.calls
+        .map(([action]) => action)
+        .filter((action): action is StandaloneAssistantAction =>
+          action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
+          && action.payload.content.includes("Today's progress")
+        );
+      expect(progressSummaries).toHaveLength(10);
+    });
+    const dispatchedAssistantContent = mockDispatch.mock.calls
+      .map(([action]) => action)
+      .filter((action): action is AssistantMessageAction =>
+        action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
+        || action.type === 'ADD_ASSISTANT_MESSAGE'
+      )
+      .map(action => action.payload.content);
+    expect(dispatchedAssistantContent.join('\n')).not.toContain('You answered ten questions.');
+  });
+
+  it('coalesces a report refresh triggered while another report is in flight', async () => {
+    let statsReadCount = 0;
+    vi.mocked(fetchDailyProgressStats).mockImplementation(async () => {
+      const answered = statsReadCount++;
+      return {
+        answered,
+        correct: answered,
+        incorrect: 0,
+        partial: 0,
+        accuracyPct: 100,
+        missedItemIds: [],
+      };
+    });
+    const reportResult = {
+      date: '2026-10-12',
+      reportMarkdown: 'Overall Session Summary\nYou answered ten questions.',
+    };
+    let resolveFirstReport!: (value: typeof reportResult) => void;
+    const firstReport = new Promise<typeof reportResult>((resolve) => {
+      resolveFirstReport = resolve;
+    });
+    mockApiClient.completeSession
+      .mockReturnValueOnce(firstReport)
+      .mockResolvedValueOnce(reportResult);
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'Correct. Next question.',
+      verdict: 'correct',
+      nextItemId: 'q-next',
+      nextQuestion: 'Next question?',
+    }));
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'practice',
+    }), { wrapper });
+
+    for (let answer = 0; answer < 10; answer += 1) {
+      await act(async () => {
+        await result.current.sendTextMessage(`First batch answer ${answer + 1}`);
+      });
+    }
+    await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledOnce());
+
+    for (let answer = 0; answer < 10; answer += 1) {
+      await act(async () => {
+        await result.current.sendTextMessage(`Second batch answer ${answer + 1}`);
+      });
+    }
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'SET_LIVE_STATS',
+      payload: expect.objectContaining({ answered: 20 }),
+    }));
+    expect(mockApiClient.completeSession).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      resolveFirstReport(reportResult);
+      await firstReport;
+    });
+    await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledTimes(2));
+  });
+
+  it('refreshes a Standard Interview report at ten scored answers in the current exam, not the daily count', async () => {
+    mockContextValue.state.sessionId = 'report-session';
+    vi.mocked(MockExamService.getLatestInProgress).mockResolvedValue({
+      id: 'exam-1',
+      test_version: '2020',
+      current_index: 8,
+      question_ids: ['q-1', 'q-2'],
+      correct_count: 8,
+      incorrect_count: 0,
+      include_english_simulation: false,
+      english_stage: 'none',
+    });
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
+      responseText: 'Let’s continue. Question nine?',
+      nextItemId: 'q-9',
+      nextQuestion: 'Question nine?',
+      examRunId: 'exam-1',
+    }));
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'Correct. Next question.',
+      verdict: 'correct',
+      nextItemId: 'q-next',
+      nextQuestion: 'Next question?',
+      examRunId: 'exam-1',
+    }));
+    vi.mocked(fetchDailyProgressStats).mockResolvedValue({
+      answered: 10,
+      correct: 9,
+      incorrect: 0,
+      partial: 0,
+      accuracyPct: 100,
+      missedItemIds: [],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'standard',
+    }), { wrapper });
+    await waitFor(() => expect(result.current.hasUnfinishedStandardInterview).toBe(true));
+    await waitFor(() => expect(fetchDailyProgressStats).toHaveBeenCalled());
+    const progressReadsBeforeAnswers = vi.mocked(fetchDailyProgressStats).mock.calls.length;
+
+    await act(async () => {
+      await result.current.startStandardInterview('resume');
+    });
+    await act(async () => {
+      await result.current.sendTextMessage('Answer nine');
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    await waitFor(() => expect(fetchDailyProgressStats).toHaveBeenCalledTimes(progressReadsBeforeAnswers + 1));
+    expect(mockApiClient.completeSession).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.sendTextMessage('Answer ten');
+    });
+    await waitFor(() => expect(fetchDailyProgressStats).toHaveBeenCalledTimes(progressReadsBeforeAnswers + 2));
+    await waitFor(() => expect(mockApiClient.postTranscript).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledOnce());
+    const dispatchedAssistantContent = mockDispatch.mock.calls
+      .map(([action]) => action)
+      .filter((action): action is AssistantMessageAction =>
+        action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
+        || action.type === 'ADD_ASSISTANT_MESSAGE'
+      )
+      .map(action => action.payload.content);
+    expect(dispatchedAssistantContent.join('\n')).not.toContain('You answered ten questions.');
+  });
+
+  it('queues a spoken Practice progress summary until the answer audio and AEC settle window finish', async () => {
+    mockContextValue.state.sessionId = 'voice-session';
+    mockContextValue.state.isSessionActive = true;
+    vi.mocked(fetchDailyProgressStats).mockResolvedValue({
+      answered: 1,
+      correct: 1,
+      incorrect: 0,
+      partial: 0,
+      accuracyPct: 100,
+      missedItemIds: [],
+    });
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'Correct. Next question.',
+      audioData: new ArrayBuffer(8),
+      verdict: 'correct',
+      nextItemId: 'q-next',
+      nextQuestion: 'Next question?',
+    }));
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'practice',
+    }), { wrapper });
+    await waitFor(() => expect(fetchDailyProgressStats).toHaveBeenCalled());
+    const progressReadsBeforeAnswer = vi.mocked(fetchDailyProgressStats).mock.calls.length;
+
+    await act(async () => {
+      await result.current.startVoiceMode();
+      await result.current.sendTextMessage('The answer', 'voice');
+    });
+    await waitFor(() => expect(fetchDailyProgressStats).toHaveBeenCalledTimes(progressReadsBeforeAnswer + 1));
+    expect(mockApiClient.synthesizeSpeechText).not.toHaveBeenCalled();
+    expect(mockDispatch.mock.calls.some(([action]) =>
+      action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
+      && action.payload.content.includes("Today's progress")
+    )).toBe(false);
+
+    expect(mockAudioInstance.onended).toBeTypeOf('function');
+    act(() => mockAudioInstance.onended());
+    await waitFor(() => expect(mockApiClient.synthesizeSpeechText).toHaveBeenCalledOnce());
+    expect(mockApiClient.synthesizeSpeechText).toHaveBeenCalledWith(
+      "Today's progress: 1 of 1 correct (100%).",
+      expect.objectContaining({ simulationMode: 'practice', preferredLanguage: 'en-US' })
+    );
+    expect(mockAudioInstance.play).toHaveBeenCalledTimes(2);
+
+    expect(mockAudioInstance.onended).toBeTypeOf('function');
+    act(() => mockAudioInstance.onended());
+    await waitFor(() => {
+      const visibleProgressText = mockDispatch.mock.calls
+        .map(([action]) => action)
+        .filter((action): action is AssistantMessageAction =>
+          action.type === 'ADD_ASSISTANT_MESSAGE' || action.type === 'RECEIVE_ASSISTANT_CHUNK'
+        )
+        .map(action => action.payload.content)
+        .join('');
+      expect(visibleProgressText).toContain("Today's progress: 1 of 1 correct (100%).");
     });
   });
 
-  it('creates a reportable analytics session for text-only graded answers', async () => {
+  it('waits to speak a queued progress summary while the user is transcribing', async () => {
+    mockContextValue.state.sessionId = 'voice-session';
+    mockContextValue.state.isSessionActive = true;
+    const stats = {
+      answered: 1,
+      correct: 1,
+      incorrect: 0,
+      partial: 0,
+      accuracyPct: 100,
+      missedItemIds: [],
+    };
+    let resolveStats: (value: typeof stats | null) => void = () => {
+      throw new Error('Progress statistics were not requested.');
+    };
+    const pendingStats = new Promise<typeof stats | null>((resolve) => {
+      resolveStats = resolve;
+    });
+    vi.mocked(fetchDailyProgressStats)
+      .mockResolvedValueOnce(null)
+      .mockReturnValueOnce(pendingStats);
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'Correct. Next question.',
+      audioData: new ArrayBuffer(8),
+      verdict: 'correct',
+      nextItemId: 'q-next',
+      nextQuestion: 'Next question?',
+    }));
+
+    let transcriptionState: TranscriptionState = 'LISTENING';
+    vi.mocked(useWhisper).mockImplementation(() => ({
+      currentState: transcriptionState,
+      displayTranscript: '',
+      finalTranscript: '',
+      isModelLoading: false,
+      isVadReady: true,
+      isTranscribing: transcriptionState === 'VERIFYING',
+      prepareMicrophoneAccess: vi.fn().mockResolvedValue(true),
+      releasePreparedMicrophone: vi.fn(),
+      startRecording: mockStartRecording,
+      stopRecording: mockStopRecording,
+      clearTranscript: vi.fn(),
+      clearMicError: vi.fn(),
+      pauseVAD: vi.fn(),
+      resumeVAD: vi.fn(),
+    }));
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result, rerender } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'practice',
+    }), { wrapper });
+    await waitFor(() => expect(fetchDailyProgressStats).toHaveBeenCalledOnce());
+
+    await act(async () => {
+      await result.current.startVoiceMode();
+      await result.current.sendTextMessage('The answer', 'voice');
+    });
+    expect(fetchDailyProgressStats).toHaveBeenCalledTimes(2);
+    act(() => mockAudioInstance.onended());
+    await act(async () => new Promise(resolve => setTimeout(resolve, 350)));
+
+    transcriptionState = 'SPECULATIVE';
+    rerender();
+    await act(async () => {
+      resolveStats(stats);
+      await pendingStats;
+    });
+    expect(mockApiClient.synthesizeSpeechText).not.toHaveBeenCalled();
+
+    transcriptionState = 'LISTENING';
+    rerender();
+    await waitFor(() => expect(mockApiClient.synthesizeSpeechText).toHaveBeenCalledOnce());
+  });
+
+  it('creates a reportable Practice session for text-only graded answers', async () => {
     vi.mocked(ChatPersistenceService.getOrCreateDailySession).mockResolvedValue({
       id: 'daily-session',
       current_item_id: 'q-next',
       mode_goal_pending: false,
-      current_mode: 'standard',
+      current_mode: 'practice',
       test_version: '2020',
       include_english_simulation: false,
       local_date: '2026-10-26',
@@ -373,7 +681,11 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         {children}
       </ConversationContext.Provider>
     );
-    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient, userId: 'user-1' }), { wrapper });
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'practice',
+    }), { wrapper });
 
     for (let answer = 0; answer < 10; answer += 1) {
       await act(async () => {
@@ -783,6 +1095,40 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(localStorage.getItem(storageKey)).toBe('done');
   });
 
+  it('fetches the daily welcome banner when hydrated conversation history exists', async () => {
+    const storageKey = 'welcome-banner-shown:user-welcome-history:2026-10-26';
+    localStorage.removeItem(storageKey);
+    mockApiClient.fetchWelcomeBanner = vi.fn().mockResolvedValue({
+      message: 'Welcome back today!',
+      isNewUser: false,
+    });
+    mockContextValue.state = {
+      ...mockContextValue.state,
+      conversationHistory: [{
+        id: 'yesterdays-message',
+        role: 'assistant',
+        content: 'Yesterday’s practice is saved.',
+        timestamp: '2026-10-25T18:00:00.000Z',
+      }],
+    };
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+
+    renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-welcome-history', accountTimezone: 'UTC' }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(mockApiClient.fetchWelcomeBanner).toHaveBeenCalledOnce());
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({ content: 'Welcome back today!' }),
+    }));
+  });
+
   it('offers continue/new exam choices in the welcome banner instead of a pop-up', async () => {
     vi.mocked(MockExamService.getLatestInProgress).mockResolvedValue({
       id: 'exam-1',
@@ -894,6 +1240,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   it('starts the chosen exam from the welcome card with an explicit exam action', async () => {
     mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
+      responseText: "Let's continue your Standard Interview from where you left off.\n\nQuestion one?",
       nextItemId: 'q-1',
       nextQuestion: 'Question one?',
     }));
@@ -919,6 +1266,36 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       'daily-session',
       expect.objectContaining({ examAction: 'resume', simulationMode: 'standard' })
     );
+  });
+
+  it('starts a Standard Interview with its immediate response in text mode', async () => {
+    const responseText = "Let's begin your Standard Interview.\n\nQuestion one?";
+    mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
+      responseText,
+      audioData: new ArrayBuffer(8),
+      nextItemId: 'q-1',
+      nextQuestion: 'Question one?',
+    }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-text-exam' }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      await result.current.startStandardInterview('new');
+    });
+
+    expect(mockStartRecording).not.toHaveBeenCalled();
+    expect(mockAudioInstance.play).not.toHaveBeenCalled();
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({ content: responseText }),
+    }));
   });
 
   it('persists new text conversation turns in the current browser tab', async () => {

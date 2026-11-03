@@ -15,6 +15,57 @@ afterEach(() => {
 });
 
 describe('ApiClient active route contracts', () => {
+  it('validates and returns the factual scorecard and question outcomes for an exam review', async () => {
+    const examReview = {
+      report: 'Civics practice result.',
+      feedback: {
+        summary: 'You answered one question correctly.',
+        strengths: ['Strong recall'],
+        suggestions: ['Review the Constitution'],
+        recommendedMode: 'practice',
+        recommendationReason: 'A short practice set can reinforce recall.',
+      },
+      scorecard: {
+        testVersion: '2020',
+        civics: { correct: 1, incorrect: 0, total: 1, accuracyPercent: 100 },
+        english: { included: false, readingPassed: null, writingPassed: null },
+      },
+      questionOutcomes: [{
+        question: 'What is the supreme law of the land?',
+        verdict: 'correct',
+        acceptableAnswers: ['The Constitution'],
+      }],
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(examReview), { status: 200 }),
+    ));
+
+    await expect(
+      new ApiClient('token', 'https://api.example.test').getMockExamFeedback('exam-1', 'en-US'),
+    ).resolves.toEqual(examReview);
+  });
+
+  it('rejects an incomplete exam scorecard instead of rendering unvalidated data', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        report: '',
+        feedback: {
+          summary: '',
+          strengths: [],
+          suggestions: [],
+          recommendedMode: 'practice',
+          recommendationReason: '',
+        },
+        scorecard: { testVersion: '2020', civics: {}, english: {} },
+        questionOutcomes: [],
+      }), { status: 200 }),
+    ));
+
+    await expect(
+      new ApiClient('token', 'https://api.example.test').getMockExamFeedback('exam-1', 'en-US'),
+    ).rejects.toBeInstanceOf(ApiError);
+  });
+
   it('transmits English exercise modality and idempotency key and parses the active exam stage', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       responseText: 'English writing, sentence one.',
@@ -119,7 +170,7 @@ describe('ApiClient active route contracts', () => {
     });
   });
 
-  it('accepts a silent session start that only selects the first question', async () => {
+  it('accepts a silent Practice session start that only selects the first question', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       responseText: '',
       audioData: '',
@@ -130,7 +181,10 @@ describe('ApiClient active route contracts', () => {
     }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await new ApiClient('token', 'https://api.example.test').postSessionStart('session-1');
+    const result = await new ApiClient('token', 'https://api.example.test').postSessionStart(
+      'session-1',
+      { simulationMode: 'practice' }
+    );
 
     expect(result.responseText).toBe('');
     expect(result.audioData.byteLength).toBe(0);
@@ -155,6 +209,41 @@ describe('ApiClient active route contracts', () => {
       sessionId: 'session-1',
       currentItemId: 'q-1',
     });
+  });
+
+  it('sends a speech-only progress summary request and decodes the returned Polly audio', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      responseText: "Today's progress: 8 of 10 correct (80%).",
+      audioData: 'AQID',
+      verdict: null,
+      needsConfirmation: false,
+      nextItemId: null,
+      nextQuestion: null,
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    const audio = await new ApiClient('token', 'https://api.example.test').synthesizeSpeechText(
+      "Today's progress: 8 of 10 correct (80%).",
+      {
+        simulationMode: 'practice',
+        preferredLanguage: 'fr-FR',
+        voiceId: 'Lea',
+        signal: controller.signal,
+      }
+    );
+
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.example.test/transcript');
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      speechSynthesis: true,
+      speechText: "Today's progress: 8 of 10 correct (80%).",
+      simulationMode: 'practice',
+      preferredLanguage: 'fr-FR',
+      voiceId: 'Lea',
+    });
+    expect(request.signal).toBe(controller.signal);
+    expect(new Uint8Array(audio)).toEqual(new Uint8Array([1, 2, 3]));
   });
 
   it('accepts a successful account deletion response', async () => {

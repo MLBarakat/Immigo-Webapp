@@ -11,6 +11,7 @@
 | 20261102120000 | security_hardening |
 | 20261102130000 | uniform_timestamps |
 | 20261103120000 | durable_learning_goals |
+| 20261103172426 | mock_exam_review_decisions |
 
 ## Tables
 
@@ -267,6 +268,9 @@ Row level security: **enabled**
 | `writing_prompt_ids` | `text[]` | no | `'{}'::text[]` |
 | `reading_passed` | `boolean` | yes |  |
 | `writing_passed` | `boolean` | yes |  |
+| `review_decision` | `text` | yes |  |
+| `review_decision_note` | `text` | yes |  |
+| `review_decision_at` | `timestamp with time zone` | yes |  |
 
 Policies:
 
@@ -446,9 +450,11 @@ Security invoker: **yes**
 | Function | Returns | Security | search_path | anon EXECUTE | authenticated EXECUTE |
 | --- | --- | --- | --- | --- | --- |
 | `get_or_create_daily_learning_session(uuid,text)` | `SETOF sessions` | invoker | `public` | no | yes |
+| `guard_mock_exam_review_decision()` | `trigger` | invoker | `""` | no | no |
 | `handle_new_user()` | `trigger` | definer | `""` | no | no |
 | `match_progress_reports(vector,double precision,integer,uuid)` | `TABLE(id uuid, date date, report_markdown text, similarity double precision)` | invoker | not pinned | no | yes |
 | `purge_old_messages()` | `void` | definer | `public` | no | no |
+| `record_mock_exam_review_decision(uuid,text,text)` | `TABLE(saved boolean, review_decision text, review_decision_note text, review_decision_at timestamp with time zone)` | invoker | `""` | no | yes |
 | `set_updated_at()` | `trigger` | invoker | not pinned | no | no |
 | `update_updated_at_column()` | `trigger` | invoker | not pinned | no | no |
 

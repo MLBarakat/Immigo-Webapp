@@ -102,6 +102,67 @@ describe('supabase schema and RLS', () => {
     ]));
   });
 
+  it('stores immutable per-exam decisions and grants the atomic save only to authenticated users', async () => {
+    const columns = await query<{ column_name: string; data_type: string; is_nullable: string }>(`
+      select column_name, data_type, is_nullable
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'mock_exams'
+        and column_name in ('review_decision', 'review_decision_note', 'review_decision_at')
+      order by column_name
+    `);
+    expect(columns).toEqual([
+      { column_name: 'review_decision', data_type: 'text', is_nullable: 'YES' },
+      { column_name: 'review_decision_at', data_type: 'timestamp with time zone', is_nullable: 'YES' },
+      { column_name: 'review_decision_note', data_type: 'text', is_nullable: 'YES' },
+    ]);
+
+    const constraints = await query<{ definition: string }>(`
+      select pg_get_constraintdef(oid) as definition
+      from pg_constraint
+      where conrelid = 'public.mock_exams'::regclass
+        and conname in (
+          'mock_exams_review_decision_check',
+          'mock_exams_review_decision_timestamp_check',
+          'mock_exams_review_decision_note_check'
+        )
+    `);
+    expect(constraints).toHaveLength(3);
+    expect(constraints.map((row) => row.definition).join(' ')).toContain('review_answers');
+
+    const routine = await query<{
+      security_definer: boolean;
+      settings: string[] | null;
+      anon_execute: boolean;
+      authenticated_execute: boolean;
+    }>(`
+      select
+        p.prosecdef as security_definer,
+        p.proconfig as settings,
+        has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute,
+        has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute
+      from pg_proc p
+      where p.oid = to_regprocedure('public.record_mock_exam_review_decision(uuid,text,text)')
+    `);
+    expect(routine).toHaveLength(1);
+    expect(routine[0]?.security_definer).toBe(false);
+    expect(routine[0]?.settings).toContain('search_path=""');
+    expect(routine[0]?.anon_execute).toBe(false);
+    expect(routine[0]?.authenticated_execute).toBe(true);
+
+    const triggers = await query<{ tgname: string }>(`
+      select tgname
+      from pg_trigger
+      where tgrelid = 'public.mock_exams'::regclass
+        and not tgisinternal
+        and tgname like 'guard_mock_exam_review_decision_%'
+    `);
+    expect(triggers.map((trigger) => trigger.tgname).sort()).toEqual([
+      'guard_mock_exam_review_decision_insert',
+      'guard_mock_exam_review_decision_update',
+    ]);
+  });
+
   it('restricts active_user_sessions to the authenticated owner', async () => {
     const policies = await query<{
       cmd: string;

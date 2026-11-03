@@ -7,6 +7,34 @@ vi.mock('../../supabaseClient', () => ({ getSupabaseClient: vi.fn() }));
 describe('ChatPersistenceService account-day sessions', () => {
   afterEach(() => vi.clearAllMocks());
 
+  it('maps database messages to the UI model without inventing an audio URL', async () => {
+    const row = {
+      id: 'message-1',
+      session_id: 'session-1',
+      user_id: 'user-1',
+      role: 'assistant',
+      content: 'Welcome back.',
+      created_at: '2026-10-27T05:30:00.000Z',
+      updated_at: '2026-10-27T05:30:00.000Z',
+    };
+    const single = vi.fn().mockResolvedValue({ data: row, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+    vi.mocked(getSupabaseClient).mockReturnValue({ from } as never);
+
+    await expect(ChatPersistenceService.persistMessage('session-1', 'user-1', 'assistant', 'Welcome back.'))
+      .resolves.toEqual({
+        id: 'message-1',
+        session_id: 'session-1',
+        user_id: 'user-1',
+        role: 'assistant',
+        content: 'Welcome back.',
+        audio_url: null,
+        created_at: '2026-10-27T05:30:00.000Z',
+      });
+  });
+
   it('uses the database-resolved session day and account time zone', async () => {
     const row = {
       id: 'shared-session',

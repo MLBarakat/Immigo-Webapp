@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { logger } from './logger';
+import type { Database } from '../supabase/database-export/database.types';
 
-let supabaseClient: SupabaseClient | null = null;
+let supabaseClient: SupabaseClient<Database> | null = null;
 
 /**
  * Returns the singleton Supabase client.
@@ -10,7 +11,7 @@ let supabaseClient: SupabaseClient | null = null;
  * - VITE_SUPABASE_URL
  * - VITE_SUPABASE_ANON_KEY
  */
-export const getSupabaseClient = (): SupabaseClient => {
+export const getSupabaseClient = (): SupabaseClient<Database> => {
   if (supabaseClient) {
     return supabaseClient;
   }
@@ -40,7 +41,7 @@ export const getSupabaseClient = (): SupabaseClient => {
   }
 
   try {
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    supabaseClient = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
     logger.info('Supabase client initialized successfully.');
 

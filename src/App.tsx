@@ -8,6 +8,7 @@ import { TranscriptionProvider } from './context/TranscriptionContext';
 import { ConversationProvider } from './context/ConversationContext';
 import { useConversation } from './hooks/useConversation';
 import { ApiClient } from './services/apiClient';
+import { MockExamService } from './services/mockExamService';
 
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
@@ -27,7 +28,11 @@ import { LeftPanel } from './components/LeftPanel';
 import { CenterPanel } from './components/CenterPanel';
 import { RightPanel } from './components/RightPanel';
 import { FeedbackModal } from './components/FeedbackModal';
-import type { MockExamReview } from './services/apiClient';
+import type {
+  MockExamReview,
+  MockExamReviewDecision,
+  MockExamReviewDecisionChoice,
+} from './services/apiClient';
 import type { MessageAction, SimulationMode, TestVersion } from './context/conversationContextTypes';
 
 import { DisplayUser } from './types/user';
@@ -103,8 +108,11 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   });
   const [activeExamReviewId, setActiveExamReviewId] = useState<string | null>(null);
   const [examReviewCache, setExamReviewCache] = useState<Record<string, MockExamReview>>({});
+  const [examReviewDecisionCache, setExamReviewDecisionCache] = useState<Record<string, MockExamReviewDecision | null>>({});
   const [isExamReviewLoading, setIsExamReviewLoading] = useState(false);
   const [examReviewError, setExamReviewError] = useState<string | null>(null);
+  const [isReviewDecisionSaving, setIsReviewDecisionSaving] = useState(false);
+  const [reviewDecisionError, setReviewDecisionError] = useState<string | null>(null);
   useEffect(() => {
     try {
       localStorage.setItem('immigo_test_version', testVersion);
@@ -125,16 +133,30 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const openExamReview = async (examId: string) => {
     setActiveExamReviewId(examId);
     setExamReviewError(null);
+    setReviewDecisionError(null);
     const cachedReview = examReviewCache[examId];
-    if (cachedReview) return;
+    const hasCachedDecision = Object.prototype.hasOwnProperty.call(examReviewDecisionCache, examId);
+    if (cachedReview && hasCachedDecision) return;
     if (!apiClientInstance) {
+      setExamReviewError(tConversation('workspace.examReview.unavailable'));
+      return;
+    }
+    if (!user?.id) {
       setExamReviewError(tConversation('workspace.examReview.unavailable'));
       return;
     }
     setIsExamReviewLoading(true);
     try {
-      const review = await apiClientInstance.getMockExamFeedback(examId, currentLanguageCode);
-      setExamReviewCache(previous => ({ ...previous, [examId]: review }));
+      const [review, decision] = await Promise.all([
+        cachedReview
+          ? Promise.resolve(cachedReview)
+          : apiClientInstance.getMockExamFeedback(examId, currentLanguageCode),
+        hasCachedDecision
+          ? Promise.resolve(examReviewDecisionCache[examId] ?? null)
+          : MockExamService.getReviewDecision(user.id, examId),
+      ]);
+      if (!cachedReview) setExamReviewCache(previous => ({ ...previous, [examId]: review }));
+      setExamReviewDecisionCache(previous => ({ ...previous, [examId]: decision }));
     } catch (error) {
       logger.warn('Could not generate mock exam feedback.', { examId, error: String(error) });
       setExamReviewError(tConversation('workspace.examReview.loadFailed'));
@@ -144,10 +166,12 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   const startStandardInterview = async (action: 'new' | 'resume' = 'new') => {
-    setActiveExamReviewId(null);
     try {
       const started = await manager.startStandardInterview(action);
-      if (started) setSimulationMode('standard');
+      if (started) {
+        setSimulationMode('standard');
+        setActiveExamReviewId(null);
+      }
       return started;
     } catch (error) {
       logger.error('Could not start the Standard Interview.', undefined, { error: String(error) });
@@ -155,25 +179,84 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     }
   };
 
-  const continueInMode = async (mode: SimulationMode) => {
-    if (mode === 'standard') {
-      await startStandardInterview('new');
-      return;
-    }
-    const changed = await manager.changeMode(mode);
-    if (changed) {
-      setSimulationMode(mode);
-      setActiveExamReviewId(null);
-    }
-  };
-
   const continueWithGoal = async (goal: string, mode: SimulationMode): Promise<boolean> => {
     const changed = await manager.changeMode(mode);
     if (!changed) return false;
     setSimulationMode(mode);
-    setActiveExamReviewId(null);
     await manager.sendTextMessage(goal);
+    setActiveExamReviewId(null);
     return true;
+  };
+
+  const saveExamReviewDecision = async (
+    choice: MockExamReviewDecisionChoice,
+    note: string | null,
+  ): Promise<MockExamReviewDecision | null> => {
+    if (!activeExamReviewId || !user?.id) {
+      setReviewDecisionError(tConversation('workspace.examReview.saveFailed'));
+      return null;
+    }
+    setIsReviewDecisionSaving(true);
+    setReviewDecisionError(null);
+    try {
+      const result = await MockExamService.recordReviewDecision(
+        user.id,
+        activeExamReviewId,
+        choice,
+        note,
+      );
+      setExamReviewDecisionCache(previous => ({
+        ...previous,
+        [activeExamReviewId]: result.decision,
+      }));
+      if (
+        (result.decision.choice === 'practice' || result.decision.choice === 'study')
+        && result.decision.note
+      ) {
+        try {
+          await updateUserSettings({ learning_goal: result.decision.note });
+        } catch (error) {
+          logger.warn('The saved interview decision could not refresh account settings in memory.', {
+            examId: activeExamReviewId,
+            error: String(error),
+          });
+          setReviewDecisionError(tConversation('workspace.examReview.goalRefreshFailed'));
+        }
+      }
+      if (!result.wasCreated && (result.decision.choice !== choice || result.decision.note !== note)) {
+        setReviewDecisionError(tConversation('workspace.examReview.alreadyDecided'));
+      }
+      return result.decision;
+    } catch (error) {
+      logger.error('Could not save the Standard Interview decision.', undefined, {
+        examId: activeExamReviewId,
+        error: String(error),
+      });
+      setReviewDecisionError(tConversation('workspace.examReview.saveFailed'));
+      return null;
+    } finally {
+      setIsReviewDecisionSaving(false);
+    }
+  };
+
+  const continueWithReviewDecision = async (decision: MockExamReviewDecision): Promise<boolean> => {
+    try {
+      if (decision.choice === 'practice' || decision.choice === 'study') {
+        if (!decision.note) return false;
+        return await continueWithGoal(decision.note, decision.choice);
+      }
+      if (decision.choice === 'new_interview') {
+        return await startStandardInterview('new');
+      }
+      return false;
+    } catch (error) {
+      logger.error('Could not continue with the saved interview decision.', undefined, {
+        examId: activeExamReviewId,
+        choice: decision.choice,
+        error: String(error),
+      });
+      return false;
+    }
   };
 
   const applySavedLearningFocus = async (goal: string): Promise<boolean> => {
@@ -469,16 +552,18 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         </nav>
         <Footer />
         <FeedbackModal
+          key={activeExamReviewId ?? 'no-exam-review'}
           isOpen={Boolean(activeExamReviewId)}
+          examId={activeExamReviewId ?? ''}
           onClose={() => setActiveExamReviewId(null)}
           isLoading={isExamReviewLoading}
-          feedback={activeExamReviewId ? examReviewCache[activeExamReviewId]?.feedback ?? null : null}
-          report={activeExamReviewId ? examReviewCache[activeExamReviewId]?.report ?? null : null}
+          review={activeExamReviewId ? examReviewCache[activeExamReviewId] ?? null : null}
+          decision={activeExamReviewId ? examReviewDecisionCache[activeExamReviewId] ?? null : null}
+          decisionSaving={isReviewDecisionSaving}
+          decisionError={reviewDecisionError}
           error={examReviewError}
-          onStartPractice={continueInMode}
-          onChooseMode={continueInMode}
-          onSetGoal={continueWithGoal}
-          onStartNewExam={startStandardInterview}
+          onSaveDecision={saveExamReviewDecision}
+          onContinueDecision={continueWithReviewDecision}
           onRetry={() => { if (activeExamReviewId) void openExamReview(activeExamReviewId); }}
         />
       </div>
@@ -632,16 +717,18 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       <Footer />
 
       <FeedbackModal
+        key={activeExamReviewId ?? 'no-exam-review'}
         isOpen={Boolean(activeExamReviewId)}
+        examId={activeExamReviewId ?? ''}
         onClose={() => setActiveExamReviewId(null)}
         isLoading={isExamReviewLoading}
-        feedback={activeExamReviewId ? examReviewCache[activeExamReviewId]?.feedback ?? null : null}
-        report={activeExamReviewId ? examReviewCache[activeExamReviewId]?.report ?? null : null}
+        review={activeExamReviewId ? examReviewCache[activeExamReviewId] ?? null : null}
+        decision={activeExamReviewId ? examReviewDecisionCache[activeExamReviewId] ?? null : null}
+        decisionSaving={isReviewDecisionSaving}
+        decisionError={reviewDecisionError}
         error={examReviewError}
-        onStartPractice={continueInMode}
-        onChooseMode={continueInMode}
-        onSetGoal={continueWithGoal}
-        onStartNewExam={startStandardInterview}
+        onSaveDecision={saveExamReviewDecision}
+        onContinueDecision={continueWithReviewDecision}
         onRetry={() => { if (activeExamReviewId) void openExamReview(activeExamReviewId); }}
       />
     </div>

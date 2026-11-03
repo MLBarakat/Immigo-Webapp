@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   state: {
     exam: null as Record<string, unknown> | null,
     priorEnglishRequest: null as Record<string, unknown> | null,
+    answers: [] as Array<{ item_id: string; verdict: string }>,
   },
 }));
 
@@ -32,6 +33,7 @@ vi.mock('@supabase/supabase-js', () => ({
 import { handler } from '../handler';
 import { getFirstQuestion } from '../turn/bank';
 import { pickEnglishExercisePrompts } from '../english-exercises';
+import { ApiClient } from '../../../../src/services/apiClient';
 
 const FIRST_QUESTION = getFirstQuestion('2020');
 const EXAM_ID = '11111111-1111-4111-8111-111111111111';
@@ -67,6 +69,7 @@ function makeQuery(table: string) {
   }
   const resolveRow = () => {
     if (table === 'mock_exams') return { data: mocks.state.exam, error: null };
+    if (table === 'mock_exam_answers') return { data: mocks.state.answers, error: null };
     if (table === 'mock_exam_english_answers' && mocks.state.priorEnglishRequest) {
       return { data: mocks.state.priorEnglishRequest, error: null };
     }
@@ -99,6 +102,47 @@ function transcribeEvent(): Parameters<typeof handler>[0] {
   } as unknown as Parameters<typeof handler>[0];
 }
 
+function standardInterviewStartEvent(examAction: 'new' | 'resume'): Parameters<typeof handler>[0] {
+  const event = transcribeEvent();
+  return {
+    ...event,
+    body: JSON.stringify({
+      sessionStart: true,
+      sessionId: 'session-1',
+      simulationMode: 'standard',
+      testVersion: '2020',
+      examAction,
+      preferredLanguage: 'en-US',
+    }),
+  } as unknown as Parameters<typeof handler>[0];
+}
+
+function speechSynthesisEvent(overrides: Record<string, unknown> = {}): Parameters<typeof handler>[0] {
+  const event = transcribeEvent();
+  return {
+    ...event,
+    body: JSON.stringify({
+      speechSynthesis: true,
+      speechText: "Today's progress: 8 of 10 correct (80%).",
+      simulationMode: 'practice',
+      preferredLanguage: 'en-US',
+      ...overrides,
+    }),
+  } as unknown as Parameters<typeof handler>[0];
+}
+
+function examReviewEvent(): Parameters<typeof handler>[0] {
+  const event = transcribeEvent();
+  return {
+    ...event,
+    body: JSON.stringify({
+      examReview: true,
+      examId: EXAM_ID,
+      preferredLanguage: 'en-US',
+    }),
+  } as unknown as Parameters<typeof handler>[0];
+}
+
 describe('transcript handler — mock exam civics phase routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -106,6 +150,7 @@ describe('transcript handler — mock exam civics phase routing', () => {
     process.env.SUPABASE_ANON_KEY = 'anon-key';
     mocks.state.exam = examRow();
     mocks.state.priorEnglishRequest = null;
+    mocks.state.answers = [];
     mocks.getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
     mocks.from.mockImplementation(makeQuery);
     mocks.createClient.mockImplementation(() => ({
@@ -157,5 +202,137 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(body.responseText).toContain('Nice reading.');
     expect(body.nextQuestion).toBeTruthy();
     expect(mocks.from).toHaveBeenCalledWith('mock_exam_english_answers');
+  });
+
+  it.each(['new', 'resume'] as const)(
+    'returns an immediate text-only Standard Interview response for the %s action',
+    async (examAction) => {
+      const response = await handler(standardInterviewStartEvent(examAction));
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body) as {
+        responseText: string;
+        audioData: string;
+        assistantSegments: string[];
+        nextItemId: string | null;
+      };
+      expect(body.responseText).toContain(FIRST_QUESTION.question);
+      expect(body.responseText).toContain(
+        examAction === 'new'
+          ? "Let's begin your Standard Interview."
+          : "Let's continue your Standard Interview from where you left off."
+      );
+      expect(body.audioData).toBe('');
+      expect(body.assistantSegments).toEqual([body.responseText]);
+      expect(body.nextItemId).toBe(FIRST_QUESTION.id);
+      expect(mocks.pollySend).not.toHaveBeenCalled();
+    }
+  );
+
+  it('returns a factual scorecard and question outcomes with the generated interview review', async () => {
+    mocks.state.exam = examRow({
+      status: 'completed',
+      correct_count: 1,
+      incorrect_count: 0,
+      include_english_simulation: true,
+      reading_passed: true,
+      writing_passed: false,
+      report_markdown: '1 civics answer was correct.',
+    });
+    mocks.state.answers = [{ item_id: FIRST_QUESTION.id, verdict: 'correct' }];
+
+    const response = await handler(examReviewEvent());
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      scorecard: {
+        testVersion: string;
+        civics: { correct: number; incorrect: number; total: number; accuracyPercent: number };
+        english: { included: boolean; readingPassed: boolean | null; writingPassed: boolean | null };
+      };
+      questionOutcomes: Array<{
+        question: string;
+        verdict: string;
+        acceptableAnswers: string[] | null;
+      }>;
+    };
+    expect(body.scorecard).toEqual({
+      testVersion: '2020',
+      civics: { correct: 1, incorrect: 0, total: 1, accuracyPercent: 100 },
+      english: { included: true, readingPassed: true, writingPassed: false },
+    });
+    expect(body.questionOutcomes).toEqual([{
+      question: FIRST_QUESTION.question,
+      verdict: 'correct',
+      acceptableAnswers: FIRST_QUESTION.kind === 'static' ? FIRST_QUESTION.acceptableAnswers : null,
+    }]);
+  });
+
+  it('synthesizes a validated speech-only progress summary without invoking grading or Bedrock', async () => {
+    const response = await handler(speechSynthesisEvent());
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { responseText: string; audioData: string };
+    expect(body.responseText).toBe("Today's progress: 8 of 10 correct (80%).");
+    expect(body.audioData).toBeTruthy();
+    expect(mocks.pollySend).toHaveBeenCalled();
+    expect(mocks.bedrockSend).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it('rejects speech-only summaries that exceed the input limit', async () => {
+    const response = await handler(speechSynthesisEvent({ speechText: 'x'.repeat(501) }));
+
+    expect(response.statusCode).toBe(400);
+    expect(mocks.pollySend).not.toHaveBeenCalled();
+  });
+
+  it('requires valid bearer authentication before speech synthesis', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'invalid token' } });
+
+    const response = await handler(speechSynthesisEvent());
+
+    expect(response.statusCode).toBe(401);
+    expect(mocks.pollySend).not.toHaveBeenCalled();
+  });
+
+  it('returns a server failure when Polly cannot synthesize a speech-only summary', async () => {
+    mocks.pollySend.mockRejectedValue(new Error('Polly unavailable'));
+
+    const response = await handler(speechSynthesisEvent());
+
+    expect(response.statusCode).toBe(500);
+  });
+
+  it('integrates ApiClient speech requests with the authenticated transcript handler', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const authorization = new Headers(init?.headers).get('Authorization') ?? '';
+      const response = await handler({
+        ...transcribeEvent(),
+        headers: {
+          Authorization: authorization,
+          'x-correlation-trace-id': 'trace-integration',
+        },
+        body: String(init?.body ?? ''),
+      });
+      const responseHeaders = new Headers();
+      for (const [name, value] of Object.entries(response.headers ?? {})) {
+        responseHeaders.set(name, String(value));
+      }
+      return new Response(response.body, {
+        status: response.statusCode,
+        headers: responseHeaders,
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const audio = await new ApiClient('token', 'https://api.example.test').synthesizeSpeechText(
+      "Today's progress: 8 of 10 correct (80%).",
+      { simulationMode: 'practice', preferredLanguage: 'en-US' }
+    );
+
+    expect(new Uint8Array(audio)).toEqual(new Uint8Array([1, 2, 3]));
+    expect(mocks.pollySend).toHaveBeenCalledOnce();
+    expect(mocks.bedrockSend).not.toHaveBeenCalled();
   });
 });

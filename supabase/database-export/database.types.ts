@@ -147,14 +147,14 @@ isOneToOne: false
                   ]
                 },"mock_exams": {
                   Row: {
-                    "completed_at": string | null,"correct_count": number,"created_at": string,"current_index": number,"english_stage": string,"id": string,"include_english_simulation": boolean,"incorrect_count": number,"question_ids": (string)[],"reading_passed": boolean | null,"reading_prompt_ids": (string)[],"report_markdown": string | null,"session_id": string | null,"status": string,"test_version": string,"updated_at": string,"user_id": string,"writing_passed": boolean | null,"writing_prompt_ids": (string)[]
+                    "completed_at": string | null,"correct_count": number,"created_at": string,"current_index": number,"english_stage": string,"id": string,"include_english_simulation": boolean,"incorrect_count": number,"question_ids": (string)[],"reading_passed": boolean | null,"reading_prompt_ids": (string)[],"report_markdown": string | null,"review_decision": string | null,"review_decision_at": string | null,"review_decision_note": string | null,"session_id": string | null,"status": string,"test_version": string,"updated_at": string,"user_id": string,"writing_passed": boolean | null,"writing_prompt_ids": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "completed_at"?: string | null,"correct_count"?: number,"created_at"?: string,"current_index"?: number,"english_stage"?: string,"id"?: string,"include_english_simulation"?: boolean,"incorrect_count"?: number,"question_ids"?: (string)[],"reading_passed"?: boolean | null,"reading_prompt_ids"?: (string)[],"report_markdown"?: string | null,"session_id"?: string | null,"status"?: string,"test_version": string,"updated_at"?: string,"user_id": string,"writing_passed"?: boolean | null,"writing_prompt_ids"?: (string)[]
+                    "completed_at"?: string | null,"correct_count"?: number,"created_at"?: string,"current_index"?: number,"english_stage"?: string,"id"?: string,"include_english_simulation"?: boolean,"incorrect_count"?: number,"question_ids"?: (string)[],"reading_passed"?: boolean | null,"reading_prompt_ids"?: (string)[],"report_markdown"?: string | null,"review_decision"?: string | null,"review_decision_at"?: string | null,"review_decision_note"?: string | null,"session_id"?: string | null,"status"?: string,"test_version": string,"updated_at"?: string,"user_id": string,"writing_passed"?: boolean | null,"writing_prompt_ids"?: (string)[]
                   }
                   Update: {
-                    "completed_at"?: string | null,"correct_count"?: number,"created_at"?: string,"current_index"?: number,"english_stage"?: string,"id"?: string,"include_english_simulation"?: boolean,"incorrect_count"?: number,"question_ids"?: (string)[],"reading_passed"?: boolean | null,"reading_prompt_ids"?: (string)[],"report_markdown"?: string | null,"session_id"?: string | null,"status"?: string,"test_version"?: string,"updated_at"?: string,"user_id"?: string,"writing_passed"?: boolean | null,"writing_prompt_ids"?: (string)[]
+                    "completed_at"?: string | null,"correct_count"?: number,"created_at"?: string,"current_index"?: number,"english_stage"?: string,"id"?: string,"include_english_simulation"?: boolean,"incorrect_count"?: number,"question_ids"?: (string)[],"reading_passed"?: boolean | null,"reading_prompt_ids"?: (string)[],"report_markdown"?: string | null,"review_decision"?: string | null,"review_decision_at"?: string | null,"review_decision_note"?: string | null,"session_id"?: string | null,"status"?: string,"test_version"?: string,"updated_at"?: string,"user_id"?: string,"writing_passed"?: boolean | null,"writing_prompt_ids"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -264,6 +264,11 @@ isOneToOne: false
                            },
 "purge_old_messages":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"record_mock_exam_review_decision":
+{ Args: { "p_decision": string,"p_exam_id": string,"p_note": string }; Returns: {
+              "review_decision": string,"review_decision_at": string,"review_decision_note": string,"saved": boolean
+            }[]
                            }
           }
           Enums: {

@@ -87,6 +87,9 @@ interface RequestBody {
    * early with no Polly synthesis at all.
    */
   welcomeBanner?: boolean;
+  /** Synthesize existing factual progress text without creating a transcript turn. */
+  speechSynthesis?: boolean;
+  speechText?: string;
   /**
    * ISO date string (YYYY-MM-DD) in the user's local timezone, sent by the
    * client so the backend can distinguish a first-visit-today from a same-day
@@ -550,6 +553,27 @@ interface MockExamFeedback {
   recommendationReason: string;
 }
 
+interface MockExamReviewScorecard {
+  testVersion: '2008' | '2020';
+  civics: {
+    correct: number;
+    incorrect: number;
+    total: number;
+    accuracyPercent: number;
+  };
+  english: {
+    included: boolean;
+    readingPassed: boolean | null;
+    writingPassed: boolean | null;
+  };
+}
+
+interface MockExamQuestionOutcome {
+  question: string;
+  verdict: 'correct' | 'incorrect' | 'partial';
+  acceptableAnswers: string[] | null;
+}
+
 function parseMockExamFeedback(raw: string, fallback: MockExamFeedback): MockExamFeedback {
   try {
     const jsonStart = raw.indexOf('{');
@@ -572,7 +596,17 @@ function parseMockExamFeedback(raw: string, fallback: MockExamFeedback): MockExa
   }
 }
 
-async function createMockExamFeedback(token: string, userId: string, examId: string, preferredLanguage: string): Promise<{ report: string; feedback: MockExamFeedback }> {
+async function createMockExamFeedback(
+  token: string,
+  userId: string,
+  examId: string,
+  preferredLanguage: string,
+): Promise<{
+  report: string;
+  feedback: MockExamFeedback;
+  scorecard: MockExamReviewScorecard;
+  questionOutcomes: MockExamQuestionOutcome[];
+}> {
   const db = getUserScopedSupabase(token);
   const { data, error } = await db.from('mock_exams')
     .select('id,test_version,status,correct_count,incorrect_count,include_english_simulation,reading_passed,writing_passed,report_markdown')
@@ -596,14 +630,35 @@ async function createMockExamFeedback(token: string, userId: string, examId: str
     recommendedMode: accuracy < 60 ? 'study' : 'practice',
     recommendationReason: accuracy < 60 ? 'A guided review can help rebuild the concepts behind missed answers.' : 'A short practice set can reinforce what you know and strengthen recall.',
   };
-  const factualAnswers = answers.map(answer => {
+  const questionOutcomes: MockExamQuestionOutcome[] = answers.map(answer => {
     const item = getItem(answer.item_id, exam.test_version);
     return {
       question: item?.question ?? 'Question unavailable',
-      result: answer.verdict === 'correct' ? 'correct' : 'needs review',
-      acceptableAnswers: item?.kind === 'static' ? item.acceptableAnswers : undefined,
+      verdict: answer.verdict === 'correct' || answer.verdict === 'partial'
+        ? answer.verdict
+        : 'incorrect',
+      acceptableAnswers: item?.kind === 'static' ? item.acceptableAnswers : null,
     };
   });
+  const factualAnswers = questionOutcomes.map(answer => ({
+    question: answer.question,
+    result: answer.verdict === 'correct' ? 'correct' : 'needs review',
+    acceptableAnswers: answer.acceptableAnswers ?? undefined,
+  }));
+  const scorecard: MockExamReviewScorecard = {
+    testVersion: exam.test_version,
+    civics: {
+      correct: exam.correct_count,
+      incorrect: exam.incorrect_count,
+      total: scored,
+      accuracyPercent: accuracy,
+    },
+    english: {
+      included: exam.include_english_simulation,
+      readingPassed: exam.include_english_simulation ? exam.reading_passed : null,
+      writingPassed: exam.include_english_simulation ? exam.writing_passed : null,
+    },
+  };
   const englishResult = exam.include_english_simulation
     ? `English reading: ${exam.reading_passed ? 'passed' : 'not passed'}; English writing: ${exam.writing_passed ? 'passed' : 'not passed'}.`
     : 'English practice was not included.';
@@ -623,7 +678,12 @@ async function createMockExamFeedback(token: string, userId: string, examId: str
   } catch (error) {
     console.warn('[Lambda-ExamReview] AI feedback unavailable; using the grounded report fallback.', error);
   }
-  return { report, feedback: parseMockExamFeedback(rawFeedback, fallback) };
+  return {
+    report,
+    feedback: parseMockExamFeedback(rawFeedback, fallback),
+    scorecard,
+    questionOutcomes,
+  };
 }
 
 type MockExamStage = MockExamRow['english_stage'];
@@ -639,6 +699,28 @@ function englishTaskMessage(stage: Exclude<MockExamStage, 'none' | 'complete'>, 
   return stage === 'reading'
     ? `English reading, sentence ${progress}. Please read this sentence aloud: ${prompt}`
     : `English writing, sentence ${progress}. Listen to the sentence, then type what you hear.`;
+}
+
+function standardInterviewOpening(action: 'new' | 'resume', language: 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA'): string {
+  const openings = {
+    'en-US': {
+      new: "Let's begin your Standard Interview.",
+      resume: "Let's continue your Standard Interview from where you left off.",
+    },
+    'es-ES': {
+      new: 'Comencemos tu entrevista estándar.',
+      resume: 'Continuemos tu entrevista estándar donde la dejaste.',
+    },
+    'fr-FR': {
+      new: 'Commençons votre entretien standard.',
+      resume: 'Reprenons votre entretien standard là où vous l’avez laissé.',
+    },
+    'ar-SA': {
+      new: 'لنبدأ المقابلة القياسية.',
+      resume: 'لنتابع المقابلة القياسية من حيث توقفت.',
+    },
+  } as const;
+  return openings[language][action];
 }
 
 async function gradeEnglishWriting(expected: string, submitted: string): Promise<ReturnType<typeof parseEnglishWritingGrade>> {
@@ -1107,6 +1189,31 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       'ar-SA': 'Arabic',
     } as const)[preferredLanguageCode];
 
+    if (parsedBody.speechSynthesis !== undefined && typeof parsedBody.speechSynthesis !== 'boolean') {
+      return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid speech synthesis flag.' }) };
+    }
+    if (parsedBody.speechText !== undefined && typeof parsedBody.speechText !== 'string') {
+      return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid speech text.' }) };
+    }
+    if (parsedBody.speechText !== undefined && parsedBody.speechSynthesis !== true) {
+      return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Speech text requires speech synthesis mode.' }) };
+    }
+    const speechSynthesisOnly = parsedBody.speechSynthesis === true;
+    const speechText = typeof parsedBody.speechText === 'string' ? parsedBody.speechText.trim() : '';
+    const hasConflictingSpeechAction = parsedBody.transcript !== undefined
+      || parsedBody.sessionStart === true
+      || parsedBody.silenceNudge === true
+      || parsedBody.modeTransition === true
+      || parsedBody.welcomeBanner === true
+      || parsedBody.examReview === true
+      || parsedBody.postExamConversation === true
+      || parsedBody.modeGoalResponse === true
+      || parsedBody.openingResponse === true
+      || parsedBody.examAction !== undefined;
+    if (speechSynthesisOnly && (!speechText || speechText.length > 500 || hasConflictingSpeechAction)) {
+      return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid speech-only synthesis request.' }) };
+    }
+
     if (parsedBody.examReview === true) {
       if (!parsedBody.examId || parsedBody.examId.length > 80) {
         return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'A valid mock exam ID is required.' }) };
@@ -1173,7 +1280,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // A proactive session-start call (item 6) legitimately has no transcript —
     // only the empty-guard for a REAL turn with nothing to process should fire.
-    if (!cleanedTranscript && parsedBody.sessionStart !== true && parsedBody.silenceNudge !== true && parsedBody.modeTransition !== true) {
+    if (!cleanedTranscript && parsedBody.sessionStart !== true && parsedBody.silenceNudge !== true
+      && parsedBody.modeTransition !== true && !speechSynthesisOnly) {
       console.log(`[Lambda-Execution] [${traceId}] Empty transcript received. Returning 200 empty payload.`);
       return {
         statusCode: 200,
@@ -1198,7 +1306,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let examStage: MockExamStage | null = null;
     let modeGoalPending = false;
 
-    if (parsedBody.postExamConversation === true) {
+    if (speechSynthesisOnly) {
+      generatedAssistantText = speechText;
+      assistantSegments = [speechText];
+    } else if (parsedBody.postExamConversation === true) {
       const postExamId = parsedBody.postExamId;
       if (!postExamId) throw new Error('Post-exam conversation requires the completed exam ID.');
       const db = getUserScopedSupabase(token);
@@ -1334,14 +1445,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       nextItemId = null;
       nextQuestionText = englishResult.prompt ?? '';
     } else if (parsedBody.sessionStart === true) {
-      // Establish the first question without speaking over the existing
-      // welcome/session-opening message. The user gets the first turn.
-      console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; selecting the first question without a spoken response.`);
+      console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; selecting the first question.`);
       if (simulationMode === 'standard') {
         const exam = await startOrResumeMockExam(
           token, userId, parsedBody.sessionId, testVersion, includeEnglishSimulation, parsedBody.examAction ?? 'resume', traceId
         );
-        examRunId = exam.id;
+        const opening = standardInterviewOpening(parsedBody.examAction ?? 'resume', preferredLanguageCode);
+        let responseText: string;
+        let nextItemId: string | null;
+        let nextQuestion: string;
+        let examStage: MockExamStage;
         if (exam.english_stage === 'reading' || exam.english_stage === 'writing') {
           const section = exam.english_stage;
           const priorAttempts = await getUserScopedSupabase(token).from('mock_exam_english_answers')
@@ -1349,25 +1462,37 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           const promptIndex = priorAttempts.count ?? 0;
           const prompt = englishPromptFor(exam, section, promptIndex);
           if (!prompt) throw new Error(`Could not restore the active ${section} exercise.`);
-          examStage = section;
           nextItemId = null;
-          nextQuestionText = prompt;
-          assistantSegments = [englishTaskMessage(section, prompt, promptIndex)];
-          generatedAssistantText = assistantSegments[0];
+          nextQuestion = prompt;
+          examStage = section;
+          responseText = `${opening}\n\n${englishTaskMessage(section, prompt, promptIndex)}`;
         } else {
-        const first = getItem(exam.question_ids[exam.current_index], testVersion) ?? selectNextQuestion([], testVersion);
+          const first = getItem(exam.question_ids[exam.current_index], testVersion) ?? selectNextQuestion([], testVersion);
+          nextItemId = first.id;
+          nextQuestion = first.question;
+          examStage = 'none';
+          responseText = `${opening}\n\n${first.question}`;
+        }
         return {
           statusCode: 200,
           headers: responseHeaders,
           body: JSON.stringify({
-            responseText: '', audioData: '', verdict: null, needsConfirmation: false,
-            nextItemId: first.id, nextQuestion: first.question, examRunId,
-            examCompleted: false, examReport: null, examStage: 'none',
+            responseText,
+            audioData: '',
+            verdict: null,
+            needsConfirmation: false,
+            nextItemId,
+            nextQuestion,
+            assistantSegments: [responseText],
+            examRunId: exam.id,
+            examCompleted: false,
+            examReport: null,
+            examReviewId: null,
+            examStage,
+            modeGoalPending: false,
           }),
         };
-        }
-      }
-      if (simulationMode !== 'standard') {
+      } else {
         const first = simulationMode === 'study' ? getFirstQuestion(testVersion) : selectNextQuestion([], testVersion);
         return {
           statusCode: 200,

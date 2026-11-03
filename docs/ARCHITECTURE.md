@@ -72,7 +72,9 @@ The turn modules are the safest place to change grading behavior. The handler is
 
 The frontend `ApiClient` and backend handlers share these contracts:
 
-- `POST /transcript` — transcript/session-start request, response text, optional base64 MP3, grading verdict, next question, confirmation state.
+- `POST /transcript` — transcript/session-start request, response text, optional base64 MP3, grading verdict, next question, confirmation state. A validated speech-only progress-summary request uses the same authenticated route and returns Polly audio without a transcript or grading turn.
+- Completed mock-exam reviews are server-generated and include a factual scorecard and per-question outcomes. The client presents the report and validates the payload without calculating scores.
+- A completed exam's explicit next-step decision is persisted once through an authenticated, owner-scoped database function. Practice/Study decisions require a learning focus and update `user_settings.learning_goal` atomically; dismissing a report saves no decision.
 - `POST /complete-session` — `{ sessionId }`, response report markdown.
 - `POST /delete-account` — authenticated deletion, `{ deleted: true }`.
 

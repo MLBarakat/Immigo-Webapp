@@ -21,6 +21,19 @@ interface ApiErrorPayload {
 
 export type MockExamAction = 'new' | 'resume';
 
+export type MockExamReviewDecisionChoice =
+  | 'practice'
+  | 'study'
+  | 'new_interview'
+  | 'review_answers'
+  | 'finish_for_now';
+
+export interface MockExamReviewDecision {
+  choice: MockExamReviewDecisionChoice;
+  note: string | null;
+  decidedAt: string;
+}
+
 export interface MockExamFeedback {
   summary: string;
   strengths: string[];
@@ -29,9 +42,32 @@ export interface MockExamFeedback {
   recommendationReason: string;
 }
 
+export interface MockExamReviewScorecard {
+  testVersion: TestVersion;
+  civics: {
+    correct: number;
+    incorrect: number;
+    total: number;
+    accuracyPercent: number;
+  };
+  english: {
+    included: boolean;
+    readingPassed: boolean | null;
+    writingPassed: boolean | null;
+  };
+}
+
+export interface MockExamQuestionOutcome {
+  question: string;
+  verdict: 'correct' | 'incorrect' | 'partial';
+  acceptableAnswers: string[] | null;
+}
+
 export interface MockExamReview {
   report: string;
   feedback: MockExamFeedback;
+  scorecard: MockExamReviewScorecard;
+  questionOutcomes: MockExamQuestionOutcome[];
 }
 
 /**
@@ -369,15 +405,48 @@ export class ApiClient {
       signal,
       body: JSON.stringify({ examReview: true, examId, preferredLanguage }),
     });
-    const data = await response.json() as Partial<MockExamReview>;
-    const feedback = data.feedback;
-    if (typeof data.report !== 'string' || !feedback || typeof feedback.summary !== 'string'
-      || !Array.isArray(feedback.strengths) || !Array.isArray(feedback.suggestions)
-      || (feedback.recommendedMode !== 'practice' && feedback.recommendedMode !== 'study')
-      || typeof feedback.recommendationReason !== 'string') {
+    const data: unknown = await response.json();
+    if (!isRecord(data)) {
       throw new ApiError('The exam review response was incomplete.', 500, data);
     }
-    return { report: data.report, feedback };
+    const feedback = data.feedback;
+    if (typeof data.report !== 'string'
+      || !isRecord(feedback)
+      || typeof feedback.summary !== 'string'
+      || !isStringArray(feedback.strengths)
+      || !isStringArray(feedback.suggestions)
+      || (feedback.recommendedMode !== 'practice' && feedback.recommendedMode !== 'study')
+      || typeof feedback.recommendationReason !== 'string'
+      || !isMockExamReviewScorecard(data.scorecard)
+      || !isMockExamQuestionOutcomes(data.questionOutcomes)) {
+      throw new ApiError('The exam review response was incomplete.', 500, data);
+    }
+    return {
+      report: data.report,
+      feedback: {
+        summary: feedback.summary,
+        strengths: feedback.strengths,
+        suggestions: feedback.suggestions,
+        recommendedMode: feedback.recommendedMode,
+        recommendationReason: feedback.recommendationReason,
+      },
+      scorecard: data.scorecard,
+      questionOutcomes: data.questionOutcomes,
+    };
+  }
+
+  async synthesizeSpeechText(
+    text: string,
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string } = {}
+  ): Promise<ArrayBuffer> {
+    const result = await this.sendTranscriptRequest({
+      speechSynthesis: true,
+      speechText: text,
+      simulationMode: options.simulationMode ?? 'standard',
+      preferredLanguage: options.preferredLanguage ?? 'en-US',
+      ...(options.voiceId ? { voiceId: options.voiceId } : {}),
+    }, options);
+    return result.audioData;
   }
 
   async postModeTransition(
@@ -397,7 +466,7 @@ export class ApiClient {
     }, options);
   }
 
-  /** Select the first interview question without speaking before user input. */
+  /** Select the current question; Standard Interview returns a text-only opening response. */
   async postSessionStart(
     sessionId?: string | null,
     options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examAction?: MockExamAction } = {}
@@ -533,4 +602,41 @@ export class ApiClient {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry): entry is string => typeof entry === 'string');
+}
+
+function isMockExamReviewScorecard(value: unknown): value is MockExamReviewScorecard {
+  if (!isRecord(value) || (value.testVersion !== '2008' && value.testVersion !== '2020')
+    || !isRecord(value.civics) || !isRecord(value.english)) {
+    return false;
+  }
+  const { correct, incorrect, total, accuracyPercent } = value.civics;
+  const { included, readingPassed, writingPassed } = value.english;
+  const isCount = (entry: unknown): entry is number => Number.isInteger(entry) && Number(entry) >= 0;
+  const isResult = (entry: unknown): entry is boolean | null => entry === null || typeof entry === 'boolean';
+
+  return isCount(correct)
+    && isCount(incorrect)
+    && isCount(total)
+    && isCount(accuracyPercent)
+    && total === correct + incorrect
+    && accuracyPercent <= 100
+    && typeof included === 'boolean'
+    && isResult(readingPassed)
+    && isResult(writingPassed)
+    && (included || (readingPassed === null && writingPassed === null));
+}
+
+function isMockExamQuestionOutcomes(value: unknown): value is MockExamQuestionOutcome[] {
+  return Array.isArray(value) && value.every((entry: unknown) => {
+    if (!isRecord(entry)
+      || typeof entry.question !== 'string'
+      || (entry.verdict !== 'correct' && entry.verdict !== 'incorrect' && entry.verdict !== 'partial')) {
+      return false;
+    }
+    return entry.acceptableAnswers === null || isStringArray(entry.acceptableAnswers);
+  });
 }

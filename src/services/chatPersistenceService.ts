@@ -1,6 +1,25 @@
 import { getSupabaseClient } from '../supabaseClient';
 import { PersistedMessage, SessionHydrationPayload } from '../types/persistence';
 import { logger } from '../logger';
+import type { Database } from '../../supabase/database-export/database.types';
+
+type MessageRow = Database['public']['Tables']['messages']['Row'];
+
+function toPersistedMessage(row: MessageRow): PersistedMessage {
+  if (row.role !== 'user' && row.role !== 'assistant') {
+    throw new Error(`Unsupported persisted message role: ${row.role}`);
+  }
+
+  return {
+    id: row.id,
+    session_id: row.session_id,
+    user_id: row.user_id,
+    role: row.role,
+    content: row.content,
+    audio_url: null,
+    created_at: row.created_at,
+  };
+}
 
 interface DailySessionRecord {
   id: string;
@@ -154,7 +173,7 @@ export class ChatPersistenceService {
         return null;
       }
 
-      return data as PersistedMessage;
+      return toPersistedMessage(data);
     } catch (err) {
       logger.error('Exception persisting message:', undefined, { error: String(err) });
       return null;
@@ -190,7 +209,7 @@ export class ChatPersistenceService {
       const sliced = hasMore ? data.slice(0, limit) : data;
 
       // Reverse to deliver chronological order (oldest first for top-to-bottom rendering)
-      const chronological = (sliced as PersistedMessage[]).reverse();
+      const chronological = sliced.map(toPersistedMessage).reverse();
       const oldestCursor = chronological[0]?.created_at || null;
 
       return {
@@ -240,7 +259,7 @@ export class ChatPersistenceService {
       const sliced = hasMore ? data.slice(0, limit) : data;
 
       // Reverse to deliver chronological order
-      const chronological = (sliced as PersistedMessage[]).reverse();
+      const chronological = sliced.map(toPersistedMessage).reverse();
       const oldestCursor = chronological[0]?.created_at || null;
 
       return {
