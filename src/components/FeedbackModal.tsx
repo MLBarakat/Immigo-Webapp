@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowRight,
   BrainCircuit,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { getFocusCategories } from '../constants/focusCategories';
 import type {
   MockExamQuestionOutcome,
   MockExamReview,
@@ -57,11 +58,6 @@ const choices: Array<{
     descriptionKey: 'workspace.examReview.choices.newInterviewDescription',
   },
   {
-    choice: 'review_answers',
-    titleKey: 'workspace.examReview.choices.reviewAnswersTitle',
-    descriptionKey: 'workspace.examReview.choices.reviewAnswersDescription',
-  },
-  {
     choice: 'finish_for_now',
     titleKey: 'workspace.examReview.choices.finishTitle',
     descriptionKey: 'workspace.examReview.choices.finishDescription',
@@ -94,9 +90,9 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
 }) => {
   const { t, i18n } = useTranslation('conversation');
   const modalRef = useFocusTrap(isOpen);
-  const questionSectionRef = useRef<HTMLElement>(null);
   const [pendingChoice, setPendingChoice] = useState<MockExamReviewDecisionChoice | null>(null);
   const [goal, setGoal] = useState('');
+  const [selectedFocusIds, setSelectedFocusIds] = useState<string[]>([]);
   const [locallySavedDecision, setLocallySavedDecision] = useState<MockExamReviewDecision | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [continuing, setContinuing] = useState(false);
@@ -110,6 +106,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   const close = () => {
     setPendingChoice(null);
     setGoal('');
+    setSelectedFocusIds([]);
     setLocalError(null);
     setContinueError(null);
     onClose();
@@ -118,14 +115,29 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   const choose = (choice: MockExamReviewDecisionChoice) => {
     setPendingChoice(choice);
     setGoal('');
+    setSelectedFocusIds([]);
     setLocalError(null);
     setContinueError(null);
+  };
+
+  const toggleFocus = (id: string) => {
+    setSelectedFocusIds(current => {
+      if (current.includes(id)) return current.filter(item => item !== id);
+      if (current.length >= 3) return current;
+      return [...current, id];
+    });
   };
 
   const saveChoice = async () => {
     if (!pendingChoice || saving || decisionSaving) return;
     const needsGoal = pendingChoice === 'practice' || pendingChoice === 'study';
-    const note = needsGoal ? goal.trim() : null;
+    const focusLabels = getFocusCategories(review?.scorecard.testVersion ?? '2020')
+      .filter(category => selectedFocusIds.includes(category.id))
+      .map(category => category.label);
+    const cleanOther = goal.trim();
+    const note = needsGoal
+      ? [...focusLabels, ...(cleanOther ? [cleanOther] : [])].join('; ')
+      : null;
     if (needsGoal && (!note || note.length > 300)) return;
 
     setSaving(true);
@@ -139,7 +151,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
       setLocallySavedDecision(saved);
       setPendingChoice(null);
       setGoal('');
-      if (saved.choice === 'review_answers') setQuestionsExpanded(true);
+      setSelectedFocusIds([]);
     } catch {
       setLocalError(t('workspace.examReview.saveFailed'));
     } finally {
@@ -166,6 +178,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
     : currentDecision?.choice === 'study'
       ? 'study'
       : null;
+  const focusCategories = review ? getFocusCategories(review.scorecard.testVersion) : [];
+  const focusReady = selectedFocusIds.length > 0 || goal.trim().length > 0;
   const englishStatus = (passed: boolean | null) => passed === null
     ? t('workspace.examReview.notRecorded')
     : passed
@@ -313,7 +327,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                 </p>
               </section>
 
-              <section ref={questionSectionRef} tabIndex={-1} aria-labelledby="exam-questions-title" className="scroll-mt-3">
+              <section tabIndex={-1} aria-labelledby="exam-questions-title" className="scroll-mt-3">
                 <details
                   open={questionsExpanded}
                   onToggle={event => setQuestionsExpanded(event.currentTarget.open)}
@@ -417,23 +431,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                         {!continuing && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
                       </button>
                     )}
-                    {(continueError || decisionError) && (
+                    {continueError || decisionError ? (
                       <p className="mt-3 text-sm text-art-red-800 dark:text-red-200" role="alert">
                         {continueError ?? decisionError}
                       </p>
-                    )}
-                    {currentDecision.choice === 'review_answers' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setQuestionsExpanded(true);
-                          questionSectionRef.current?.focus();
-                        }}
-                        className="mt-4 min-h-11 rounded-xl border border-art-blue-300 px-4 py-2 text-sm font-semibold text-art-blue-800 hover:bg-art-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-art-blue-700 dark:border-blue-800 dark:text-blue-200 dark:hover:bg-blue-950/60"
-                      >
-                        {t('workspace.examReview.openQuestionReview')}
-                      </button>
-                    )}
+                    ) : null}
                     <button
                       type="button"
                       onClick={close}
@@ -450,23 +452,50 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                           {t(choices.find(item => item.choice === pendingChoice)?.titleKey ?? '')}
                         </p>
                         {(pendingChoice === 'practice' || pendingChoice === 'study') && (
-                          <div>
-                            <label htmlFor={`exam-review-goal-${examId}`} className="mb-1.5 block text-sm font-medium text-deep-navy dark:text-white">
-                              {t('workspace.examReview.goalLabel')}
-                            </label>
-                            <textarea
-                              id={`exam-review-goal-${examId}`}
-                              value={goal}
-                              onChange={event => setGoal(event.target.value.slice(0, 300))}
-                              rows={3}
-                              maxLength={300}
-                              required
-                              className="w-full rounded-xl border border-immigo-gray-300 bg-white p-3 text-sm text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:ring-blue-900"
-                              placeholder={t('workspace.examReview.goalPlaceholder')}
-                            />
-                            <p className="mt-1 text-end text-xs text-immigo-gray-500 dark:text-gray-400">
-                              {goal.trim().length}/300
-                            </p>
+                          <div className="space-y-3">
+                            <fieldset>
+                              <legend className="mb-1.5 block text-sm font-medium text-deep-navy dark:text-white">
+                                {t('workspace.examReview.focusCategoriesLabel')}
+                              </legend>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {focusCategories.map(category => {
+                                  const checked = selectedFocusIds.includes(category.id);
+                                  const atLimit = selectedFocusIds.length >= 3;
+                                  return (
+                                    <label
+                                      key={category.id}
+                                      className="flex min-h-11 items-center gap-2 rounded-xl border border-immigo-gray-200 bg-white px-3 py-2 text-sm text-deep-navy dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        disabled={!checked && atLimit}
+                                        onChange={() => toggleFocus(category.id)}
+                                        className="h-4 w-4 rounded border-immigo-gray-300 text-art-blue-700 focus:ring-art-blue-500"
+                                      />
+                                      <span>{category.label}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </fieldset>
+                            <div>
+                              <label htmlFor={`exam-review-other-${examId}`} className="mb-1.5 block text-sm font-medium text-deep-navy dark:text-white">
+                                {t('workspace.examReview.otherFocusLabel')}
+                              </label>
+                              <textarea
+                                id={`exam-review-other-${examId}`}
+                                value={goal}
+                                onChange={event => setGoal(event.target.value.slice(0, 120))}
+                                rows={2}
+                                maxLength={120}
+                                className="w-full rounded-xl border border-immigo-gray-300 bg-white p-3 text-sm text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:ring-blue-900"
+                                placeholder={t('workspace.examReview.otherFocusPlaceholder')}
+                              />
+                              <p className="mt-1 text-end text-xs text-immigo-gray-500 dark:text-gray-400">
+                                {goal.trim().length}/120
+                              </p>
+                            </div>
                           </div>
                         )}
                         <p className="text-xs text-immigo-gray-600 dark:text-gray-300">
@@ -481,7 +510,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                           <button
                             type="button"
                             onClick={() => { void saveChoice(); }}
-                            disabled={saving || decisionSaving || ((pendingChoice === 'practice' || pendingChoice === 'study') && !goal.trim())}
+                            disabled={saving || decisionSaving || ((pendingChoice === 'practice' || pendingChoice === 'study') && !focusReady)}
                             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-art-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-art-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-art-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {(saving || decisionSaving) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -489,7 +518,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => { setPendingChoice(null); setGoal(''); setLocalError(null); }}
+                            onClick={() => { setPendingChoice(null); setGoal(''); setSelectedFocusIds([]); setLocalError(null); }}
                             disabled={saving || decisionSaving}
                             className="min-h-11 rounded-xl px-4 py-2 text-sm font-semibold text-immigo-gray-700 hover:bg-immigo-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-art-blue-600 dark:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
                           >
@@ -523,15 +552,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                   </p>
                 )}
               </section>
-
-              <details className="rounded-2xl border border-immigo-gray-200 p-4 dark:border-gray-700">
-                <summary className="min-h-8 cursor-pointer font-semibold text-deep-navy focus-visible:outline focus-visible:outline-2 focus-visible:outline-art-blue-600 dark:text-white">
-                  {t('workspace.examReview.fullReport')}
-                </summary>
-                <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-relaxed text-immigo-gray-700 dark:text-gray-200">
-                  {review.report}
-                </pre>
-              </details>
             </>
           )}
         </main>

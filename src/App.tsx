@@ -462,7 +462,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               simulationMode={simulationMode}
               canApplySavedFocus={Boolean(manager.sessionId && user?.id)}
               onApplySavedFocus={applySavedLearningFocus}
-              onOpenSettings={() => setShowAppSettings(true)}
               isGeneratingProgressReport={manager.isGeneratingProgressReport}
             />
           )}
@@ -518,6 +517,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               onDownloadTranscript={manager.downloadTranscript}
               conversationLength={manager.conversationHistory.length}
               appStatus={manager.appStatus}
+              learningGoal={userSettings.learning_goal}
+              weeklyGradedAnswerTarget={userSettings.weekly_graded_answer_target}
+              onUpdateLearningGoals={updates => updateUserSettings(updates)}
             />
           )}
         </div>
@@ -654,7 +656,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           simulationMode={simulationMode}
           canApplySavedFocus={Boolean(manager.sessionId && user?.id)}
           onApplySavedFocus={applySavedLearningFocus}
-          onOpenSettings={() => setShowAppSettings(true)}
           isGeneratingProgressReport={manager.isGeneratingProgressReport}
         />
 
@@ -711,6 +712,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onDownloadTranscript={manager.downloadTranscript}
           conversationLength={manager.conversationHistory.length}
           appStatus={manager.appStatus}
+          learningGoal={userSettings.learning_goal}
+          weeklyGradedAnswerTarget={userSettings.weekly_graded_answer_target}
+          onUpdateLearningGoals={updates => updateUserSettings(updates)}
         />
       </div>
 

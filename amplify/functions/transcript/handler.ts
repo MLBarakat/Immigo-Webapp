@@ -3,7 +3,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { PollyClient, SynthesizeSpeechCommand, VoiceId } from '@aws-sdk/client-polly';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
-import { allItems, getFirstQuestion, getItem, getNextSequentialQuestion, selectNextQuestion } from './turn/bank';
+import { allItems, getFirstQuestion, getItem, getNextSequentialQuestion, getStudyCategoryTitle, selectNextQuestion } from './turn/bank';
 import { formatStudyFeedback, formatStudyQuestion, TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn, sanitizeFinalAnswerFeedback } from './turn/turn-policy';
 import type { CivicsItem, ConversationTurn, SimulationMode, TestVersion } from './turn/types';
@@ -261,7 +261,8 @@ interface ExtendedSdkStream {
 const RAG_INTENT_KEYWORDS = [
   'how have i improved', 'my score', 'my progress', 'last week',
   'last month', 'how am i doing', 'my history', 'my weaknesses',
-  'areas to improve', 'government score', 'civics score', 'history score'
+  'areas to improve', 'government score', 'civics score', 'history score',
+  'progress report', 'progress update', 'how am i progressing'
 ];
 
 function isRagQuery(text: string): boolean {
@@ -403,17 +404,120 @@ async function getTitanEmbedding(text: string): Promise<number[] | null> {
 
 /**
  * Grounded progress answer for "how am I doing?" style questions.
- * Retrieves the user's report context (vector match, with a baseline fallback)
- * and answers ONLY from it.
+ * Builds mode-specific facts from the learner's own rows, then asks the model
+ * for warm phrasing. A deterministic fallback carries the same facts if the
+ * model is unavailable.
  */
-async function answerProgressQuery(userId: string, question: string, traceId: string, preferredLanguage?: string): Promise<string> {
-  const supabase = getSupabaseClient();
-  let ragContext = '';
+async function answerProgressQuery(
+  token: string,
+  userId: string,
+  question: string,
+  traceId: string,
+  simulationMode: SimulationMode,
+  testVersion: TestVersion,
+  currentItemId: string | null,
+  examRunId: string | null,
+  preferredLanguage?: string,
+): Promise<string> {
+  const db = getUserScopedSupabase(token);
+  let facts = '';
+  let fallback = '';
 
+  if (simulationMode === 'standard') {
+    let total = 0;
+    let answered = 0;
+    if (examRunId) {
+      const { data } = await db.from('mock_exams')
+        .select('question_ids,current_index,test_version')
+        .eq('id', examRunId).eq('user_id', userId).maybeSingle();
+      const row = data as { question_ids?: string[]; current_index?: number } | null;
+      if (row) {
+        total = Array.isArray(row.question_ids) ? row.question_ids.length : 0;
+        answered = Math.max(0, Number(row.current_index ?? 0));
+      }
+    }
+    const remaining = Math.max(0, total - answered);
+    if (total > 0) {
+      facts = `Standard Interview: ${answered} of ${total} questions answered; ${remaining} still ahead.`;
+      fallback = `You're ${answered} questions into your ${total}-question Standard Interview, with ${remaining} still ahead — and you're making steady progress. Would you like to continue?`;
+    } else {
+      facts = 'Standard Interview: no interview is currently in progress.';
+      fallback = "You're all caught up right now — there's no Standard Interview in progress. Would you like to start one and continue?";
+    }
+  } else if (simulationMode === 'practice') {
+    const settingsResult = await db.from('user_settings')
+      .select('weekly_graded_answer_target,account_timezone')
+      .eq('user_id', userId).maybeSingle();
+    const settings = settingsResult.data as {
+      weekly_graded_answer_target?: number | null;
+      account_timezone?: string | null;
+    } | null;
+    const weeklyTarget = settings?.weekly_graded_answer_target ?? null;
+    const timeZone = settings?.account_timezone || 'UTC';
+    let today = new Date().toISOString().slice(0, 10);
+    try {
+      today = new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
+    } catch {
+      // Keep the UTC date when the stored time zone is invalid.
+    }
+
+    const sessionsResult = await db.from('sessions')
+      .select('id').eq('user_id', userId).eq('local_date', today);
+    const sessionIds = ((sessionsResult.data ?? []) as Array<{ id: string }>).map(session => session.id);
+    let answers: Array<{ verdict?: string }> = [];
+    if (sessionIds.length > 0) {
+      const answerResult = await db.from('graded_answers')
+        .select('verdict').eq('user_id', userId).in('session_id', sessionIds);
+      answers = (answerResult.data ?? []) as Array<{ verdict?: string }>;
+    } else {
+      const answerResult = await db.from('graded_answers')
+        .select('verdict').eq('user_id', userId)
+        .gte('created_at', `${today}T00:00:00.000Z`)
+        .lte('created_at', `${today}T23:59:59.999Z`);
+      answers = (answerResult.data ?? []) as Array<{ verdict?: string }>;
+    }
+    const answered = answers.length;
+    const correct = answers.filter(answer => answer.verdict === 'correct').length;
+    const accuracy = answered > 0 ? Math.round((correct / answered) * 100) : 0;
+    const milestone = (Math.floor(answered / 10) + 1) * 10;
+    const untilMilestone = milestone - answered;
+    facts = [
+      `Practice today: ${answered} practice questions answered, ${correct} right, ${accuracy}% accuracy.`,
+      `Next ten-answer milestone: ${milestone} answers (${untilMilestone} away).`,
+      weeklyTarget === null
+        ? 'Weekly graded-answer target: not set.'
+        : `Weekly graded-answer target: ${weeklyTarget} graded answers.`,
+    ].join(' ');
+    fallback = [
+      `Today you've worked through ${answered} practice questions and got ${correct} right — that's ${accuracy}% accuracy.`,
+      `You're ${untilMilestone} answers away from your next ten-answer milestone.`,
+      weeklyTarget === null
+        ? "Your weekly target isn't set yet — we can add one whenever you like."
+        : `Your weekly target is ${weeklyTarget} graded answers.`,
+      'Would you like to continue practicing?',
+    ].join(' ');
+  } else {
+    const ordered = allItems(testVersion).slice().sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+    const index = currentItemId ? ordered.findIndex(item => item.id === currentItemId) : -1;
+    const position = index >= 0 ? index + 1 : 1;
+    const total = ordered.length;
+    const remaining = Math.max(0, total - position);
+    const item = index >= 0 ? ordered[index] : ordered[0];
+    const category = item ? getStudyCategoryTitle(item) : 'your current study category';
+    facts = `Study progress: question ${position} of ${total} in the sequential bank; ${remaining} questions ahead. Current category: ${category}.`;
+    fallback = `You're on question ${position} of ${total} in the Study bank — ${remaining} questions ahead. This one is in ${category}. Want to continue studying?`;
+  }
+
+  const db2 = db;
+  void db2;
+
+  // Optional vector context from past reports adds history, but the live facts
+  // above always ground the answer in what is true right now.
+  let ragContext = '';
   const queryVector = await getTitanEmbedding(question);
   if (queryVector) {
     console.log(`[Lambda-RAG] [${traceId}] Querying match_progress_reports RPC...`);
-    const { data: matchedReports, error: rpcError } = await supabase.rpc('match_progress_reports', {
+    const { data: matchedReports, error: rpcError } = await db.rpc('match_progress_reports', {
       query_embedding: queryVector,
       match_threshold: 0.3,
       match_count: 3,
@@ -424,19 +528,25 @@ async function answerProgressQuery(userId: string, question: string, traceId: st
       console.error(`[Lambda-RAG] RPC Error: ${rpcError.message}`);
     } else if (matchedReports && matchedReports.length > 0) {
       console.log(`[Lambda-RAG] Found ${matchedReports.length} matching progress report sections.`);
-      ragContext = matchedReports
-        .map((r: { date: string; report_markdown: string }) => `[Report Date: ${r.date}]\n${r.report_markdown}`)
+      ragContext = (matchedReports as Array<{ date: string; report_markdown: string }>)
+        .map((r) => `[Report Date: ${r.date}]\n${r.report_markdown}`)
         .join('\n\n');
     } else {
       console.log(`[Lambda-RAG] No matching reports above similarity threshold.`);
     }
   }
-
   if (!ragContext) {
     ragContext = await fetchUserProgressReport(userId);
   }
 
-  return turnInterpreter.answerProgressQuery(ragContext, question, preferredLanguage);
+  const groundedFacts = [facts, ragContext].filter(Boolean).join('\n\n');
+  return turnInterpreter.answerProgressQuery(
+    groundedFacts,
+    question,
+    preferredLanguage,
+    simulationMode,
+    fallback,
+  );
 }
 
 /**
@@ -766,9 +876,16 @@ async function startOrResumeMockExam(
   if (inProgress.error) throw new Error(`Could not read the current mock exam: ${inProgress.error.message}`);
 
   if (action === 'resume' && inProgress.data) return inProgress.data as MockExamRow;
-  if (inProgress.data) {
-    const { error } = await db.from('mock_exams').update({ status: 'abandoned', updated_at: new Date().toISOString() }).eq('id', inProgress.data.id);
-    if (error) throw new Error(`Could not close the previous mock exam: ${error.message}`);
+  if (action === 'new') {
+    // A new Standard Interview supersedes every unfinished one, across bank
+    // editions. They are completed, not abandoned, so no learner progress is
+    // left in limbo.
+    const closed = await db.from('mock_exams').update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', userId).eq('status', 'in_progress');
+    if (closed.error) throw new Error(`Could not close the previous mock exam: ${closed.error.message}`);
   }
 
   const previousResult = await db.from('mock_exams')
@@ -857,7 +974,7 @@ async function advanceMockExam(
     const civicsReport = [
       `${exam.test_version} Civics Mock Exam`,
       `${status} Score: ${correct} correct and ${incorrect} incorrect out of ${scored} graded answers (${accuracy}% accuracy).`,
-      weakLines.length ? `Questions to review: ${[...new Set(weakLines)].join(' | ')}` : 'No incorrect answers were recorded.',
+      weakLines.length ? `Areas to strengthen: ${[...new Set(weakLines)].join(' | ')}` : 'No incorrect answers were recorded.',
     ].filter(Boolean).join('\n');
     if (exam.include_english_simulation) {
       const englishStage: MockExamStage = 'reading';
@@ -892,7 +1009,7 @@ async function submitEnglishExercise(
   inputMethod: 'text' | 'voice',
   requestId: string,
   traceId: string,
-): Promise<{ segments: string[]; stage: MockExamStage; completed: boolean; report: string | null; prompt: string | null } | null> {
+): Promise<{ segments: string[]; stage: MockExamStage; completed: boolean; report: string | null; prompt: string | null; correct?: number; incorrect?: number } | null> {
   const db = getUserScopedSupabase(token);
   const { data, error } = await db.from('mock_exams')
     .select('id,test_version,status,question_ids,current_index,correct_count,incorrect_count,include_english_simulation,english_stage,reading_prompt_ids,writing_prompt_ids,reading_passed,writing_passed,report_markdown')
@@ -925,6 +1042,7 @@ async function submitEnglishExercise(
     return {
       segments: [...segments, ...(isComplete && exam.report_markdown ? [exam.report_markdown] : [])],
       stage, completed: isComplete, report: isComplete ? exam.report_markdown : null, prompt,
+      correct: exam.correct_count, incorrect: exam.incorrect_count,
     };
   }
   if (exam.status !== 'in_progress') throw new Error('This mock exam is no longer in progress.');
@@ -1010,7 +1128,7 @@ async function submitEnglishExercise(
   }).eq('id', exam.id).eq('user_id', userId);
   if (update.error) throw new Error(`Could not complete English practice: ${update.error.message}`);
   console.log(`[Lambda-Exam] [${traceId}] Completed English exercises for mock exam ${exam.id}.`);
-  return { segments: [grade.feedback, report], stage: 'complete', completed: true, report, prompt: null };
+  return { segments: [grade.feedback, report], stage: 'complete', completed: true, report, prompt: null, correct: exam.correct_count, incorrect: exam.incorrect_count };
 }
 
 /**
@@ -1441,6 +1559,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       if (englishResult.completed) {
         examReviewId = examRunId;
         examRunId = null;
+        const correct = englishResult.correct ?? 0;
+        const incorrect = englishResult.incorrect ?? 0;
+        const total = correct + incorrect;
+        const summary = await turnInterpreter.generateCompletionSummary({
+          correct,
+          incorrect,
+          total,
+          accuracyPercent: total ? Math.round((correct / total) * 100) : 0,
+          recommendedMode: 'Practice Mode',
+        }, preferredLanguage);
+        const finalFeedback = englishResult.segments[0] ?? 'Thank you for completing the English practice.';
+        assistantSegments = [
+          `${finalFeedback}\n\nThat completes your Standard Interview.`,
+          summary,
+        ];
+        generatedAssistantText = assistantSegments.join('\n');
       }
       nextItemId = null;
       nextQuestionText = englishResult.prompt ?? '';
@@ -1552,10 +1686,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       // ---- ASSIST / progress path (grounded in the user's own reports) ----
       console.log(`[Lambda-RAG] [${traceId}] Progress intent detected.`);
       generatedAssistantText = await answerProgressQuery(
+        token,
         userId,
         cleanedTranscript,
         traceId,
-        simulationMode === 'study' ? preferredLanguage : undefined
+        simulationMode,
+        testVersion,
+        askedItem?.id ?? parsedBody.currentItemId ?? null,
+        examRunId,
+        simulationMode === 'study' ? preferredLanguage : undefined,
       );
       // Do NOT advance the civics question; keep the user's place.
       const stay = askedItem ?? (simulationMode === 'study' ? getFirstQuestion(testVersion) : selectNextQuestion([], testVersion));
@@ -1693,9 +1832,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             nextQuestionText = '';
             const scored = (examProgress.exam?.correct_count ?? 0) + (examProgress.exam?.incorrect_count ?? 0);
             const accuracy = scored ? Math.round(((examProgress.exam?.correct_count ?? 0) / scored) * 100) : 0;
-            const recommendedMode = accuracy < 60 ? 'Study Mode' : 'Practice Mode';
-            const recommendation = `Based on this result, I recommend ${recommendedMode} for your next review. Would you like to start a new mock exam or switch modes to keep learning?`;
-            assistantSegments = [rawFeedback, examReport ?? 'Your mock exam is complete.', recommendation];
+            const summary = await turnInterpreter.generateCompletionSummary({
+              correct: examProgress.exam?.correct_count ?? 0,
+              incorrect: examProgress.exam?.incorrect_count ?? 0,
+              total: scored,
+              accuracyPercent: accuracy,
+              recommendedMode: 'Practice Mode',
+            }, preferredLanguage);
+            assistantSegments = [
+              `${rawFeedback}\n\nThat completes your Standard Interview.`,
+              summary,
+            ];
             generatedAssistantText = assistantSegments.join('\n');
           } else {
             next = examProgress.nextItem;

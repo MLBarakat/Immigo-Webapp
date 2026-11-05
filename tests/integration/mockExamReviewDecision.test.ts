@@ -6,7 +6,7 @@ import { Client } from 'pg';
 const connectionString =
   process.env.SUPABASE_DB_URL ||
   process.env.DATABASE_URL ||
-  '******127.0.0.1:54322/postgres';
+  'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 
 let client: Client;
 

@@ -188,7 +188,6 @@ describe('workspace panel headers', () => {
         simulationMode="study"
         canApplySavedFocus
         onApplySavedFocus={onApplySavedFocus}
-        onOpenSettings={vi.fn()}
       />
     );
 
@@ -209,7 +208,6 @@ describe('workspace panel headers', () => {
         learningGoal="Review the branches of government"
         simulationMode="standard"
         onApplySavedFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
       />
     );
 
@@ -232,7 +230,6 @@ describe('workspace panel headers', () => {
         {...leftPanelProps}
         userId="user-1"
         accountTimezone="America/Chicago"
-        onOpenSettings={vi.fn()}
       />
     );
 

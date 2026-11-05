@@ -352,20 +352,70 @@ export function buildWelcomeBannerPrompt(ctx: WelcomeBannerContext): { system: s
   return { system, user };
 }
 
-export function buildProgressQueryPrompt(ragContext: string, question: string, preferredLanguage?: string): { system: string; user: string } {
+export function buildProgressQueryPrompt(
+  ragContext: string,
+  question: string,
+  preferredLanguage?: string,
+  mode?: 'standard' | 'practice' | 'study',
+): { system: string; user: string } {
   const languageInstruction = preferredLanguage ? ` Write the answer in ${preferredLanguage}.` : '';
+  const modeInstruction = mode === 'standard'
+    ? 'This is Standard Interview progress. State how many questions are answered and how many remain. Never predict pass or fail, and never say the user passed or failed.'
+    : mode === 'practice'
+      ? 'This is Practice Mode progress. Ground the answer in today\'s activity, accuracy, the next ten-answer milestone, and the weekly graded-answer target when available.'
+      : mode === 'study'
+        ? 'This is Study Mode progress. Ground the answer in the learner\'s position in the sequential question bank, how many questions remain, and the current study category.'
+        : '';
   const system = [
-    'You are a warm, encouraging civics tutor.',
-    'Answer the user\'s question about their own study progress using ONLY the progress report content provided.',
-    'If the reports do not contain the answer, say you do not have that detail yet.',
+    'You are a warm, very encouraging, friendly civics tutor.',
+    'Answer the user\'s question about their own study progress using ONLY the progress facts provided.',
+    'State the current progress and the distance from finishing the current work. Be specific with the supplied numbers.',
+    'Then invite the learner to continue in a natural, encouraging way.',
+    modeInstruction,
+    'If the facts do not contain a detail, say you do not have that detail yet.',
     'Do not give legal or immigration advice.',
     languageInstruction,
     '',
     TTS_HYGIENE,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
-  const user = `Progress report(s):\n${ragContext}\n\nUser question: ${question}`;
+  const user = `Progress facts:\n${ragContext}\n\nUser question: ${question}`;
   return { system, user };
+}
+
+export interface CompletionSummaryFacts {
+  correct: number;
+  incorrect: number;
+  total: number;
+  accuracyPercent: number;
+  recommendedMode: 'Practice Mode' | 'Study Mode';
+}
+
+export function buildCompletionSummaryPrompt(
+  facts: CompletionSummaryFacts,
+  preferredLanguage?: string,
+): { system: string; user: string } {
+  const languageInstruction = preferredLanguage ? ` Write in ${preferredLanguage}.` : '';
+  return {
+    system: [
+      'You are a warm, very encouraging, friendly civics tutor celebrating the end of a Standard Interview.',
+      'Write 3 to 4 short conversational sentences as one spoken bubble. No markdown, no bullet points, no lists.',
+      'Gently name the recorded result using the supplied numbers. Never predict pass or fail and never say the learner passed or failed.',
+      `Recommend ${facts.recommendedMode} as the next step in the same bubble.`,
+      'Invite the learner to open the Interview Report scorecard for details, then capture their decision and goals next.',
+      'Never mention questions to review.',
+      languageInstruction,
+      '',
+      TTS_HYGIENE,
+    ].join('\n'),
+    user: [
+      `Correct answers: ${facts.correct}`,
+      `Incorrect answers: ${facts.incorrect}`,
+      `Graded answers: ${facts.total}`,
+      `Accuracy: ${facts.accuracyPercent}%`,
+      `Recommended next step: ${facts.recommendedMode}`,
+    ].join('\n'),
+  };
 }
 
 export function buildModeTransitionPrompt(
@@ -530,19 +580,47 @@ export class TurnInterpreterAdapter {
     return "Thanks for sharing. Let's focus on today's civics practice.";
   }
 
-  async answerProgressQuery(ragContext: string, question: string, preferredLanguage?: string): Promise<string> {
+  async answerProgressQuery(
+    ragContext: string,
+    question: string,
+    preferredLanguage?: string,
+    mode?: 'standard' | 'practice' | 'study',
+    fallback?: string,
+  ): Promise<string> {
     try {
-      const text = await this.complete(buildProgressQueryPrompt(ragContext, question, preferredLanguage));
+      const text = await this.complete(buildProgressQueryPrompt(ragContext, question, preferredLanguage, mode));
       if (text && text.trim()) return text.trim();
     } catch {
       // fallback below
     }
+    if (fallback) return fallback;
     const localizedFallbacks: Record<string, string> = {
       Spanish: 'Sigamos practicando las preguntas de educación cívica. ¿Continuamos?',
       French: 'Continuons à réviser les questions d’éducation civique. On continue ?',
       Arabic: 'لنتابع التدريب على أسئلة التربية المدنية. هل نكمل؟',
     };
     return localizedFallbacks[preferredLanguage ?? ''] ?? "Let's keep practicing your civics questions. Ready for the next one?";
+  }
+
+  async generateCompletionSummary(
+    facts: CompletionSummaryFacts,
+    preferredLanguage?: string,
+  ): Promise<string> {
+    try {
+      const text = await this.complete(buildCompletionSummaryPrompt(facts, preferredLanguage));
+      if (text && text.trim()) return text.trim();
+    } catch (error) {
+      console.warn('[TurnInterpreter] Completion summary unavailable; using the warm fallback.', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const localizedFallbacks: Record<string, string> = {
+      Spanish: `¡Lo lograste! Estoy muy orgulloso del esfuerzo que pusiste. Respondiste ${facts.total} preguntas, con ${facts.correct} correctas y ${facts.incorrect} por reforzar. Según este resultado, te recomiendo ${facts.recommendedMode} para tu próxima repaso. Abre tu Interview Report para ver todos los detalles y luego registra tu decisión y tus metas; cuando quieras, seguimos avanzando juntos.`,
+      French: `Vous l’avez fait — je suis vraiment fier de l’effort que vous avez fourni. Vous avez répondu à ${facts.total} questions, avec ${facts.correct} bonnes réponses et ${facts.incorrect} à renforcer. D’après ce résultat, je recommande ${facts.recommendedMode} pour votre prochaine révision. Ouvrez votre Interview Report pour voir tous les détails, puis notez votre décision et vos objectifs — nous pouvons continuer ensemble quand vous le souhaitez.`,
+      Arabic: `لقد فعلتها — أنا فخور جدًا بالجهد الذي بذلته. أجبت عن ${facts.total} سؤالًا، منها ${facts.correct} إجابة صحيحة و${facts.incorrect} تحتاج إلى تعزيز. بناءً على هذه النتيجة، أوصي بـ ${facts.recommendedMode} لمراجعتك القادمة. افتح Interview Report لرؤية كل التفاصيل، ثم سجّل قرارك وأهدافك — ويمكننا المتابعة معًا متى كنت مستعدًا.`,
+    };
+    return localizedFallbacks[preferredLanguage ?? ''] ?? `You did it — I'm genuinely proud of the effort you put in. You answered ${facts.total} questions, with ${facts.correct} correct and ${facts.incorrect} to strengthen. Based on this result, I recommend ${facts.recommendedMode} for your next review. Open your Interview Report for the full picture, then capture your decision and goals — and whenever you're ready, we can keep going together.`;
   }
 
   async generateModeTransition(

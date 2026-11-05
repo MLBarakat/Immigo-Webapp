@@ -75,7 +75,7 @@ describe('FeedbackModal', () => {
     expect(screen.getByText('Good recall of the three branches')).toBeDefined();
   });
 
-  it('requires an explicit goal and confirmation before saving a Practice decision', async () => {
+  it('requires a focus selection before saving a Practice decision', async () => {
     const props = makeProps();
     render(<FeedbackModal {...props} />);
 
@@ -83,38 +83,65 @@ describe('FeedbackModal', () => {
     const saveButton = screen.getByRole('button', { name: 'Save my choice' }) as HTMLButtonElement;
     expect(saveButton.disabled).toBe(true);
 
-    fireEvent.change(screen.getByLabelText('What would you like to focus on?'), {
-      target: { value: 'Review the Bill of Rights' },
-    });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Principles of American Democracy' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'System of Government' }));
     expect(saveButton.disabled).toBe(false);
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(props.onSaveDecision).toHaveBeenCalledWith('practice', 'Review the Bill of Rights');
+      expect(props.onSaveDecision).toHaveBeenCalledWith(
+        'practice',
+        'Principles of American Democracy; System of Government',
+      );
     });
     expect(props.onContinueDecision).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue in Practice Mode' }));
     await waitFor(() => {
       expect(props.onContinueDecision).toHaveBeenCalledWith(
-        makeDecision('practice', 'Review the Bill of Rights'),
+        makeDecision('practice', 'Principles of American Democracy; System of Government'),
       );
     });
   });
 
-  it('records a Review answers choice and displays the saved question review', async () => {
+  it('limits focus choices to three and records free-text Other in the same decision', async () => {
     const props = makeProps();
     render(<FeedbackModal {...props} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Review question-by-question/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Study a focus/ }));
+    const categories = [
+      'Principles of American Democracy',
+      'System of Government',
+      'Rights and Responsibilities',
+      'Colonial Period and Independence',
+    ];
+    fireEvent.click(screen.getByRole('checkbox', { name: categories[0] }));
+    fireEvent.click(screen.getByRole('checkbox', { name: categories[1] }));
+    fireEvent.click(screen.getByRole('checkbox', { name: categories[2] }));
+    expect(
+      (screen.getByRole('checkbox', { name: categories[3] }) as HTMLInputElement).disabled,
+    ).toBe(true);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Other focus' }), {
+      target: { value: 'Local government' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save my choice' }));
 
     await waitFor(() => {
-      expect(props.onSaveDecision).toHaveBeenCalledWith('review_answers', null);
+      expect(props.onSaveDecision).toHaveBeenCalledWith(
+        'study',
+        `${categories[0]}; ${categories[1]}; ${categories[2]}; Local government`,
+      );
     });
-    expect(screen.getByText('Your choice is saved')).toBeDefined();
-    expect(screen.getByText('What is the supreme law of the land?')).toBeDefined();
-    expect(screen.queryByRole('button', { name: 'Choose Study Mode' })).toBeNull();
+  });
+
+  it('does not offer question review or the detailed report from the scorecard', () => {
+    render(<FeedbackModal {...makeProps()} />);
+
+    expect(screen.queryByRole('button', { name: /Review question-by-question/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open question review' })).toBeNull();
+    expect(screen.queryByText('View the detailed report')).toBeNull();
+    expect(screen.getByText('Question-by-question')).toBeDefined();
   });
 
   it('does not save a decision when the report is dismissed', () => {

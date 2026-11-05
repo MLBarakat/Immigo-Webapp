@@ -11,6 +11,14 @@ const mocks = vi.hoisted(() => ({
     exam: null as Record<string, unknown> | null,
     priorEnglishRequest: null as Record<string, unknown> | null,
     answers: [] as Array<{ item_id: string; verdict: string }>,
+    gradedAnswers: [] as Array<{ verdict: string }>,
+    sessions: [] as Array<{ id: string; local_date?: string }>,
+    settings: null as Record<string, unknown> | null,
+    updates: [] as Array<{
+      table: string;
+      payload: Record<string, unknown>;
+      filters: Array<[string, unknown]>;
+    }>,
   },
 }));
 
@@ -31,12 +39,13 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 import { handler } from '../handler';
-import { getFirstQuestion } from '../turn/bank';
+import { allItems, getFirstQuestion, getStudyCategoryTitle } from '../turn/bank';
 import { pickEnglishExercisePrompts } from '../english-exercises';
 import { ApiClient } from '../../../../src/services/apiClient';
 
 const FIRST_QUESTION = getFirstQuestion('2020');
 const EXAM_ID = '11111111-1111-4111-8111-111111111111';
+const STUDY_ITEM = allItems('2020').slice().sort((a, b) => (a.number ?? 0) - (b.number ?? 0))[9];
 
 function examRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -64,15 +73,42 @@ function examRow(overrides: Record<string, unknown> = {}): Record<string, unknow
  */
 function makeQuery(table: string) {
   const query: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'neq', 'order', 'limit', 'insert', 'update']) {
+  const filters: Array<[string, unknown]> = [];
+  for (const method of ['select', 'neq', 'order', 'limit']) {
     query[method] = vi.fn(() => query);
   }
+  for (const method of ['eq', 'in', 'gte', 'lte']) {
+    query[method] = vi.fn((column: string, value: unknown) => {
+      filters.push([column, value]);
+      return query;
+    });
+  }
+  query.insert = vi.fn((payload: Record<string, unknown>) => {
+    mocks.state.updates.push({ table, payload, filters: [...filters] });
+    if (table === 'mock_exam_answers') {
+      mocks.state.answers = [
+        ...mocks.state.answers,
+        { item_id: String(payload.item_id ?? ''), verdict: String(payload.verdict ?? '') },
+      ];
+    }
+    return query;
+  });
+  query.update = vi.fn((payload: Record<string, unknown>) => {
+    mocks.state.updates.push({ table, payload, filters: [...filters] });
+    if (table === 'mock_exams' && mocks.state.exam) {
+      mocks.state.exam = { ...mocks.state.exam, ...payload };
+    }
+    return query;
+  });
   const resolveRow = () => {
     if (table === 'mock_exams') return { data: mocks.state.exam, error: null };
     if (table === 'mock_exam_answers') return { data: mocks.state.answers, error: null };
     if (table === 'mock_exam_english_answers' && mocks.state.priorEnglishRequest) {
       return { data: mocks.state.priorEnglishRequest, error: null };
     }
+    if (table === 'graded_answers') return { data: mocks.state.gradedAnswers, error: null };
+    if (table === 'sessions') return { data: mocks.state.sessions, error: null };
+    if (table === 'user_settings') return { data: mocks.state.settings, error: null };
     return { data: null, error: null };
   };
   query.maybeSingle = vi.fn(async () => resolveRow());
@@ -143,6 +179,29 @@ function examReviewEvent(): Parameters<typeof handler>[0] {
   } as unknown as Parameters<typeof handler>[0];
 }
 
+function progressEvent(overrides: Record<string, unknown> = {}): Parameters<typeof handler>[0] {
+  const event = transcribeEvent();
+  return {
+    ...event,
+    body: JSON.stringify({
+      transcript: 'Can you give me a progress report?',
+      sessionId: 'session-1',
+      simulationMode: 'practice',
+      testVersion: '2020',
+      preferredLanguage: 'en-US',
+      ...overrides,
+    }),
+  } as unknown as Parameters<typeof handler>[0];
+}
+
+function bedrockText(text: string) {
+  return {
+    body: new TextEncoder().encode(JSON.stringify({
+      content: [{ type: 'text', text }],
+    })),
+  };
+}
+
 describe('transcript handler — mock exam civics phase routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -151,6 +210,10 @@ describe('transcript handler — mock exam civics phase routing', () => {
     mocks.state.exam = examRow();
     mocks.state.priorEnglishRequest = null;
     mocks.state.answers = [];
+    mocks.state.gradedAnswers = [];
+    mocks.state.sessions = [];
+    mocks.state.settings = null;
+    mocks.state.updates = [];
     mocks.getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
     mocks.from.mockImplementation(makeQuery);
     mocks.createClient.mockImplementation(() => ({
@@ -229,8 +292,120 @@ describe('transcript handler — mock exam civics phase routing', () => {
     }
   );
 
-  it('returns a factual scorecard and question outcomes with the generated interview review', async () => {
+  it('closes every previously unfinished Standard Interview when a new one starts', async () => {
+    const response = await handler(standardInterviewStartEvent('new'));
+
+    expect(response.statusCode).toBe(200);
+    const closed = mocks.state.updates.filter(
+      update => update.table === 'mock_exams' && update.payload.status === 'completed',
+    );
+    expect(closed).toHaveLength(1);
+    expect(closed[0].payload.completed_at).toEqual(expect.any(String));
+    expect(mocks.state.updates.some(update => update.payload.status === 'abandoned')).toBe(false);
+  });
+
+  it('announces completion and sends one warm summary bubble without a question review', async () => {
     mocks.state.exam = examRow({
+      question_ids: [FIRST_QUESTION.id],
+      current_index: 0,
+      correct_count: 3,
+      incorrect_count: 8,
+    });
+    mocks.state.answers = [{ item_id: FIRST_QUESTION.id, verdict: 'incorrect' }];
+    let bedrockCalls = 0;
+    mocks.bedrockSend.mockImplementation(async () => {
+      bedrockCalls += 1;
+      if (bedrockCalls === 1) {
+        return bedrockText(JSON.stringify({
+          intent: 'answer',
+          targetItemId: null,
+          grade: { verdict: 'incorrect', matchedAnswer: null },
+          reply: 'Thanks for giving that a try.',
+        }));
+      }
+      throw new Error('summary model unavailable in test');
+    });
+
+    const response = await handler(transcribeEvent());
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      responseText: string;
+      assistantSegments: string[];
+      examCompleted: boolean;
+      examReviewId: string | null;
+    };
+    expect(body.examCompleted).toBe(true);
+    expect(body.examReviewId).toBe(EXAM_ID);
+    expect(body.assistantSegments).toHaveLength(2);
+    expect(body.assistantSegments[0]).toMatch(/completes your Standard Interview/i);
+    expect(body.assistantSegments[1]).toContain('Practice Mode');
+    expect(body.assistantSegments[1]).toContain('Interview Report');
+    expect(body.assistantSegments[1]).toMatch(/decision/i);
+    expect(body.assistantSegments[1]).toMatch(/goals/i);
+    expect(body.responseText).not.toMatch(/questions to review/i);
+  });
+
+  it('reports Standard Interview progress as answered and remaining questions', async () => {
+    mocks.state.exam = examRow({
+      question_ids: allItems('2020').slice(0, 10).map(item => item.id),
+      current_index: 4,
+      correct_count: 3,
+      incorrect_count: 1,
+    });
+
+    const response = await handler(progressEvent({
+      simulationMode: 'standard',
+      currentItemId: FIRST_QUESTION.id,
+      examRunId: EXAM_ID,
+    }));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { responseText: string };
+    expect(body.responseText).toContain('4 questions into your 10-question Standard Interview');
+    expect(body.responseText).toContain('6 still ahead');
+    expect(body.responseText).toMatch(/continue/i);
+    expect(body.responseText).not.toMatch(/pass|fail/i);
+  });
+
+  it('reports Practice progress with today, accuracy, milestone, and weekly goal facts', async () => {
+    mocks.state.gradedAnswers = [
+      { verdict: 'correct' },
+      { verdict: 'correct' },
+      { verdict: 'correct' },
+      { verdict: 'incorrect' },
+      { verdict: 'incorrect' },
+    ];
+    mocks.state.sessions = [{ id: 'session-1', local_date: '2026-11-04' }];
+    mocks.state.settings = { weekly_graded_answer_target: 20, account_timezone: 'UTC' };
+
+    const response = await handler(progressEvent());
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { responseText: string };
+    expect(body.responseText).toContain('5 practice questions');
+    expect(body.responseText).toContain('3 right');
+    expect(body.responseText).toContain('60%');
+    expect(body.responseText).toContain('next ten-answer milestone');
+    expect(body.responseText).toContain('20');
+    expect(body.responseText).toMatch(/continue/i);
+  });
+
+  it('reports Study progress as the current position in the sequential bank', async () => {
+    const response = await handler(progressEvent({
+      simulationMode: 'study',
+      currentItemId: STUDY_ITEM.id,
+    }));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { responseText: string };
+    expect(body.responseText).toContain('question 10 of 128');
+    expect(body.responseText).toContain('118 questions ahead');
+    expect(body.responseText).toContain(getStudyCategoryTitle(STUDY_ITEM));
+    expect(body.responseText).toMatch(/continue/i);
+  });
+
+  it('returns a factual scorecard and question outcomes with the generated interview review', async () => {    mocks.state.exam = examRow({
       status: 'completed',
       correct_count: 1,
       incorrect_count: 0,

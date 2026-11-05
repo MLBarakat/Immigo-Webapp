@@ -30,7 +30,6 @@ interface LeftPanelProps {
   weeklyGradedAnswerTarget?: number | null;
   simulationMode?: SimulationMode;
   canApplySavedFocus?: boolean;
-  onOpenSettings?: () => void;
   onApplySavedFocus?: (goal: string) => Promise<boolean>;
   isGeneratingProgressReport?: boolean;
   isMobile?: boolean;
@@ -96,7 +95,6 @@ export function LeftPanel({
   weeklyGradedAnswerTarget,
   simulationMode = 'standard',
   canApplySavedFocus = false,
-  onOpenSettings,
   onApplySavedFocus,
   isGeneratingProgressReport = false,
   isMobile = false,
@@ -454,15 +452,6 @@ export function LeftPanel({
                   <h3 id="weekly-learning-progress-title" className="text-xs font-semibold text-deep-navy">
                     {t('workspace.left.weeklyProgress.title')}
                   </h3>
-                  {onOpenSettings && (
-                    <button
-                      type="button"
-                      onClick={onOpenSettings}
-                      className="text-[10px] font-semibold text-art-blue-700 underline"
-                    >
-                      {t('workspace.left.weeklyProgress.settings')}
-                    </button>
-                  )}
                 </div>
                 {weeklyProgressLoading && <p className="py-1 text-[11px] text-immigo-gray-500" role="status">{t('workspace.left.weeklyProgress.loading')}</p>}
                 {weeklyError && (
