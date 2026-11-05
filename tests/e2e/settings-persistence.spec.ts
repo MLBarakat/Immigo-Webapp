@@ -6,7 +6,7 @@ test.describe('Settings persistence', () => {
     await ensureAuthenticated(context, page);
   });
 
-  test('persists theme/font settings across reload', async ({ page }) => {
+  test('persists theme/font settings across reload', async ({ context, page }) => {
     // Navigate to settings if available via UI
     const settingsBtn = page.getByRole('button', { name: /settings/i });
     if (await settingsBtn.isVisible({ timeout: 3000 }).catch(() => false)) {

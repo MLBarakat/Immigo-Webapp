@@ -48,11 +48,20 @@ describe('buildTurnPrompt — content gap fixes are actually present', () => {
     expect(system.toLowerCase()).toContain('english');
   });
 
-  it('includes TTS/Polly hygiene rules (no markdown, no parenthetical math, sentence cap)', () => {
+  it('includes TTS/Polly hygiene rules (speakable text, natural dates and symbols, sentence cap)', () => {
     const { system } = buildTurnPrompt({ askedItem: cabinet }, 'x');
-    expect(system).toContain('markdown');
+    expect(system.toLowerCase()).toContain('markdown');
     expect(system).toContain('parenthetical math');
+    expect(system.toLowerCase()).toContain('dates');
+    expect(system.toLowerCase()).toContain('symbols');
     expect(system).toMatch(/2-3 spoken sentences/);
+  });
+
+  it('allows light display structure while requiring speech to survive sanitization', () => {
+    const { system } = buildTurnPrompt({ askedItem: cabinet }, 'x');
+    expect(system.toLowerCase()).toContain('bullet');
+    expect(system.toLowerCase()).toContain('sanitized');
+    expect(system.toLowerCase()).toContain('sounds natural when markdown punctuation is removed');
   });
 });
 
@@ -189,7 +198,12 @@ describe('buildGreetingPrompt — content gap fixes are actually present', () =>
   it('still includes the exact first question and TTS hygiene rules', () => {
     const { system } = buildGreetingPrompt({ userUtterance: 'hi', isFirstSessionToday: true, firstQuestion: q });
     expect(system).toContain(q.question);
-    expect(system).toContain('markdown');
+    expect(system.toLowerCase()).toContain('markdown');
     expect(system).toContain('parenthetical math');
+  });
+
+  it('does not tie the tutor persona to a legacy Polly voice name', () => {
+    const { system } = buildGreetingPrompt({ userUtterance: 'hi', isFirstSessionToday: true, firstQuestion: q });
+    expect(system).not.toMatch(/You are Joanna/);
   });
 });

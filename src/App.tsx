@@ -36,7 +36,7 @@ import type {
 import type { MessageAction, SimulationMode, TestVersion } from './context/conversationContextTypes';
 
 import { DisplayUser } from './types/user';
-import { UserSettings, FontSize, ThemeOption } from './types/settings';
+import { UserSettings, FontSize } from './types/settings';
 import { applyFontSize } from './utils/fontSize';
 import { applyTheme } from './utils/theme';
 import { MIC_CONSENT_VERSION } from './utils/micConsent';
@@ -44,11 +44,12 @@ import { logger } from './logger';
 import useMediaQuery from './hooks/useMediaQuery';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { useNotifications } from './hooks/useNotifications';
+import { useVoicePreview } from './hooks/useVoicePreview';
 import { setPreferredInputDeviceId, setPreferredOutputDeviceId } from './utils/audioUtils';
 import { analytics } from './analytics';
 import { normalizeAppLanguage } from './i18n';
 import { I18nProvider } from './i18n/I18nProvider';
-import { APP_VOICES, getDefaultVoiceId, normalizeVoiceId } from './constants/voices';
+import { normalizeVoiceId } from './constants/voices';
 
 try {
   if (amplifyOutputs) {
@@ -79,22 +80,20 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     catch { return false; }
   });
   const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
-  const [previewTheme, setPreviewTheme] = useState<ThemeOption | null>(null);
   const [micAccessError, setMicAccessError] = useState<string | null>(null);
 
   useEffect(() => {
-    const activeTheme = previewTheme ?? userSettings.theme;
-    applyTheme(activeTheme);
-  }, [previewTheme, userSettings.theme]);
+    applyTheme(userSettings.theme);
+  }, [userSettings.theme]);
+
+  const previewVoice = useVoicePreview(apiClientInstance);
 
   // Model preload runs on mount (background, no mic). Microphone is
   // requested lazily inside the Start-tap gesture via vad.start().
   // No pre-gesture getUserMedia here: on iOS a background permission
   // prompt backgrounds the tab and triggers visibilitychange churn.
 
-  const activeVoiceId = normalizeVoiceId(
-    userSettings.ai_voice_id ?? getDefaultVoiceId(userSettings.language || profile?.language)
-  );
+  const activeVoiceId = normalizeVoiceId(userSettings.ai_voice_id, currentLanguageCode);
   const manager = useConversation({
     apiClient: apiClientInstance,
     userId: user?.id ?? null,
@@ -396,11 +395,10 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           <ApplicationSettingsModal
             isOpen={showAppSettings}
             settings={userSettings}
-            pollyVoices={APP_VOICES.map(v => ({ id: v.id, name: v.displayName }))}
             isDesktop={false}
             isSessionActive={manager.isSessionActive || manager.isVoiceSessionActive}
-            onClose={() => { setPreviewTheme(null); setShowAppSettings(false); }}
-            onThemePreview={setPreviewTheme}
+            onClose={() => setShowAppSettings(false)}
+            onVoicePreview={(voiceId, language, voiceName) => { void previewVoice(voiceId, language, voiceName); }}
             onSave={async (newSettings) => { await updateUserSettings(newSettings); }}
           />
         )}
@@ -583,11 +581,10 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         <ApplicationSettingsModal
           isOpen={showAppSettings}
           settings={userSettings}
-          pollyVoices={APP_VOICES.map(v => ({ id: v.id, name: v.displayName }))}
           isDesktop={isDesktop}
           isSessionActive={manager.isSessionActive || manager.isVoiceSessionActive}
-          onClose={() => { setPreviewTheme(null); setShowAppSettings(false); }}
-          onThemePreview={setPreviewTheme}
+          onClose={() => setShowAppSettings(false)}
+          onVoicePreview={(voiceId, language, voiceName) => { void previewVoice(voiceId, language, voiceName); }}
           onSave={async (newSettings) => { await updateUserSettings(newSettings); }}
         />
       )}

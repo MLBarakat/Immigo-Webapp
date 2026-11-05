@@ -11,6 +11,7 @@ import { UserSettingsService, userSettingsRowToSettings } from '../services/user
 import type { UserSettingsRow } from '../services/userSettingsService';
 import { normalizeTheme } from '../utils/theme';
 import { isSupportedUSTimeZone, US_STATES } from '../utils/usLocation';
+import { normalizeVoiceId } from '../constants/voices';
 
 function clearReferralAttribution(): void {
   try {
@@ -546,7 +547,11 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     if (!user || !supabase) throw new Error("User not authenticated or Supabase client not initialized.");
 
     const previousSettings = userSettings;
-    const nextSettings: UserSettings = { ...userSettings, language: newLanguageCode };
+    const nextSettings: UserSettings = {
+      ...userSettings,
+      language: newLanguageCode,
+      ai_voice_id: normalizeVoiceId(userSettings.ai_voice_id, newLanguageCode),
+    };
     setUserSettings(nextSettings);
 
     const tableOk = await UserSettingsService.upsertSettings(supabase, user.id, nextSettings);

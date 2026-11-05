@@ -181,7 +181,7 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-07 — History persistence and pagination
 
 **Status:** protected  
-**Entry points:** `src/services/chatPersistenceService.ts`, `src/components/ConversationHistory.tsx`, `src/hooks/useConversation.ts`
+**Entry points:** `src/services/chatPersistenceService.ts`, `src/components/ConversationHistory.tsx`, `src/components/ChatMessageContent.tsx`, `src/hooks/useConversation.ts`, `src/utils/revealTokens.ts`
 
 **Invariants**
 
@@ -189,28 +189,34 @@ This registry is the contract between the product, the tests, and every AI codin
 - History is user-scoped and RLS-protected.
 - Loading older messages preserves scroll position and the active session.
 - Transcript download reflects the persisted conversation.
+- Assistant messages render safe rich text — headings, paragraphs, lists, quotes, emphasis, code, and http(s) links — without injecting raw HTML; user-authored messages remain literal.
+- The assistant reveal keeps paragraph breaks and list indentation so Markdown structure survives the typewriter and reconstructs the stored message exactly.
 
-**Tests:** `src/services/__tests__/chatPersistenceService.test.ts`, `src/components/__tests__/ConversationHistory.test.tsx`, `tests/e2e/infinite-scroll.spec.ts`, `tests/e2e/text-roundtrip.spec.ts`
+**Tests:** `src/services/__tests__/chatPersistenceService.test.ts`, `src/components/__tests__/ConversationHistory.test.tsx`, `src/components/__tests__/ChatMessageContent.test.tsx`, `src/utils/__tests__/revealTokens.test.ts`, `tests/e2e/infinite-scroll.spec.ts`, `tests/e2e/text-roundtrip.spec.ts`
 
 ---
 
 ## F-08 — Settings and preferences
 
 **Status:** protected  
-**Entry points:** `src/services/userSettingsService.ts`, `src/components/ApplicationSettingsModal.tsx`, `src/components/RightPanel.tsx`, `src/components/LeftPanel.tsx`, `src/components/FontSizeSelector.tsx`, `src/utils/fontSize.ts`, `src/utils/theme.ts`
+**Entry points:** `src/services/userSettingsService.ts`, `src/components/ApplicationSettingsModal.tsx`, `src/components/RightPanel.tsx`, `src/components/LeftPanel.tsx`, `src/components/FontSizeSelector.tsx`, `src/constants/voices.ts`, `src/constants/voicePreview.ts`, `src/hooks/useVoicePreview.ts`, `src/utils/fontSize.ts`, `src/utils/theme.ts`
 
 **Invariants**
 
 - Settings persist per user and survive reloads.
-- Theme and font-size previews do not commit until saved.
+- Application Settings has no Save or Cancel action: every selection applies immediately, updates the visible UI, and is queued to the database in order.
+- Failed auto-saves surface an inline error while the chosen value remains selected for retry; a later successful save clears the error.
 - Language, voice, audio-device, notification, and accessibility preferences keep their existing keys.
+- Exactly two Polly voices exist per supported language: Ruth (default) and Matthew for English, Mía (default) and Andrés for Spanish, Léa (default) and Rémi for French, and Hala (default) and Zayd for Arabic.
+- Legacy voice IDs (Joanna, Lupe, Pedro, Stephen, and accented variants) normalize to their supported replacement, and a voice from another language falls back to the selected language's default.
+- Changing the selected voice previews one localized introduction in the newly chosen voice; consecutive previews for the same language never repeat the same sentence.
 - Up to three official USCIS focus categories plus a separate free-text Other persist as the account learning goal with an optional weekly graded-answer target.
 - Learning Goals are edited only in the right panel under Question bank and auto-save without a Save button; Application Settings does not edit or persist them.
 - The suggested weekly target is 20, but remains unset until the user chooses one.
 - The target week is Monday through Sunday in the account time zone and counts answers from every mode.
 - Invalid or missing settings fall back to documented defaults.
 
-**Tests:** `src/components/__tests__/ApplicationSettingsModal.test.tsx`, `src/components/__tests__/RightPanel.test.tsx`, `src/services/__tests__/userSettingsService.test.ts`, `src/components/__tests__/PanelHeaders.test.tsx`, `src/components/__tests__/FontSizeSelector.test.tsx`, `src/utils/__tests__/fontSize.test.ts`, `tests/e2e/settings-persistence.spec.ts`
+**Tests:** `src/components/__tests__/ApplicationSettingsModal.test.tsx`, `src/components/__tests__/RightPanel.test.tsx`, `src/services/__tests__/userSettingsService.test.ts`, `src/components/__tests__/PanelHeaders.test.tsx`, `src/components/__tests__/FontSizeSelector.test.tsx`, `src/constants/__tests__/voices.test.ts`, `src/constants/__tests__/voicePreview.test.ts`, `src/hooks/__tests__/useVoicePreview.test.tsx`, `src/utils/__tests__/fontSize.test.ts`, `tests/e2e/settings-persistence.spec.ts`
 
 ---
 
@@ -293,9 +299,12 @@ This registry is the contract between the product, the tests, and every AI codin
 - Invalid input returns `400`; missing/invalid auth returns `401`; downstream failure returns `500`.
 - Backend handlers remain raw API Gateway handlers; no Express layer.
 - `POST /transcript` accepts a validated speech-only progress-summary request and returns Polly audio without creating a user transcript or grading turn.
+- Speech-only requests use the same voice resolver and speech sanitizer as conversation turns.
+- Polly receives a sanitized copy of the reply: Markdown, emoji, raw HTML, decorative symbols, and date separators are removed or spoken as words without changing the visible response text.
+- Only the two canonical voices for the requested language are synthesized; legacy IDs are mapped and cross-language or unknown voices fall back to that language's default.
 - The completed-exam review response includes server-generated scorecard and question-outcome data; the client validates and presents those facts without calculating scores.
 
-**Tests:** `src/services/__tests__/apiClient.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `amplify/functions/deleteAccount/__tests__/handler.test.ts`, `tests/integration/websocket_api.test.ts`
+**Tests:** `src/services/__tests__/apiClient.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `amplify/functions/transcript/__tests__/ssml.test.ts`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `amplify/functions/deleteAccount/__tests__/handler.test.ts`, `tests/integration/websocket_api.test.ts`
 
 ---
 

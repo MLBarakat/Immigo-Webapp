@@ -1369,7 +1369,6 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
 
   it('shows the full AI opening in voice mode when greeting playback fails', async () => {
     const responseText = "Let's begin your Standard Interview.\n\nQuestion one?";
-    const spokenText = responseText.replace(/\s+/g, ' ');
     mockApiClient.postSessionStart.mockResolvedValue(transcriptResponse({
       responseText,
       audioData: new ArrayBuffer(8),
@@ -1394,7 +1393,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         .filter(message => message.role === 'assistant')
         .map(message => message.content)
         .join(' ');
-      expect(assistantContent).toBe(spokenText);
+      expect(assistantContent).toBe(responseText);
     });
     expect(result.current.appStatus).toBe('listening');
     expect(result.current.isVoiceSessionActive).toBe(true);

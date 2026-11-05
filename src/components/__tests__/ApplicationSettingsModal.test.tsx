@@ -1,24 +1,23 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApplicationSettingsModal } from '../ApplicationSettingsModal';
-import { DEFAULT_USER_SETTINGS } from '../../types/settings';
+import { DEFAULT_USER_SETTINGS, type UserSettings } from '../../types/settings';
 
-function renderSettings(isDesktop: boolean) {
-  const onThemePreview = vi.fn();
+function renderSettings(isDesktop: boolean, settings: Partial<UserSettings> = DEFAULT_USER_SETTINGS) {
   const onClose = vi.fn();
   const onSave = vi.fn().mockResolvedValue(undefined);
+  const onVoicePreview = vi.fn();
   render(
     <ApplicationSettingsModal
       isOpen
       onClose={onClose}
-      settings={DEFAULT_USER_SETTINGS}
+      settings={settings}
       onSave={onSave}
-      onThemePreview={onThemePreview}
-      pollyVoices={[]}
+      onVoicePreview={onVoicePreview}
       isDesktop={isDesktop}
     />
   );
-  return { onThemePreview, onClose, onSave };
+  return { onClose, onSave, onVoicePreview };
 }
 
 afterEach(() => {
@@ -27,42 +26,83 @@ afterEach(() => {
 });
 
 describe('ApplicationSettingsModal', () => {
-  it('previews the selected appearance immediately', () => {
-    const { onThemePreview, onClose, onSave } = renderSettings(false);
+  it('applies and persists appearance changes immediately with no Save or Cancel action', async () => {
+    const { onClose, onSave } = renderSettings(true);
+
+    expect(screen.queryByRole('button', { name: 'Save Changes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
 
     fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
 
     expect(document.documentElement.classList.contains('dark')).toBe(true);
-    expect(onThemePreview).toHaveBeenLastCalledWith('dark');
     expect(screen.getByRole('radio', { name: 'Dark' }).getAttribute('aria-checked')).toBe('true');
-    expect(onSave).not.toHaveBeenCalled();
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].theme).toBe('dark');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
 
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
-    expect(onThemePreview).toHaveBeenLastCalledWith(null);
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('offers only Light and Dark and commits the selected theme only on Save', async () => {
-    const { onSave, onThemePreview, onClose } = renderSettings(true);
-    const lightOption = screen.getByRole('radio', { name: 'Light' });
-    const darkOption = screen.getByRole('radio', { name: 'Dark' });
+  it('offers exactly the two voices for the selected language and previews a newly selected voice', async () => {
+    const { onSave, onVoicePreview } = renderSettings(true);
+    const voiceSelect = screen.getByRole('combobox', { name: 'AI Voice' });
 
-    expect(screen.queryByRole('radio', { name: 'System' })).toBeNull();
-    expect(lightOption.getAttribute('aria-checked')).toBe('true');
+    expect(within(voiceSelect).getAllByRole('option').map((option) => option.textContent))
+      .toEqual(['Ruth (Female)', 'Matthew (Male)']);
 
-    fireEvent.click(darkOption);
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
-    expect(darkOption.getAttribute('aria-checked')).toBe('true');
-    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.change(voiceSelect, { target: { value: 'Matthew' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].ai_voice_id).toBe('Matthew');
+    expect(onVoicePreview).toHaveBeenCalledWith('Matthew', 'en-US', 'Matthew');
+  });
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    expect(onSave.mock.calls[0][0].theme).toBe('dark');
-    expect(onThemePreview).toHaveBeenLastCalledWith(null);
-    expect(onClose).toHaveBeenCalledTimes(1);
+  it('persists rapid changes in order without losing the latest choices', async () => {
+    const { onSave } = renderSettings(true);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Toggle Live Feedback' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
+    expect(onSave.mock.calls[1][0]).toMatchObject({
+      theme: 'dark',
+      live_feedback_enabled: false,
+    });
+  });
+
+  it('shows an inline error and keeps the chosen value when auto-save fails', async () => {
+    render(
+      <ApplicationSettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={DEFAULT_USER_SETTINGS}
+        onSave={vi.fn().mockRejectedValue(new Error('offline'))}
+        onVoicePreview={vi.fn()}
+        isDesktop
+      />
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe('offline');
+    expect(screen.getByRole('radio', { name: 'Dark' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('switches to the default voice for a newly selected language', async () => {
+    const { onSave, onVoicePreview } = renderSettings(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Language' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Español/ }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ language: 'es-ES', ai_voice_id: 'Mia' });
+    expect(onVoicePreview).not.toHaveBeenCalled();
+
+    const voiceSelect = screen.getByRole('combobox', { name: 'AI Voice' });
+    expect(within(voiceSelect).getAllByRole('option').map((option) => option.textContent))
+      .toEqual(['Mía (Femenino)', 'Andrés (Masculino)']);
   });
 
   it('shows Text Size on mobile but not on desktop', () => {
@@ -72,8 +112,7 @@ describe('ApplicationSettingsModal', () => {
         onClose={vi.fn()}
         settings={DEFAULT_USER_SETTINGS}
         onSave={vi.fn().mockResolvedValue(undefined)}
-        onThemePreview={vi.fn()}
-        pollyVoices={[]}
+        onVoicePreview={vi.fn()}
         isDesktop
       />
     );
@@ -85,16 +124,17 @@ describe('ApplicationSettingsModal', () => {
     expect(screen.getByText('Text Size')).toBeDefined();
   });
 
-  it('no longer edits learning goals from application settings', async () => {
+  it('no longer edits learning goals and omits them from every auto-save payload', async () => {
     const { onSave } = renderSettings(false);
 
     expect(screen.queryByText('Learning Goals')).toBeNull();
     expect(screen.queryByRole('textbox', { name: 'Learning focus' })).toBeNull();
     expect(screen.queryByRole('spinbutton', { name: 'Weekly graded-answer target' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Toggle Live Feedback' }));
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].live_feedback_enabled).toBe(false);
     expect(onSave.mock.calls[0][0]).not.toHaveProperty('learning_goal');
     expect(onSave.mock.calls[0][0]).not.toHaveProperty('weekly_graded_answer_target');
   });

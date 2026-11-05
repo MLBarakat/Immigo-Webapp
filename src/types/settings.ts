@@ -44,7 +44,7 @@ export interface UserSettings {
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'en-US',
   theme: 'light',
-  ai_voice_id: 'Joanna',
+  ai_voice_id: 'Ruth',
   live_feedback_enabled: true,
   mic_mode: 'voice_activity',
   barge_in: 'balanced',

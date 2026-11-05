@@ -30,6 +30,44 @@ describe('ConversationHistory', () => {
     expect(screen.getByText('Thursday, January 2, 2025')).toBeTruthy();
   });
 
+  it('renders assistant answers as organized rich text', () => {
+    render(
+      <ConversationHistory
+        messages={[{
+          ...message('rich', '2025-01-01T12:00:00.000Z'),
+          content: '## Study plan\n\n**Focus** on three ideas.\n\n1. Rights\n2. Duties\n\n- Review daily.',
+        }]}
+        displayUser={displayUser}
+        interimTranscript=""
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Study plan', level: 2 })).toBeTruthy();
+    expect(screen.getByText('Focus').tagName).toBe('STRONG');
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Rights',
+      'Duties',
+      'Review daily.',
+    ]);
+    expect(screen.queryByText(/## Study plan/)).toBeNull();
+  });
+
+  it('does not interpret user-authored text as formatting', () => {
+    render(
+      <ConversationHistory
+        messages={[{
+          ...message('literal', '2025-01-01T12:00:00.000Z'),
+          role: 'user',
+          content: '**I typed this literally**',
+        }]}
+        displayUser={displayUser}
+        interimTranscript=""
+      />
+    );
+
+    expect(screen.getByText('**I typed this literally**')).toBeTruthy();
+  });
+
   it('renders in-chat actions and reports the chosen one', () => {
     const onMessageAction = vi.fn();
     render(

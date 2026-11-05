@@ -1,9 +1,7 @@
 {
   "title": "Application Settings",
   "close": "Close settings",
-  "save": "Save Changes",
   "saving": "Saving...",
-  "cancel": "Cancel",
   "saveFailed": "Save failed",
   "appearance": {
     "title": "Appearance",
@@ -55,16 +53,6 @@
     "daily": "Daily",
     "weekly": "Weekly",
     "monthly": "Monthly"
-  },
-  "learningGoals": {
-    "title": "Learning goals",
-    "description": "Save a focus for Practice and Study modes and optionally track your weekly effort.",
-    "focusLabel": "Learning focus",
-    "focusTooLong": "Keep your learning focus to 300 characters or fewer.",
-    "targetLabel": "Weekly graded-answer target",
-    "targetDescription": "Optional. Leave blank to turn off the weekly target. Answers in all modes count.",
-    "targetPlaceholder": "Suggested: 20",
-    "targetInvalid": "Enter a whole-number weekly target greater than zero."
   },
   "audio": {
     "title": "Microphone & Audio Check",

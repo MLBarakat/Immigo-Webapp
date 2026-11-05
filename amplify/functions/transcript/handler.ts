@@ -102,7 +102,9 @@ interface RequestBody {
   postExamConversation?: boolean;
   postExamId?: string;
   /**
-   * Optional Polly Voice ID selected by the user (e.g. Joanna, Matthew, Mia, Andres, etc.).
+   * Optional Polly voice ID selected by the user. Only the two voices for the
+   * requested language are accepted; anything else falls back to that
+   * language's default voice.
    */
   voiceId?: string;
 }
@@ -171,21 +173,163 @@ export function wrapWithSpeechBreaks(text: string, breakMs = 250): string {
   return `<speak>${sentences.join(` <break time="${breakMs}ms"/> `)}</speak>`;
 }
 
-const ALLOWED_VOICES: Record<string, string> = {
-  'Joanna': 'Joanna',
-  'Matthew': 'Matthew',
-  'Mia': 'Mia',
-  'Lupe': 'Lupe',
-  'Pedro': 'Pedro',
-  'Andres': 'Andres',
-  'Andrés': 'Andres',
-  'Lea': 'Lea',
-  'Remi': 'Remi',
-  'Hala': 'Hala',
-  'Zayd': 'Zayd',
-  'Ruth': 'Hala',
-  'Stephen': 'Zayd',
+/** Exactly one female default and one male voice per supported language. */
+const POLLY_VOICES_BY_LANGUAGE: Record<string, { defaultVoice: string; voices: readonly string[] }> = {
+  'en-US': { defaultVoice: 'Ruth', voices: ['Ruth', 'Matthew'] },
+  'es-ES': { defaultVoice: 'Mia', voices: ['Mia', 'Andres'] },
+  'fr-FR': { defaultVoice: 'Lea', voices: ['Lea', 'Remi'] },
+  'ar-SA': { defaultVoice: 'Hala', voices: ['Hala', 'Zayd'] },
 };
+
+/** Voice IDs stored by earlier clients; kept for backward compatibility. */
+const LEGACY_VOICE_ALIASES: Record<string, string> = {
+  Joanna: 'Ruth',
+  Lupe: 'Mia',
+  Pedro: 'Andres',
+  Stephen: 'Zayd',
+  'Mía': 'Mia',
+  'Andrés': 'Andres',
+  'Léa': 'Lea',
+  'Rémi': 'Remi',
+};
+
+function getPollyLanguage(language?: string | null): string {
+  if (language && Object.prototype.hasOwnProperty.call(POLLY_VOICES_BY_LANGUAGE, language)) return language;
+  const prefix = language?.split('-')[0]?.toLowerCase();
+  if (prefix === 'es') return 'es-ES';
+  if (prefix === 'fr') return 'fr-FR';
+  if (prefix === 'ar') return 'ar-SA';
+  return 'en-US';
+}
+
+/**
+ * Resolves a client-supplied voice to one of the two voices for the selected
+ * language. Voices saved by older releases are mapped to their replacement.
+ */
+export function resolvePollyVoiceId(voiceId?: string | null, language?: string | null): string {
+  const languageConfig = POLLY_VOICES_BY_LANGUAGE[getPollyLanguage(language)];
+  if (!voiceId) return languageConfig.defaultVoice;
+  const canonicalVoice = LEGACY_VOICE_ALIASES[voiceId] ?? voiceId;
+  return languageConfig.voices.includes(canonicalVoice)
+    ? canonicalVoice
+    : languageConfig.defaultVoice;
+}
+
+function stripInlineMarkdown(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/(?<![\p{L}\p{N}])__([^_\n]+)__(?![\p{L}\p{N}])/gu, '$1')
+    .replace(/~~([^~\n]+)~~/g, '$1')
+    .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '$1')
+    .replace(/(?<![\p{L}\p{N}_])_([^_\n]+)_(?![\p{L}\p{N}_])/gu, '$1');
+}
+
+/**
+ * Converts assistant display text into natural spoken text for Polly. Display
+ * text keeps its Markdown; only the synthesis copy is stripped of formatting,
+ * emojis, raw HTML, and symbols that a voice engine would read aloud.
+ */
+export function sanitizeSpeechText(text: string): string {
+  if (!text || !text.trim()) return '';
+
+  let value = text.replace(/\r\n?/g, '\n');
+  value = value
+    .replace(/&(?:amp|lt|gt|quot|apos|nbsp);/gi, (entity) => {
+      const decoded: Record<string, string> = {
+        '&amp;': ' and ',
+        '&lt;': ' ',
+        '&gt;': ' ',
+        '&quot;': '"',
+        '&apos;': "'",
+        '&nbsp;': ' ',
+      };
+      return decoded[entity.toLowerCase()] ?? ' ';
+    })
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ');
+
+  const blocks: string[] = [];
+  let paragraph: string[] = [];
+  const flushParagraph = () => {
+    if (paragraph.length > 0) {
+      blocks.push(paragraph.join(' '));
+      paragraph = [];
+    }
+  };
+
+  for (const rawLine of value.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushParagraph();
+      continue;
+    }
+    if (/^(?:[-*_]\s*){3,}$/.test(line)) {
+      flushParagraph();
+      continue;
+    }
+
+    const heading = /^#{1,6}\s+(.+)$/.exec(line);
+    if (heading) {
+      flushParagraph();
+      blocks.push(heading[1]);
+      continue;
+    }
+
+    const bullet = /^[-*+•]\s+(.+)$/.exec(line);
+    if (bullet) {
+      flushParagraph();
+      blocks.push(bullet[1]);
+      continue;
+    }
+
+    const numbered = /^(\d+)[.)]\s+(.+)$/.exec(line);
+    if (numbered) {
+      flushParagraph();
+      blocks.push(`${numbered[1]} ${numbered[2]}`);
+      continue;
+    }
+
+    const quote = /^>\s?(.*)$/.exec(line);
+    if (quote) {
+      flushParagraph();
+      blocks.push(quote[1]);
+      continue;
+    }
+
+    paragraph.push(line);
+  }
+  flushParagraph();
+
+  const spokenBlocks = blocks
+    .map((block) => stripInlineMarkdown(block)
+      .replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D]/gu, ' ')
+      .replace(/(\d)\s*\/\s*(\d)/g, '$1 $2')
+      .replace(/&/g, ' and ')
+      .replace(/%/g, ' percent')
+      .replace(/\+/g, ' plus ')
+      .replace(/=/g, ' equals ')
+      .replace(/#/g, ' number ')
+      .replace(/[/\\^|{}$<>@]/g, ' ')
+      .replace(/[*_~`]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .trim())
+    .filter(Boolean);
+
+  let spoken = '';
+  for (const block of spokenBlocks) {
+    if (!spoken) {
+      spoken = block;
+    } else {
+      spoken += /[.!?…]$/.test(spoken) ? ` ${block}` : `. ${block}`;
+    }
+  }
+  return spoken.trim();
+}
 
 function getLocalizedStudyFallback(flags: string[], language: string): string | null {
   const flag = [
@@ -1937,23 +2081,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // 3. Polly Speech Synthesis
-    const studyVoiceByLanguage: Record<string, { female: string; male: string }> = {
-      'en-US': { female: 'Joanna', male: 'Matthew' },
-      'es-ES': { female: 'Lupe', male: 'Pedro' },
-      'fr-FR': { female: 'Lea', male: 'Remi' },
-      'ar-SA': { female: 'Hala', male: 'Zayd' },
-    };
-    const requestedVoiceId = (parsedBody.voiceId && ALLOWED_VOICES[parsedBody.voiceId])
-      ? ALLOWED_VOICES[parsedBody.voiceId]
-      : 'Joanna';
-    const requestedMaleVoice = ['Matthew', 'Pedro', 'Andres', 'Andrés', 'Remi', 'Zayd', 'Stephen'].includes(parsedBody.voiceId ?? '');
-    const targetVoiceId = simulationMode === 'study'
-      ? studyVoiceByLanguage[preferredLanguageCode][requestedMaleVoice ? 'male' : 'female']
-      : requestedVoiceId;
+    const targetVoiceId = resolvePollyVoiceId(parsedBody.voiceId, preferredLanguageCode);
 
     console.log(`[Lambda-Polly] [${traceId}] Synthesizing speech with voice ${targetVoiceId} (region: ${pollyRegion})...`);
     const pollyVoiceId = targetVoiceId as VoiceId;
-    const ssmlText = wrapWithSpeechBreaks(generatedAssistantText);
+    const ssmlText = wrapWithSpeechBreaks(sanitizeSpeechText(generatedAssistantText));
     let pollyResponse;
     let usedEngine: 'generative' | 'neural' | 'standard' = 'generative';
     try {

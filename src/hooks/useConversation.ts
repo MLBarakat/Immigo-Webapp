@@ -20,6 +20,7 @@ import {
   isPlaybackEchoTranscript,
 } from '../utils/bargeIn';
 import { unlockAudioPlayback, describeAudioEnvironment, acquirePollyPlaybackElement } from '../utils/audioUtils';
+import { tokenizeAssistantReveal } from '../utils/revealTokens';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
@@ -38,8 +39,8 @@ interface AssistantReveal {
   // message; later segments are standalone bubbles). Revealing proceeds across
   // bubbles in order, so the "next question" bubble appears only once the
   // previous bubble's words are all spoken.
-  bubbles: Array<{ messageId: string; words: string[]; created: boolean }>;
-  /** Cumulative word count at the end of each bubble (index == bubble index). */
+  bubbles: Array<{ messageId: string; tokens: string[]; created: boolean }>;
+  /** Cumulative token count at the end of each bubble (index == bubble index). */
   wordCounts: number[];
   totalWords: number;
   revealedGlobal: number;
@@ -266,18 +267,18 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       for (let i = 0; i < reveal.bubbles.length; i += 1) {
         const bubble = reveal.bubbles[i];
         const startIdx = i === 0 ? 0 : reveal.wordCounts[i - 1];
-        const revealedInBubble = Math.max(0, Math.min(bubble.words.length, reveal.revealedGlobal - startIdx));
-        const remaining = bubble.words.slice(revealedInBubble);
+        const revealedInBubble = Math.max(0, Math.min(bubble.tokens.length, reveal.revealedGlobal - startIdx));
+        const remaining = bubble.tokens.slice(revealedInBubble);
         if (remaining.length === 0) continue;
         if (!bubble.created) {
           bubble.created = true;
           if (i === 0) {
-            dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: remaining.join(' ') } });
+            dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: remaining.join('') } });
           } else {
-            dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: remaining.join(' ') } });
+            dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: remaining.join('') } });
           }
         } else {
-          dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { assistantMessageId: bubble.messageId, content: ` ${remaining.join(' ')}` } });
+          dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { assistantMessageId: bubble.messageId, content: remaining.join('') } });
         }
       }
     }
@@ -286,17 +287,17 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
   const startAssistantReveal = useCallback((messageId: string, segments: readonly string[], audioNode: HTMLAudioElement | null = null) => {
     stopAssistantReveal();
-    const bubbles: Array<{ messageId: string; words: string[]; created: boolean }> = segments
+    const bubbles: Array<{ messageId: string; tokens: string[]; created: boolean }> = segments
       .map((segment, index) => ({
         messageId: index === 0 ? messageId : `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        words: segment.trim().split(/\s+/).filter(Boolean),
+        tokens: tokenizeAssistantReveal(segment),
         created: false,
       }))
-      .filter(bubble => bubble.words.length > 0);
+      .filter(bubble => bubble.tokens.length > 0);
     if (bubbles.length === 0) return;
 
     let cumulative = 0;
-    const wordCounts = bubbles.map(bubble => (cumulative += bubble.words.length));
+    const wordCounts = bubbles.map(bubble => (cumulative += bubble.tokens.length));
     const reveal: AssistantReveal = {
       bubbles,
       wordCounts,
@@ -315,16 +316,16 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const bubbleIndex = reveal.wordCounts.findIndex(end => globalIndex < end);
       const startIdx = bubbleIndex === 0 ? 0 : reveal.wordCounts[bubbleIndex - 1];
       const bubble = reveal.bubbles[bubbleIndex];
-      const word = bubble.words[globalIndex - startIdx];
+      const token = bubble.tokens[globalIndex - startIdx];
       if (!bubble.created) {
         bubble.created = true;
         if (bubbleIndex === 0) {
-          dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: word } });
+          dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: token } });
         } else {
-          dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: word } });
+          dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: token } });
         }
       } else {
-        dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { assistantMessageId: bubble.messageId, content: ` ${word}` } });
+        dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { assistantMessageId: bubble.messageId, content: token } });
       }
       reveal.revealedGlobal = globalIndex + 1;
     };

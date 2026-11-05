@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown } from 'lucide-react';
 import { Message, MessageAction } from '../context/conversationContextTypes';
 import { DisplayUser } from '../types/user';
+import { ChatMessageContent } from './ChatMessageContent';
 import ImmigoLogo from '../assets/immigo_logo.png';
 
 // Threshold in pixels below the bottom at which we still consider the user
@@ -172,6 +173,8 @@ export function ConversationHistory({
                       {t('workspace.examReview.openReview')}
                     </button>
                   </div>
+                ) : msg.role === 'assistant' ? (
+                  <ChatMessageContent content={msg.content} />
                 ) : <p className="whitespace-pre-wrap">{msg.content}</p>}
                 {msg.actions && msg.actions.length > 0 && (
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-testid="message-actions">

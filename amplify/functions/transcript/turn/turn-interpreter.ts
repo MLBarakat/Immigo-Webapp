@@ -39,14 +39,21 @@ export function bedrockComplete(client: BedrockRuntimeClient, modelId: string, m
   };
 }
 
-// Shared TTS/Polly audio-hygiene rules — the model's "reply" text is spoken
-// directly by Amazon Polly, so its formatting has real audio consequences.
+// Shared TTS/Polly audio-hygiene rules — the model's "reply" text is shown in
+// the chat and also synthesized by Polly. The server strips display formatting
+// before synthesis, so replies may use light Markdown without polluting audio.
 // Applied to every prompt whose output gets spoken (turn + greeting).
 const TTS_HYGIENE = [
-  'IMPORTANT FOR SPOKEN TEXT-TO-SPEECH AUDIO (Amazon Polly reads "reply" aloud verbatim):',
-  '- Never use markdown, asterisks, bullet points, headers, quotes, slashes, or emojis.',
+  'SPOKEN TEXT-TO-SPEECH AUDIO (Amazon Polly reads a sanitized copy of "reply" aloud):',
+  '- Use plain, natural spoken sentences. For display structure you may use short paragraphs and simple',
+  '  "-" bullet or "1." numbered lists when they genuinely make a multi-part answer clearer; never use',
+  '  headings, tables, code blocks, HTML, emojis, or decorative symbols.',
+  '- Write every sentence so it still sounds natural when Markdown punctuation is removed for speech.',
   '- Never write parenthetical math or equations (e.g. "(50 states x 2)"). Spell out numbers and',
   '  arithmetic in natural spoken words instead (e.g. "two from each of the fifty states").',
+  '- Say dates, times, and symbols the way a person speaks them. For example, say "October thirty-first,',
+  '  twenty twenty-six" instead of "10/31/2026", and read symbols as words such as "percent", "and",',
+  '  "plus", or "equals" instead of leaving the symbol in the text.',
   '- Keep "reply" to at most 2-3 spoken sentences. Hand the conversation back to the user quickly.',
   '- WRITE FOR THE EAR, NOT THE PAGE: the voice engine infers its tone and rhythm FROM the words',
   '  themselves (it does not accept manual pitch/rate tuning), so natural phrasing IS the delivery:',
@@ -199,7 +206,7 @@ export function buildGreetingPrompt(ctx: SessionStartContext): { system: string;
   const isLongBreak = daysSince !== null && daysSince >= 7;
 
   const system = [
-    'You are Joanna, a warm, encouraging, and professional US Civics naturalization test voice tutor.',
+    'You are a warm, encouraging, and professional US Civics naturalization test voice tutor.',
     'You are greeting the student at the beginning of their practice session.',
     '',
     TTS_HYGIENE,

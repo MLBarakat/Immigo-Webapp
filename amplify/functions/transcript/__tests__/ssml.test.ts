@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { escapeXml, wrapWithSpeechBreaks } from '../handler';
+import { escapeXml, resolvePollyVoiceId, sanitizeSpeechText, wrapWithSpeechBreaks } from '../handler';
 
 describe('escapeXml', () => {
   it('escapes all five XML special characters', () => {
@@ -69,5 +69,73 @@ describe('wrapWithSpeechBreaks', () => {
   it('respects a custom break duration', () => {
     const out = wrapWithSpeechBreaks('One. Two.', 400);
     expect(out).toContain('<break time="400ms"/>');
+  });
+});
+
+describe('sanitizeSpeechText', () => {
+  it('removes emojis, markdown emphasis, and decorative symbols before Polly speaks', () => {
+    expect(sanitizeSpeechText('**Great job!** 😀 You know the answer.')).toBe('Great job! You know the answer.');
+    expect(sanitizeSpeechText('# Heading\n\n- First point\n- Second point')).toBe('Heading. First point. Second point');
+    expect(sanitizeSpeechText('Use *asterisks*, `code`, and [the guide](https://example.com).'))
+      .toBe('Use asterisks, code, and the guide.');
+  });
+
+  it('turns date separators and bullets into natural spoken boundaries', () => {
+    expect(sanitizeSpeechText('Your interview is on 10/31/2026 at 9:30.')).toBe('Your interview is on 10 31 2026 at 9:30.');
+    expect(sanitizeSpeechText('1. Read the question\n2. Answer aloud')).toBe('1 Read the question. 2 Answer aloud');
+  });
+
+  it('strips raw HTML and characters Polly should never pronounce', () => {
+    const spoken = sanitizeSpeechText('<script>alert("x")</script> Use #1 & 50% + 2 = 3.');
+
+    expect(spoken).not.toMatch(/[<>#+=]/);
+    expect(spoken).not.toContain('script');
+    expect(spoken).toContain('and');
+  });
+
+  it('leaves ordinary punctuation and contractions intact', () => {
+    expect(sanitizeSpeechText("It's correct, isn't it? Yes!")).toBe("It's correct, isn't it? Yes!");
+  });
+
+  it('returns an empty string for empty or whitespace-only input', () => {
+    expect(sanitizeSpeechText('')).toBe('');
+    expect(sanitizeSpeechText('   ')).toBe('');
+  });
+});
+
+describe('resolvePollyVoiceId', () => {
+  it.each([
+    ['en-US', 'Ruth'],
+    ['es-ES', 'Mia'],
+    ['fr-FR', 'Lea'],
+    ['ar-SA', 'Hala'],
+  ])('defaults %s to its female voice', (language, expected) => {
+    expect(resolvePollyVoiceId(undefined, language)).toBe(expected);
+  });
+
+  it.each([
+    ['en-US', 'Matthew'],
+    ['es-ES', 'Andres'],
+    ['fr-FR', 'Remi'],
+    ['ar-SA', 'Zayd'],
+  ])('keeps the selected male voice for %s', (language, voiceId) => {
+    expect(resolvePollyVoiceId(voiceId, language)).toBe(voiceId);
+  });
+
+  it('falls back to the language default when the selected voice belongs to another language', () => {
+    expect(resolvePollyVoiceId('Matthew', 'es-ES')).toBe('Mia');
+    expect(resolvePollyVoiceId('Zayd', 'en-US')).toBe('Ruth');
+  });
+
+  it('maps legacy voice IDs for older clients', () => {
+    expect(resolvePollyVoiceId('Joanna', 'en-US')).toBe('Ruth');
+    expect(resolvePollyVoiceId('Lupe', 'es-ES')).toBe('Mia');
+    expect(resolvePollyVoiceId('Pedro', 'es-ES')).toBe('Andres');
+    expect(resolvePollyVoiceId('Stephen', 'ar-SA')).toBe('Zayd');
+  });
+
+  it('treats inherited object keys as unsupported languages', () => {
+    expect(resolvePollyVoiceId(undefined, 'toString')).toBe('Ruth');
+    expect(resolvePollyVoiceId('Hala', 'toString')).toBe('Ruth');
   });
 });

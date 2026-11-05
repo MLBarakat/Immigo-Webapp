@@ -1,9 +1,7 @@
 {
   "title": "Configuración de la aplicación",
   "close": "Cerrar configuración",
-  "save": "Guardar cambios",
   "saving": "Guardando...",
-  "cancel": "Cancelar",
   "saveFailed": "No se pudo guardar",
   "appearance": {
     "title": "Apariencia",
@@ -55,16 +53,6 @@
     "daily": "Diario",
     "weekly": "Semanal",
     "monthly": "Mensual"
-  },
-  "learningGoals": {
-    "title": "Objetivos de aprendizaje",
-    "description": "Guarda un enfoque para los modos Práctica y Estudio y, si quieres, sigue tu actividad semanal.",
-    "focusLabel": "Enfoque de aprendizaje",
-    "focusTooLong": "El enfoque de aprendizaje no puede superar los 300 caracteres.",
-    "targetLabel": "Objetivo semanal de respuestas evaluadas",
-    "targetDescription": "Opcional. Déjalo en blanco para desactivar el objetivo semanal. Se cuentan las respuestas de todos los modos.",
-    "targetPlaceholder": "Sugerido: 20",
-    "targetInvalid": "Introduce un objetivo semanal entero mayor que cero."
   },
   "audio": {
     "title": "Micrófono y comprobación de audio",
