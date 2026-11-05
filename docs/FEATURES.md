@@ -132,17 +132,19 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-05 — Civics grading and turn policy
 
 **Status:** protected  
-**Entry points:** `amplify/functions/transcript/turn/turn-policy.ts`, `amplify/functions/transcript/turn/turn-interpreter.ts`, `amplify/functions/transcript/turn/matching.ts`, `amplify/functions/transcript/turn/bank.ts`, `amplify/functions/transcript/handler.ts`
+**Entry points:** `amplify/functions/transcript/turn/turn-policy.ts`, `amplify/functions/transcript/turn/turn-interpreter.ts`, `amplify/functions/transcript/turn/matching.ts`, `amplify/functions/transcript/turn/bank.ts`, `amplify/functions/transcript/turn/dynamic-answers.ts`, `amplify/functions/transcript/civics-dynamic-answers.json`, `amplify/functions/transcript/handler.ts`
 
 **Invariants**
 
 - Civics answers are graded server-side. The client never decides correctness.
-- Partial answers, confirmations, hints, repeats, progress questions, and ungraded current-answer questions remain distinct.
+- Partial answers, confirmations, hints, repeats, progress questions, and dynamic questions without verifiable current answers remain distinct.
+- Dynamic answers are checked against the maintained dynamic-answer JSON; state-specific entries use the authenticated user's persisted registration/account state.
+- For the representative question, any current U.S. House member listed for the selected state is accepted because registration does not collect a congressional district.
 - `graded_answers` is the authoritative record for progress reports.
 - A grading change requires an eval run and a reviewed prompt change.
 - Question-bank IDs and test-version routing remain stable.
 
-**Tests:** `amplify/functions/transcript/turn/__tests__/turn-policy.test.ts`, `turn-policy.flow.test.ts`, `turn-policy.confirmation.test.ts`, `turn-interpreter.test.ts`, `turn-interpreter.transcript-fixes.test.ts`, `turn-interpreter.prompts.test.ts`, `matching.test.ts`, `bank.test.ts`, `welcomeBanner.test.ts`, `amplify/functions/transcript/__tests__/ssml.test.ts`, `eval/civics/__tests__/civics-eval.test.ts`
+**Tests:** `amplify/functions/transcript/turn/__tests__/turn-policy.test.ts`, `turn-policy.flow.test.ts`, `turn-policy.confirmation.test.ts`, `turn-interpreter.test.ts`, `turn-interpreter.transcript-fixes.test.ts`, `turn-interpreter.prompts.test.ts`, `matching.test.ts`, `bank.test.ts`, `dynamic-answers.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `welcomeBanner.test.ts`, `amplify/functions/transcript/__tests__/ssml.test.ts`, `eval/civics/__tests__/civics-eval.test.ts`
 
 ---
 

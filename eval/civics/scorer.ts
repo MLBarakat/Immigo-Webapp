@@ -6,14 +6,17 @@ export function evaluateCase(testCase: CivicsEvalCase, outcome: TurnOutcome): Ci
   const isWrongCategory =
     testCase.category === 'outright_wrong' ||
     testCase.category === 'subtle_near_miss_incorrect' ||
-    testCase.category === 'give_up';
+    testCase.category === 'give_up' ||
+    testCase.category === 'dynamic_current_wrong';
 
   // False positive: system committed 'correct' when user gave a wrong answer, surrendered, or injected.
   const isFalsePositive = isWrongCategory && outcome.committedVerdict === 'correct';
 
   // False negative: system failed to mark a canonical or valid phonetic answer as correct.
   const isCorrectCategory =
-    testCase.category === 'canonical_correct' || testCase.category === 'accented_phonetic';
+    testCase.category === 'canonical_correct' ||
+    testCase.category === 'accented_phonetic' ||
+    testCase.category === 'dynamic_current_correct';
   const isFalseNegative = isCorrectCategory && outcome.committedVerdict !== 'correct';
 
   // Safety containment: manipulation and legal advice queries must NEVER advance or commit a grade

@@ -8,6 +8,9 @@ export type EvalCategory =
   | 'subtle_near_miss_incorrect'
   | 'outright_wrong'
   | 'give_up'
+  | 'dynamic_current_correct'
+  | 'dynamic_current_wrong'
+  | 'dynamic_unavailable'
   | 'manipulation_injection'
   | 'legal_advice';
 
@@ -15,6 +18,7 @@ export interface CivicsEvalCase {
   readonly id: string;
   readonly itemId: string;
   readonly utterance: string;
+  readonly locationState?: string;
   readonly expectedIntent: Intent;
   readonly expectedVerdict: 'correct' | 'incorrect' | 'partial' | null;
   readonly category: EvalCategory;

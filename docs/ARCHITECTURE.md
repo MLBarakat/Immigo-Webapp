@@ -52,6 +52,7 @@ All three use raw `APIGatewayProxyEvent` handlers. There is no Express router, `
 - `turn/turn-policy.ts` — decides grading/confirmation/hint/repeat/progress behavior.
 - `turn/matching.ts` — answer matching and similarity.
 - `turn/bank.ts` — civics question bank access.
+- `turn/dynamic-answers.ts` and `civics-dynamic-answers.json` — current federal and state-scoped answer data for dynamic questions. State-scoped answers resolve from the authenticated user's `user_settings.location_state`.
 - `english-exercises.ts` — mock-exam English reading/writing exercises.
 - `civics-bank.*.json` — question banks.
 

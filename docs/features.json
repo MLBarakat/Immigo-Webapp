@@ -154,15 +154,17 @@
       "id": "F-05",
       "title": "Civics grading and turn policy",
       "status": "protected",
-      "summary": "Server-authoritative civics grading, answer matching, confirmations, hints, repeats, progress questions, and question-bank routing.",
+      "summary": "Server-authoritative civics grading, maintained dynamic answers, state-aware matching, confirmations, hints, repeats, progress questions, and question-bank routing.",
       "entryPoints": [
         "amplify/functions/transcript/turn/turn-policy.ts",
         "amplify/functions/transcript/turn/turn-interpreter.ts",
         "amplify/functions/transcript/turn/matching.ts",
         "amplify/functions/transcript/turn/bank.ts",
+        "amplify/functions/transcript/turn/dynamic-answers.ts",
         "amplify/functions/transcript/handler.ts",
         "amplify/functions/transcript/civics-bank.2020-128.json",
-        "amplify/functions/transcript/civics-bank.2008-100.json"
+        "amplify/functions/transcript/civics-bank.2008-100.json",
+        "amplify/functions/transcript/civics-dynamic-answers.json"
       ],
       "tests": [
         "amplify/functions/transcript/turn/__tests__/turn-policy.test.ts",
@@ -173,13 +175,17 @@
         "amplify/functions/transcript/turn/__tests__/turn-interpreter.prompts.test.ts",
         "amplify/functions/transcript/turn/__tests__/matching.test.ts",
         "amplify/functions/transcript/turn/__tests__/bank.test.ts",
+        "amplify/functions/transcript/turn/__tests__/dynamic-answers.test.ts",
         "amplify/functions/transcript/turn/__tests__/welcomeBanner.test.ts",
+        "amplify/functions/transcript/__tests__/mock-exam-routing.test.ts",
         "amplify/functions/transcript/__tests__/ssml.test.ts",
         "eval/civics/__tests__/civics-eval.test.ts"
       ],
       "invariants": [
         "Civics answers are graded server-side.",
-        "Partial answers, confirmations, hints, repeats, progress questions, and ungraded current-answer questions remain distinct.",
+        "Partial answers, confirmations, hints, repeats, progress questions, and dynamic questions without verifiable current answers remain distinct.",
+        "Dynamic current answers are checked against the maintained JSON data; state-specific answers use the authenticated user's persisted registration/account state.",
+        "For the representative question, any current House member from the selected state is accepted because registration does not collect a congressional district.",
         "graded_answers is the authoritative record for progress reports.",
         "A grading change requires an eval run and a reviewed prompt change.",
         "Question-bank IDs and test-version routing remain stable."

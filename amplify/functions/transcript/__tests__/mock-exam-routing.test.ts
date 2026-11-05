@@ -242,6 +242,33 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(mocks.from).not.toHaveBeenCalledWith('mock_exam_english_answers');
   });
 
+  it('grades a dynamic civics answer using the authenticated user state', async () => {
+    mocks.state.exam = examRow({
+      question_ids: ['q-023', 'q-024'],
+      current_index: 0,
+    });
+    mocks.state.settings = { location_state: 'AL' };
+    mocks.bedrockSend.mockResolvedValue(bedrockText(JSON.stringify({
+      intent: 'answer',
+      targetItemId: 'q-023',
+      grade: { verdict: 'incorrect', matchedAnswer: null },
+      reply: 'Thanks for your answer.',
+    })));
+
+    const event = transcribeEvent();
+    const request = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    request.currentItemId = 'q-023';
+    request.transcript = 'Katie Britt';
+    const response = await handler({ ...event, body: JSON.stringify(request) });
+
+    expect(response.statusCode).toBe(200);
+    expect(mocks.from).toHaveBeenCalledWith('user_settings');
+    expect(mocks.state.updates).toContainEqual(expect.objectContaining({
+      table: 'graded_answers',
+      payload: expect.objectContaining({ item_id: 'q-023', verdict: 'correct' }),
+    }));
+  });
+
   it('still routes to the English exercise path while the exam is in stage=reading', async () => {
     const readingPromptId = pickEnglishExercisePrompts('reading')[0];
     mocks.state.exam = examRow({

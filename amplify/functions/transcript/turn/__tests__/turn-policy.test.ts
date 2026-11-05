@@ -49,6 +49,39 @@ describe('TurnPolicy.resolveTurn — grading guarantees', () => {
     expect(out.scoreChanged).toBe(true);
   });
 
+  it('grades a dynamic question when current answers have been resolved for the user', () => {
+    const dynamicItem: CivicsItem = {
+      id: '2008-020',
+      question: 'Who is one of your state’s U.S. Senators now?',
+      kind: 'dynamic',
+      acceptableAnswers: ['Katie Britt', 'Tommy Tuberville'],
+    };
+    const out = resolveTurn(
+      interp({ targetItemId: dynamicItem.id, grade: { verdict: 'correct', matchedAnswer: 'Katie Britt' } }),
+      { askedItem: dynamicItem, rawTranscript: 'Katie Britt' }
+    );
+
+    expect(out.committedVerdict).toBe('correct');
+    expect(out.scoreChanged).toBe(true);
+    expect(out.flags).not.toContain('dynamic_ungraded');
+  });
+
+  it('leaves a dynamic question unscored when no current answers are available', () => {
+    const dynamicItem: CivicsItem = {
+      id: '2008-020',
+      question: 'Who is one of your state’s U.S. Senators now?',
+      kind: 'dynamic',
+      acceptableAnswers: [],
+    };
+    const out = resolveTurn(
+      interp({ targetItemId: dynamicItem.id, grade: { verdict: 'correct', matchedAnswer: 'Katie Britt' } }),
+      { askedItem: dynamicItem, rawTranscript: 'Katie Britt' }
+    );
+
+    expect(out.committedVerdict).toBeNull();
+    expect(out.flags).toContain('dynamic_ungraded');
+  });
+
   it('overrides an off-bank "correct" (hallucination / injection)', () => {
     const out = resolveTurn(
       interp({ grade: { verdict: 'correct', matchedAnswer: 'banana' } }),

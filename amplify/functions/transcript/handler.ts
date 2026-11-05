@@ -4,6 +4,7 @@ import { PollyClient, SynthesizeSpeechCommand, VoiceId } from '@aws-sdk/client-p
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
 import { allItems, getFirstQuestion, getItem, getNextSequentialQuestion, getStudyCategoryTitle, selectNextQuestion } from './turn/bank';
+import { dynamicAnswersRequireLocation, withDynamicAnswers } from './turn/dynamic-answers';
 import { formatStudyFeedback, formatStudyQuestion, TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn, sanitizeFinalAnswerFeedback } from './turn/turn-policy';
 import type { CivicsItem, ConversationTurn, SimulationMode, TestVersion } from './turn/types';
@@ -564,6 +565,36 @@ function getUserScopedSupabase(token: string): SupabaseClient {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
     realtime: { transport: LambdaUnsupportedRealtimeTransport },
   });
+}
+
+function getLocationStateFromMetadata(userMetadata: unknown): string | null {
+  if (typeof userMetadata !== 'object' || userMetadata === null || Array.isArray(userMetadata)) return null;
+  const metadata = userMetadata as Record<string, unknown>;
+  if (typeof metadata.location_state === 'string') return metadata.location_state;
+
+  const settings = metadata.settings;
+  if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) return null;
+  const locationState = (settings as Record<string, unknown>).location_state;
+  return typeof locationState === 'string' ? locationState : null;
+}
+
+async function getLocationStateForUser(
+  token: string,
+  userId: string,
+  userMetadata: unknown,
+): Promise<string | null> {
+  const { data, error } = await getUserScopedSupabase(token)
+    .from('user_settings')
+    .select('location_state')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`Could not load account location for dynamic civics grading: ${error.message}`);
+  }
+
+  return data
+    ? typeof data.location_state === 'string' ? data.location_state : null
+    : getLocationStateFromMetadata(userMetadata);
 }
 
 /**
@@ -1530,7 +1561,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    const askedItem = getItem(parsedBody.currentItemId, testVersion);
+    const bankAskedItem = getItem(parsedBody.currentItemId, testVersion);
+    const locationState = bankAskedItem?.kind === 'dynamic' && dynamicAnswersRequireLocation(bankAskedItem.id)
+      ? await getLocationStateForUser(token, userId, userData.user.user_metadata)
+      : null;
+    const askedItem = bankAskedItem ? withDynamicAnswers(bankAskedItem, locationState) : null;
 
     // In standard mode an active mock exam may be in its English reading/writing
     // phase, in which case this utterance is an exercise submission. The exam's

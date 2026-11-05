@@ -48,7 +48,7 @@ const SAFE = {
   offTopic: "That's outside what I can help with here, but I'm happy to keep practicing civics with you.",
   confirm: "I want to make sure I heard you correctly. Could you say your answer once more?",
   practiceRetry: "That's not quite right. Try once more, or ask me for a hint.",
-  dynamicAnswer: 'This answer changes over time and cannot be verified from the stored official bank. I will leave it unscored and move on.',
+  dynamicAnswer: "I can't verify this current answer from the available reference data, so I'll leave it unscored and move on.",
   legalAdvice: "I can only help you practice civics questions and English speaking. I cannot provide legal advice or evaluate your eligibility for naturalization. Please consult a licensed immigration attorney or a DOJ-accredited representative.",
 };
 
@@ -166,7 +166,7 @@ function resolveAnswer(interp: TurnInterpretation, opts: ResolveOptions): TurnOu
     // Claimed an answer but the server has no active question -> don't grade.
     return outcome('unclear', null, false, false, 'clarify', SAFE.clarify, false, ['answer_without_active_question']);
   }
-  if (item.kind === 'dynamic') {
+  if (item.kind === 'dynamic' && item.acceptableAnswers.length === 0) {
     return outcome('answer', null, false, true, 'grade_feedback', SAFE.dynamicAnswer, false, ['dynamic_ungraded']);
   }
   const g = interp.grade;

@@ -1,0 +1,1282 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-11-05",
+  "verificationStatus": "initial-draft",
+  "maintenanceNote": "Answer values are arrays to allow common spoken forms. Update the relevant federal or state entry, refresh asOf, and verify against the cited source before release. State-only registration means any current U.S. representative from the selected state is accepted; the exact district is not known.",
+  "sources": {
+    "senators": "https://unitedstates.github.io/congress-legislators/legislators-current.json (cross-checked for the Florida and Ohio appointments against https://www.senate.gov/senators/NewSenators.htm)",
+    "representatives": "https://www.house.gov/representatives",
+    "governors": "https://www.nga.org/governors/",
+    "presidentAndVicePresident": "https://www.whitehouse.gov/administration/",
+    "supremeCourt": "https://www.supremecourt.gov/about/biographies.aspx",
+    "speaker": "https://www.speaker.gov/",
+    "capitals": "Manual initial draft of the 50 U.S. state capitals; verify when updating."
+  },
+  "questions": {
+    "2008-020": "state.senators",
+    "2008-023": "state.representatives",
+    "2008-028": "federal.president",
+    "2008-029": "federal.vicePresident",
+    "2008-039": "federal.supremeCourtJustices",
+    "2008-040": "federal.chiefJustice",
+    "2008-043": "state.governor",
+    "2008-044": "state.capital",
+    "2008-046": "federal.presidentParty",
+    "2008-047": "federal.speaker",
+    "q-023": "state.senators",
+    "q-029": "state.representatives",
+    "q-061": "state.governor",
+    "q-062": "state.capital"
+  },
+  "federal": {
+    "president": [
+      "Donald Trump",
+      "Donald J. Trump"
+    ],
+    "vicePresident": [
+      "JD Vance",
+      "J.D. Vance",
+      "J D Vance",
+      "James David Vance"
+    ],
+    "supremeCourtJustices": [
+      "nine",
+      "9"
+    ],
+    "chiefJustice": [
+      "John Roberts",
+      "John G. Roberts",
+      "John Roberts Jr.",
+      "John G. Roberts Jr."
+    ],
+    "presidentParty": [
+      "Republican",
+      "Republican Party"
+    ],
+    "speaker": [
+      "Mike Johnson",
+      "James Michael Johnson"
+    ]
+  },
+  "states": {
+    "AL": {
+      "name": "Alabama",
+      "capital": [
+        "Montgomery"
+      ],
+      "senators": [
+        "Katie Boyd Britt",
+        "Katie Britt",
+        "Tommy Tuberville"
+      ],
+      "representatives": [
+        "Barry Moore",
+        "Dale Strong",
+        "Gary Palmer",
+        "Mike Rogers",
+        "Robert Aderholt",
+        "Shomari Figures",
+        "Terri Sewell"
+      ],
+      "governor": [
+        "Kay Ivey"
+      ]
+    },
+    "AK": {
+      "name": "Alaska",
+      "capital": [
+        "Juneau"
+      ],
+      "senators": [
+        "Dan Sullivan",
+        "Lisa Murkowski"
+      ],
+      "representatives": [
+        "Nicholas Begich"
+      ],
+      "governor": [
+        "Mike Dunleavy"
+      ]
+    },
+    "AZ": {
+      "name": "Arizona",
+      "capital": [
+        "Phoenix"
+      ],
+      "senators": [
+        "Mark Kelly",
+        "Ruben Gallego"
+      ],
+      "representatives": [
+        "Abraham Hamadeh",
+        "Adelita Grijalva",
+        "Andy Biggs",
+        "David Schweikert",
+        "Elijah Crane",
+        "Greg Stanton",
+        "Juan Ciscomani",
+        "Paul Gosar",
+        "Yassamin Ansari"
+      ],
+      "governor": [
+        "Katie Hobbs"
+      ]
+    },
+    "AR": {
+      "name": "Arkansas",
+      "capital": [
+        "Little Rock"
+      ],
+      "senators": [
+        "John Boozman",
+        "Tom Cotton"
+      ],
+      "representatives": [
+        "Bruce Westerman",
+        "Eric Crawford",
+        "J. Hill",
+        "Steve Womack"
+      ],
+      "governor": [
+        "Sarah Huckabee Sanders"
+      ]
+    },
+    "CA": {
+      "name": "California",
+      "capital": [
+        "Sacramento"
+      ],
+      "senators": [
+        "Adam B. Schiff",
+        "Adam Schiff",
+        "Alejandro Padilla",
+        "Alex Padilla"
+      ],
+      "representatives": [
+        "Adam Gray",
+        "Aisha Wahab",
+        "Ami Bera",
+        "Brad Sherman",
+        "Darrell Issa",
+        "Dave Min",
+        "David Valadao",
+        "Derek Tran",
+        "Doris Matsui",
+        "George Whitesides",
+        "Gilbert Cisneros",
+        "J. Correa",
+        "James Gallagher",
+        "Jared Huffman",
+        "Jay Obernolte",
+        "Jim Costa",
+        "Jimmy Gomez",
+        "Jimmy Panetta",
+        "John Garamendi",
+        "Josh Harder",
+        "Juan Vargas",
+        "Judy Chu",
+        "Julia Brownley",
+        "Ken Calvert",
+        "Kevin Kiley",
+        "Kevin Mullin",
+        "Lateefah Simon",
+        "Laura Friedman",
+        "Linda Sanchez",
+        "Luz Rivas",
+        "Mark DeSaulnier",
+        "Mark Takano",
+        "Maxine Waters",
+        "Mike Levin",
+        "Mike Thompson",
+        "Nancy Pelosi",
+        "Nanette Barragan",
+        "Norma Torres",
+        "Pete Aguilar",
+        "Raul Ruiz",
+        "Ro Khanna",
+        "Robert Garcia",
+        "Salud Carbajal",
+        "Sam Liccardo",
+        "Sara Jacobs",
+        "Scott Peters",
+        "Sydney Kamlager-Dove",
+        "Ted Lieu",
+        "Tom McClintock",
+        "Vince Fong",
+        "Young Kim",
+        "Zoe Lofgren"
+      ],
+      "governor": [
+        "Gavin Newsom"
+      ]
+    },
+    "CO": {
+      "name": "Colorado",
+      "capital": [
+        "Denver"
+      ],
+      "senators": [
+        "John Hickenlooper",
+        "John W. Hickenlooper",
+        "Michael Bennet",
+        "Michael F. Bennet"
+      ],
+      "representatives": [
+        "Brittany Pettersen",
+        "Diana DeGette",
+        "Gabe Evans",
+        "Jason Crow",
+        "Jeff Crank",
+        "Jeff Hurd",
+        "Joe Neguse",
+        "Lauren Boebert"
+      ],
+      "governor": [
+        "Jared Polis"
+      ]
+    },
+    "CT": {
+      "name": "Connecticut",
+      "capital": [
+        "Hartford"
+      ],
+      "senators": [
+        "Christopher Murphy",
+        "Richard Blumenthal"
+      ],
+      "representatives": [
+        "Jahana Hayes",
+        "James Himes",
+        "Joe Courtney",
+        "John Larson",
+        "Rosa DeLauro"
+      ],
+      "governor": [
+        "Ned Lamont"
+      ]
+    },
+    "DE": {
+      "name": "Delaware",
+      "capital": [
+        "Dover"
+      ],
+      "senators": [
+        "Christopher A. Coons",
+        "Christopher Coons",
+        "Lisa Blunt Rochester"
+      ],
+      "representatives": [
+        "Sarah McBride"
+      ],
+      "governor": [
+        "Matt Meyer"
+      ]
+    },
+    "FL": {
+      "name": "Florida",
+      "capital": [
+        "Tallahassee"
+      ],
+      "senators": [
+        "Ashley Moody",
+        "Rick Scott"
+      ],
+      "representatives": [
+        "Aaron Bean",
+        "Anna Paulina Luna",
+        "Brian Mast",
+        "Byron Donalds",
+        "Carlos Gimenez",
+        "Cory Mills",
+        "Daniel Webster",
+        "Darren Soto",
+        "Debbie Wasserman Schultz",
+        "Frederica Wilson",
+        "Gus Bilirakis",
+        "Jared Moskowitz",
+        "Jimmy Patronis",
+        "John Rutherford",
+        "Kat Cammack",
+        "Kathy Castor",
+        "Laurel Lee",
+        "Lois Frankel",
+        "Maria Salazar",
+        "Mario Diaz-Balart",
+        "Maxwell Frost",
+        "Mike Haridopolos",
+        "Neal Dunn",
+        "Randy Fine",
+        "Scott Franklin",
+        "Sheila - Vacancy Cherfilus-McCormick",
+        "Vern Buchanan",
+        "W. Steube"
+      ],
+      "governor": [
+        "Ron DeSantis"
+      ]
+    },
+    "GA": {
+      "name": "Georgia",
+      "capital": [
+        "Atlanta"
+      ],
+      "senators": [
+        "Jon Ossoff",
+        "Raphael G. Warnock",
+        "Raphael Warnock"
+      ],
+      "representatives": [
+        "Andrew Clyde",
+        "Austin Scott",
+        "Barry Loudermilk",
+        "Brian Jack",
+        "Clay Fuller",
+        "Earl Carter",
+        "Everton Blair",
+        "Henry Johnson",
+        "Lucy McBath",
+        "Mike Collins",
+        "Nikema Williams",
+        "Richard McCormick",
+        "Rick Allen",
+        "Sanford Bishop"
+      ],
+      "governor": [
+        "Brian Kemp"
+      ]
+    },
+    "HI": {
+      "name": "Hawaii",
+      "capital": [
+        "Honolulu"
+      ],
+      "senators": [
+        "Brian Schatz",
+        "Mazie Hirono",
+        "Mazie K. Hirono"
+      ],
+      "representatives": [
+        "Ed Case",
+        "Jill Tokuda"
+      ],
+      "governor": [
+        "Josh Green"
+      ]
+    },
+    "ID": {
+      "name": "Idaho",
+      "capital": [
+        "Boise"
+      ],
+      "senators": [
+        "James E. Risch",
+        "James Risch",
+        "Michael Crapo",
+        "Mike Crapo"
+      ],
+      "representatives": [
+        "Michael Simpson",
+        "Russ Fulcher"
+      ],
+      "governor": [
+        "Brad Little"
+      ]
+    },
+    "IL": {
+      "name": "Illinois",
+      "capital": [
+        "Springfield"
+      ],
+      "senators": [
+        "Richard Durbin",
+        "Richard J. Durbin",
+        "Tammy Duckworth"
+      ],
+      "representatives": [
+        "Bill Foster",
+        "Bradley Schneider",
+        "Danny Davis",
+        "Darin LaHood",
+        "Delia Ramirez",
+        "Eric Sorensen",
+        "Janice Schakowsky",
+        "Jesus Garcia",
+        "Jonathan Jackson",
+        "Lauren Underwood",
+        "Mary Miller",
+        "Mike Bost",
+        "Mike Quigley",
+        "Nikki Budzinski",
+        "Raja Krishnamoorthi",
+        "Robin Kelly",
+        "Sean Casten"
+      ],
+      "governor": [
+        "JB Pritzker"
+      ]
+    },
+    "IN": {
+      "name": "Indiana",
+      "capital": [
+        "Indianapolis"
+      ],
+      "senators": [
+        "Jim Banks",
+        "Todd Young"
+      ],
+      "representatives": [
+        "Andre Carson",
+        "Erin Houchin",
+        "Frank Mrvan",
+        "James Baird",
+        "Jefferson Shreve",
+        "Mark Messmer",
+        "Marlin Stutzman",
+        "Rudy Yakym",
+        "Victoria Spartz"
+      ],
+      "governor": [
+        "Mike Braun"
+      ]
+    },
+    "IA": {
+      "name": "Iowa",
+      "capital": [
+        "Des Moines"
+      ],
+      "senators": [
+        "Charles Grassley",
+        "Chuck Grassley",
+        "Joni Ernst"
+      ],
+      "representatives": [
+        "Ashley Hinson",
+        "Mariannette Miller-Meeks",
+        "Randy Feenstra",
+        "Zachary Nunn"
+      ],
+      "governor": [
+        "Kim Reynolds"
+      ]
+    },
+    "KS": {
+      "name": "Kansas",
+      "capital": [
+        "Topeka"
+      ],
+      "senators": [
+        "Jerry Moran",
+        "Roger Marshall"
+      ],
+      "representatives": [
+        "Derek Schmidt",
+        "Ron Estes",
+        "Sharice Davids",
+        "Tracey Mann"
+      ],
+      "governor": [
+        "Laura Kelly"
+      ]
+    },
+    "KY": {
+      "name": "Kentucky",
+      "capital": [
+        "Frankfort"
+      ],
+      "senators": [
+        "Mitch McConnell",
+        "Rand Paul"
+      ],
+      "representatives": [
+        "Andy Barr",
+        "Brett Guthrie",
+        "Harold Rogers",
+        "James Comer",
+        "Morgan McGarvey",
+        "Thomas Massie"
+      ],
+      "governor": [
+        "Andy Beshear"
+      ]
+    },
+    "LA": {
+      "name": "Louisiana",
+      "capital": [
+        "Baton Rouge"
+      ],
+      "senators": [
+        "Bill Cassidy",
+        "John Kennedy"
+      ],
+      "representatives": [
+        "Clay Higgins",
+        "Cleo Fields",
+        "Julia Letlow",
+        "Mike Johnson",
+        "Steve Scalise",
+        "Troy Carter"
+      ],
+      "governor": [
+        "Jeff Landry"
+      ]
+    },
+    "ME": {
+      "name": "Maine",
+      "capital": [
+        "Augusta"
+      ],
+      "senators": [
+        "Angus King",
+        "Angus S. King, Jr.",
+        "Susan Collins",
+        "Susan M. Collins"
+      ],
+      "representatives": [
+        "Chellie Pingree",
+        "Jared Golden"
+      ],
+      "governor": [
+        "Janet Mills"
+      ]
+    },
+    "MD": {
+      "name": "Maryland",
+      "capital": [
+        "Annapolis"
+      ],
+      "senators": [
+        "Angela Alsobrooks",
+        "Angela D. Alsobrooks",
+        "Chris Van Hollen"
+      ],
+      "representatives": [
+        "Andy Harris",
+        "April McClain Delaney",
+        "Glenn Ivey",
+        "Jamie Raskin",
+        "Johnny Olszewski",
+        "Kweisi Mfume",
+        "Sarah Elfreth",
+        "Steny Hoyer"
+      ],
+      "governor": [
+        "Wes Moore"
+      ]
+    },
+    "MA": {
+      "name": "Massachusetts",
+      "capital": [
+        "Boston"
+      ],
+      "senators": [
+        "Edward J. Markey",
+        "Edward Markey",
+        "Elizabeth Warren"
+      ],
+      "representatives": [
+        "Ayanna Pressley",
+        "Jake Auchincloss",
+        "James McGovern",
+        "Katherine Clark",
+        "Lori Trahan",
+        "Richard Neal",
+        "Seth Moulton",
+        "Stephen Lynch",
+        "William Keating"
+      ],
+      "governor": [
+        "Maura Healey"
+      ]
+    },
+    "MI": {
+      "name": "Michigan",
+      "capital": [
+        "Lansing"
+      ],
+      "senators": [
+        "Elissa Slotkin",
+        "Gary C. Peters",
+        "Gary Peters"
+      ],
+      "representatives": [
+        "Bill Huizenga",
+        "Debbie Dingell",
+        "Haley Stevens",
+        "Hillary Scholten",
+        "Jack Bergman",
+        "John James",
+        "John Moolenaar",
+        "Kristen McDonald Rivet",
+        "Lisa McClain",
+        "Rashida Tlaib",
+        "Shri Thanedar",
+        "Tim Walberg",
+        "Tom Barrett"
+      ],
+      "governor": [
+        "Gretchen Whitmer"
+      ]
+    },
+    "MN": {
+      "name": "Minnesota",
+      "capital": [
+        "Saint Paul",
+        "St. Paul"
+      ],
+      "senators": [
+        "Amy Klobuchar",
+        "Tina Smith"
+      ],
+      "representatives": [
+        "Angie Craig",
+        "Betty McCollum",
+        "Brad Finstad",
+        "Ilhan Omar",
+        "Kelly Morrison",
+        "Michelle Fischbach",
+        "Pete Stauber",
+        "Tom Emmer"
+      ],
+      "governor": [
+        "Tim Walz"
+      ]
+    },
+    "MS": {
+      "name": "Mississippi",
+      "capital": [
+        "Jackson"
+      ],
+      "senators": [
+        "Cindy Hyde-Smith",
+        "Roger F. Wicker",
+        "Roger Wicker"
+      ],
+      "representatives": [
+        "Bennie Thompson",
+        "Michael Guest",
+        "Mike Ezell",
+        "Trent Kelly"
+      ],
+      "governor": [
+        "Tate Reeves"
+      ]
+    },
+    "MO": {
+      "name": "Missouri",
+      "capital": [
+        "Jefferson City"
+      ],
+      "senators": [
+        "Eric Schmitt",
+        "Josh Hawley",
+        "Joshua Hawley"
+      ],
+      "representatives": [
+        "Ann Wagner",
+        "Emanuel Cleaver",
+        "Eric Burlison",
+        "Jason Smith",
+        "Mark Alford",
+        "Robert Onder",
+        "Sam Graves",
+        "Wesley Bell"
+      ],
+      "governor": [
+        "Mike Kehoe"
+      ]
+    },
+    "MT": {
+      "name": "Montana",
+      "capital": [
+        "Helena"
+      ],
+      "senators": [
+        "Steve Daines",
+        "Tim Sheehy"
+      ],
+      "representatives": [
+        "Ryan Zinke",
+        "Troy Downing"
+      ],
+      "governor": [
+        "Greg Gianforte"
+      ]
+    },
+    "NE": {
+      "name": "Nebraska",
+      "capital": [
+        "Lincoln"
+      ],
+      "senators": [
+        "Deb Fischer",
+        "Pete Ricketts"
+      ],
+      "representatives": [
+        "Adrian Smith",
+        "Don Bacon",
+        "Mike Flood"
+      ],
+      "governor": [
+        "Jim Pillen"
+      ]
+    },
+    "NV": {
+      "name": "Nevada",
+      "capital": [
+        "Carson City"
+      ],
+      "senators": [
+        "Catherine Cortez Masto",
+        "Jacky Rosen"
+      ],
+      "representatives": [
+        "Dina Titus",
+        "Mark Amodei",
+        "Steven Horsford",
+        "Susie Lee"
+      ],
+      "governor": [
+        "Joe Lombardo"
+      ]
+    },
+    "NH": {
+      "name": "New Hampshire",
+      "capital": [
+        "Concord"
+      ],
+      "senators": [
+        "Jeanne Shaheen",
+        "Margaret Hassan",
+        "Margaret Wood Hassan"
+      ],
+      "representatives": [
+        "Chris Pappas",
+        "Maggie Goodlander"
+      ],
+      "governor": [
+        "Kelly Ayotte"
+      ]
+    },
+    "NJ": {
+      "name": "New Jersey",
+      "capital": [
+        "Trenton"
+      ],
+      "senators": [
+        "Andy Kim",
+        "Cory A. Booker",
+        "Cory Booker"
+      ],
+      "representatives": [
+        "Analilia Mejia",
+        "Bonnie Watson Coleman",
+        "Christopher Smith",
+        "Donald Norcross",
+        "Frank Pallone",
+        "Herbert Conaway",
+        "Jefferson Van Drew",
+        "Josh Gottheimer",
+        "LaMonica McIver",
+        "Nellie Pou",
+        "Robert Menendez",
+        "Thomas Kean"
+      ],
+      "governor": [
+        "Mikie Sherrill"
+      ]
+    },
+    "NM": {
+      "name": "New Mexico",
+      "capital": [
+        "Santa Fe"
+      ],
+      "senators": [
+        "Ben Luján",
+        "Ben Ray Luján",
+        "Martin Heinrich"
+      ],
+      "representatives": [
+        "Gabe Vasquez",
+        "Melanie Stansbury",
+        "Teresa Leger Fernandez"
+      ],
+      "governor": [
+        "Michelle Lujan Grisham"
+      ]
+    },
+    "NY": {
+      "name": "New York",
+      "capital": [
+        "Albany"
+      ],
+      "senators": [
+        "Charles E. Schumer",
+        "Charles Schumer",
+        "Kirsten E. Gillibrand",
+        "Kirsten Gillibrand"
+      ],
+      "representatives": [
+        "Adriano Espaillat",
+        "Alexandria Ocasio-Cortez",
+        "Andrew Garbarino",
+        "Claudia Tenney",
+        "Daniel Goldman",
+        "Elise Stefanik",
+        "George Latimer",
+        "Grace Meng",
+        "Gregory Meeks",
+        "Hakeem Jeffries",
+        "Jerrold Nadler",
+        "John Mannion",
+        "Joseph Morelle",
+        "Josh Riley",
+        "Laura Gillen",
+        "Michael Lawler",
+        "Nicholas Langworthy",
+        "Nick LaLota",
+        "Nicole Malliotakis",
+        "Nydia Velazquez",
+        "Patrick Ryan",
+        "Paul Tonko",
+        "Ritchie Torres",
+        "Thomas R. Suozzi",
+        "Timothy Kennedy",
+        "Yvette Clarke"
+      ],
+      "governor": [
+        "Kathy Hochul"
+      ]
+    },
+    "NC": {
+      "name": "North Carolina",
+      "capital": [
+        "Raleigh"
+      ],
+      "senators": [
+        "Ted Budd",
+        "Thom Tillis"
+      ],
+      "representatives": [
+        "Addison McDowell",
+        "Alma Adams",
+        "Brad Knott",
+        "Chuck Edwards",
+        "David Rouzer",
+        "Deborah Ross",
+        "Donald Davis",
+        "Gregory Murphy",
+        "Mark Harris",
+        "Pat Harrigan",
+        "Richard Hudson",
+        "Tim Moore",
+        "Valerie Foushee",
+        "Virginia Foxx"
+      ],
+      "governor": [
+        "Josh Stein"
+      ]
+    },
+    "ND": {
+      "name": "North Dakota",
+      "capital": [
+        "Bismarck"
+      ],
+      "senators": [
+        "John Hoeven",
+        "Kevin Cramer"
+      ],
+      "representatives": [
+        "Julie Fedorchak"
+      ],
+      "governor": [
+        "Kelly Armstrong"
+      ]
+    },
+    "OH": {
+      "name": "Ohio",
+      "capital": [
+        "Columbus"
+      ],
+      "senators": [
+        "Bernie Moreno",
+        "Jon Husted"
+      ],
+      "representatives": [
+        "David Joyce",
+        "David Taylor",
+        "Emilia Sykes",
+        "Greg Landsman",
+        "Jim Jordan",
+        "Joyce Beatty",
+        "Marcy Kaptur",
+        "Max Miller",
+        "Michael A. Rulli",
+        "Michael Turner",
+        "Mike Carey",
+        "Robert Latta",
+        "Shontel Brown",
+        "Troy Balderson",
+        "Warren Davidson"
+      ],
+      "governor": [
+        "Mike DeWine"
+      ]
+    },
+    "OK": {
+      "name": "Oklahoma",
+      "capital": [
+        "Oklahoma City"
+      ],
+      "senators": [
+        "Alan Armstrong",
+        "James Lankford"
+      ],
+      "representatives": [
+        "Frank Lucas",
+        "Josh Brecheen",
+        "Kevin Hern",
+        "Stephanie Bice",
+        "Tom Cole"
+      ],
+      "governor": [
+        "Kevin Stitt"
+      ]
+    },
+    "OR": {
+      "name": "Oregon",
+      "capital": [
+        "Salem"
+      ],
+      "senators": [
+        "Jeff Merkley",
+        "Ron Wyden"
+      ],
+      "representatives": [
+        "Andrea Salinas",
+        "Cliff Bentz",
+        "Janelle Bynum",
+        "Maxine Dexter",
+        "Suzanne Bonamici",
+        "Val Hoyle"
+      ],
+      "governor": [
+        "Tina Kotek"
+      ]
+    },
+    "PA": {
+      "name": "Pennsylvania",
+      "capital": [
+        "Harrisburg"
+      ],
+      "senators": [
+        "Dave McCormick",
+        "David McCormick",
+        "John Fetterman"
+      ],
+      "representatives": [
+        "Brendan Boyle",
+        "Brian Fitzpatrick",
+        "Chrissy Houlahan",
+        "Christopher Deluzio",
+        "Daniel Meuser",
+        "Dwight Evans",
+        "Glenn Thompson",
+        "Guy Reschenthaler",
+        "John Joyce",
+        "Lloyd Smucker",
+        "Madeleine Dean",
+        "Mary Gay Scanlon",
+        "Mike Kelly",
+        "Robert Bresnahan",
+        "Ryan Mackenzie",
+        "Scott Perry",
+        "Summer Lee"
+      ],
+      "governor": [
+        "Josh Shapiro"
+      ]
+    },
+    "RI": {
+      "name": "Rhode Island",
+      "capital": [
+        "Providence"
+      ],
+      "senators": [
+        "Jack Reed",
+        "John Reed",
+        "Sheldon Whitehouse"
+      ],
+      "representatives": [
+        "Gabe Amo",
+        "Seth Magaziner"
+      ],
+      "governor": [
+        "Dan McKee"
+      ]
+    },
+    "SC": {
+      "name": "South Carolina",
+      "capital": [
+        "Columbia"
+      ],
+      "senators": [
+        "Darline Graham",
+        "Darline Graham Nordone",
+        "Tim Scott"
+      ],
+      "representatives": [
+        "James Clyburn",
+        "Joe Wilson",
+        "Nancy Mace",
+        "Ralph Norman",
+        "Russell Fry",
+        "Sheri Biggs",
+        "William Timmons"
+      ],
+      "governor": [
+        "Henry McMaster"
+      ]
+    },
+    "SD": {
+      "name": "South Dakota",
+      "capital": [
+        "Pierre"
+      ],
+      "senators": [
+        "John Thune",
+        "Mike Rounds"
+      ],
+      "representatives": [
+        "Dusty Johnson"
+      ],
+      "governor": [
+        "Larry Rhoden"
+      ]
+    },
+    "TN": {
+      "name": "Tennessee",
+      "capital": [
+        "Nashville"
+      ],
+      "senators": [
+        "Bill Hagerty",
+        "Marsha Blackburn"
+      ],
+      "representatives": [
+        "Andrew Ogles",
+        "Charles Fleischmann",
+        "David Kustoff",
+        "Diana Harshbarger",
+        "John Rose",
+        "Matt Van Epps",
+        "Scott DesJarlais",
+        "Steve Cohen",
+        "Tim Burchett"
+      ],
+      "governor": [
+        "Bill Lee"
+      ]
+    },
+    "TX": {
+      "name": "Texas",
+      "capital": [
+        "Austin"
+      ],
+      "senators": [
+        "John Cornyn",
+        "Ted Cruz"
+      ],
+      "representatives": [
+        "Al Green",
+        "August Pfluger",
+        "Beth Van Duyne",
+        "Brandon Gill",
+        "Brian Babin",
+        "Chip Roy",
+        "Christian Menefee",
+        "Craig Goldman",
+        "Dan Crenshaw",
+        "Greg Casar",
+        "Henry Cuellar",
+        "Jake Ellzey",
+        "Jasmine Crockett",
+        "Joaquin Castro",
+        "Jodey Arrington",
+        "John Carter",
+        "Julie Johnson",
+        "Keith Self",
+        "Lance Gooden",
+        "Lizzie Fletcher",
+        "Lloyd Doggett",
+        "Marc Veasey",
+        "Michael Cloud",
+        "Michael McCaul",
+        "Monica De La Cruz",
+        "Morgan Luttrell",
+        "Nathaniel Moran",
+        "Pat Fallon",
+        "Pete Sessions",
+        "Randy Weber",
+        "Roger Williams",
+        "Ronny Jackson",
+        "Sylvia Garcia",
+        "Tony - Vacancy Gonzales",
+        "Troy Nehls",
+        "Veronica Escobar",
+        "Vicente Gonzalez",
+        "Wesley Hunt"
+      ],
+      "governor": [
+        "Greg Abbott"
+      ]
+    },
+    "UT": {
+      "name": "Utah",
+      "capital": [
+        "Salt Lake City"
+      ],
+      "senators": [
+        "John Curtis",
+        "John R. Curtis",
+        "Mike Lee"
+      ],
+      "representatives": [
+        "Blake Moore",
+        "Burgess Owens",
+        "Celeste Maloy",
+        "Mike Kennedy"
+      ],
+      "governor": [
+        "Spencer Cox"
+      ]
+    },
+    "VT": {
+      "name": "Vermont",
+      "capital": [
+        "Montpelier"
+      ],
+      "senators": [
+        "Bernard Sanders",
+        "Peter Welch"
+      ],
+      "representatives": [
+        "Becca Balint"
+      ],
+      "governor": [
+        "Phil Scott"
+      ]
+    },
+    "VA": {
+      "name": "Virginia",
+      "capital": [
+        "Richmond"
+      ],
+      "senators": [
+        "Mark R. Warner",
+        "Mark Warner",
+        "Tim Kaine",
+        "Timothy Kaine"
+      ],
+      "representatives": [
+        "Ben Cline",
+        "Donald Beyer",
+        "Eugene Vindman",
+        "H. Griffith",
+        "James Walkinshaw",
+        "Jennifer Kiggans",
+        "Jennifer McClellan",
+        "John McGuire",
+        "Robert Scott",
+        "Robert Wittman",
+        "Suhas Subramanyam"
+      ],
+      "governor": [
+        "Abigail Spanberger"
+      ]
+    },
+    "WA": {
+      "name": "Washington",
+      "capital": [
+        "Olympia"
+      ],
+      "senators": [
+        "Maria Cantwell",
+        "Patty Murray"
+      ],
+      "representatives": [
+        "Adam Smith",
+        "Dan Newhouse",
+        "Emily Randall",
+        "Kim Schrier",
+        "Marie Perez",
+        "Marilyn Strickland",
+        "Michael Baumgartner",
+        "Pramila Jayapal",
+        "Rick Larsen",
+        "Suzan DelBene"
+      ],
+      "governor": [
+        "Bob Ferguson"
+      ]
+    },
+    "WV": {
+      "name": "West Virginia",
+      "capital": [
+        "Charleston"
+      ],
+      "senators": [
+        "James C. Justice",
+        "Jim Justice",
+        "Shelley Capito",
+        "Shelley Moore Capito"
+      ],
+      "representatives": [
+        "Carol Miller",
+        "Riley Moore"
+      ],
+      "governor": [
+        "Patrick Morrisey"
+      ]
+    },
+    "WI": {
+      "name": "Wisconsin",
+      "capital": [
+        "Madison"
+      ],
+      "senators": [
+        "Ron Johnson",
+        "Tammy Baldwin"
+      ],
+      "representatives": [
+        "Bryan Steil",
+        "Derrick Van Orden",
+        "Glenn Grothman",
+        "Gwen Moore",
+        "Mark Pocan",
+        "Scott Fitzgerald",
+        "Thomas Tiffany",
+        "Tony Wied"
+      ],
+      "governor": [
+        "Tony Evers"
+      ]
+    },
+    "WY": {
+      "name": "Wyoming",
+      "capital": [
+        "Cheyenne"
+      ],
+      "senators": [
+        "Cynthia Lummis",
+        "Cynthia M. Lummis",
+        "John Barrasso"
+      ],
+      "representatives": [
+        "Harriet Hageman"
+      ],
+      "governor": [
+        "Mark Gordon"
+      ]
+    }
+  }
+}

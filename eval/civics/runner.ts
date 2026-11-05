@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getItem } from '../../amplify/functions/transcript/turn/bank';
+import { withDynamicAnswers } from '../../amplify/functions/transcript/turn/dynamic-answers';
 import { resolveTurn } from '../../amplify/functions/transcript/turn/turn-policy';
 import type { TurnInterpretation } from '../../amplify/functions/transcript/turn/types';
 import { evaluateCase, scoreResults } from './scorer';
@@ -21,10 +22,11 @@ export function runBenchmark(benchmarkPath?: string): { results: CivicsEvalResul
   const results: CivicsEvalResult[] = [];
 
   for (const c of cases) {
-    const askedItem = getItem(c.itemId);
-    if (!askedItem) {
+    const bankItem = getItem(c.itemId);
+    if (!bankItem) {
       throw new Error(`Evaluation dataset references unknown bank itemId: ${c.itemId}`);
     }
+    const askedItem = withDynamicAnswers(bankItem, c.locationState);
 
     // Build candidate interpretation claim
     const simulatedInterp: TurnInterpretation = {
