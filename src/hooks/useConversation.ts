@@ -50,6 +50,22 @@ interface AssistantReveal {
   tick: () => void;
 }
 
+/** One queued assistant bubble from a text-mode turn (no Polly to pace it). */
+interface TextModeSegment {
+  assistantMessageId: string;
+  content: string;
+}
+
+interface TextModeSegmentQueue {
+  timerId: number | null;
+  pending: TextModeSegment[];
+}
+
+// Text mode has no audio track to pace consecutive bubbles, so each later
+// bubble waits long enough to read as a separate AI response. Voice mode is
+// unaffected; Polly playback still drives its reveal.
+const TEXT_MODE_SEGMENT_DELAY_MS = 700;
+
 const SILENCE_NUDGE_DELAY_MS = 15_000;
 // Fix 2 safety net: how long a Polly turn blocked by the iOS autoplay policy
 // may wait for a user gesture before it degrades to text-only (never worse
@@ -238,6 +254,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const activePollyTextRef = useRef('');
   const speechStartedDuringPollyRef = useRef(false);
   const assistantRevealRef = useRef<AssistantReveal | null>(null);
+  const textModeSegmentQueueRef = useRef<TextModeSegmentQueue | null>(null);
   const isLoadingOlderRef = useRef(false);
 
   /**
@@ -255,6 +272,85 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
     progressSummaryFlushRef.current();
   }, [dispatch]);
+
+  /** Drops queued text-mode bubbles without rendering them (unmount/clear). */
+  const cancelTextModeSegments = useCallback(() => {
+    const queue = textModeSegmentQueueRef.current;
+    if (!queue) return;
+    if (queue.timerId !== null) window.clearTimeout(queue.timerId);
+    textModeSegmentQueueRef.current = null;
+  }, []);
+
+  /**
+   * Renders every bubble that is still waiting in the queue right away, then
+   * settles the turn. Used when the user barges in with another message: the
+   * remaining content must not appear on top of the new turn.
+   */
+  const flushTextModeSegments = useCallback(() => {
+    const queue = textModeSegmentQueueRef.current;
+    if (!queue) return;
+    if (queue.timerId !== null) window.clearTimeout(queue.timerId);
+    textModeSegmentQueueRef.current = null;
+    for (const segment of queue.pending) {
+      dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: segment });
+    }
+    finishAssistantTurn();
+  }, [dispatch, finishAssistantTurn]);
+
+  /**
+   * Presents a full assistant response in text mode. The first bubble appears
+   * immediately; each later bubble follows after a short readable delay so a
+   * multi-part answer does not pop in as one block. The turn stays pending
+   * until the last bubble is on screen, which also holds back progress
+   * summaries that would otherwise interleave.
+   */
+  const presentTextModeSegments = useCallback((
+    assistantMessageId: string,
+    segments: readonly string[],
+  ) => {
+    cancelTextModeSegments();
+    const [first, ...rest] = segments;
+    if (first === undefined) {
+      finishAssistantTurn();
+      return;
+    }
+
+    dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId, content: first } });
+    if (rest.length === 0) {
+      finishAssistantTurn();
+      return;
+    }
+
+    const queue: TextModeSegmentQueue = {
+      timerId: null,
+      pending: rest.map(content => ({
+        assistantMessageId: `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        content,
+      })),
+    };
+    textModeSegmentQueueRef.current = queue;
+
+    const presentNext = () => {
+      if (textModeSegmentQueueRef.current !== queue) return;
+      const next = queue.pending.shift();
+      if (!next) {
+        textModeSegmentQueueRef.current = null;
+        finishAssistantTurn();
+        return;
+      }
+
+      dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: next });
+      if (queue.pending.length === 0) {
+        queue.timerId = null;
+        textModeSegmentQueueRef.current = null;
+        finishAssistantTurn();
+        return;
+      }
+      queue.timerId = window.setTimeout(presentNext, TEXT_MODE_SEGMENT_DELAY_MS);
+    };
+
+    queue.timerId = window.setTimeout(presentNext, TEXT_MODE_SEGMENT_DELAY_MS);
+  }, [cancelTextModeSegments, dispatch, finishAssistantTurn]);
 
   const stopAssistantReveal = useCallback((complete = false) => {
     const reveal = assistantRevealRef.current;
@@ -1195,10 +1291,14 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     // Sending text while the assistant is still speaking counts as a
     // barge-in: cut Polly and freeze the answer where it was revealed, then
-    // process the user's new turn.
+    // process the user's new turn. A text-mode response still waiting between
+    // bubbles is flushed so its remaining content is not lost or overlaid on
+    // top of the new turn.
     if (isPollyPlayingRef.current || isAssistantAudioActiveRef.current || assistantRevealRef.current) {
       clearAudioPlayback();
       finishAssistantTurn();
+    } else if (textModeSegmentQueueRef.current) {
+      flushTextModeSegments();
     }
 
     const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
@@ -1457,20 +1557,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
 
       if (!conversationState.isSessionActive || !voiceSessionRef.current) {
-        // Text mode renders the whole answer at once: the word-by-word
-        // typewriter is reserved for voice mode where it tracks Polly.
+        // Text mode renders each bubble whole; consecutive bubbles are spaced
+        // out so they read as separate AI responses. The word-by-word
+        // typewriter remains reserved for voice mode where it tracks Polly.
         assistantReplyPendingRef.current = true;
-        dispatch({
-          type: 'ADD_ASSISTANT_MESSAGE',
-          payload: { assistantMessageId: secureAssistantMessageId, content: displaySegments[0] ?? responseText },
-        });
-        for (const segment of displaySegments.slice(1)) {
-          dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: {
-            assistantMessageId: `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            content: segment,
-          } });
-        }
-        finishAssistantTurn();
+        presentTextModeSegments(secureAssistantMessageId, displaySegments);
         activeTurnControllerRef.current = null;
         activeAssistantMessageIdRef.current = null;
         return;
@@ -1598,7 +1689,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
       releaseAssistantRequestHold();
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, generatePeriodicProgressReport, queueProgressSummary, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, flushProgressSummaryBeforeListening, updateCurrentItemId]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, presentTextModeSegments, flushTextModeSegments, generatePeriodicProgressReport, queueProgressSummary, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, flushProgressSummaryBeforeListening, updateCurrentItemId]);
 
   const requestSilenceNudge = useCallback(async () => {
     const currentItemId = currentItemIdRef.current;
@@ -2065,6 +2156,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     silenceNudgeControllerRef.current = null;
     activeTurnControllerRef.current?.abort();
     activeTurnControllerRef.current = null;
+    cancelTextModeSegments();
     if (activeAssistantMessageIdRef.current) {
       dispatch({
         type: 'REMOVE_PENDING_ASSISTANT_MESSAGE',
@@ -2107,7 +2199,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         setIsGeneratingProgressReport(false);
       }
     }
-  }, [conversationState.sessionId, conversationState.sessionTime, apiClient, dispatch, stopRecording, clearAudioPlayback, updateCurrentItemId]);
+  }, [conversationState.sessionId, conversationState.sessionTime, apiClient, dispatch, stopRecording, clearAudioPlayback, cancelTextModeSegments, updateCurrentItemId]);
 
   /**
    * Microphone control: activate voice capture only. It deliberately does not
@@ -2380,10 +2472,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       if (silenceNudgeTimerRef.current !== null) window.clearTimeout(silenceNudgeTimerRef.current);
       silenceNudgeControllerRef.current?.abort();
       progressSummaryControllerRef.current?.abort();
+      cancelTextModeSegments();
       clearAudioPlayback();
       stopRecordingRef.current();
     };
-  }, [clearAudioPlayback]);
+  }, [cancelTextModeSegments, clearAudioPlayback]);
 
   const wipeConversationHistory = useCallback(async () => {
     sessionStartGenerationRef.current += 1;
@@ -2396,6 +2489,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     assistantRequestGenerationRef.current += 1;
     assistantRequestPendingRef.current = false;
     assistantReplyPendingRef.current = false;
+    cancelTextModeSegments();
     progressSummaryQueueRef.current = [];
     progressSummaryControllerRef.current?.abort();
     progressSummaryControllerRef.current = null;
@@ -2443,7 +2537,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         setIsGeneratingProgressReport(false);
       }
     }
-  }, [conversationState.isSessionActive, conversationState.sessionId, clearAudioPlayback, stopRecording, apiClient, dispatch, updateCurrentItemId]);
+  }, [conversationState.isSessionActive, conversationState.sessionId, clearAudioPlayback, cancelTextModeSegments, stopRecording, apiClient, dispatch, updateCurrentItemId]);
 
   const exportTranscriptFile = useCallback(() => {
     const exportedAt = new Date();

@@ -147,7 +147,8 @@
         "Completed-interview review presents the report, score breakdown, question outcomes, strengths, focus areas, and one explicit next-step decision; it has no separate question-review or detailed-report entry points.",
         "Dismissing a review does not save a decision; saved decisions are immutable, and Practice/Study choices require one to three official USCIS focus categories or free-text Other that synchronize the account goal atomically.",
         "Follow-on actions remain separate from the saved decision and can be retried without changing it.",
-        "Standard interview, practice, and study modes preserve their turn semantics."
+        "Standard interview, practice, and study modes preserve their turn semantics.",
+        "In text mode, consecutive assistant bubbles from one turn appear sequentially with a short readable delay; voice mode continues to reveal them in step with Polly playback."
       ]
     },
     {

@@ -109,6 +109,7 @@ This registry is the contract between the product, the tests, and every AI codin
 
 - Standard Interview is the user-facing name for the existing scored interview flow; internal identifiers and scoring behavior remain unchanged.
 - Standard Interview, Practice, and Study workflows preserve their turn semantics.
+- In text mode, consecutive assistant bubbles from one turn appear sequentially with a short readable delay; voice mode continues to reveal them in step with Polly playback.
 - Mode changes do not lose persisted history or corrupt the active exam run.
 - Leaving an unfinished Standard Interview requires confirmation; its progress remains saved.
 - Returning to an unfinished Standard Interview explicitly offers resume or start new.

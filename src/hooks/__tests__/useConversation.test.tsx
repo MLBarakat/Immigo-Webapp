@@ -801,11 +801,17 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     await waitFor(() => expect(mockAudioInstance.pause).toHaveBeenCalledOnce());
   });
 
-  it('renders a text-mode answer in full without the word typewriter', async () => {
+  it('renders a text-mode answer in full without the word typewriter and spaces the next bubble', async () => {
     mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
       responseText: 'First part.\nNext question?',
       assistantSegments: ['First part.', 'Next question?'],
     }));
+    const bubbleTimes: number[] = [];
+    mockDispatch.mockImplementation((action: ConversationAction) => {
+      if (action.type === 'ADD_ASSISTANT_MESSAGE' || action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE') {
+        bubbleTimes.push(Date.now());
+      }
+    });
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <ConversationContext.Provider value={mockContextValue}>
         {children}
@@ -817,19 +823,52 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       await result.current.sendTextMessage('A typed answer');
     });
 
-    // Typing is not voice: the whole answer appears at once, no chunking.
+    // Typing is not voice: each bubble appears whole, never as word chunks.
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'ADD_ASSISTANT_MESSAGE',
       payload: { assistantMessageId: expect.any(String), content: 'First part.' },
     });
-    expect(mockDispatch).toHaveBeenCalledWith({
-      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
-      payload: expect.objectContaining({ content: 'Next question?' }),
-    });
     expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
       type: 'RECEIVE_ASSISTANT_CHUNK',
     }));
+
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith({
+        type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+        payload: expect.objectContaining({ content: 'Next question?' }),
+      });
+    }, { timeout: 3000 });
+    expect(bubbleTimes).toHaveLength(2);
+    expect(bubbleTimes[1] - bubbleTimes[0]).toBeGreaterThanOrEqual(500);
     expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+  });
+
+  it('spaces each consecutive text-mode AI bubble instead of showing them at once', async () => {
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'First part.\nSecond part.\nNext question?',
+      assistantSegments: ['First part.', 'Second part.', 'Next question?'],
+    }));
+    const bubbleTimes: number[] = [];
+    mockDispatch.mockImplementation((action: ConversationAction) => {
+      if (action.type === 'ADD_ASSISTANT_MESSAGE' || action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE') {
+        bubbleTimes.push(Date.now());
+      }
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({ apiClient: mockApiClient }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendTextMessage('A typed answer');
+    });
+
+    expect(bubbleTimes).toHaveLength(1);
+    await waitFor(() => expect(bubbleTimes).toHaveLength(3), { timeout: 5000 });
+    expect(bubbleTimes[1] - bubbleTimes[0]).toBeGreaterThanOrEqual(500);
+    expect(bubbleTimes[2] - bubbleTimes[1]).toBeGreaterThanOrEqual(500);
   });
 
   it('reveals the next-question bubble only when its turn in the Polly track arrives', async () => {
