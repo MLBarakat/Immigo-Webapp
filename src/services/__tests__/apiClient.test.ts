@@ -35,7 +35,6 @@ describe('ApiClient active route contracts', () => {
         verdict: 'correct',
         acceptableAnswers: ['The Constitution'],
       }],
-      suggestedFocus: [],
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(JSON.stringify(examReview), { status: 200 }),

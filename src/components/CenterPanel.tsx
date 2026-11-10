@@ -3,10 +3,7 @@ import { useCallback, useEffect, useRef, useState, KeyboardEvent, ChangeEvent } 
 import { useTranslation } from 'react-i18next';
 import { ConversationHistory } from './ConversationHistory';
 import { VoiceHub } from './VoiceHub';
-import { FocusOnboardingCard } from './FocusOnboardingCard';
-import type { FocusAreaSelection } from './FocusAreaCombobox';
-import { AppStatus, Message, MessageAction, TestVersion } from '../context/conversationContextTypes';
-import type { FocusOnboardingState } from '../types/focus';
+import { AppStatus, Message, MessageAction } from '../context/conversationContextTypes';
 import { DisplayUser } from '../types/user';
 
 interface CenterPanelProps {
@@ -37,10 +34,6 @@ interface CenterPanelProps {
   isAudioRetryPending?: boolean;
   onOpenExamReview?: (examId: string) => void;
   onMessageAction?: (messageId: string, action: MessageAction) => void;
-  focusOnboarding?: FocusOnboardingState | null;
-  learningGoal?: string | null;
-  testVersion?: TestVersion;
-  onFocusOnboardingSubmit?: (selection: FocusAreaSelection) => void;
 }
 
 const STATUS_COLORS: Record<AppStatus, string> = {
@@ -102,10 +95,6 @@ export function CenterPanel({
   onMessageAction,
   initError,
   isAudioRetryPending,
-  focusOnboarding = null,
-  learningGoal = null,
-  testVersion = '2020',
-  onFocusOnboardingSubmit,
 }: CenterPanelProps) {
   const [message, setMessage] = useState('');
   const [isStatusVisible, setIsStatusVisible] = useState(true);
@@ -259,21 +248,7 @@ export function CenterPanel({
         )}
       </div>
 
-      {/* Input Area. While Practice/Study onboarding is pending, the card
-          replaces the composer so no text or voice turn can skip the choice. */}
-      {focusOnboarding ? (
-        <div className="max-h-[60%] shrink-0 overflow-y-auto border-t border-immigo-gray-200 bg-star-white px-4 py-4 dark:border-gray-700 dark:bg-gray-800">
-          <FocusOnboardingCard
-            key={focusOnboarding.mode}
-            mode={focusOnboarding.mode}
-            testVersion={testVersion}
-            initialGoal={learningGoal}
-            submitting={focusOnboarding.submitting}
-            error={focusOnboarding.error}
-            onSubmit={selection => onFocusOnboardingSubmit?.(selection)}
-          />
-        </div>
-      ) : (
+      {/* Input Area */}
       <div
         className="shrink-0 bg-star-white dark:bg-gray-800 border-t border-immigo-gray-200 dark:border-gray-700"
         onPointerDown={revealStatusIsland}
@@ -325,7 +300,6 @@ export function CenterPanel({
           </div>
         </div>
       </div>
-      )}
     </main>
   );
 }

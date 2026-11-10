@@ -103,7 +103,7 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-04 — Conversation modes and Standard Interviews
 
 **Status:** protected  
-**Entry points:** `src/hooks/useConversation.ts`, `src/context/ConversationContext.tsx`, `src/services/mockExamService.ts`, `src/components/FeedbackModal.tsx`, `src/components/FocusOnboardingCard.tsx`, `src/components/FocusAreaCombobox.tsx`, `src/constants/focusCategories.ts`, `amplify/functions/transcript/handler.ts`, `amplify/functions/transcript/turn/mock-exam-selector.ts`, `amplify/functions/transcript/turn/focus.ts`, `amplify/functions/transcript/turn/mode-onboarding.ts`, `amplify/functions/transcript/english-exercises.ts`
+**Entry points:** `src/hooks/useConversation.ts`, `src/context/ConversationContext.tsx`, `src/services/mockExamService.ts`, `src/components/FeedbackModal.tsx`, `src/constants/focusCategories.ts`, `amplify/functions/transcript/handler.ts`, `amplify/functions/transcript/english-exercises.ts`
 
 **Invariants**
 
@@ -125,26 +125,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - The completed-exam review presents the interview report, score breakdown, question outcomes, strengths, focus areas, and one explicit next-step decision; it has no separate question-review or detailed-report entry points.
 - Dismissing the review is not a decision; a saved decision is immutable, and Practice/Study choices require one to three official USCIS focus categories or free-text Other that update the account goal atomically.
 - A saved next-step decision is shown consistently in the report and remains distinct from the follow-on action, which can be retried without changing the saved decision.
-- `Learning Modes` is the user-facing name for the mode selector; internal `SimulationMode`, API `simulationMode`, and database values remain unchanged.
-- First-time Standard Interviews use version-specific limits: 2008 ends at 10 questions with a pass at 6 correct or a fail at 5 incorrect; 2020 ends at 20 questions with a pass at 12 correct or a fail at 9 incorrect. The interview ends as soon as either threshold is reached.
-- First-time detection is per mode and test version. Standard is first-time when the learner has no completed interview with a real report; Practice and Study are first-time when no graded answer exists for that mode and version. Auto-closed abandoned interviews never count as completed reports.
-- A first-time Standard Interview opens with an AI icebreaker, then a rules card and deterministic rules, then a Ready gate, and only then the first question. A returning Standard Interview opens with the AI icebreaker plus a deterministic previous-score sentence, then the Ready gate.
-- A resumed Standard Interview continues at its current question without replaying the intro. The returning score comes from the latest completed interview for the same test version.
-- The Standard AI icebreaker contains no digits and always has a deterministic fallback.
-- Standard ignores focus areas entirely and hides the Learning Goals section, including the weekly target.
-- Standard selection is dynamic: `mock_exams.question_ids` is the list actually asked and grows by one appended question per turn; `current_index` identifies the current question.
-- Over the questions actually asked, 20% are least-recently-seen mastered review questions and 80% are split evenly between new and weak questions, with no repeats and a hard maximum of 10 of 20.
-- The scheduler always serves the bucket furthest below its target share; ties break new, then weak, then review, then item ID.
-- English reading and writing run only after a civics pass when English is enabled, then the report; a civics fail goes straight to the report, and disabled English goes to the report after civics. English never changes civics pass/fail, and a post-fail report says English was not administered.
-- The English preference defaults on only for new accounts; an existing saved value, including off, is always respected in both test versions.
-- Practice and Study first-time onboarding shows a deterministic explanation and a focus card; the learner must choose at least one category or All focus areas, cannot skip, and the first question starts only after Continue.
-- Practice and Study returning onboarding shows per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts plus the same counts for the focus subset, lets the learner keep or change focus, and then starts the first question.
-- Practice and Study focus constrains question selection; a category cycle restarts only after a full pass and shows a deterministic notice.
-- The Standard Ready gate reuses the existing opening-response path, returning `nextItemId: null` until the learner confirms; no database flag is added.
-- The Interview Report suggests two or three weakest categories from structured grading signals, never by reading qualitative report prose. The suggestion pre-fills the decision form only when the learner chooses Use this focus, and nothing persists until Save.
-- The decision form replaces Cancel with Back, which returns to the choice cards and discards unsaved edits, and Save my choice with Save. The focus combobox appears in the report only for Practice and Study decisions.
 
-**Tests:** `src/hooks/__tests__/useConversation.test.tsx`, `src/services/__tests__/mockExamService.test.ts`, `src/components/__tests__/ConversationHub.test.tsx`, `src/components/__tests__/CenterPanel.test.tsx`, `src/components/__tests__/FeedbackModal.test.tsx`, `src/components/__tests__/FocusOnboardingCard.test.tsx`, `src/components/__tests__/FocusAreaCombobox.test.tsx`, `src/constants/__tests__/focusCategories.test.ts`, `amplify/functions/transcript/__tests__/english-exercises.test.ts`, `amplify/functions/transcript/__tests__/focus.test.ts`, `amplify/functions/transcript/__tests__/mode-onboarding.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `amplify/functions/transcript/turn/__tests__/mock-exam-selector.test.ts`, `tests/e2e/text-roundtrip.spec.ts`, `tests/e2e/edge-cases.spec.ts`
+**Tests:** `src/hooks/__tests__/useConversation.test.tsx`, `src/services/__tests__/mockExamService.test.ts`, `src/components/__tests__/ConversationHub.test.tsx`, `src/components/__tests__/CenterPanel.test.tsx`, `src/components/__tests__/FeedbackModal.test.tsx`, `src/constants/__tests__/focusCategories.test.ts`, `amplify/functions/transcript/__tests__/english-exercises.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `tests/e2e/text-roundtrip.spec.ts`, `tests/e2e/edge-cases.spec.ts`
 
 ---
 
@@ -192,11 +174,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - Detailed reports refresh silently every ten account-local daily graded answers in Practice and Study.
 - Practice and Study show a one-line factual summary after each assistant response, based only on recorded daily grading counts; summaries are not persisted as conversation context.
 - When voice is active, Polly speaks that summary only after the current response and AEC settle window; active user speech defers it.
-- Mastery means at least three graded attempts with more than 85% correct, counting every graded answer including Standard Interview answers.
-- Practice and Study returning onboarding reports per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts from authoritative graded answers, plus the same counts for the selected focus subset; this copy is deterministic and never model-generated.
-- Suggested focus is derived from structured signals only: question mastery, previous exam misses, and recent graded answers by category. Qualitative report prose is never read by a model to produce it.
 
-**Tests:** `src/services/__tests__/liveProgressService.test.ts`, `src/hooks/__tests__/useConversation.test.tsx`, `src/components/__tests__/PanelHeaders.test.tsx`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `eval/reports/__tests__/reports-eval.test.ts`, `tests/e2e/network-chaos.spec.ts`
+**Tests:** `src/services/__tests__/liveProgressService.test.ts`, `src/hooks/__tests__/useConversation.test.tsx`, `src/components/__tests__/PanelHeaders.test.tsx`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `eval/reports/__tests__/reports-eval.test.ts`, `tests/e2e/network-chaos.spec.ts`
 
 ---
 
@@ -221,7 +200,7 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-08 — Settings and preferences
 
 **Status:** protected  
-**Entry points:** `src/services/userSettingsService.ts`, `src/components/ApplicationSettingsModal.tsx`, `src/components/RightPanel.tsx`, `src/components/FocusAreaCombobox.tsx`, `src/components/LeftPanel.tsx`, `src/components/FontSizeSelector.tsx`, `src/constants/focusCategories.ts`, `src/constants/voices.ts`, `src/constants/voicePreview.ts`, `src/hooks/useVoicePreview.ts`, `src/utils/fontSize.ts`, `src/utils/theme.ts`
+**Entry points:** `src/services/userSettingsService.ts`, `src/components/ApplicationSettingsModal.tsx`, `src/components/RightPanel.tsx`, `src/components/LeftPanel.tsx`, `src/components/FontSizeSelector.tsx`, `src/constants/voices.ts`, `src/constants/voicePreview.ts`, `src/hooks/useVoicePreview.ts`, `src/utils/fontSize.ts`, `src/utils/theme.ts`
 
 **Invariants**
 
@@ -237,13 +216,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - The suggested weekly target is 20, but remains unset until the user chooses one.
 - The target week is Monday through Sunday in the account time zone and counts answers from every mode.
 - Invalid or missing settings fall back to documented defaults.
-- The mode selector is labeled Learning Modes; internal identifiers and API/database values stay unchanged.
-- Focus selection is a searchable, accessible multi-select combobox with All focus areas as the default. Choosing an individual category turns All off, removing the last category returns to All, and at most three categories plus one free-text Other are allowed.
-- The exact string `All focus areas` is stored in `learning_goal` as the All sentinel. Existing free-text goals are preserved as Other and are never discarded.
-- Standard Interview hides the entire Learning Goals section, including the weekly target; focus settings apply only to Practice and Study.
-- The English reading and writing preference defaults on only for new accounts; an existing saved value, including off, is respected in both test versions.
 
-**Tests:** `src/components/__tests__/ApplicationSettingsModal.test.tsx`, `src/components/__tests__/RightPanel.test.tsx`, `src/components/__tests__/FocusAreaCombobox.test.tsx`, `src/constants/__tests__/focusCategories.test.ts`, `src/services/__tests__/userSettingsService.test.ts`, `src/components/__tests__/PanelHeaders.test.tsx`, `src/components/__tests__/FontSizeSelector.test.tsx`, `src/constants/__tests__/voices.test.ts`, `src/constants/__tests__/voicePreview.test.ts`, `src/hooks/__tests__/useVoicePreview.test.tsx`, `src/utils/__tests__/fontSize.test.ts`, `tests/e2e/settings-persistence.spec.ts`
+**Tests:** `src/components/__tests__/ApplicationSettingsModal.test.tsx`, `src/components/__tests__/RightPanel.test.tsx`, `src/services/__tests__/userSettingsService.test.ts`, `src/components/__tests__/PanelHeaders.test.tsx`, `src/components/__tests__/FontSizeSelector.test.tsx`, `src/constants/__tests__/voices.test.ts`, `src/constants/__tests__/voicePreview.test.ts`, `src/hooks/__tests__/useVoicePreview.test.tsx`, `src/utils/__tests__/fontSize.test.ts`, `tests/e2e/settings-persistence.spec.ts`
 
 ---
 
@@ -258,11 +232,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - Arabic renders RTL; layout, icons, and overlays respect direction.
 - New user-facing strings live in locale files, not components.
 - Language changes persist and do not reset the active session.
-- Learning Modes, Standard Interview onboarding, Practice/Study focus onboarding, the focus combobox, and report actions and statuses are localized in English, Spanish, French, and Arabic.
-- Deterministic onboarding and report status copy is localized rather than model-generated; the All focus areas sentinel is displayed through a localized label.
-- The focus combobox and onboarding card support RTL and dark mode without a new dependency.
 
-**Tests:** `src/i18n/__tests__/i18n.test.tsx`, `src/components/__tests__/RtlOverlays.test.tsx`, `src/components/__tests__/PanelHeaders.test.tsx`, `src/components/__tests__/FocusAreaCombobox.test.tsx`, `src/components/__tests__/FocusOnboardingCard.test.tsx`, `amplify/functions/transcript/__tests__/mode-onboarding.test.ts`
+**Tests:** `src/i18n/__tests__/i18n.test.tsx`, `src/components/__tests__/RtlOverlays.test.tsx`, `src/components/__tests__/PanelHeaders.test.tsx`
 
 ---
 

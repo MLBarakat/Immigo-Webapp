@@ -240,24 +240,4 @@ describe('CenterPanel text interview flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Voice microphone' }));
     expect(onStartSession).toHaveBeenCalledOnce();
   });
-
-  it('replaces the composer with the blocking focus card during Practice/Study onboarding', () => {
-    const onFocusOnboardingSubmit = vi.fn();
-    renderCenterPanel({
-      focusOnboarding: { mode: 'practice', submitting: false, error: null },
-      learningGoal: 'Geography',
-      onFocusOnboardingSubmit,
-    });
-
-    expect(screen.getByRole('heading', { name: 'Choose your focus' })).toBeDefined();
-    expect(screen.queryByTestId('centerpanel-input')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Voice microphone' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(onFocusOnboardingSubmit).toHaveBeenCalledWith({
-      selectedIds: ['geography'],
-      allFocusAreas: false,
-    });
-  });
 });

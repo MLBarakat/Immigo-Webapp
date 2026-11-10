@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowRight,
   BrainCircuit,
@@ -11,13 +11,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import {
-  getFocusCategories,
-  MAX_FOCUS_CATEGORIES,
-  serializeLearningGoal,
-} from '../constants/focusCategories';
-import { FocusAreaCombobox } from './FocusAreaCombobox';
-import type { FocusAreaSelection } from './FocusAreaCombobox';
+import { getFocusCategories } from '../constants/focusCategories';
 import type {
   MockExamQuestionOutcome,
   MockExamReview,
@@ -99,8 +93,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   const [pendingChoice, setPendingChoice] = useState<MockExamReviewDecisionChoice | null>(null);
   const [goal, setGoal] = useState('');
   const [selectedFocusIds, setSelectedFocusIds] = useState<string[]>([]);
-  const [allFocusAreas, setAllFocusAreas] = useState(true);
-  const focusFormRef = useRef<HTMLDivElement | null>(null);
   const [locallySavedDecision, setLocallySavedDecision] = useState<MockExamReviewDecision | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [continuing, setContinuing] = useState(false);
@@ -111,15 +103,10 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
 
   if (!isOpen) return null;
 
-  const resetFocusForm = () => {
-    setGoal('');
-    setSelectedFocusIds([]);
-    setAllFocusAreas(true);
-  };
-
   const close = () => {
     setPendingChoice(null);
-    resetFocusForm();
+    setGoal('');
+    setSelectedFocusIds([]);
     setLocalError(null);
     setContinueError(null);
     onClose();
@@ -127,51 +114,29 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
 
   const choose = (choice: MockExamReviewDecisionChoice) => {
     setPendingChoice(choice);
-    resetFocusForm();
+    setGoal('');
+    setSelectedFocusIds([]);
     setLocalError(null);
     setContinueError(null);
   };
 
-  const handleFocusSelection = (selection: FocusAreaSelection) => {
-    setSelectedFocusIds(selection.selectedIds);
-    setAllFocusAreas(selection.allFocusAreas);
-    // "All focus areas" is a complete goal on its own, so a free-text Other
-    // would contradict it; choosing All clears the custom entry.
-    if (selection.allFocusAreas) setGoal('');
-  };
-
-  const handleOtherFocusChange = (value: string) => {
-    const next = value.slice(0, 120);
-    setGoal(next);
-    // A custom focus narrows the goal, and removing the last one returns the
-    // form to its default instead of saving an empty decision note.
-    if (next.trim()) setAllFocusAreas(false);
-    else if (selectedFocusIds.length === 0) setAllFocusAreas(true);
-  };
-
-  const applySuggestedFocus = () => {
-    const suggestedIds = (review?.suggestedFocus ?? []).map(item => item.id);
-    if (suggestedIds.length === 0) return;
-    // Suggestion only pre-fills the form; nothing is persisted until Save.
-    setSelectedFocusIds(suggestedIds.slice(0, MAX_FOCUS_CATEGORIES));
-    setAllFocusAreas(false);
-    setGoal('');
-  };
-
-  const editSuggestedFocus = () => {
-    focusFormRef.current?.querySelector<HTMLInputElement>('input[role="combobox"]')?.focus();
+  const toggleFocus = (id: string) => {
+    setSelectedFocusIds(current => {
+      if (current.includes(id)) return current.filter(item => item !== id);
+      if (current.length >= 3) return current;
+      return [...current, id];
+    });
   };
 
   const saveChoice = async () => {
     if (!pendingChoice || saving || decisionSaving) return;
     const needsGoal = pendingChoice === 'practice' || pendingChoice === 'study';
+    const focusLabels = getFocusCategories(review?.scorecard.testVersion ?? '2020')
+      .filter(category => selectedFocusIds.includes(category.id))
+      .map(category => category.label);
+    const cleanOther = goal.trim();
     const note = needsGoal
-      ? serializeLearningGoal(
-        selectedFocusIds,
-        goal,
-        review?.scorecard.testVersion ?? '2020',
-        allFocusAreas,
-      )
+      ? [...focusLabels, ...(cleanOther ? [cleanOther] : [])].join('; ')
       : null;
     if (needsGoal && (!note || note.length > 300)) return;
 
@@ -185,7 +150,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
       }
       setLocallySavedDecision(saved);
       setPendingChoice(null);
-      resetFocusForm();
+      setGoal('');
+      setSelectedFocusIds([]);
     } catch {
       setLocalError(t('workspace.examReview.saveFailed'));
     } finally {
@@ -213,9 +179,9 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
       ? 'study'
       : null;
   const focusCategories = review ? getFocusCategories(review.scorecard.testVersion) : [];
-  const focusReady = allFocusAreas || selectedFocusIds.length > 0 || goal.trim().length > 0;
+  const focusReady = selectedFocusIds.length > 0 || goal.trim().length > 0;
   const englishStatus = (passed: boolean | null) => passed === null
-    ? t('workspace.examReview.notAdministered')
+    ? t('workspace.examReview.notRecorded')
     : passed
       ? t('workspace.examReview.passed')
       : t('workspace.examReview.needsReview');
@@ -487,59 +453,32 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                         </p>
                         {(pendingChoice === 'practice' || pendingChoice === 'study') && (
                           <div className="space-y-3">
-                            {review.suggestedFocus.length > 0 && (
-                              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
-                                <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
-                                  {t('workspace.examReview.suggestedFocusTitle')}
-                                </p>
-                                <p className="mt-1 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
-                                  {t('workspace.examReview.suggestedFocusDescription')}
-                                </p>
-                                <ul className="mt-2 flex flex-wrap gap-1.5">
-                                  {review.suggestedFocus.map(item => (
-                                    <li
-                                      key={item.id}
-                                      className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-950 dark:bg-amber-900/60 dark:text-amber-100"
+                            <fieldset>
+                              <legend className="mb-1.5 block text-sm font-medium text-deep-navy dark:text-white">
+                                {t('workspace.examReview.focusCategoriesLabel')}
+                              </legend>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {focusCategories.map(category => {
+                                  const checked = selectedFocusIds.includes(category.id);
+                                  const atLimit = selectedFocusIds.length >= 3;
+                                  return (
+                                    <label
+                                      key={category.id}
+                                      className="flex min-h-11 items-center gap-2 rounded-xl border border-immigo-gray-200 bg-white px-3 py-2 text-sm text-deep-navy dark:border-gray-600 dark:bg-gray-900 dark:text-white"
                                     >
-                                      {item.label}
-                                    </li>
-                                  ))}
-                                </ul>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={applySuggestedFocus}
-                                    className="min-h-11 rounded-xl bg-amber-700 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500"
-                                  >
-                                    {t('workspace.examReview.useSuggestedFocus')}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={editSuggestedFocus}
-                                    className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-amber-950 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-700 dark:text-amber-100"
-                                  >
-                                    {t('workspace.examReview.editSuggestedFocus')}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                            <div ref={focusFormRef}>
-                              <FocusAreaCombobox
-                                categories={focusCategories}
-                                selectedIds={selectedFocusIds}
-                                allFocusAreas={allFocusAreas}
-                                onChange={handleFocusSelection}
-                                label={t('workspace.examReview.focusCategoriesLabel')}
-                                allLabel={t('workspace.examReview.allFocusAreas')}
-                                searchPlaceholder={t('workspace.examReview.focusSearchPlaceholder')}
-                                noResultsLabel={t('workspace.examReview.focusNoResults')}
-                                limitLabel={count => t('workspace.examReview.focusLimit', {
-                                  count,
-                                  max: MAX_FOCUS_CATEGORIES,
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        disabled={!checked && atLimit}
+                                        onChange={() => toggleFocus(category.id)}
+                                        className="h-4 w-4 rounded border-immigo-gray-300 text-art-blue-700 focus:ring-art-blue-500"
+                                      />
+                                      <span>{category.label}</span>
+                                    </label>
+                                  );
                                 })}
-                                idPrefix={`exam-review-focus-${examId}`}
-                              />
-                            </div>
+                              </div>
+                            </fieldset>
                             <div>
                               <label htmlFor={`exam-review-other-${examId}`} className="mb-1.5 block text-sm font-medium text-deep-navy dark:text-white">
                                 {t('workspace.examReview.otherFocusLabel')}
@@ -547,7 +486,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                               <textarea
                                 id={`exam-review-other-${examId}`}
                                 value={goal}
-                                onChange={event => handleOtherFocusChange(event.target.value)}
+                                onChange={event => setGoal(event.target.value.slice(0, 120))}
                                 rows={2}
                                 maxLength={120}
                                 className="w-full rounded-xl border border-immigo-gray-300 bg-white p-3 text-sm text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:ring-blue-900"
@@ -575,21 +514,15 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-art-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-art-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-art-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {(saving || decisionSaving) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                            {t('workspace.examReview.save')}
+                            {t('workspace.examReview.saveChoice')}
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              // Back returns to the choice cards and drops every
-                              // unsaved focus edit; nothing is persisted.
-                              setPendingChoice(null);
-                              resetFocusForm();
-                              setLocalError(null);
-                            }}
+                            onClick={() => { setPendingChoice(null); setGoal(''); setSelectedFocusIds([]); setLocalError(null); }}
                             disabled={saving || decisionSaving}
                             className="min-h-11 rounded-xl px-4 py-2 text-sm font-semibold text-immigo-gray-700 hover:bg-immigo-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-art-blue-600 dark:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
                           >
-                            {t('workspace.examReview.back')}
+                            {t('workspace.examReview.cancelChoice')}
                           </button>
                         </div>
                       </div>

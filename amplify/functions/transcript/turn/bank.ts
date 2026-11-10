@@ -21,11 +21,6 @@ function getBank(version: '2008' | '2020' = '2020'): CivicsBank {
   return banks[version];
 }
 
-/** Official USCIS study categories for one bank edition, in bank order. */
-export function getStudyCategories(version: '2008' | '2020' = '2020'): CivicsBank['studyKnowledge']['categories'] {
-  return getBank(version).studyKnowledge.categories;
-}
-
 export function getStudyCategoryTitle(item: CivicsItem): string {
   const version = item.edition === '2008-100' ? '2008' : '2020';
   const category = item.studyCategoryId

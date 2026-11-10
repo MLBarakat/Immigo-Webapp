@@ -3,33 +3,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { PollyClient, SynthesizeSpeechCommand, VoiceId } from '@aws-sdk/client-polly';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
-import { allItems, getFirstQuestion, getItem, getStudyCategoryTitle, selectNextQuestion } from './turn/bank';
-import {
-  ALL_FOCUS_AREAS,
-  filterItemsByFocus,
-  normalizeFocusCategoryId,
-  parseFocusGoal,
-  selectFocusedPracticeQuestion,
-  selectFocusedStudyQuestion,
-  serializeFocusGoal,
-  type ParsedFocusGoal,
-} from './turn/focus';
-import {
-  buildCycleNotice,
-  buildFirstTimeOnboarding,
-  buildFocusConfirmation,
-  buildReturningOnboarding,
-  buildStandardModeSwitchCopy,
-  type ModeOnboardingStats,
-  type OnboardingLanguage,
-} from './turn/mode-onboarding';
-import {
-  MAX_EXAM_QUESTIONS,
-  selectNextMockExamItem,
-  summarizePreviousExam,
-  type MockExamMasterySnapshot,
-  type PreviousExamSummary,
-} from './turn/mock-exam-selector';
+import { allItems, getFirstQuestion, getItem, getNextSequentialQuestion, getStudyCategoryTitle, selectNextQuestion } from './turn/bank';
 import { dynamicAnswersRequireLocation, withDynamicAnswers } from './turn/dynamic-answers';
 import { formatStudyFeedback, formatStudyQuestion, TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn, sanitizeFinalAnswerFeedback } from './turn/turn-policy';
@@ -104,9 +78,6 @@ interface RequestBody {
   requestId?: string;
   modeTransition?: boolean;
   modeGoalResponse?: boolean;
-  /** Practice/Study focus card submission; replaces free-text goal parsing. */
-  focusAreaIds?: string[];
-  allFocusAreas?: boolean;
   preferredLanguage?: 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA';
   /** True when the client needs the first question selected before listening. */
   sessionStart?: boolean;
@@ -604,10 +575,9 @@ async function answerProgressQuery(
       const { data } = await db.from('mock_exams')
         .select('question_ids,current_index,test_version')
         .eq('id', examRunId).eq('user_id', userId).maybeSingle();
-      const row = data as { question_ids?: string[]; current_index?: number; test_version?: string } | null;
+      const row = data as { question_ids?: string[]; current_index?: number } | null;
       if (row) {
-        const version: TestVersion = row.test_version === '2008' ? '2008' : '2020';
-        total = MAX_EXAM_QUESTIONS[version];
+        total = Array.isArray(row.question_ids) ? row.question_ids.length : 0;
         answered = Math.max(0, Number(row.current_index ?? 0));
       }
     }
@@ -807,14 +777,21 @@ async function persistGradedAnswer(
 }
 
 /**
- * Every graded item for this session in the order it was asked. Focus passes
- * are reconstructed from this list, so ascending order matters.
+ * Recently-asked item ids for THIS session, read from graded_answers (RLS-
+ * scoped to the caller via their own JWT — same pattern as persistGradedAnswer).
+ * Fed into selectNextQuestion's exclusion list so a short session doesn't
+ * coincidentally re-ask a question from a few turns earlier. Every item that
+ * gets advanced past is guaranteed to have a graded_answers row (persisted
+ * right before advancing), so this is a complete record of what's already
+ * been asked in the session — not just the single most recent item.
+ * Read failures degrade gracefully to an empty list (falls back to the old
+ * single-item exclusion) rather than breaking the turn.
  */
-async function getOrderedSessionItemIds(
+async function getRecentSessionItemIds(
   token: string,
   sessionId: string | null | undefined,
   traceId: string,
-  limit = 500,
+  limit = 20
 ): Promise<string[]> {
   if (!sessionId) return [];
   try {
@@ -823,117 +800,17 @@ async function getOrderedSessionItemIds(
       .from('graded_answers')
       .select('item_id')
       .eq('session_id', sessionId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(limit);
     if (error) {
-      console.warn(`[Lambda-Focus] [${traceId}] ordered-items query error: ${error.message}`);
+      console.warn(`[Lambda-Grade] [${traceId}] recent-items query error: ${error.message}`);
       return [];
     }
-    return (data ?? [])
-      .map(row => row.item_id)
-      .filter((id): id is string => typeof id === 'string' && Boolean(id));
+    return (data ?? []).map((row) => row.item_id as string);
   } catch (err) {
-    console.error(`[Lambda-Focus] [${traceId}] ordered-items query exception:`, err);
+    console.error(`[Lambda-Grade] [${traceId}] recent-items query exception:`, err);
     return [];
   }
-}
-
-interface SessionFocus extends ParsedFocusGoal {
-  raw: string;
-}
-
-/** Reads the effective focus: session goal, then the account's saved goal. */
-async function loadSessionFocus(
-  token: string,
-  userId: string,
-  sessionId: string | null | undefined,
-  testVersion: TestVersion,
-): Promise<SessionFocus> {
-  const db = getUserScopedSupabase(token);
-  const [sessionResult, settingsResult] = await Promise.all([
-    sessionId
-      ? db.from('sessions').select('current_goal').eq('id', sessionId).eq('user_id', userId).maybeSingle()
-      : Promise.resolve({ data: null }),
-    db.from('user_settings').select('learning_goal').eq('user_id', userId).maybeSingle(),
-  ]);
-  const sessionGoal = typeof sessionResult.data?.current_goal === 'string'
-    ? sessionResult.data.current_goal.trim()
-    : '';
-  const accountGoal = typeof settingsResult.data?.learning_goal === 'string'
-    ? settingsResult.data.learning_goal.trim()
-    : '';
-  const raw = sessionGoal || accountGoal || ALL_FOCUS_AREAS;
-  return { ...parseFocusGoal(raw, testVersion), raw };
-}
-
-const MASTERY_MIN_ATTEMPTS = 3;
-const MASTERY_ACCURACY = 0.85;
-
-/** Counts mastered / practiced / untouched items for the version and focus. */
-async function loadModeProgressStats(
-  token: string,
-  userId: string,
-  testVersion: TestVersion,
-  focus: ParsedFocusGoal,
-  traceId: string,
-): Promise<ModeOnboardingStats> {
-  const db = getUserScopedSupabase(token);
-  const { data, error } = await db
-    .from('graded_answers')
-    .select('item_id,verdict')
-    .eq('user_id', userId)
-    .eq('test_version', testVersion)
-    .limit(5000);
-  if (error) {
-    console.warn(`[Lambda-Focus] [${traceId}] progress query error: ${error.message}`);
-  }
-  const attempts = new Map<string, { total: number; correct: number }>();
-  for (const row of data ?? []) {
-    if (typeof row.item_id !== 'string' || !row.item_id) continue;
-    const current = attempts.get(row.item_id) ?? { total: 0, correct: 0 };
-    current.total += 1;
-    if (row.verdict === 'correct') current.correct += 1;
-    attempts.set(row.item_id, current);
-  }
-  const count = (items: CivicsItem[]) => {
-    let mastered = 0;
-    let practicedNotMastered = 0;
-    let notPracticed = 0;
-    for (const item of items) {
-      const stats = attempts.get(item.id);
-      if (!stats || stats.total === 0) {
-        notPracticed += 1;
-      } else if (stats.total >= MASTERY_MIN_ATTEMPTS
-        && stats.correct / stats.total > MASTERY_ACCURACY) {
-        mastered += 1;
-      } else {
-        practicedNotMastered += 1;
-      }
-    }
-    return { mastered, practicedNotMastered, notPracticed };
-  };
-  const items = allItems(testVersion);
-  const focusPool = focus.all ? items : filterItemsByFocus(items, focus.categoryIds);
-  return {
-    overall: count(items),
-    focus: count(focusPool.length > 0 ? focusPool : items),
-    focusLabels: focus.labels,
-    allFocusAreas: focus.all,
-  };
-}
-
-/** Practice selection constrained by the current focus and pass. */
-async function selectPracticeQuestion(
-  token: string,
-  _userId: string,
-  sessionId: string | null | undefined,
-  testVersion: TestVersion,
-  focus: ParsedFocusGoal,
-  currentItemId: string | null,
-  traceId: string,
-): Promise<{ item: CivicsItem; cycleRestarted: boolean }> {
-  const ordered = await getOrderedSessionItemIds(token, sessionId, traceId);
-  return selectFocusedPracticeQuestion(testVersion, focus.categoryIds, ordered, currentItemId);
 }
 
 interface MockExamRow {
@@ -982,11 +859,6 @@ interface MockExamQuestionOutcome {
   acceptableAnswers: string[] | null;
 }
 
-interface SuggestedFocus {
-  id: string;
-  label: string;
-}
-
 function parseMockExamFeedback(raw: string, fallback: MockExamFeedback): MockExamFeedback {
   try {
     const jsonStart = raw.indexOf('{');
@@ -1019,7 +891,6 @@ async function createMockExamFeedback(
   feedback: MockExamFeedback;
   scorecard: MockExamReviewScorecard;
   questionOutcomes: MockExamQuestionOutcome[];
-  suggestedFocus: SuggestedFocus[];
 }> {
   const db = getUserScopedSupabase(token);
   const { data, error } = await db.from('mock_exams')
@@ -1059,42 +930,6 @@ async function createMockExamFeedback(
     result: answer.verdict === 'correct' ? 'correct' : 'needs review',
     acceptableAnswers: answer.acceptableAnswers ?? undefined,
   }));
-  const civicsPassAt = exam.test_version === '2008' ? 6 : 12;
-  const civicsPassed = exam.correct_count >= civicsPassAt;
-  const englishAdministered = exam.include_english_simulation && civicsPassed;
-  const categoryStats = new Map<string, { id: string; label: string; correct: number; total: number }>();
-  for (const answer of answers) {
-    const item = getItem(answer.item_id, exam.test_version);
-    if (!item?.studyCategoryId) continue;
-    const current = categoryStats.get(item.studyCategoryId) ?? {
-      id: item.studyCategoryId,
-      label: getStudyCategoryTitle(item),
-      correct: 0,
-      total: 0,
-    };
-    current.total += 1;
-    if (answer.verdict === 'correct') current.correct += 1;
-    categoryStats.set(item.studyCategoryId, current);
-  }
-  const suggestedFocus: SuggestedFocus[] = [...categoryStats.values()]
-    .filter(category => category.correct < category.total)
-    .sort((a, b) => {
-      const aAccuracy = a.correct / a.total;
-      const bAccuracy = b.correct / b.total;
-      if (aAccuracy !== bAccuracy) return aAccuracy - bAccuracy;
-      if (a.total !== b.total) return b.total - a.total;
-      return a.id.localeCompare(b.id);
-    })
-    .slice(0, 3)
-    .map(category => ({
-      // The 2008 bank uses longer slugs than the app's focus selector.
-      id: category.id === 'the-1800s'
-        ? '1800s'
-        : category.id === 'recent-american-history'
-          ? 'recent-history'
-          : category.id,
-      label: category.label,
-    }));
   const scorecard: MockExamReviewScorecard = {
     testVersion: exam.test_version,
     civics: {
@@ -1105,15 +940,13 @@ async function createMockExamFeedback(
     },
     english: {
       included: exam.include_english_simulation,
-      readingPassed: englishAdministered ? exam.reading_passed : null,
-      writingPassed: englishAdministered ? exam.writing_passed : null,
+      readingPassed: exam.include_english_simulation ? exam.reading_passed : null,
+      writingPassed: exam.include_english_simulation ? exam.writing_passed : null,
     },
   };
-  const englishResult = !exam.include_english_simulation
-    ? 'English practice was not included.'
-    : !civicsPassed
-      ? 'English practice was not administered because civics ended at the fail threshold.'
-      : `English reading: ${exam.reading_passed ? 'passed' : 'not passed'}; English writing: ${exam.writing_passed ? 'passed' : 'not passed'}.`;
+  const englishResult = exam.include_english_simulation
+    ? `English reading: ${exam.reading_passed ? 'passed' : 'not passed'}; English writing: ${exam.writing_passed ? 'passed' : 'not passed'}.`
+    : 'English practice was not included.';
   let rawFeedback = '';
   try {
     rawFeedback = await examReviewComplete({
@@ -1135,7 +968,6 @@ async function createMockExamFeedback(
     feedback: parseMockExamFeedback(rawFeedback, fallback),
     scorecard,
     questionOutcomes,
-    suggestedFocus,
   };
 }
 
@@ -1154,154 +986,26 @@ function englishTaskMessage(stage: Exclude<MockExamStage, 'none' | 'complete'>, 
     : `English writing, sentence ${progress}. Listen to the sentence, then type what you hear.`;
 }
 
-type MockExamIntro = {
-  kind: 'first-time' | 'returning' | 'resume';
-  icebreaker: string;
-  facts: string;
-  rules: string[];
-  readyPrompt: string;
-};
-
-type ExamIntroCopy = {
-  firstFacts: (max: number, passAt: number, failAt: number) => string;
-  topics: string;
-  english: string;
-  ready: string;
-  returning: (correct: number, incorrect: number, total: number, passed: boolean, endedEarly: boolean) => string;
-  resume: (answered: number, correct: number, incorrect: number, needed: number, remaining: number) => string;
-  resumeIcebreaker: string;
-  firstFallback: string;
-  returningFallback: string;
-};
-
-const EXAM_INTRO_COPY: Record<'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA', ExamIntroCopy> = {
-  'en-US': {
-    firstFacts: (max, passAt, failAt) => `This practice interview has up to ${max} civics questions. You pass with ${passAt} correct answers. It ends early at ${passAt} correct or ${failAt} incorrect.`,
-    topics: 'The questions come from the nine USCIS civics topics.',
-    english: 'If you pass civics, reading and writing practice follows. If you do not pass, English practice is not administered.',
-    ready: 'When you are ready, choose Ready. I will ask the first question.',
-    returning: (correct, incorrect, total, passed, endedEarly) => `Last time you answered ${correct} correctly and ${incorrect} incorrectly (${total} graded answers). ${passed ? 'You passed that practice interview.' : 'You did not pass that practice interview.'}${endedEarly ? ' It ended early when a pass or fail threshold was reached.' : ' It used the full question set.'}`,
-    resume: (answered, correct, incorrect, needed, remaining) => `You have answered ${answered} questions: ${correct} correct and ${incorrect} incorrect. You need ${needed} more correct answers to pass; ${remaining} more incorrect answers would end the interview.`,
-    resumeIcebreaker: "Welcome back. Let's pick up where you left off.",
-    firstFallback: "I'm glad you're here. Let's get comfortable and begin your practice interview.",
-    returningFallback: "It's good to see you again. Let's build on your last practice interview.",
-  },
-  'es-ES': {
-    firstFacts: (max, passAt, failAt) => `Esta entrevista de práctica tiene hasta ${max} preguntas de civismo. Apruebas con ${passAt} respuestas correctas. Termina antes al llegar a ${passAt} correctas o ${failAt} incorrectas.`,
-    topics: 'Las preguntas provienen de los nueve temas de civismo de USCIS.',
-    english: 'Si apruebas civismo, seguirás con práctica de lectura y escritura. Si no apruebas, la práctica de inglés no se realiza.',
-    ready: 'Cuando estés listo, elige Listo. Te haré la primera pregunta.',
-    returning: (correct, incorrect, total, passed, endedEarly) => `La última vez respondiste ${correct} correctas y ${incorrect} incorrectas (${total} respuestas calificadas). ${passed ? 'Aprobaste esa entrevista de práctica.' : 'No aprobaste esa entrevista de práctica.'}${endedEarly ? ' Terminó antes al alcanzar un umbral de aprobación o fallo.' : ' Usó el conjunto completo de preguntas.'}`,
-    resume: (answered, correct, incorrect, needed, remaining) => `Has respondido ${answered} preguntas: ${correct} correctas y ${incorrect} incorrectas. Necesitas ${needed} respuestas correctas más para aprobar; ${remaining} incorrectas más terminarían la entrevista.`,
-    resumeIcebreaker: 'Bienvenido de nuevo. Sigamos donde lo dejaste.',
-    firstFallback: 'Me alegra que estés aquí. Empecemos con calma tu entrevista de práctica.',
-    returningFallback: 'Qué bueno verte de nuevo. Sigamos construyendo sobre tu última entrevista de práctica.',
-  },
-  'fr-FR': {
-    firstFacts: (max, passAt, failAt) => `Cet entretien d’entraînement comporte jusqu’à ${max} questions de civisme. Vous réussissez avec ${passAt} bonnes réponses. Il s’arrête dès ${passAt} bonnes réponses ou ${failAt} mauvaises réponses.`,
-    topics: 'Les questions proviennent des neuf thèmes de civisme de l’USCIS.',
-    english: 'Si vous réussissez le civisme, la lecture et l’écriture suivent. Sinon, l’entraînement d’anglais n’est pas administré.',
-    ready: 'Quand vous êtes prêt, choisissez Prêt. Je poserai la première question.',
-    returning: (correct, incorrect, total, passed, endedEarly) => `La dernière fois, vous avez répondu correctement à ${correct} questions et incorrectement à ${incorrect} (${total} réponses évaluées). ${passed ? 'Vous avez réussi cet entretien d’entraînement.' : 'Vous n’avez pas réussi cet entretien d’entraînement.'}${endedEarly ? ' Il s’est arrêté tôt à un seuil de réussite ou d’échec.' : ' Il a utilisé toutes les questions.'}`,
-    resume: (answered, correct, incorrect, needed, remaining) => `Vous avez répondu à ${answered} questions : ${correct} correctes et ${incorrect} incorrectes. Il vous faut ${needed} bonnes réponses de plus pour réussir ; ${remaining} mauvaises réponses de plus mettraient fin à l’entretien.`,
-    resumeIcebreaker: 'Bon retour. Reprenons là où vous vous êtes arrêté.',
-    firstFallback: 'Je suis content de vous voir. Commençons tranquillement votre entretien d’entraînement.',
-    returningFallback: 'Ravi de vous revoir. Appuyons-nous sur votre dernier entretien d’entraînement.',
-  },
-  'ar-SA': {
-    firstFacts: (max, passAt, failAt) => `تتضمن مقابلة التدريب هذه ما يصل إلى ${max} سؤالًا في التربية المدنية. تنجح بـ ${passAt} إجابات صحيحة. تنتهي مبكرًا عند الوصول إلى ${passAt} صحيحة أو ${failAt} خاطئة.`,
-    topics: 'تأتي الأسئلة من موضوعات التربية المدنية التسعة لدى USCIS.',
-    english: 'إذا نجحت في التربية المدنية، تتبعها تدريبات القراءة والكتابة. وإذا لم تنجح، لا يُجرى تدريب اللغة الإنجليزية.',
-    ready: 'عندما تكون مستعدًا، اختر "جاهز". سأطرح السؤال الأول.',
-    returning: (correct, incorrect, total, passed, endedEarly) => `في المرة الماضية أجبت عن ${correct} إجابة صحيحة و${incorrect} خاطئة (${total} إجابات مصححة). ${passed ? 'لقد نجحت في مقابلة التدريب تلك.' : 'لم تنجح في مقابلة التدريب تلك.'}${endedEarly ? ' انتهت مبكرًا عند بلوغ حد النجاح أو الرسوب.' : ' استُخدمت مجموعة الأسئلة كاملة.'}`,
-    resume: (answered, correct, incorrect, needed, remaining) => `أجبت حتى الآن عن ${answered} سؤالًا: ${correct} صحيحة و${incorrect} خاطئة. تحتاج إلى ${needed} إجابات صحيحة إضافية للنجاح؛ و${remaining} إجابات خاطئة إضافية ستُنهي المقابلة.`,
-    resumeIcebreaker: 'مرحبًا بعودتك. لنكمل من حيث توقفت.',
-    firstFallback: 'يسعدني وجودك. لنبدأ مقابلة التدريب بهدوء.',
-    returningFallback: 'من الجيد رؤيتك مجددًا. لنبنِ على مقابلة التدريب السابقة.',
-  },
-};
-
-async function generateExamIcebreaker(
-  language: 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA',
-  returning: boolean,
-): Promise<string> {
-  const copy = EXAM_INTRO_COPY[language];
-  const fallback = returning ? copy.returningFallback : copy.firstFallback;
-  try {
-    const raw = await modelComplete({
-      system: [
-        'Write exactly one warm, natural sentence to open a USCIS civics practice interview.',
-        'Sound like a friendly coach starting a conversation, not a script or a warning.',
-        'Do not use any digits or spelled-out numbers. Do not state scores, counts, rules, thresholds, or question topics.',
-        'Do not mention focus areas. Do not ask a question.',
-        `Write in ${language}. Return only the sentence.`,
-      ].join(' '),
-      user: returning
-        ? 'The learner has completed a practice interview before and is starting another one.'
-        : 'The learner is starting their first practice interview with you.',
-    });
-    const cleaned = raw.replace(/\s+/g, ' ').trim().replace(/^["'“”]+|["'“”]+$/g, '').trim();
-    if (cleaned && cleaned.length <= 220 && !/\d/.test(cleaned)) return cleaned;
-  } catch (error) {
-    console.warn('[Lambda-ExamIntro] Icebreaker unavailable; using the deterministic fallback.', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-  return fallback;
-}
-
-async function buildStandardInterviewIntro(
-  start: MockExamStartResult,
-  language: 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA',
-  includeEnglishSimulation: boolean,
-): Promise<MockExamIntro> {
-  const version = start.exam.test_version;
-  const maxQuestions = MAX_EXAM_QUESTIONS[version];
-  const passAt = version === '2008' ? 6 : 12;
-  const failAt = version === '2008' ? 5 : 9;
-  const copy = EXAM_INTRO_COPY[language];
-
-  if (start.resumed && start.answeredCount > 0) {
-    return {
-      kind: 'resume',
-      icebreaker: copy.resumeIcebreaker,
-      facts: copy.resume(
-        start.answeredCount,
-        start.exam.correct_count,
-        start.exam.incorrect_count,
-        Math.max(0, passAt - start.exam.correct_count),
-        Math.max(0, failAt - start.exam.incorrect_count),
-      ),
-      rules: [],
-      readyPrompt: '',
-    };
-  }
-
-  const rules = [copy.topics];
-  if (includeEnglishSimulation) rules.push(copy.english);
-  if (start.previous) {
-    const previous = start.previous.summary;
-    return {
-      kind: 'returning',
-      icebreaker: await generateExamIcebreaker(language, true),
-      facts: copy.returning(
-        previous.correct,
-        previous.incorrect,
-        previous.total,
-        previous.passed,
-        previous.endedEarly,
-      ),
-      rules: [],
-      readyPrompt: copy.ready,
-    };
-  }
-  return {
-    kind: 'first-time',
-    icebreaker: await generateExamIcebreaker(language, false),
-    facts: copy.firstFacts(maxQuestions, passAt, failAt),
-    rules,
-    readyPrompt: copy.ready,
-  };
+function standardInterviewOpening(action: 'new' | 'resume', language: 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA'): string {
+  const openings = {
+    'en-US': {
+      new: "Let's begin your Standard Interview.",
+      resume: "Let's continue your Standard Interview from where you left off.",
+    },
+    'es-ES': {
+      new: 'Comencemos tu entrevista estándar.',
+      resume: 'Continuemos tu entrevista estándar donde la dejaste.',
+    },
+    'fr-FR': {
+      new: 'Commençons votre entretien standard.',
+      resume: 'Reprenons votre entretien standard là où vous l’avez laissé.',
+    },
+    'ar-SA': {
+      new: 'لنبدأ المقابلة القياسية.',
+      resume: 'لنتابع المقابلة القياسية من حيث توقفت.',
+    },
+  } as const;
+  return openings[language][action];
 }
 
 async function gradeEnglishWriting(expected: string, submitted: string): Promise<ReturnType<typeof parseEnglishWritingGrade>> {
@@ -1321,100 +1025,13 @@ async function gradeEnglishWriting(expected: string, submitted: string): Promise
   return parseEnglishWritingGrade(prompt);
 }
 
-async function loadMockExamHistory(
-  token: string,
-  userId: string,
-  testVersion: TestVersion,
-  traceId: string,
-): Promise<{ mastery: MockExamMasterySnapshot[]; previous: PreviousExamRecord | null }> {
-  const db = getUserScopedSupabase(token);
-  const [gradeResult, examResult] = await Promise.all([
-    db.from('graded_answers')
-      .select('item_id,verdict,created_at')
-      .eq('user_id', userId).eq('test_version', testVersion)
-      .order('created_at', { ascending: true }).limit(5000),
-    db.from('mock_exams')
-      .select('id,status,correct_count,incorrect_count,question_ids,report_markdown')
-      .eq('user_id', userId).eq('test_version', testVersion).eq('status', 'completed')
-      .not('report_markdown', 'is', null)
-      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
-  ]);
-
-  if (gradeResult.error) {
-    console.warn(`[Lambda-Exam] [${traceId}] Could not read learning history: ${gradeResult.error.message}`);
+function shuffle<T>(values: T[]): T[] {
+  const result = values.slice();
+  for (let index = result.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
   }
-  const grades = (gradeResult.data ?? []) as Array<{
-    item_id?: unknown;
-    verdict?: unknown;
-    created_at?: unknown;
-  }>;
-  const byItem = new Map<string, { attempts: number; correct: number; lastSeenAt: number }>();
-  for (const grade of grades) {
-    if (typeof grade.item_id !== 'string' || !grade.item_id) continue;
-    const current = byItem.get(grade.item_id) ?? { attempts: 0, correct: 0, lastSeenAt: 0 };
-    current.attempts += 1;
-    if (grade.verdict === 'correct') current.correct += 1;
-    if (typeof grade.created_at === 'string') {
-      const timestamp = Date.parse(grade.created_at);
-      if (Number.isFinite(timestamp)) current.lastSeenAt = Math.max(current.lastSeenAt, timestamp);
-    }
-    byItem.set(grade.item_id, current);
-  }
-  const mastery: MockExamMasterySnapshot[] = [...byItem.entries()].map(([itemId, stats]) => ({
-    itemId,
-    attempts: stats.attempts,
-    correctCount: stats.correct,
-    lastSeenAt: stats.lastSeenAt,
-    mastered: stats.attempts >= 3 && stats.correct / stats.attempts > 0.85,
-  }));
-
-  const previousRow = examResult.data as {
-    id?: unknown;
-    status?: unknown;
-    correct_count?: unknown;
-    incorrect_count?: unknown;
-    question_ids?: unknown;
-    report_markdown?: unknown;
-  } | null;
-  if (examResult.error || !previousRow
-    || previousRow.status !== 'completed'
-    || typeof previousRow.report_markdown !== 'string'
-    || !previousRow.report_markdown.trim()) {
-    return { mastery, previous: null };
-  }
-
-  const previousId = typeof previousRow.id === 'string' ? previousRow.id : '';
-  const summary = summarizePreviousExam(testVersion, {
-    correct_count: typeof previousRow.correct_count === 'number' ? previousRow.correct_count : 0,
-    incorrect_count: typeof previousRow.incorrect_count === 'number' ? previousRow.incorrect_count : 0,
-    question_ids: Array.isArray(previousRow.question_ids)
-      ? previousRow.question_ids.filter((id): id is string => typeof id === 'string')
-      : [],
-  });
-  if (!previousId || !summary) return { mastery, previous: null };
-
-  const missesResult = await db.from('mock_exam_answers')
-    .select('item_id,verdict').eq('exam_id', previousId).neq('verdict', 'correct');
-  if (missesResult.error) {
-    console.warn(`[Lambda-Exam] [${traceId}] Could not read previous misses: ${missesResult.error.message}`);
-  }
-  const misses = ((missesResult.data ?? []) as Array<{ item_id?: unknown }>)
-    .map(answer => answer.item_id)
-    .filter((id): id is string => typeof id === 'string' && Boolean(id));
-  return { mastery, previous: { id: previousId, summary, misses } };
-}
-
-interface PreviousExamRecord {
-  id: string;
-  summary: PreviousExamSummary;
-  misses: string[];
-}
-
-interface MockExamStartResult {
-  exam: MockExamRow;
-  resumed: boolean;
-  answeredCount: number;
-  previous: PreviousExamRecord | null;
+  return result;
 }
 
 async function startOrResumeMockExam(
@@ -1425,7 +1042,7 @@ async function startOrResumeMockExam(
   includeEnglishSimulation: boolean,
   action: 'new' | 'resume',
   traceId: string
-): Promise<MockExamStartResult> {
+): Promise<MockExamRow> {
   const db = getUserScopedSupabase(token);
   const inProgress = await db.from('mock_exams')
     .select('id,test_version,status,question_ids,current_index,correct_count,incorrect_count,include_english_simulation,english_stage,reading_prompt_ids,writing_prompt_ids,reading_passed,writing_passed')
@@ -1433,36 +1050,7 @@ async function startOrResumeMockExam(
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
   if (inProgress.error) throw new Error(`Could not read the current mock exam: ${inProgress.error.message}`);
 
-  if (action === 'resume' && inProgress.data) {
-    const existing = inProgress.data as MockExamRow;
-    const history = await loadMockExamHistory(token, userId, testVersion, traceId);
-    if (existing.question_ids.length === 0) {
-      const first = selectNextMockExamItem({
-        version: testVersion,
-        askedItemIds: [],
-        mastery: history.mastery,
-        previousMissItemIds: history.previous?.misses ?? [],
-      });
-      if (!first) throw new Error('The question bank has no available questions.');
-      const updated = await db.from('mock_exams').update({
-        question_ids: [first.id], current_index: 0, updated_at: new Date().toISOString(),
-      }).eq('id', existing.id).eq('user_id', userId);
-      if (updated.error) throw new Error(`Could not restore the mock exam question: ${updated.error.message}`);
-      return {
-        exam: { ...existing, question_ids: [first.id], current_index: 0 },
-        resumed: true,
-        answeredCount: existing.correct_count + existing.incorrect_count,
-        previous: history.previous,
-      };
-    }
-    return {
-      exam: existing,
-      resumed: true,
-      answeredCount: existing.correct_count + existing.incorrect_count,
-      previous: history.previous,
-    };
-  }
-
+  if (action === 'resume' && inProgress.data) return inProgress.data as MockExamRow;
   if (action === 'new') {
     // A new Standard Interview supersedes every unfinished one, across bank
     // editions. They are completed, not abandoned, so no learner progress is
@@ -1475,15 +1063,29 @@ async function startOrResumeMockExam(
     if (closed.error) throw new Error(`Could not close the previous mock exam: ${closed.error.message}`);
   }
 
-  const history = await loadMockExamHistory(token, userId, testVersion, traceId);
-  const first = selectNextMockExamItem({
-    version: testVersion,
-    askedItemIds: [],
-    mastery: history.mastery,
-    previousMissItemIds: history.previous?.misses ?? [],
-  });
-  if (!first) throw new Error('The question bank has no available questions.');
+  const previousResult = await db.from('mock_exams')
+    .select('id,question_ids')
+    .eq('user_id', userId).eq('test_version', testVersion).eq('status', 'completed')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (previousResult.error) throw new Error(`Could not read the previous mock exam: ${previousResult.error.message}`);
+  const previousQuestionIds = new Set<string>((previousResult.data?.question_ids ?? []) as string[]);
+  let previousMisses: string[] = [];
+  if (previousResult.data?.id) {
+    const answers = await db.from('mock_exam_answers').select('item_id,verdict')
+      .eq('exam_id', previousResult.data.id).neq('verdict', 'correct');
+    if (!answers.error) previousMisses = (answers.data ?? []).map((answer) => answer.item_id as string);
+  }
 
+  const questionCount = testVersion === '2008' ? 10 : 20;
+  const weakCount = Math.min(Math.round(questionCount * 0.2), new Set(previousMisses).size);
+  const weakQuestions = shuffle([...new Set(previousMisses)]).slice(0, weakCount);
+  const weakSet = new Set(weakQuestions);
+  const bank = allItems(testVersion);
+  const unseen = shuffle(bank.filter((item) => !previousQuestionIds.has(item.id) && !weakSet.has(item.id)));
+  const unseenSet = new Set(unseen.map((item) => item.id));
+  const fill = shuffle(bank.filter((item) => !weakSet.has(item.id) && !unseenSet.has(item.id)));
+  const newQuestions = [...unseen, ...fill].slice(0, questionCount - weakQuestions.length);
+  const questionIds = shuffle([...weakQuestions, ...newQuestions]).map((item) => typeof item === 'string' ? item : item.id);
   const insert = await db.from('mock_exams').insert({
     user_id: userId,
     session_id: sessionId ?? null,
@@ -1493,19 +1095,14 @@ async function startOrResumeMockExam(
     reading_prompt_ids: includeEnglishSimulation ? pickEnglishExercisePrompts('reading') : [],
     writing_prompt_ids: includeEnglishSimulation ? pickEnglishExercisePrompts('writing') : [],
     status: 'in_progress',
-    question_ids: [first.id],
+    question_ids: questionIds,
     current_index: 0,
     correct_count: 0,
     incorrect_count: 0,
   }).select('id,test_version,status,question_ids,current_index,correct_count,incorrect_count,include_english_simulation,english_stage,reading_prompt_ids,writing_prompt_ids,reading_passed,writing_passed').single();
   if (insert.error || !insert.data) throw new Error(`Could not create a new mock exam: ${insert.error?.message ?? 'no record returned'}`);
-  console.log(`[Lambda-Exam] [${traceId}] Started ${testVersion} mock exam ${insert.data.id}; first question selected dynamically.`);
-  return {
-    exam: insert.data as MockExamRow,
-    resumed: false,
-    answeredCount: 0,
-    previous: history.previous,
-  };
+  console.log(`[Lambda-Exam] [${traceId}] Started ${testVersion} mock exam ${insert.data.id} with ${questionIds.length} questions (${weakQuestions.length} previous misses).`);
+  return insert.data as MockExamRow;
 }
 
 async function advanceMockExam(
@@ -1537,17 +1134,8 @@ async function advanceMockExam(
   const nextIndex = exam.current_index + 1;
   const passAt = exam.test_version === '2008' ? 6 : 12;
   const failAt = exam.test_version === '2008' ? 5 : 9;
-  const maxQuestions = MAX_EXAM_QUESTIONS[exam.test_version];
-  const civicsPassed = correct >= passAt;
-  const completed = civicsPassed || incorrect >= failAt || nextIndex >= maxQuestions;
-  const askedQuestionIds = exam.question_ids.slice(0, nextIndex);
-  const updatedExam = {
-    ...exam,
-    question_ids: askedQuestionIds,
-    current_index: nextIndex,
-    correct_count: correct,
-    incorrect_count: incorrect,
-  };
+  const completed = correct >= passAt || incorrect >= failAt || nextIndex >= exam.question_ids.length;
+  const updatedExam = { ...exam, current_index: nextIndex, correct_count: correct, incorrect_count: incorrect };
   let report: string | null = null;
   let weakLines: string[] = [];
   if (completed) {
@@ -1557,25 +1145,17 @@ async function advanceMockExam(
       .filter((question): question is string => Boolean(question));
     const scored = correct + incorrect;
     const accuracy = scored ? Math.round((correct / scored) * 100) : 0;
-    const status = civicsPassed
-      ? 'Practice result: pass threshold reached.'
-      : incorrect >= failAt
-        ? 'Practice result: fail threshold reached.'
-        : 'Practice result: exam ended before a passing threshold was reached.';
-    const englishLine = exam.include_english_simulation && !civicsPassed
-      ? 'English practice: not administered — civics ended at the fail threshold.'
-      : '';
+    const status = correct >= passAt ? 'Practice result: pass threshold reached.' : incorrect >= failAt ? 'Practice result: fail threshold reached.' : correct >= passAt ? 'Practice result: pass threshold reached.' : 'Practice result: exam ended before a passing threshold was reached.';
     const civicsReport = [
       `${exam.test_version} Civics Mock Exam`,
       `${status} Score: ${correct} correct and ${incorrect} incorrect out of ${scored} graded answers (${accuracy}% accuracy).`,
       weakLines.length ? `Areas to strengthen: ${[...new Set(weakLines)].join(' | ')}` : 'No incorrect answers were recorded.',
-      englishLine,
     ].filter(Boolean).join('\n');
-    if (exam.include_english_simulation && civicsPassed) {
+    if (exam.include_english_simulation) {
       const englishStage: MockExamStage = 'reading';
       const englishPrompt = englishPromptFor(exam, 'reading', 0);
       const update = await db.from('mock_exams').update({
-        question_ids: askedQuestionIds, current_index: nextIndex, correct_count: correct, incorrect_count: incorrect,
+        current_index: nextIndex, correct_count: correct, incorrect_count: incorrect,
         english_stage: englishStage, report_markdown: civicsReport, updated_at: new Date().toISOString(),
       }).eq('id', exam.id).eq('user_id', userId);
       if (update.error) throw new Error(`Could not start English practice: ${update.error.message}`);
@@ -1583,60 +1163,17 @@ async function advanceMockExam(
     }
     report = civicsReport;
     const update = await db.from('mock_exams').update({
-      status: 'completed', question_ids: askedQuestionIds, current_index: nextIndex,
-      correct_count: correct, incorrect_count: incorrect,
+      status: 'completed', current_index: nextIndex, correct_count: correct, incorrect_count: incorrect,
       report_markdown: report, completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq('id', exam.id).eq('user_id', userId);
     if (update.error) throw new Error(`Could not complete mock exam: ${update.error.message}`);
-    console.log(`[Lambda-Exam] [${traceId}] Completed mock exam ${exam.id}, correct=${correct}, incorrect=${incorrect}, english=${exam.include_english_simulation && civicsPassed ? 'administered' : 'not administered'}.`);
+    console.log(`[Lambda-Exam] [${traceId}] Completed mock exam ${exam.id}, correct=${correct}, incorrect=${incorrect}.`);
     return { nextItem: null, completed: true, report, exam: updatedExam, englishStage: 'complete', englishPrompt: null };
   }
-
-  const history = await loadMockExamHistory(token, userId, exam.test_version, traceId);
-  const next = selectNextMockExamItem({
-    version: exam.test_version,
-    askedItemIds: askedQuestionIds,
-    mastery: history.mastery,
-    previousMissItemIds: history.previous?.misses ?? [],
-  });
-  if (!next) {
-    // The bank should always have another unseen item before the cap. If it
-    // does not, close the interview rather than repeat a question.
-    const scored = correct + incorrect;
-    const accuracy = scored ? Math.round((correct / scored) * 100) : 0;
-    report = [
-      `${exam.test_version} Civics Mock Exam`,
-      `Practice result: exam ended before a passing threshold was reached. Score: ${correct} correct and ${incorrect} incorrect (${accuracy}% accuracy).`,
-      exam.include_english_simulation
-        ? 'English practice: not administered — civics ended at the fail threshold.'
-        : '',
-    ].filter(Boolean).join('\n');
-    const update = await db.from('mock_exams').update({
-      status: 'completed', question_ids: askedQuestionIds, current_index: nextIndex,
-      correct_count: correct, incorrect_count: incorrect, report_markdown: report,
-      completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    }).eq('id', exam.id).eq('user_id', userId);
-    if (update.error) throw new Error(`Could not complete mock exam: ${update.error.message}`);
-    return { nextItem: null, completed: true, report, exam: updatedExam, englishStage: 'complete', englishPrompt: null };
-  }
-
-  const nextQuestionIds = [...askedQuestionIds, next.id];
-  const update = await db.from('mock_exams').update({
-    question_ids: nextQuestionIds,
-    current_index: nextIndex,
-    correct_count: correct,
-    incorrect_count: incorrect,
-    updated_at: new Date().toISOString(),
-  }).eq('id', exam.id).eq('user_id', userId);
+  const update = await db.from('mock_exams').update({ current_index: nextIndex, correct_count: correct, incorrect_count: incorrect, updated_at: new Date().toISOString() })
+    .eq('id', exam.id).eq('user_id', userId);
   if (update.error) throw new Error(`Could not advance mock exam: ${update.error.message}`);
-  return {
-    nextItem: next,
-    completed: false,
-    report: null,
-    exam: { ...updatedExam, question_ids: nextQuestionIds },
-    englishStage: 'none',
-    englishPrompt: null,
-  };
+  return { nextItem: getItem(exam.question_ids[nextIndex], exam.test_version), completed: false, report: null, exam: updatedExam, englishStage: 'none', englishPrompt: null };
 }
 
 async function submitEnglishExercise(
@@ -1772,7 +1309,7 @@ async function submitEnglishExercise(
 /**
  * Lifetime stats across ALL of the user's sessions (not just one), for the
  * welcome banner's "summary of achievement so far". Same RLS-scoped pattern
- * as the other graded-answer reads. A zero-answered result IS the "new user" signal
+ * as getRecentSessionItemIds. A zero-answered result IS the "new user" signal
  * — no separate existence check needed.
  */
 async function getLifetimeStats(
@@ -1929,15 +1466,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (parsedBody.examAction !== undefined && parsedBody.examAction !== 'new' && parsedBody.examAction !== 'resume') {
       return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid mock exam action.' }) };
     }
-    if (parsedBody.focusAreaIds !== undefined
-      && (!Array.isArray(parsedBody.focusAreaIds)
-        || parsedBody.focusAreaIds.length > 3
-        || parsedBody.focusAreaIds.some(id => typeof id !== 'string' || id.length > 80))) {
-      return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid focus area selection.' }) };
-    }
-    if (parsedBody.allFocusAreas !== undefined && typeof parsedBody.allFocusAreas !== 'boolean') {
-      return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid focus area selection.' }) };
-    }
     if (parsedBody.preferredLanguage !== undefined
       && !['en-US', 'es-ES', 'fr-FR', 'ar-SA'].includes(parsedBody.preferredLanguage)) {
       return {
@@ -2069,7 +1597,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let examReport: string | null = null;
     let examReviewId: string | null = null;
     let examStage: MockExamStage | null = null;
-    let examIntro: MockExamIntro | null = null;
     let modeGoalPending = false;
 
     if (speechSynthesisOnly) {
@@ -2095,52 +1622,39 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       assistantSegments = [generatedAssistantText || 'I’m here with you. What would you like to talk through from your exam?'];
       generatedAssistantText = assistantSegments[0];
     } else if (parsedBody.modeTransition === true) {
+      modeGoalPending = true;
       const sessionId = parsedBody.sessionId;
       if (!sessionId) throw new Error('Mode transition requires an active daily session.');
       const db = getUserScopedSupabase(token);
-      const language = preferredLanguageCode as OnboardingLanguage;
-
-      if (simulationMode === 'standard') {
-        // Standard has no focus onboarding. Its first-question sequence is
-        // owned by the sessionStart Ready gate, not by a goal prompt.
-        await db.from('sessions').update({ current_mode: 'standard', mode_goal_pending: false })
-          .eq('id', sessionId).eq('user_id', userId);
-        const copy = buildStandardModeSwitchCopy(language);
-        generatedAssistantText = copy;
-        assistantSegments = [copy];
-        nextItemId = parsedBody.currentItemId ?? null;
-        nextQuestionText = getItem(parsedBody.currentItemId, testVersion)?.question ?? '';
-      } else {
-        modeGoalPending = true;
-        const focus = await loadSessionFocus(token, userId, sessionId, testVersion);
-        const serializedGoal = serializeFocusGoal(focus.categoryIds, focus.all, testVersion);
-        const { data: priorGrade } = await db.from('graded_answers')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('test_version', testVersion)
-          .eq('simulation_mode', simulationMode)
-          .limit(1)
-          .maybeSingle();
-        const copy = priorGrade
-          ? buildReturningOnboarding(
-            simulationMode,
-            testVersion,
-            await loadModeProgressStats(token, userId, testVersion, focus, traceId),
-            language,
-          )
-          : buildFirstTimeOnboarding(simulationMode, language);
-        await db.from('sessions').update({
-          current_mode: simulationMode,
-          mode_goal_pending: true,
-          current_goal: serializedGoal,
-        }).eq('id', sessionId).eq('user_id', userId);
-        generatedAssistantText = copy;
-        assistantSegments = [copy];
-        // The first question is selected only after the learner confirms the
-        // focus card; no skip path exists.
-        nextItemId = null;
-        nextQuestionText = '';
+      const { data: recentGrades } = await db
+        .from('graded_answers')
+        .select('simulation_mode,verdict')
+        .eq('user_id', userId)
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      const grouped = new Map<string, { correct: number; total: number }>();
+      for (const grade of recentGrades ?? []) {
+        const mode = grade.simulation_mode ?? 'standard';
+        const stats = grouped.get(mode) ?? { correct: 0, total: 0 };
+        stats.total += 1;
+        if (grade.verdict === 'correct') stats.correct += 1;
+        grouped.set(mode, stats);
       }
+      const progress = [...grouped.entries()].map(([mode, stats]) => `${mode}: ${stats.correct}/${stats.total} correct`).join('; ');
+      const { data: reportRow } = await db.from('daily_progress_reports').select('report_markdown')
+        .eq('user_id', userId).order('date', { ascending: false }).limit(1).maybeSingle();
+      const latestReport = reportRow?.report_markdown ?? 'No prior progress history available.';
+      const activeQuestion = getItem(parsedBody.currentItemId, testVersion);
+      const suggestion = await turnInterpreter.generateModeTransition(
+        simulationMode, activeQuestion?.question ?? null, progress, latestReport, preferredLanguage
+      );
+      await db.from('sessions').update({ current_mode: simulationMode, mode_goal_pending: true, current_goal: suggestion })
+        .eq('id', sessionId).eq('user_id', userId);
+      generatedAssistantText = suggestion;
+      assistantSegments = [suggestion];
+      nextItemId = activeQuestion?.id ?? null;
+      nextQuestionText = activeQuestion?.question ?? '';
     } else if (parsedBody.modeGoalResponse === true) {
       const sessionId = parsedBody.sessionId;
       const db = getUserScopedSupabase(token);
@@ -2148,87 +1662,46 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         .select('current_goal,mode_goal_pending,current_item_id')
         .eq('id', sessionId).eq('user_id', userId).maybeSingle() : { data: null };
       if (sessionGoal?.mode_goal_pending) {
-        const language = preferredLanguageCode as OnboardingLanguage;
-        const selectedIds = (parsedBody.focusAreaIds ?? [])
-          .map(id => normalizeFocusCategoryId(id))
-          .filter((id): id is string => id !== null);
-        const hasFocusSelection = parsedBody.allFocusAreas === true || selectedIds.length > 0;
-
-        if (hasFocusSelection && simulationMode !== 'standard') {
-          const uniqueIds = [...new Set(selectedIds)].slice(0, 3);
-          const allFocusAreas = parsedBody.allFocusAreas === true || uniqueIds.length === 0;
-          const categoryIds = allFocusAreas ? [] : uniqueIds;
-          const goal = serializeFocusGoal(categoryIds, allFocusAreas, testVersion);
-          const labels = parseFocusGoal(goal, testVersion).labels;
-          await db.from('sessions').update({ current_goal: goal, mode_goal_pending: false })
-            .eq('id', sessionId).eq('user_id', userId);
-          modeGoalPending = false;
-
-          const selected = simulationMode === 'study'
-            ? selectFocusedStudyQuestion(testVersion, categoryIds)
-            : await selectPracticeQuestion(
-              token, userId, sessionId, testVersion,
-              { all: allFocusAreas, categoryIds, labels }, null, traceId,
-            );
-          const segments: string[] = [
-            buildFocusConfirmation(simulationMode, allFocusAreas, labels, language),
-          ];
-          if (selected.cycleRestarted) segments.push(buildCycleNotice(language));
-          segments.push(simulationMode === 'study'
-            ? formatStudyQuestion(
-              selected.item,
-              await turnInterpreter.explainStudyQuestion(selected.item, preferredLanguage),
-              preferredLanguage,
-            )
-            : `Let's begin with this question: ${selected.item.question}`);
-          assistantSegments = segments;
-          generatedAssistantText = segments.join('\n');
-          nextItemId = selected.item.id;
-          nextQuestionText = selected.item.question;
-        } else {
-          // Legacy clients still send free text for the goal. Keep the old
-          // interpreter path so an in-flight session never gets stuck.
-          const resolution = await turnInterpreter.resolveModeGoalResponse(
-            simulationMode, sessionGoal.current_goal ?? '', cleanedTranscript, preferredLanguage
-          );
-          const selectedGoal = resolution.goal || sessionGoal.current_goal || '';
-          modeGoalPending = !resolution.accepted;
-          await db.from('sessions').update({ current_goal: selectedGoal, mode_goal_pending: !resolution.accepted })
-            .eq('id', sessionId).eq('user_id', userId);
-          let active = getItem(sessionGoal.current_item_id ?? parsedBody.currentItemId, testVersion);
-          if (resolution.accepted && !active && simulationMode !== 'standard') {
-            active = simulationMode === 'study' ? getFirstQuestion(testVersion) : selectNextQuestion([], testVersion);
-          }
-          if (resolution.accepted && active && !(simulationMode === 'standard' && examRunId)) {
-            const questionPrompt = simulationMode === 'study'
-              ? formatStudyQuestion(active, await turnInterpreter.explainStudyQuestion(active, preferredLanguage), preferredLanguage)
-              : `Let's begin with this question: ${active.question}`;
-            assistantSegments = [resolution.reply, questionPrompt];
-          } else if (resolution.accepted && simulationMode === 'standard' && examRunId) {
-            const { data: examData } = await db.from('mock_exams')
-              .select('id,test_version,status,question_ids,current_index,correct_count,incorrect_count,include_english_simulation,english_stage,reading_prompt_ids,writing_prompt_ids,reading_passed,writing_passed')
-              .eq('id', examRunId).eq('user_id', userId).eq('status', 'in_progress').maybeSingle();
-            const exam = examData as MockExamRow | null;
-            if (exam && (exam.english_stage === 'reading' || exam.english_stage === 'writing')) {
-              const section = exam.english_stage;
-              const progress = await db.from('mock_exam_english_answers').select('id', { count: 'exact', head: true })
-                .eq('exam_id', exam.id).eq('section', section);
-              const promptIndex = progress.count ?? 0;
-              const prompt = englishPromptFor(exam, section, promptIndex);
-              if (prompt) {
-                examStage = section;
-                assistantSegments = [resolution.reply, englishTaskMessage(section, prompt, promptIndex)];
-                nextItemId = null;
-                nextQuestionText = prompt;
-              } else assistantSegments = [resolution.reply];
-            } else assistantSegments = [resolution.reply];
-          } else {
-            assistantSegments = [resolution.reply];
-          }
-          generatedAssistantText = assistantSegments.join('\n');
-          nextItemId = active?.id ?? null;
-          if (!examStage) nextQuestionText = active?.question ?? '';
+        const resolution = await turnInterpreter.resolveModeGoalResponse(
+          simulationMode, sessionGoal.current_goal ?? '', cleanedTranscript, preferredLanguage
+        );
+        const selectedGoal = resolution.goal || sessionGoal.current_goal || '';
+        modeGoalPending = !resolution.accepted;
+        await db.from('sessions').update({ current_goal: selectedGoal, mode_goal_pending: !resolution.accepted })
+          .eq('id', sessionId).eq('user_id', userId);
+        let active = getItem(sessionGoal.current_item_id ?? parsedBody.currentItemId, testVersion);
+        if (resolution.accepted && !active && simulationMode !== 'standard') {
+          active = simulationMode === 'study' ? getFirstQuestion(testVersion) : selectNextQuestion([], testVersion);
         }
+        if (resolution.accepted && active && !(simulationMode === 'standard' && examRunId)) {
+          const questionPrompt = simulationMode === 'study'
+            ? formatStudyQuestion(active, await turnInterpreter.explainStudyQuestion(active, preferredLanguage), preferredLanguage)
+            : `Let's begin with this question: ${active.question}`;
+          assistantSegments = [resolution.reply, questionPrompt];
+        } else if (resolution.accepted && simulationMode === 'standard' && examRunId) {
+          const { data: examData } = await db.from('mock_exams')
+            .select('id,test_version,status,question_ids,current_index,correct_count,incorrect_count,include_english_simulation,english_stage,reading_prompt_ids,writing_prompt_ids,reading_passed,writing_passed')
+            .eq('id', examRunId).eq('user_id', userId).eq('status', 'in_progress').maybeSingle();
+          const exam = examData as MockExamRow | null;
+          if (exam && (exam.english_stage === 'reading' || exam.english_stage === 'writing')) {
+            const section = exam.english_stage;
+            const progress = await db.from('mock_exam_english_answers').select('id', { count: 'exact', head: true })
+              .eq('exam_id', exam.id).eq('section', section);
+            const promptIndex = progress.count ?? 0;
+            const prompt = englishPromptFor(exam, section, promptIndex);
+            if (prompt) {
+              examStage = section;
+              assistantSegments = [resolution.reply, englishTaskMessage(section, prompt, promptIndex)];
+              nextItemId = null;
+              nextQuestionText = prompt;
+            } else assistantSegments = [resolution.reply];
+          } else assistantSegments = [resolution.reply];
+        } else {
+          assistantSegments = [resolution.reply];
+        }
+        generatedAssistantText = assistantSegments.join('\n');
+        nextItemId = active?.id ?? null;
+        if (!examStage) nextQuestionText = active?.question ?? '';
       }
     }
 
@@ -2287,10 +1760,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     } else if (parsedBody.sessionStart === true) {
       console.log(`[Lambda-Start] [${traceId}] Explicit sessionStart; selecting the first question.`);
       if (simulationMode === 'standard') {
-        const start = await startOrResumeMockExam(
+        const exam = await startOrResumeMockExam(
           token, userId, parsedBody.sessionId, testVersion, includeEnglishSimulation, parsedBody.examAction ?? 'resume', traceId
         );
-        const exam = start.exam;
+        const opening = standardInterviewOpening(parsedBody.examAction ?? 'resume', preferredLanguageCode);
         let responseText: string;
         let nextItemId: string | null;
         let nextQuestion: string;
@@ -2305,25 +1778,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           nextItemId = null;
           nextQuestion = prompt;
           examStage = section;
-          const intro = await buildStandardInterviewIntro(start, preferredLanguageCode, includeEnglishSimulation);
-          assistantSegments = [intro.icebreaker, intro.facts, englishTaskMessage(section, prompt, promptIndex)];
-          responseText = assistantSegments.join('\n\n');
+          responseText = `${opening}\n\n${englishTaskMessage(section, prompt, promptIndex)}`;
         } else {
-          const first = getItem(exam.question_ids[exam.current_index], testVersion);
-          if (!first) throw new Error('The Standard Interview has no current question.');
-          const intro = await buildStandardInterviewIntro(start, preferredLanguageCode, includeEnglishSimulation);
-          examIntro = intro;
+          const first = getItem(exam.question_ids[exam.current_index], testVersion) ?? selectNextQuestion([], testVersion);
+          nextItemId = first.id;
+          nextQuestion = first.question;
           examStage = 'none';
-          if (intro.kind === 'resume') {
-            nextItemId = first.id;
-            nextQuestion = first.question;
-            assistantSegments = [intro.icebreaker, intro.facts, first.question];
-          } else {
-            nextItemId = null;
-            nextQuestion = '';
-            assistantSegments = [intro.icebreaker, intro.facts, ...intro.rules, intro.readyPrompt];
-          }
-          responseText = assistantSegments.join('\n\n');
+          responseText = `${opening}\n\n${first.question}`;
         }
         return {
           statusCode: 200,
@@ -2335,23 +1796,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             needsConfirmation: false,
             nextItemId,
             nextQuestion,
-            assistantSegments,
+            assistantSegments: [responseText],
             examRunId: exam.id,
             examCompleted: false,
             examReport: null,
             examReviewId: null,
             examStage,
-            examIntro,
             modeGoalPending: false,
           }),
         };
       } else {
-        const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-        const first = simulationMode === 'study'
-          ? selectFocusedStudyQuestion(testVersion, focus.categoryIds).item
-          : (await selectPracticeQuestion(
-            token, userId, parsedBody.sessionId, testVersion, focus, null, traceId,
-          )).item;
+        const first = simulationMode === 'study' ? getFirstQuestion(testVersion) : selectNextQuestion([], testVersion);
         return {
           statusCode: 200,
           headers: responseHeaders,
@@ -2363,39 +1818,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         };
       }
     } else if (parsedBody.silenceNudge === true) {
-      const focus = simulationMode === 'standard'
-        ? null
-        : await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-      const focusedItem = askedItem ?? (simulationMode === 'study'
-        ? selectFocusedStudyQuestion(testVersion, focus?.categoryIds ?? []).item
-        : (await selectPracticeQuestion(
-          token, userId, parsedBody.sessionId, testVersion,
-          focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
-        )).item);
+      const focusedItem = askedItem ?? (simulationMode === 'study' ? getFirstQuestion(testVersion) : selectNextQuestion([], testVersion));
       generatedAssistantText = `Take your time. Let's return to the question: ${focusedItem.question}`;
       nextItemId = focusedItem.id;
       nextQuestionText = focusedItem.question;
     } else if (parsedBody.openingResponse === true) {
-      let first: CivicsItem;
-      if (askedItem) {
-        first = askedItem;
-      } else if (simulationMode === 'study') {
-        const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-        first = selectFocusedStudyQuestion(testVersion, focus.categoryIds).item;
-      } else if (simulationMode === 'practice') {
-        const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-        first = (await selectPracticeQuestion(
-          token, userId, parsedBody.sessionId, testVersion, focus, null, traceId,
-        )).item;
-      } else {
-        first = getFirstQuestion(testVersion);
-      }
+      let first = askedItem ?? (simulationMode === 'study' ? getFirstQuestion(testVersion) : selectNextQuestion([], testVersion));
       let resumedEnglish: { section: Exclude<MockExamStage, 'none' | 'complete'>; prompt: string; index: number } | null = null;
       if (simulationMode === 'standard' && !askedItem) {
-        const start = await startOrResumeMockExam(
+        const exam = await startOrResumeMockExam(
           token, userId, parsedBody.sessionId, testVersion, includeEnglishSimulation, parsedBody.examAction ?? 'resume', traceId
         );
-        const exam = start.exam;
         examRunId = exam.id;
         if (exam.english_stage === 'reading' || exam.english_stage === 'writing') {
           const section = exam.english_stage;
@@ -2406,43 +1839,28 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           if (!prompt) throw new Error(`Could not restore the active ${section} exercise.`);
           resumedEnglish = { section, prompt, index };
           examStage = section;
-        } else {
-          const current = getItem(exam.question_ids[exam.current_index], testVersion);
-          if (!current) throw new Error('The Standard Interview has no current question.');
-          first = current;
-        }
+        } else first = getItem(exam.question_ids[exam.current_index], testVersion) ?? first;
       }
-      if (simulationMode === 'standard') {
-        // The intro card's Ready action is the only way in. Keep this
-        // deterministic: no model call, no extra score narration.
-        assistantSegments = [
-          resumedEnglish
-            ? englishTaskMessage(resumedEnglish.section, resumedEnglish.prompt, resumedEnglish.index)
-            : first.question,
-        ];
-        generatedAssistantText = assistantSegments[0];
+      const acknowledgement = await turnInterpreter.respondToOpening(
+        cleanedTranscript,
+        getRecentTurns(parsedBody.conversationWindow),
+        simulationMode === 'study' ? preferredLanguage : undefined,
+      );
+      if (resumedEnglish) {
+        assistantSegments = [acknowledgement, englishTaskMessage(resumedEnglish.section, resumedEnglish.prompt, resumedEnglish.index)];
+        generatedAssistantText = assistantSegments.join('\n');
+        nextItemId = null;
+        nextQuestionText = resumedEnglish.prompt;
+      } else if (simulationMode === 'study') {
+        const explanation = await turnInterpreter.explainStudyQuestion(first, preferredLanguage);
+        assistantSegments = [acknowledgement, formatStudyQuestion(first, explanation, preferredLanguage)];
+        generatedAssistantText = assistantSegments.join('\n');
       } else {
-        const acknowledgement = await turnInterpreter.respondToOpening(
-          cleanedTranscript,
-          getRecentTurns(parsedBody.conversationWindow),
-          simulationMode === 'study' ? preferredLanguage : undefined,
-        );
-        if (resumedEnglish) {
-          assistantSegments = [acknowledgement, englishTaskMessage(resumedEnglish.section, resumedEnglish.prompt, resumedEnglish.index)];
-          generatedAssistantText = assistantSegments.join('\n');
-          nextItemId = null;
-          nextQuestionText = resumedEnglish.prompt;
-        } else if (simulationMode === 'study') {
-          const explanation = await turnInterpreter.explainStudyQuestion(first, preferredLanguage);
-          assistantSegments = [acknowledgement, formatStudyQuestion(first, explanation, preferredLanguage)];
-          generatedAssistantText = assistantSegments.join('\n');
-        } else {
-          assistantSegments = [acknowledgement, `The first question is: ${first.question}`];
-          generatedAssistantText = assistantSegments.join('\n');
-        }
+        assistantSegments = [acknowledgement, `The first question is: ${first.question}`];
+        generatedAssistantText = assistantSegments.join('\n');
       }
-      nextItemId = resumedEnglish ? null : first.id;
-      nextQuestionText = resumedEnglish ? resumedEnglish.prompt : first.question;
+      nextItemId = first.id;
+      nextQuestionText = first.question;
     } else if (cleanedTranscript && isRagQuery(cleanedTranscript)) {
       // ---- ASSIST / progress path (grounded in the user's own reports) ----
       console.log(`[Lambda-RAG] [${traceId}] Progress intent detected.`);
@@ -2458,15 +1876,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         simulationMode === 'study' ? preferredLanguage : undefined,
       );
       // Do NOT advance the civics question; keep the user's place.
-      const focus = simulationMode === 'standard'
-        ? null
-        : await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-      const stay = askedItem ?? (simulationMode === 'study'
-        ? selectFocusedStudyQuestion(testVersion, focus?.categoryIds ?? []).item
-        : (await selectPracticeQuestion(
-          token, userId, parsedBody.sessionId, testVersion,
-          focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
-        )).item);
+      const stay = askedItem ?? (simulationMode === 'study' ? getFirstQuestion(testVersion) : selectNextQuestion([], testVersion));
       nextItemId = stay.id;
       nextQuestionText = stay.question;
 
@@ -2476,15 +1886,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       // app still works even if the client never calls sessionStart — same
       // simplified behavior (no LLM call) as the explicit sessionStart path. ----
       console.log(`[Lambda-Start] [${traceId}] No active question (implicit); picking first question.`);
-      const focus = simulationMode === 'standard'
-        ? null
-        : await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-      const first = simulationMode === 'study'
-        ? selectFocusedStudyQuestion(testVersion, focus?.categoryIds ?? []).item
-        : (await selectPracticeQuestion(
-          token, userId, parsedBody.sessionId, testVersion,
-          focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
-        )).item;
+      const first = simulationMode === 'study' ? getFirstQuestion(testVersion) : selectNextQuestion([], testVersion);
       const explanation = simulationMode === 'study'
         ? await turnInterpreter.explainStudyQuestion(first, preferredLanguage)
         : '';
@@ -2596,7 +1998,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         // but everything asked so far this session (up to a bound) — the
         // persist above already wrote askedItem.id, so it's included here too.
         let next: CivicsItem | null = null;
-        let cycleRestarted = false;
         if (simulationMode === 'standard' && examRunId) {
           const examProgress = await advanceMockExam(
             token, userId, examRunId, askedItem, outcome.committedVerdict, traceId
@@ -2638,35 +2039,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             }
           }
         } else {
-          const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-          if (simulationMode === 'study') {
-            const selected = selectFocusedStudyQuestion(testVersion, focus.categoryIds, askedItem.id);
-            next = selected.item;
-            cycleRestarted = selected.cycleRestarted;
-          } else {
-            const selected = await selectPracticeQuestion(
-              token, userId, parsedBody.sessionId, testVersion, focus, askedItem.id, traceId,
-            );
-            next = selected.item;
-            cycleRestarted = selected.cycleRestarted;
-          }
+          const recentItemIds = await getRecentSessionItemIds(token, parsedBody.sessionId, traceId);
+          const excludeIds = [...new Set([...recentItemIds, askedItem.id])];
+          next = simulationMode === 'study'
+            ? getNextSequentialQuestion(askedItem, testVersion)
+            : selectNextQuestion(excludeIds, testVersion);
         }
 
         if (!examCompleted && !examStage) {
-          if (!next) {
-            const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-            if (simulationMode === 'study') {
-              const selected = selectFocusedStudyQuestion(testVersion, focus.categoryIds, askedItem.id);
-              next = selected.item;
-              cycleRestarted = selected.cycleRestarted;
-            } else {
-              const selected = await selectPracticeQuestion(
-                token, userId, parsedBody.sessionId, testVersion, focus, askedItem.id, traceId,
-              );
-              next = selected.item;
-              cycleRestarted = selected.cycleRestarted;
-            }
-          }
+          next ??= simulationMode === 'study'
+            ? getNextSequentialQuestion(askedItem, testVersion)
+            : selectNextQuestion([askedItem.id], testVersion);
           nextItemId = next.id;
           nextQuestionText = next.question;
           const feedback = sanitizeFinalAnswerFeedback(rawFeedback, next.question);
@@ -2675,12 +2058,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           const explanation = simulationMode === 'study'
             ? await turnInterpreter.explainStudyQuestion(next, preferredLanguage)
             : '';
-          const questionSegments = simulationMode === 'study'
+          assistantSegments = simulationMode === 'study'
             ? [formatStudyFeedback(askedItem, feedback, preferredLanguage), formatStudyQuestion(next, explanation, preferredLanguage)]
             : [feedback, `Next question: ${next.question}`];
-          assistantSegments = cycleRestarted
-            ? [buildCycleNotice(preferredLanguageCode as OnboardingLanguage), ...questionSegments]
-            : questionSegments;
           generatedAssistantText = assistantSegments.join('\n');
         }
       }
@@ -2783,7 +2163,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         examReport,
         examReviewId,
         examStage,
-        examIntro,
         modeGoalPending,
       })
     };

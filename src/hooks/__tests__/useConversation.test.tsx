@@ -35,7 +35,6 @@ const transcriptResponse = (overrides: Partial<TranscriptResponse> = {}): Transc
   examReviewId: null,
   examStage: null,
   modeGoalPending: false,
-  examIntro: null,
   ...overrides,
 });
 

@@ -10,18 +10,12 @@ export type AppStatus = 'idle' | 'connecting' | 'listening' | 'processing' | 'sp
 export type SimulationMode = 'standard' | 'practice' | 'study';
 export type TestVersion = '2008' | '2020';
 
-export type MessageAction =
-  | {
-    kind: 'exam';
-    examAction: 'new' | 'resume';
-    label: string;
-    variant?: 'primary' | 'secondary';
-  }
-  | {
-    kind: 'ready';
-    label: string;
-    variant?: 'primary' | 'secondary';
-  };
+export type MessageAction = {
+  kind: 'exam';
+  examAction: 'new' | 'resume';
+  label: string;
+  variant?: 'primary' | 'secondary';
+};
 
 export interface Message {
   id: string;
