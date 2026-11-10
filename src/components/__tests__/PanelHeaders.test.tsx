@@ -275,7 +275,7 @@ describe('workspace panel headers', () => {
     const { rerender } = render(<RightPanel {...rightPanelProps} isMobile />);
 
     expect(screen.queryByText('Configuration & Control')).toBeNull();
-    expect(screen.getByText('Simulation Modes')).toBeDefined();
+    expect(screen.getByText('Learning Modes')).toBeDefined();
 
     rerender(<RightPanel {...rightPanelProps} />);
 

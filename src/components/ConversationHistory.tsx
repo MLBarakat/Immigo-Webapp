@@ -180,7 +180,7 @@ export function ConversationHistory({
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-testid="message-actions">
                     {msg.actions.map(action => (
                       <button
-                        key={`${action.kind}-${action.examAction}`}
+                        key={`${action.kind}-${action.kind === 'exam' ? action.examAction : 'ready'}`}
                         type="button"
                         onClick={() => onMessageAction?.(msg.id, action)}
                         disabled={!onMessageAction}

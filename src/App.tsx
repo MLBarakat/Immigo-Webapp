@@ -34,6 +34,8 @@ import type {
   MockExamReviewDecisionChoice,
 } from './services/apiClient';
 import type { MessageAction, SimulationMode, TestVersion } from './context/conversationContextTypes';
+import { serializeLearningGoal } from './constants/focusCategories';
+import type { FocusAreaSelection } from './components/FocusAreaCombobox';
 
 import { DisplayUser } from './types/user';
 import { UserSettings, FontSize } from './types/settings';
@@ -65,7 +67,7 @@ interface ConversationWorkspaceProps {
 }
 
 function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps): JSX.Element {
-  const { user, profile, logout, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
+  const { user, profile, logout, loading: authLoading, userSettings, updateUserSettings, updateUserLanguage } = useAuth();
   const { t: tConversation, i18n } = useTranslation('conversation');
   const { t: tCommon } = useTranslation('common');
   const isArabic = i18n.language === 'ar-SA';
@@ -79,6 +81,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     try { return localStorage.getItem('immigo_include_english_simulation') === 'true'; }
     catch { return false; }
   });
+  const [englishPreferenceResolved, setEnglishPreferenceResolved] = useState(false);
   const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
   const [micAccessError, setMicAccessError] = useState<string | null>(null);
 
@@ -113,11 +116,29 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const [isReviewDecisionSaving, setIsReviewDecisionSaving] = useState(false);
   const [reviewDecisionError, setReviewDecisionError] = useState<string | null>(null);
   useEffect(() => {
+    if (authLoading || englishPreferenceResolved || !user) return;
+    void Promise.resolve().then(() => {
+      try {
+        const stored = localStorage.getItem('immigo_include_english_simulation');
+        if (stored !== null) {
+          // An explicit saved choice always wins, including an explicit "off".
+          setIncludeEnglishSimulation(stored === 'true');
+        } else if (userSettings.has_seen_welcome === false) {
+          // Brand-new accounts start with reading and writing practice enabled.
+          setIncludeEnglishSimulation(true);
+        }
+      } catch { /* preferences remain available for the current app lifetime */ }
+      setEnglishPreferenceResolved(true);
+    });
+  }, [authLoading, englishPreferenceResolved, user, userSettings.has_seen_welcome]);
+
+  useEffect(() => {
+    if (!englishPreferenceResolved) return;
     try {
       localStorage.setItem('immigo_test_version', testVersion);
       localStorage.setItem('immigo_include_english_simulation', String(includeEnglishSimulation));
     } catch { /* preferences remain available for the current app lifetime */ }
-  }, [testVersion, includeEnglishSimulation]);
+  }, [testVersion, includeEnglishSimulation, englishPreferenceResolved]);
   useEffect(() => {
     if (!manager.dailySessionSettings) return;
     const settings = manager.dailySessionSettings;
@@ -178,13 +199,33 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     }
   };
 
-  const continueWithGoal = async (goal: string, mode: SimulationMode): Promise<boolean> => {
+  const continueWithGoal = async (_goal: string, mode: SimulationMode): Promise<boolean> => {
+    // The saved goal pre-fills the focus card; the mode transition now owns
+    // the onboarding and starts the first question only after Continue.
     const changed = await manager.changeMode(mode);
     if (!changed) return false;
     setSimulationMode(mode);
-    await manager.sendTextMessage(goal);
     setActiveExamReviewId(null);
     return true;
+  };
+
+  const handleFocusOnboardingSubmit = async (selection: FocusAreaSelection) => {
+    if (!manager.focusOnboarding) return;
+    const goal = serializeLearningGoal(
+      selection.selectedIds,
+      '',
+      testVersion,
+      selection.allFocusAreas,
+    );
+    const started = await manager.submitFocusOnboarding(selection);
+    if (!started) return;
+    try {
+      await updateUserSettings({ learning_goal: goal });
+    } catch (error) {
+      logger.warn('The focus choice started the first question, but the account goal could not be refreshed in memory.', {
+        error: String(error),
+      });
+    }
   };
 
   const saveExamReviewDecision = async (
@@ -264,6 +305,15 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   const handleWelcomeAction = async (messageId: string, action: MessageAction) => {
+    if (action.kind === 'ready') {
+      // The Standard intro waits here. The request is an opening response, so
+      // the server ignores the label and asks the current first question.
+      await manager.sendTextMessage(
+        action.label,
+        manager.isVoiceSessionActive ? 'voice' : 'text',
+      );
+      return;
+    }
     if (action.kind !== 'exam') return;
     try {
       const started = await manager.chooseWelcomeAction(action.examAction, messageId);
@@ -488,7 +538,11 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               isAudioRetryPending={manager.isAudioRetryPending}
               onLoadOlder={manager.loadOlderMessages}
               onClearError={manager.clearError}
-              onOpenExamReview={openExamReview}
+              focusOnboarding={manager.focusOnboarding}
+          learningGoal={userSettings.learning_goal}
+          testVersion={testVersion}
+          onFocusOnboardingSubmit={handleFocusOnboardingSubmit}
+          onOpenExamReview={openExamReview}
               onMessageAction={handleWelcomeAction}
             />
           )}
@@ -681,6 +735,10 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           isAudioRetryPending={manager.isAudioRetryPending}
           onLoadOlder={manager.loadOlderMessages}
           onClearError={manager.clearError}
+          focusOnboarding={manager.focusOnboarding}
+          learningGoal={userSettings.learning_goal}
+          testVersion={testVersion}
+          onFocusOnboardingSubmit={handleFocusOnboardingSubmit}
           onOpenExamReview={openExamReview}
           onMessageAction={handleWelcomeAction}
           onToggleFocus={toggleFocusMode}

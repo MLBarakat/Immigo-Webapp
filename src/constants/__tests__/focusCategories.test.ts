@@ -56,5 +56,24 @@ describe('focus categories', () => {
     const parsed = parseLearningGoal('  ; Learn about my city ; ', '2020');
     expect(parsed.selectedIds).toEqual([]);
     expect(parsed.other).toBe('Learn about my city');
+    expect(parsed.allFocusAreas).toBe(false);
+  });
+
+  it('round-trips the All focus areas sentinel', () => {
+    expect(serializeLearningGoal([], '', '2020', true)).toBe('All focus areas');
+    expect(parseLearningGoal('All focus areas', '2020')).toEqual({
+      selectedIds: [],
+      other: '',
+      allFocusAreas: true,
+    });
+    expect(parseLearningGoal('  all focus areas  ', '2008').allFocusAreas).toBe(true);
+  });
+
+  it('returns to individual categories when All is cleared', () => {
+    const categories = getFocusCategories('2020');
+    const saved = serializeLearningGoal([categories[0].id], '', '2020', false);
+    const parsed = parseLearningGoal(saved, '2020');
+    expect(parsed.allFocusAreas).toBe(false);
+    expect(parsed.selectedIds).toEqual([categories[0].id]);
   });
 });

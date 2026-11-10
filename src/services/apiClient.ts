@@ -63,11 +63,28 @@ export interface MockExamQuestionOutcome {
   acceptableAnswers: string[] | null;
 }
 
+export interface MockExamFocusSuggestion {
+  id: string;
+  label: string;
+}
+
 export interface MockExamReview {
   report: string;
   feedback: MockExamFeedback;
   scorecard: MockExamReviewScorecard;
   questionOutcomes: MockExamQuestionOutcome[];
+  suggestedFocus: MockExamFocusSuggestion[];
+}
+
+export type ExamIntroKind = 'first-time' | 'returning' | 'resume';
+
+/** Deterministic Standard Interview opening copy; never spoken before Ready. */
+export interface ExamIntro {
+  kind: ExamIntroKind;
+  icebreaker: string;
+  facts: string;
+  rules: string[];
+  readyPrompt: string;
 }
 
 /**
@@ -214,6 +231,7 @@ export class ApiClient {
     examReviewId: string | null;
     examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
     modeGoalPending: boolean;
+    examIntro: ExamIntro | null;
   }> {
     let response: Response;
     try {
@@ -259,6 +277,7 @@ export class ApiClient {
       examReviewId?: unknown;
       examStage?: unknown;
       modeGoalPending?: unknown;
+      examIntro?: unknown;
       error?: string;
     }
 
@@ -314,6 +333,7 @@ export class ApiClient {
         examReviewId: typeof parsedPayload.examReviewId === 'string' ? parsedPayload.examReviewId : null,
         examStage: parsedPayload.examStage === 'reading' || parsedPayload.examStage === 'writing' || parsedPayload.examStage === 'complete' || parsedPayload.examStage === 'none' ? parsedPayload.examStage : null,
         modeGoalPending: parsedPayload.modeGoalPending === true,
+        examIntro: parseExamIntro(parsedPayload.examIntro),
       };
     } catch (error) {
       logger.error('[ApiClient] Codec Exception decoding audio stream:', undefined, { error: String(error) });
@@ -326,8 +346,8 @@ export class ApiClient {
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     currentItemId?: string | null,
-    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null },
-    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null } = {}
+    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean },
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -342,6 +362,7 @@ export class ApiClient {
     examReviewId: string | null;
     examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
     modeGoalPending: boolean;
+    examIntro: ExamIntro | null;
   }> {
     let confirmationRetry: boolean | undefined;
     let effectiveOptions = options;
@@ -385,6 +406,8 @@ export class ApiClient {
           ...(effectiveOptions.examAction ? { examAction: effectiveOptions.examAction } : {}),
           ...(effectiveOptions.inputMethod ? { inputMethod: effectiveOptions.inputMethod } : {}),
           ...(effectiveOptions.requestId ? { requestId: effectiveOptions.requestId } : {}),
+          ...(effectiveOptions.focusAreaIds ? { focusAreaIds: effectiveOptions.focusAreaIds } : {}),
+          ...(effectiveOptions.allFocusAreas ? { allFocusAreas: true } : {}),
           ...(effectiveOptions.postExamId ? { postExamConversation: true, postExamId: effectiveOptions.postExamId } : {}),
           ...(effectiveOptions.openingResponse ? { openingResponse: true } : {}),
           ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {})
@@ -432,6 +455,7 @@ export class ApiClient {
       },
       scorecard: data.scorecard,
       questionOutcomes: data.questionOutcomes,
+      suggestedFocus: parseFocusSuggestions(data.suggestedFocus),
     };
   }
 
@@ -469,7 +493,7 @@ export class ApiClient {
   /** Select the current question; Standard Interview returns a text-only opening response. */
   async postSessionStart(
     sessionId?: string | null,
-    options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examAction?: MockExamAction } = {}
+    options: { headers?: Record<string, string>; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice' } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -483,6 +507,7 @@ export class ApiClient {
     examReport: string | null;
     examReviewId: string | null;
     examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
+    examIntro: ExamIntro | null;
   }> {
     logger.info('[ApiClient] Dispatching postSessionStart request:', { sessionId, voiceId: options.voiceId });
     return this.sendTranscriptRequest({
@@ -493,6 +518,7 @@ export class ApiClient {
       testVersion: options.testVersion ?? '2020',
       includeEnglishSimulation: options.includeEnglishSimulation ?? false,
       ...(options.examAction ? { examAction: options.examAction } : {}),
+      ...(options.inputMethod ? { inputMethod: options.inputMethod } : {}),
       ...(options.voiceId ? { voiceId: options.voiceId } : {})
     }, options);
   }
@@ -606,6 +632,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry): entry is string => typeof entry === 'string');
+}
+
+function parseExamIntro(value: unknown): ExamIntro | null {
+  if (!isRecord(value)
+    || (value.kind !== 'first-time' && value.kind !== 'returning' && value.kind !== 'resume')
+    || typeof value.icebreaker !== 'string'
+    || typeof value.facts !== 'string'
+    || typeof value.readyPrompt !== 'string'
+    || !isStringArray(value.rules)) {
+    return null;
+  }
+  return {
+    kind: value.kind,
+    icebreaker: value.icebreaker,
+    facts: value.facts,
+    rules: value.rules,
+    readyPrompt: value.readyPrompt,
+  };
+}
+
+function parseFocusSuggestions(value: unknown): MockExamFocusSuggestion[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is MockExamFocusSuggestion => isRecord(entry)
+      && typeof entry.id === 'string'
+      && typeof entry.label === 'string')
+    .slice(0, 3);
 }
 
 function isMockExamReviewScorecard(value: unknown): value is MockExamReviewScorecard {

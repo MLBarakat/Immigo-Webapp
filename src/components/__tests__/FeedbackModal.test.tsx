@@ -21,6 +21,10 @@ const review: MockExamReview = {
     { question: 'What are the two parts of the U.S. Congress?', verdict: 'correct', acceptableAnswers: null },
     { question: 'What is the supreme law of the land?', verdict: 'incorrect', acceptableAnswers: ['The Constitution'] },
   ],
+  suggestedFocus: [
+    { id: 'rights-and-responsibilities', label: 'Rights and Responsibilities' },
+    { id: 'geography', label: 'Geography' },
+  ],
 };
 
 const makeDecision = (
@@ -50,6 +54,14 @@ const makeProps = () => ({
   onRetry: vi.fn(),
 });
 
+function chooseFocus(name: string) {
+  fireEvent.focus(screen.getByRole('combobox'));
+  const option = screen.getByRole('option', { name });
+  const button = option.querySelector('button');
+  if (!button) throw new Error(`Option "${name}" has no button`);
+  fireEvent.click(button);
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -75,32 +87,53 @@ describe('FeedbackModal', () => {
     expect(screen.getByText('Good recall of the three branches')).toBeDefined();
   });
 
-  it('requires a focus selection before saving a Practice decision', async () => {
+  it('says English was not administered when a civics fail skipped it', () => {
+    const notAdministeredReview: MockExamReview = {
+      ...review,
+      scorecard: {
+        ...review.scorecard,
+        civics: { correct: 5, incorrect: 5, total: 10, accuracyPercent: 50 },
+        english: { included: true, readingPassed: null, writingPassed: null },
+      },
+    };
+    render(<FeedbackModal {...makeProps()} review={notAdministeredReview} />);
+
+    expect(screen.getByText('Reading practice: not administered')).toBeDefined();
+    expect(screen.getByText('Writing practice: not administered')).toBeDefined();
+  });
+
+  it('offers the suggested focus without applying it until the learner asks', () => {
     const props = makeProps();
     render(<FeedbackModal {...props} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Practice a focus/ }));
-    const saveButton = screen.getByRole('button', { name: 'Save my choice' }) as HTMLButtonElement;
-    expect(saveButton.disabled).toBe(true);
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Principles of American Democracy' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: 'System of Government' }));
-    expect(saveButton.disabled).toBe(false);
-    fireEvent.click(saveButton);
+    expect(screen.getByText('Suggested focus')).toBeDefined();
+    expect(screen.getByText('Rights and Responsibilities')).toBeDefined();
+    expect(screen.getByRole('combobox')).toBeDefined();
+    expect(props.onSaveDecision).not.toHaveBeenCalled();
 
-    await waitFor(() => {
+    fireEvent.click(screen.getByRole('button', { name: 'Use this focus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    return waitFor(() => {
       expect(props.onSaveDecision).toHaveBeenCalledWith(
         'practice',
-        'Principles of American Democracy; System of Government',
+        'Rights and Responsibilities; Geography',
       );
     });
-    expect(props.onContinueDecision).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Continue in Practice Mode' }));
+  it('defaults to All focus areas so the report has a complete goal', async () => {
+    const props = makeProps();
+    render(<FeedbackModal {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Study a focus/ }));
+    expect(screen.getByText('All focus areas')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
     await waitFor(() => {
-      expect(props.onContinueDecision).toHaveBeenCalledWith(
-        makeDecision('practice', 'Principles of American Democracy; System of Government'),
-      );
+      expect(props.onSaveDecision).toHaveBeenCalledWith('study', 'All focus areas');
     });
   });
 
@@ -115,17 +148,18 @@ describe('FeedbackModal', () => {
       'Rights and Responsibilities',
       'Colonial Period and Independence',
     ];
-    fireEvent.click(screen.getByRole('checkbox', { name: categories[0] }));
-    fireEvent.click(screen.getByRole('checkbox', { name: categories[1] }));
-    fireEvent.click(screen.getByRole('checkbox', { name: categories[2] }));
-    expect(
-      (screen.getByRole('checkbox', { name: categories[3] }) as HTMLInputElement).disabled,
-    ).toBe(true);
+    chooseFocus(categories[0]);
+    chooseFocus(categories[1]);
+    chooseFocus(categories[2]);
+    fireEvent.focus(screen.getByRole('combobox'));
+    expect(screen.getByText('3 of 3 selected')).toBeDefined();
+    const blocked = screen.getByRole('option', { name: categories[3] }).querySelector('button');
+    expect(blocked?.disabled).toBe(true);
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Other focus' }), {
       target: { value: 'Local government' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save my choice' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
       expect(props.onSaveDecision).toHaveBeenCalledWith(
@@ -133,6 +167,28 @@ describe('FeedbackModal', () => {
         `${categories[0]}; ${categories[1]}; ${categories[2]}; Local government`,
       );
     });
+  });
+
+  it('returns to the choice cards with Back and discards unsaved focus edits', () => {
+    const props = makeProps();
+    render(<FeedbackModal {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Practice a focus/ }));
+    chooseFocus('Symbols');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Other focus' }), {
+      target: { value: 'Neighbour practice' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.getByRole('button', { name: /Practice a focus/ })).toBeDefined();
+    expect(props.onSaveDecision).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Practice a focus/ }));
+    expect(screen.getByText('All focus areas')).toBeDefined();
+    expect(
+      (screen.getByRole('textbox', { name: 'Other focus' }) as HTMLTextAreaElement).value,
+    ).toBe('');
   });
 
   it('does not offer question review or the detailed report from the scorecard', () => {
