@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   state: {
     exam: null as Record<string, unknown> | null,
+    previousExam: null as Record<string, unknown> | null,
     priorEnglishRequest: null as Record<string, unknown> | null,
     answers: [] as Array<{ item_id: string; verdict: string }>,
-    gradedAnswers: [] as Array<{ verdict: string }>,
+    gradedAnswers: [] as Array<{ item_id?: string; verdict: string }>,
     sessions: [] as Array<{ id: string; local_date?: string }>,
+    sessionRow: null as Record<string, unknown> | null,
     settings: null as Record<string, unknown> | null,
     updates: [] as Array<{
       table: string;
@@ -40,6 +42,7 @@ vi.mock('@supabase/supabase-js', () => ({
 
 import { handler } from '../handler';
 import { allItems, getFirstQuestion, getStudyCategoryTitle } from '../turn/bank';
+import { focusedItems, normalizeFocusCategoryId } from '../turn/focus';
 import { pickEnglishExercisePrompts } from '../english-exercises';
 import { ApiClient } from '../../../../src/services/apiClient';
 
@@ -74,6 +77,7 @@ function examRow(overrides: Record<string, unknown> = {}): Record<string, unknow
 function makeQuery(table: string) {
   const query: Record<string, unknown> = {};
   const filters: Array<[string, unknown]> = [];
+  let wantsReportedExam = false;
   for (const method of ['select', 'neq', 'order', 'limit']) {
     query[method] = vi.fn(() => query);
   }
@@ -83,6 +87,13 @@ function makeQuery(table: string) {
       return query;
     });
   }
+  // The selector history query is the only mock_exams read that filters out
+  // rows without a report; use it to distinguish the previous completed exam
+  // from the current in-progress/new one.
+  query.not = vi.fn(() => {
+    if (table === 'mock_exams') wantsReportedExam = true;
+    return query;
+  });
   query.insert = vi.fn((payload: Record<string, unknown>) => {
     mocks.state.updates.push({ table, payload, filters: [...filters] });
     if (table === 'mock_exam_answers') {
@@ -101,17 +112,29 @@ function makeQuery(table: string) {
     return query;
   });
   const resolveRow = () => {
-    if (table === 'mock_exams') return { data: mocks.state.exam, error: null };
+    if (table === 'mock_exams') {
+      return { data: wantsReportedExam ? mocks.state.previousExam : mocks.state.exam, error: null };
+    }
     if (table === 'mock_exam_answers') return { data: mocks.state.answers, error: null };
     if (table === 'mock_exam_english_answers' && mocks.state.priorEnglishRequest) {
       return { data: mocks.state.priorEnglishRequest, error: null };
     }
     if (table === 'graded_answers') return { data: mocks.state.gradedAnswers, error: null };
-    if (table === 'sessions') return { data: mocks.state.sessions, error: null };
+    if (table === 'sessions') {
+      return { data: mocks.state.sessionRow ?? mocks.state.sessions, error: null };
+    }
     if (table === 'user_settings') return { data: mocks.state.settings, error: null };
     return { data: null, error: null };
   };
-  query.maybeSingle = vi.fn(async () => resolveRow());
+  query.maybeSingle = vi.fn(async () => {
+    if (table === 'graded_answers') {
+      return { data: mocks.state.gradedAnswers[0] ?? null, error: null };
+    }
+    if (table === 'sessions' && mocks.state.sessionRow) {
+      return { data: mocks.state.sessionRow, error: null };
+    }
+    return resolveRow();
+  });
   query.single = vi.fn(async () => resolveRow());
   // Supabase builders are thenable for queries used without .maybeSingle().
   query.then = (onFulfilled: (value: unknown) => unknown) => Promise.resolve(resolveRow()).then(onFulfilled);
@@ -194,6 +217,42 @@ function progressEvent(overrides: Record<string, unknown> = {}): Parameters<type
   } as unknown as Parameters<typeof handler>[0];
 }
 
+function modeTransitionEvent(
+  simulationMode: 'practice' | 'study' | 'standard',
+  overrides: Record<string, unknown> = {},
+): Parameters<typeof handler>[0] {
+  const event = transcribeEvent();
+  return {
+    ...event,
+    body: JSON.stringify({
+      modeTransition: true,
+      sessionId: 'session-1',
+      currentItemId: null,
+      simulationMode,
+      testVersion: '2020',
+      preferredLanguage: 'en-US',
+      ...overrides,
+    }),
+  } as unknown as Parameters<typeof handler>[0];
+}
+
+function modeGoalResponseEvent(overrides: Record<string, unknown> = {}): Parameters<typeof handler>[0] {
+  const event = transcribeEvent();
+  return {
+    ...event,
+    body: JSON.stringify({
+      transcript: 'Geography',
+      sessionId: 'session-1',
+      currentItemId: null,
+      simulationMode: 'practice',
+      testVersion: '2020',
+      preferredLanguage: 'en-US',
+      modeGoalResponse: true,
+      ...overrides,
+    }),
+  } as unknown as Parameters<typeof handler>[0];
+}
+
 function bedrockText(text: string) {
   return {
     body: new TextEncoder().encode(JSON.stringify({
@@ -208,10 +267,12 @@ describe('transcript handler — mock exam civics phase routing', () => {
     process.env.SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_ANON_KEY = 'anon-key';
     mocks.state.exam = examRow();
+    mocks.state.previousExam = null;
     mocks.state.priorEnglishRequest = null;
     mocks.state.answers = [];
     mocks.state.gradedAnswers = [];
     mocks.state.sessions = [];
+    mocks.state.sessionRow = null;
     mocks.state.settings = null;
     mocks.state.updates = [];
     mocks.getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
@@ -269,6 +330,112 @@ describe('transcript handler — mock exam civics phase routing', () => {
     }));
   });
 
+  it('appends exactly one dynamically chosen question to the asked list per turn', async () => {
+    mocks.state.exam = examRow({
+      question_ids: [FIRST_QUESTION.id],
+      current_index: 0,
+    });
+    mocks.bedrockSend.mockResolvedValue(bedrockText(JSON.stringify({
+      intent: 'answer',
+      targetItemId: FIRST_QUESTION.id,
+      grade: { verdict: 'correct', matchedAnswer: 'Republic' },
+      reply: 'That is correct.',
+    })));
+
+    const event = transcribeEvent();
+    const request = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    request.transcript = 'Republic';
+    const response = await handler({ ...event, body: JSON.stringify(request) });
+
+    expect(response.statusCode).toBe(200);
+    const update = mocks.state.updates.find(
+      entry => entry.table === 'mock_exams'
+        && Array.isArray(entry.payload.question_ids)
+        && entry.payload.current_index === 1,
+    );
+    expect(update).toBeDefined();
+    const questionIds = update?.payload.question_ids as string[];
+    expect(questionIds).toHaveLength(2);
+    expect(questionIds[0]).toBe(FIRST_QUESTION.id);
+    expect(questionIds[1]).not.toBe(FIRST_QUESTION.id);
+  });
+
+  it('starts English reading only after the civics pass threshold is reached', async () => {
+    const readingPromptIds = pickEnglishExercisePrompts('reading');
+    mocks.state.exam = examRow({
+      question_ids: [FIRST_QUESTION.id],
+      current_index: 0,
+      correct_count: 11,
+      incorrect_count: 0,
+      include_english_simulation: true,
+      reading_prompt_ids: readingPromptIds,
+    });
+    mocks.bedrockSend.mockResolvedValue(bedrockText(JSON.stringify({
+      intent: 'answer',
+      targetItemId: FIRST_QUESTION.id,
+      grade: { verdict: 'correct', matchedAnswer: 'Republic' },
+      reply: 'That is correct.',
+    })));
+
+    const event = transcribeEvent();
+    const request = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    request.transcript = 'Republic';
+    const response = await handler({ ...event, body: JSON.stringify(request) });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      examCompleted: boolean;
+      examStage: string | null;
+      nextQuestion: string | null;
+    };
+    expect(body.examCompleted).toBe(false);
+    expect(body.examStage).toBe('reading');
+    expect(body.nextQuestion).toBeTruthy();
+    expect(mocks.state.updates).toContainEqual(expect.objectContaining({
+      table: 'mock_exams',
+      payload: expect.objectContaining({ english_stage: 'reading' }),
+    }));
+  });
+
+  it('does not administer English when civics ends at the fail threshold', async () => {
+    const readingPromptIds = pickEnglishExercisePrompts('reading');
+    mocks.state.exam = examRow({
+      question_ids: [FIRST_QUESTION.id],
+      current_index: 0,
+      correct_count: 0,
+      incorrect_count: 8,
+      include_english_simulation: true,
+      reading_prompt_ids: readingPromptIds,
+    });
+    mocks.bedrockSend.mockResolvedValue(bedrockText(JSON.stringify({
+      intent: 'answer',
+      targetItemId: FIRST_QUESTION.id,
+      grade: { verdict: 'incorrect', matchedAnswer: null },
+      reply: 'Thanks for trying.',
+    })));
+
+    const event = transcribeEvent();
+    const request = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    request.transcript = 'I am not sure';
+    const response = await handler({ ...event, body: JSON.stringify(request) });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      examCompleted: boolean;
+      examReviewId: string | null;
+      nextItemId: string | null;
+      assistantSegments: string[];
+    };
+    expect(body.examCompleted).toBe(true);
+    expect(body.examReviewId).toBe(EXAM_ID);
+    expect(body.nextItemId).toBeNull();
+    expect(body.assistantSegments.join(' ')).not.toMatch(/English reading/i);
+    expect(mocks.state.updates).not.toContainEqual(expect.objectContaining({
+      table: 'mock_exams',
+      payload: expect.objectContaining({ english_stage: 'reading' }),
+    }));
+  });
+
   it('still routes to the English exercise path while the exam is in stage=reading', async () => {
     const readingPromptId = pickEnglishExercisePrompts('reading')[0];
     mocks.state.exam = examRow({
@@ -295,7 +462,7 @@ describe('transcript handler — mock exam civics phase routing', () => {
   });
 
   it.each(['new', 'resume'] as const)(
-    'returns an immediate text-only Standard Interview response for the %s action',
+    'shows the first-time rules card and waits for Ready for the %s action',
     async (examAction) => {
       const response = await handler(standardInterviewStartEvent(examAction));
 
@@ -305,19 +472,111 @@ describe('transcript handler — mock exam civics phase routing', () => {
         audioData: string;
         assistantSegments: string[];
         nextItemId: string | null;
+        examIntro: { kind: string; icebreaker: string; facts: string; readyPrompt: string } | null;
       };
-      expect(body.responseText).toContain(FIRST_QUESTION.question);
-      expect(body.responseText).toContain(
-        examAction === 'new'
-          ? "Let's begin your Standard Interview."
-          : "Let's continue your Standard Interview from where you left off."
-      );
+      expect(body.examIntro?.kind).toBe('first-time');
+      expect(body.responseText).toContain('up to 20 civics questions');
+      expect(body.responseText).toContain('You pass with 12 correct answers');
+      expect(body.responseText).toContain('ends early at 12 correct or 9 incorrect');
+      expect(body.responseText).toContain('nine USCIS civics topics');
+      expect(body.responseText).toContain('When you are ready, choose Ready.');
+      expect(body.responseText).not.toContain(FIRST_QUESTION.question);
+      expect(body.nextItemId).toBeNull();
+      expect(body.assistantSegments).toHaveLength(4);
+      expect(body.assistantSegments[0]).toBe(body.examIntro?.icebreaker);
       expect(body.audioData).toBe('');
-      expect(body.assistantSegments).toEqual([body.responseText]);
-      expect(body.nextItemId).toBe(FIRST_QUESTION.id);
       expect(mocks.pollySend).not.toHaveBeenCalled();
     }
   );
+
+  it('uses a deterministic, digit-free icebreaker when the model is unavailable', async () => {
+    const response = await handler(standardInterviewStartEvent('new'));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      examIntro: { kind: string; icebreaker: string } | null;
+    };
+    expect(body.examIntro?.icebreaker).toBe(
+      "I'm glad you're here. Let's get comfortable and begin your practice interview."
+    );
+    expect(body.examIntro?.icebreaker).not.toMatch(/\d/);
+  });
+
+  it('summarises the last completed interview before asking for Ready', async () => {
+    mocks.state.previousExam = examRow({
+      id: '22222222-2222-4222-8222-222222222222',
+      status: 'completed',
+      correct_count: 14,
+      incorrect_count: 3,
+      question_ids: allItems('2020').slice(0, 17).map(item => item.id),
+      report_markdown: '17 civics answers were graded.',
+    });
+
+    const response = await handler(standardInterviewStartEvent('new'));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      responseText: string;
+      nextItemId: string | null;
+      examIntro: { kind: string; facts: string } | null;
+    };
+    expect(body.examIntro?.kind).toBe('returning');
+    expect(body.responseText).toContain('Last time you answered 14 correctly and 3 incorrectly (17 graded answers).');
+    expect(body.responseText).toContain('You passed that practice interview.');
+    expect(body.responseText).toContain('It ended early when a pass or fail threshold was reached.');
+    expect(body.responseText).toContain('When you are ready, choose Ready.');
+    expect(body.responseText).not.toContain('up to 20 civics questions');
+    expect(body.nextItemId).toBeNull();
+  });
+
+  it('resumes a mid-interview attempt at its current question', async () => {
+    const items = allItems('2020');
+    mocks.state.exam = examRow({
+      question_ids: [items[0].id, items[1].id],
+      current_index: 1,
+      correct_count: 2,
+      incorrect_count: 1,
+    });
+
+    const response = await handler(standardInterviewStartEvent('resume'));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      responseText: string;
+      nextItemId: string | null;
+      examIntro: { kind: string } | null;
+    };
+    expect(body.examIntro?.kind).toBe('resume');
+    expect(body.responseText).toContain('You have answered 3 questions: 2 correct and 1 incorrect.');
+    expect(body.nextItemId).toBe(items[1].id);
+    expect(body.responseText).toContain(items[1].question);
+  });
+
+  it('asks the first question only after the Ready action', async () => {
+    const response = await handler({
+      ...transcribeEvent(),
+      body: JSON.stringify({
+        transcript: 'Ready',
+        openingResponse: true,
+        sessionId: 'session-1',
+        simulationMode: 'standard',
+        testVersion: '2020',
+        examRunId: EXAM_ID,
+        preferredLanguage: 'en-US',
+      }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      responseText: string;
+      assistantSegments: string[];
+      nextItemId: string | null;
+    };
+    expect(body.responseText).toBe(FIRST_QUESTION.question);
+    expect(body.assistantSegments).toEqual([FIRST_QUESTION.question]);
+    expect(body.nextItemId).toBe(FIRST_QUESTION.id);
+    expect(mocks.bedrockSend).not.toHaveBeenCalled();
+  });
 
   it('closes every previously unfinished Standard Interview when a new one starts', async () => {
     const response = await handler(standardInterviewStartEvent('new'));
@@ -389,8 +648,8 @@ describe('transcript handler — mock exam civics phase routing', () => {
 
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body) as { responseText: string };
-    expect(body.responseText).toContain('4 questions into your 10-question Standard Interview');
-    expect(body.responseText).toContain('6 still ahead');
+    expect(body.responseText).toContain('4 questions into your 20-question Standard Interview');
+    expect(body.responseText).toContain('16 still ahead');
     expect(body.responseText).toMatch(/continue/i);
     expect(body.responseText).not.toMatch(/pass|fail/i);
   });
@@ -432,16 +691,18 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(body.responseText).toMatch(/continue/i);
   });
 
-  it('returns a factual scorecard and question outcomes with the generated interview review', async () => {    mocks.state.exam = examRow({
+  it('returns a factual scorecard and question outcomes with the generated interview review', async () => {
+    const items = allItems('2020').slice(0, 12);
+    mocks.state.exam = examRow({
       status: 'completed',
-      correct_count: 1,
+      correct_count: 12,
       incorrect_count: 0,
       include_english_simulation: true,
       reading_passed: true,
       writing_passed: false,
-      report_markdown: '1 civics answer was correct.',
+      report_markdown: '12 civics answers were correct.',
     });
-    mocks.state.answers = [{ item_id: FIRST_QUESTION.id, verdict: 'correct' }];
+    mocks.state.answers = items.map(item => ({ item_id: item.id, verdict: 'correct' }));
 
     const response = await handler(examReviewEvent());
 
@@ -457,17 +718,77 @@ describe('transcript handler — mock exam civics phase routing', () => {
         verdict: string;
         acceptableAnswers: string[] | null;
       }>;
+      suggestedFocus: Array<{ id: string; label: string }>;
     };
     expect(body.scorecard).toEqual({
       testVersion: '2020',
-      civics: { correct: 1, incorrect: 0, total: 1, accuracyPercent: 100 },
+      civics: { correct: 12, incorrect: 0, total: 12, accuracyPercent: 100 },
       english: { included: true, readingPassed: true, writingPassed: false },
     });
-    expect(body.questionOutcomes).toEqual([{
-      question: FIRST_QUESTION.question,
+    expect(body.questionOutcomes).toHaveLength(12);
+    expect(body.questionOutcomes[0]).toEqual({
+      question: items[0].question,
       verdict: 'correct',
-      acceptableAnswers: FIRST_QUESTION.kind === 'static' ? FIRST_QUESTION.acceptableAnswers : null,
-    }]);
+      acceptableAnswers: items[0].kind === 'static' ? items[0].acceptableAnswers : null,
+    });
+    expect(body.suggestedFocus).toEqual([]);
+  });
+
+  it('suggests the weakest civics categories in the interview review', async () => {
+    mocks.state.exam = examRow({
+      status: 'completed',
+      correct_count: 4,
+      incorrect_count: 5,
+      report_markdown: 'Nine civics answers were graded.',
+    });
+    // Hit one category twice and another once so accuracy, then volume,
+    // decides the order.
+    mocks.state.answers = [
+      { item_id: 'q-001', verdict: 'incorrect' },
+      { item_id: 'q-002', verdict: 'incorrect' },
+      { item_id: 'q-063', verdict: 'incorrect' },
+      { item_id: 'q-064', verdict: 'correct' },
+    ];
+
+    const response = await handler(examReviewEvent());
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      suggestedFocus: Array<{ id: string; label: string }>;
+    };
+    expect(body.suggestedFocus.map(entry => entry.id).slice(0, 2)).toEqual([
+      'principles-of-american-democracy',
+      'rights-and-responsibilities',
+    ]);
+  });
+
+  it('reports English as not administered when civics ends at the fail threshold', async () => {
+    const items = allItems('2020').slice(0, 9);
+    mocks.state.exam = examRow({
+      status: 'completed',
+      correct_count: 0,
+      incorrect_count: 9,
+      include_english_simulation: true,
+      reading_passed: null,
+      writing_passed: null,
+      report_markdown: 'Civics ended at the fail threshold.',
+    });
+    mocks.state.answers = items.map(item => ({ item_id: item.id, verdict: 'incorrect' }));
+
+    const response = await handler(examReviewEvent());
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      scorecard: {
+        civics: { correct: number; incorrect: number; total: number; accuracyPercent: number };
+        english: { included: boolean; readingPassed: boolean | null; writingPassed: boolean | null };
+      };
+    };
+    expect(body.scorecard.english).toEqual({
+      included: true,
+      readingPassed: null,
+      writingPassed: null,
+    });
   });
 
   it('synthesizes a validated speech-only progress summary without invoking grading or Bedrock', async () => {
@@ -536,5 +857,156 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(new Uint8Array(audio)).toEqual(new Uint8Array([1, 2, 3]));
     expect(mocks.pollySend).toHaveBeenCalledOnce();
     expect(mocks.bedrockSend).not.toHaveBeenCalled();
+  });
+
+  it('starts first-time Practice onboarding with the account goal and no first question', async () => {
+    mocks.state.sessionRow = {
+      id: 'session-1',
+      current_goal: null,
+      mode_goal_pending: false,
+      current_item_id: null,
+    };
+    mocks.state.settings = { learning_goal: 'Symbols' };
+
+    const response = await handler(modeTransitionEvent('practice'));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      responseText: string;
+      nextItemId: string | null;
+      modeGoalPending: boolean;
+    };
+    expect(body.responseText).toContain('Practice Mode is ready');
+    expect(body.responseText).toContain('Choose one focus area');
+    expect(body.nextItemId).toBeNull();
+    expect(body.modeGoalPending).toBe(true);
+    expect(mocks.state.updates).toContainEqual(expect.objectContaining({
+      table: 'sessions',
+      payload: expect.objectContaining({
+        mode_goal_pending: true,
+        current_goal: 'Symbols',
+      }),
+    }));
+  });
+
+  it('shows returning Practice counts from prior graded answers before the focus card', async () => {
+    const item = allItems('2020')[0];
+    mocks.state.sessionRow = {
+      id: 'session-1',
+      current_goal: 'All focus areas',
+      mode_goal_pending: false,
+      current_item_id: null,
+    };
+    mocks.state.gradedAnswers = [
+      { item_id: item.id, verdict: 'correct' },
+      { item_id: item.id, verdict: 'correct' },
+      { item_id: item.id, verdict: 'correct' },
+      { item_id: item.id, verdict: 'correct' },
+    ];
+
+    const response = await handler(modeTransitionEvent('practice'));
+
+    const body = JSON.parse(response.body) as {
+      responseText: string;
+      nextItemId: string | null;
+      modeGoalPending: boolean;
+    };
+    expect(body.responseText).toContain('Practice Mode is ready');
+    expect(body.responseText).toContain('Across the 2020 question bank');
+    expect(body.responseText).toContain('questions are mastered');
+    expect(body.responseText).toContain('You are currently covering All focus areas');
+    expect(body.nextItemId).toBeNull();
+    expect(body.modeGoalPending).toBe(true);
+  });
+
+  it('starts the first focused Practice question only after the focus submission', async () => {
+    mocks.state.sessionRow = {
+      id: 'session-1',
+      current_goal: 'All focus areas',
+      mode_goal_pending: true,
+      current_item_id: null,
+    };
+
+    const response = await handler(modeGoalResponseEvent({
+      focusAreaIds: ['geography'],
+      allFocusAreas: false,
+    }));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      responseText: string;
+      nextItemId: string | null;
+      modeGoalPending: boolean;
+    };
+    const geography = focusedItems('2020', ['geography']).map(entry => entry.id);
+    expect(body.responseText).toContain('Great. We will use Geography in Practice Mode.');
+    expect(body.nextItemId).not.toBeNull();
+    expect(geography).toContain(body.nextItemId);
+    expect(body.modeGoalPending).toBe(false);
+    expect(mocks.state.updates).toContainEqual(expect.objectContaining({
+      table: 'sessions',
+      payload: expect.objectContaining({
+        current_goal: 'Geography',
+        mode_goal_pending: false,
+      }),
+    }));
+  });
+
+  it('announces a new focus pass after every item was asked once', async () => {
+    const pool = focusedItems('2020', ['geography']);
+    mocks.state.sessionRow = {
+      id: 'session-1',
+      current_goal: 'Geography',
+      mode_goal_pending: true,
+      current_item_id: null,
+    };
+    mocks.state.gradedAnswers = pool.map(item => ({ item_id: item.id, verdict: 'correct' }));
+
+    const response = await handler(modeGoalResponseEvent({
+      focusAreaIds: ['geography'],
+      allFocusAreas: false,
+    }));
+
+    const body = JSON.parse(response.body) as { responseText: string; nextItemId: string | null };
+    expect(body.responseText).toContain('You have completed a full pass through this focus');
+    expect(pool.map(item => item.id)).toContain(body.nextItemId);
+  });
+
+  it('normalises 2008 category aliases before persisting the focus', async () => {
+    mocks.state.sessionRow = {
+      id: 'session-1',
+      current_goal: 'All focus areas',
+      mode_goal_pending: true,
+      current_item_id: null,
+    };
+
+    const response = await handler(modeGoalResponseEvent({
+      simulationMode: 'study',
+      testVersion: '2008',
+      focusAreaIds: ['the-1800s'],
+      allFocusAreas: false,
+    }));
+
+    const body = JSON.parse(response.body) as { nextItemId: string | null };
+    const selected = allItems('2008').find(item => item.id === body.nextItemId);
+    expect(normalizeFocusCategoryId(selected?.studyCategoryId)).toBe('1800s');
+    expect(mocks.state.updates).toContainEqual(expect.objectContaining({
+      table: 'sessions',
+      payload: expect.objectContaining({
+        current_goal: 'The 1800s',
+        mode_goal_pending: false,
+      }),
+    }));
+  });
+
+  it('rejects more than three focus categories', async () => {
+    const response = await handler(modeGoalResponseEvent({
+      focusAreaIds: ['geography', 'symbols', 'holidays', '1800s'],
+      allFocusAreas: false,
+    }));
+
+    expect(response.statusCode).toBe(400);
+    const body = JSON.parse(response.body) as { error: string };
+    expect(body.error).toContain('Invalid focus area selection');
   });
 });

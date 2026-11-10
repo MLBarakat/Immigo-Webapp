@@ -55,6 +55,18 @@ const CATEGORY_TITLES: Record<string, CategoryTitles> = {
 
 export const FOCUS_CATEGORY_IDS = Object.keys(CATEGORY_TITLES);
 
+/**
+ * Stored verbatim in `user_settings.learning_goal` when the learner chooses
+ * every category. It is deliberately human-readable because the column is a
+ * plain text note and older clients may display it as-is.
+ */
+export const ALL_FOCUS_AREAS = 'All focus areas';
+export const MAX_FOCUS_CATEGORIES = 3;
+
+export function isAllFocusAreas(value: string | null | undefined): boolean {
+  return normalize(value ?? '') === normalize(ALL_FOCUS_AREAS);
+}
+
 export function getFocusCategories(version: FocusTestVersion): FocusCategory[] {
   return FOCUS_CATEGORY_IDS.map(id => ({
     id,
@@ -80,6 +92,7 @@ function findCategoryId(chunk: string): string | null {
 export interface ParsedLearningGoal {
   selectedIds: string[];
   other: string;
+  allFocusAreas: boolean;
 }
 
 /**
@@ -91,6 +104,7 @@ export function parseLearningGoal(
   value: string | null | undefined,
   _version: FocusTestVersion,
 ): ParsedLearningGoal {
+  if (isAllFocusAreas(value)) return { selectedIds: [], other: '', allFocusAreas: true };
   const chunks = (value ?? '')
     .split(';')
     .map(chunk => chunk.trim())
@@ -102,7 +116,9 @@ export function parseLearningGoal(
     if (id && !selectedIds.includes(id)) selectedIds.push(id);
     else if (!id) other.push(chunk);
   }
-  return { selectedIds, other: other.join('; ') };
+  // An empty goal means the learner has not narrowed anything yet, so the
+  // selector opens on the same "All focus areas" option that gets stored.
+  return { selectedIds, other: other.join('; '), allFocusAreas: chunks.length === 0 };
 }
 
 /** Saves selected categories using the active bank edition's labels. */
@@ -110,7 +126,9 @@ export function serializeLearningGoal(
   selectedIds: string[],
   other: string,
   version: FocusTestVersion,
+  allFocusAreas = false,
 ): string {
+  if (allFocusAreas) return ALL_FOCUS_AREAS;
   const parts = selectedIds
     .map(id => CATEGORY_TITLES[id]?.[version])
     .filter((label): label is string => Boolean(label));

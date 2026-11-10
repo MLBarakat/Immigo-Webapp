@@ -21,6 +21,12 @@ import {
 } from '../utils/bargeIn';
 import { unlockAudioPlayback, describeAudioEnvironment, acquirePollyPlaybackElement } from '../utils/audioUtils';
 import { tokenizeAssistantReveal } from '../utils/revealTokens';
+import {
+  serializeLearningGoal,
+  type FocusTestVersion,
+} from '../constants/focusCategories';
+import type { FocusAreaSelection } from '../components/FocusAreaCombobox';
+import type { FocusOnboardingState } from '../types/focus';
 
 interface UseConversationManagerProps {
   apiClient: ApiClient | null;
@@ -59,6 +65,8 @@ interface TextModeSegment {
 interface TextModeSegmentQueue {
   timerId: number | null;
   pending: TextModeSegment[];
+  /** Rendered only with the final bubble of the response. */
+  actions?: readonly MessageAction[];
 }
 
 // Text mode has no audio track to pace consecutive bubbles, so each later
@@ -203,6 +211,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const completedExamIdRef = useRef<string | null>(null);
   const nextExamActionRef = useRef<MockExamAction | undefined>(undefined);
   const modeGoalPendingRef = useRef(false);
+  const [focusOnboarding, setFocusOnboarding] = useState<FocusOnboardingState | null>(null);
+  const focusOnboardingRef = useRef<FocusOnboardingState | null>(null);
+  const updateFocusOnboarding = useCallback((next: FocusOnboardingState | null) => {
+    focusOnboardingRef.current = next;
+    setFocusOnboarding(next);
+  }, []);
   const openingResponseRef = useRef(false);
   const reportMilestoneDateRef = useRef(ChatPersistenceService.getSessionDate(accountTimezone || 'UTC'));
   const hydratedHistoryUserIdRef = useRef<string | null>(null);
@@ -291,9 +305,13 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     if (!queue) return;
     if (queue.timerId !== null) window.clearTimeout(queue.timerId);
     textModeSegmentQueueRef.current = null;
-    for (const segment of queue.pending) {
-      dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: segment });
-    }
+    queue.pending.forEach((segment, index) => {
+      const isLast = index === queue.pending.length - 1;
+      dispatch({
+        type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+        payload: { ...segment, ...(isLast && queue.actions?.length ? { actions: queue.actions } : {}) },
+      });
+    });
     finishAssistantTurn();
   }, [dispatch, finishAssistantTurn]);
 
@@ -307,6 +325,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const presentTextModeSegments = useCallback((
     assistantMessageId: string,
     segments: readonly string[],
+    actions?: readonly MessageAction[],
   ) => {
     cancelTextModeSegments();
     const [first, ...rest] = segments;
@@ -315,7 +334,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       return;
     }
 
-    dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId, content: first } });
+    dispatch({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId, content: first, ...(rest.length === 0 && actions?.length ? { actions } : {}) },
+    });
     if (rest.length === 0) {
       finishAssistantTurn();
       return;
@@ -327,6 +349,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         assistantMessageId: `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         content,
       })),
+      actions,
     };
     textModeSegmentQueueRef.current = queue;
 
@@ -339,7 +362,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         return;
       }
 
-      dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: next });
+      dispatch({
+        type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+        payload: { ...next, ...(queue.pending.length === 0 && queue.actions?.length ? { actions: queue.actions } : {}) },
+      });
       if (queue.pending.length === 0) {
         queue.timerId = null;
         textModeSegmentQueueRef.current = null;
@@ -891,6 +917,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       sessionIdRef.current = dailySession.id;
       updateCurrentItemId(dailySession.current_item_id);
       modeGoalPendingRef.current = dailySession.mode_goal_pending;
+      if (dailySession.mode_goal_pending
+        && (dailySession.current_mode === 'practice' || dailySession.current_mode === 'study')) {
+        updateFocusOnboarding({ mode: dailySession.current_mode, submitting: false, error: null });
+      } else {
+        updateFocusOnboarding(null);
+      }
       if (['standard', 'practice', 'study'].includes(dailySession.current_mode)
         && (dailySession.test_version === '2008' || dailySession.test_version === '2020')) {
         setDailySessionSettings({ mode: dailySession.current_mode as SimulationMode, testVersion: dailySession.test_version, includeEnglishSimulation: dailySession.include_english_simulation });
@@ -942,7 +974,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     return () => {
       isMounted = false;
     };
-  }, [userId, accountTimezone, dispatch, updateCurrentItemId]);
+  }, [userId, accountTimezone, dispatch, updateCurrentItemId, updateFocusOnboarding]);
 
   useEffect(() => {
     if (!userId || hydratedHistoryUserIdRef.current !== userId) return;
@@ -1262,6 +1294,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [currentState]);
 
   const sendTextMessage = useCallback(async (text: string, inputMethod: 'text' | 'voice' = 'text') => {
+    // The focus card is a blocking onboarding step. Keyboard, voice, and
+    // programmatic sends stay closed until the learner presses Continue.
+    if (focusOnboardingRef.current) return;
     // Unlock audible playback while still inside the user gesture — play()
     // calls below happen after an async gap where the gesture is long gone.
     // Text-only turns never create audio, so skip the unlock there.
@@ -1378,6 +1413,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           sessionIdRef.current = activeSessionId;
           updateCurrentItemId(dailySession?.current_item_id ?? null);
           modeGoalPendingRef.current = dailySession?.mode_goal_pending ?? false;
+          if (dailySession?.mode_goal_pending
+            && (dailySession.current_mode === 'practice' || dailySession.current_mode === 'study')) {
+            updateFocusOnboarding({ mode: dailySession.current_mode, submitting: false, error: null });
+          }
           dispatch({ type: 'SET_SESSION_ID', payload: activeSessionId });
         }
         if (previousSessionId !== activeSessionId || previousSessionDate !== localDate) {
@@ -1689,7 +1728,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
       releaseAssistantRequestHold();
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, presentTextModeSegments, flushTextModeSegments, generatePeriodicProgressReport, queueProgressSummary, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, flushProgressSummaryBeforeListening, updateCurrentItemId]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, presentTextModeSegments, flushTextModeSegments, generatePeriodicProgressReport, queueProgressSummary, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, flushProgressSummaryBeforeListening, updateCurrentItemId, updateFocusOnboarding]);
 
   const requestSilenceNudge = useCallback(async () => {
     const currentItemId = currentItemIdRef.current;
@@ -2004,14 +2043,24 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         // Text mode never owns the microphone. If the user explicitly started
         // voice during this request, leave that choice alone.
         openingResponseRef.current = false;
+        const displaySegments = res.assistantSegments.length > 0
+          ? res.assistantSegments
+          : [res.responseText];
         if (userId && newSessionId) {
-          void ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', res.responseText);
+          void (async () => {
+            for (const segment of displaySegments) {
+              await ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', segment);
+            }
+          })();
         }
-        dispatch({
-          type: 'ADD_ASSISTANT_MESSAGE',
-          payload: { assistantMessageId: secureAssistantMessageId, content: res.responseText },
-        });
-        finishAssistantTurn();
+        // The Standard intro ends with a Ready action. The first question is
+        // requested only after the learner confirms, never on load.
+        const readyGate = res.examIntro !== null && res.nextItemId === null;
+        presentTextModeSegments(
+          secureAssistantMessageId,
+          displaySegments,
+          readyGate ? [{ kind: 'ready', label: t('workspace.center.ready') }] : undefined,
+        );
         return true;
       }
 
@@ -2024,6 +2073,39 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           ...describeAudioEnvironment(),
         });
         if (activateVoice) await startListeningWithMicGate();
+        return true;
+      }
+
+      if (res.examIntro !== null && res.nextItemId === null) {
+        // Standard Interview rules are text-first. Keep the microphone closed
+        // until the learner chooses Ready, then ask for the first question.
+        const displaySegments = res.assistantSegments.length > 0
+          ? res.assistantSegments
+          : [res.responseText];
+        if (userId && newSessionId) {
+          void (async () => {
+            for (const segment of displaySegments) {
+              await ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', segment);
+            }
+          })();
+        }
+        displaySegments.forEach((content, index) => {
+          dispatch({
+            type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+            payload: {
+              assistantMessageId: index === 0
+                ? secureAssistantMessageId
+                : `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              content,
+              ...(index === displaySegments.length - 1
+                ? { actions: [{ kind: 'ready' as const, label: t('workspace.center.ready') }] }
+                : {}),
+            },
+          });
+        });
+        openingResponseRef.current = false;
+        finishAssistantTurn();
+        dispatch({ type: 'SET_STATUS', payload: 'idle' });
         return true;
       }
 
@@ -2144,7 +2226,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       await startListeningWithMicGate();
       return false;
     }
-  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, stopRecording, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId]);
+  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, stopRecording, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId, presentTextModeSegments, t]);
 
   const terminateSession = useCallback(async () => {
     sessionStartGenerationRef.current += 1;
@@ -2586,8 +2668,13 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       simulationModeRef.current = mode;
       completedExamIdRef.current = null;
       setPostExamId(null);
-      modeGoalPendingRef.current = true;
-      updateCurrentItemId(response.nextItemId ?? currentItemIdRef.current);
+      modeGoalPendingRef.current = response.modeGoalPending;
+      if (response.modeGoalPending && (mode === 'practice' || mode === 'study')) {
+        updateFocusOnboarding({ mode, submitting: false, error: null });
+      } else {
+        updateFocusOnboarding(null);
+      }
+      updateCurrentItemId(response.modeGoalPending ? null : response.nextItemId ?? currentItemIdRef.current);
         const segments = Array.isArray(response.assistantSegments) && response.assistantSegments.length
           ? response.assistantSegments
           : [response.responseText];
@@ -2609,7 +2696,80 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       logger.warn('Could not start the mode goal conversation.', { error: String(error) });
       return false;
     }
-  }, [apiClient, userId, dispatch, updateCurrentItemId]);
+  }, [apiClient, userId, dispatch, updateCurrentItemId, updateFocusOnboarding]);
+
+  const submitFocusOnboarding = useCallback(async (selection: FocusAreaSelection): Promise<boolean> => {
+    const activeMode = focusOnboardingRef.current?.mode;
+    const activeSessionId = sessionIdRef.current || conversationState.sessionId;
+    if (!apiClient || !userId || !activeMode || !activeSessionId) return false;
+    if (focusOnboardingRef.current?.submitting) return false;
+
+    const focusGoal = serializeLearningGoal(
+      selection.selectedIds,
+      '',
+      testVersionRef.current as FocusTestVersion,
+      selection.allFocusAreas,
+    );
+    updateFocusOnboarding({ mode: activeMode, submitting: true, error: null });
+    const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    try {
+      const response = await apiClient.postTranscript(
+        focusGoal,
+        [],
+        activeSessionId,
+        currentItemIdRef.current,
+        {
+          headers: { 'x-correlation-trace-id': traceId },
+          voiceId: voiceIdRef.current ?? undefined,
+          simulationMode: activeMode,
+          preferredLanguage: preferredLanguageRef.current,
+          testVersion: testVersionRef.current,
+          includeEnglishSimulation: includeEnglishSimulationRef.current,
+          modeGoalResponse: true,
+          focusAreaIds: selection.allFocusAreas ? [] : selection.selectedIds,
+          allFocusAreas: selection.allFocusAreas,
+        },
+      );
+
+      modeGoalPendingRef.current = response.modeGoalPending;
+      updateCurrentItemId(response.nextItemId);
+      updateFocusOnboarding(null);
+      if (sessionIdRef.current) {
+        void ChatPersistenceService.saveDailySessionState(sessionIdRef.current, {
+          current_item_id: response.nextItemId,
+          current_mode: activeMode,
+          test_version: testVersionRef.current,
+          include_english_simulation: includeEnglishSimulationRef.current,
+        });
+      }
+
+      const segments = response.assistantSegments.length > 0
+        ? response.assistantSegments
+        : [response.responseText];
+      for (const content of segments) {
+        dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: {
+          assistantMessageId: `focus-onboarding-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          content,
+        } });
+        if (content.trim()) void ChatPersistenceService.persistMessage(activeSessionId, userId, 'assistant', content);
+      }
+      if (voiceSessionRef.current && response.audioData.byteLength > 0) {
+        const url = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
+        const player = acquirePollyPlaybackElement(url);
+        player.onended = () => URL.revokeObjectURL(url);
+        void player.play().catch(() => URL.revokeObjectURL(url));
+      }
+      return true;
+    } catch (error) {
+      logger.warn('Could not submit the Practice/Study focus selection.', { error: String(error) });
+      updateFocusOnboarding({
+        mode: activeMode,
+        submitting: false,
+        error: t('workspace.center.focusOnboarding.error'),
+      });
+      return false;
+    }
+  }, [apiClient, userId, conversationState.sessionId, dispatch, updateCurrentItemId, updateFocusOnboarding, t]);
 
   return {
     ...conversationState,
@@ -2624,6 +2784,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     refreshStandardInterviewLookup,
     startStandardInterview,
     changeMode,
+    focusOnboarding,
+    submitFocusOnboarding,
     isAudioRetryPending,
     currentState,
     interimTranscript: conversationState.interimTranscript || displayTranscript,

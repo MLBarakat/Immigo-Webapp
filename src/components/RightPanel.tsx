@@ -7,9 +7,12 @@ import type { QuestionMastery } from '../services/liveProgressService';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import {
   getFocusCategories,
+  MAX_FOCUS_CATEGORIES,
   parseLearningGoal,
   serializeLearningGoal,
 } from '../constants/focusCategories';
+import { FocusAreaCombobox } from './FocusAreaCombobox';
+import type { FocusAreaSelection } from './FocusAreaCombobox';
 
 export interface LearningGoalUpdates {
   learning_goal?: string | null;
@@ -101,6 +104,7 @@ export function RightPanel({
   const initialGoal = parseLearningGoal(learningGoal, testVersion);
   const [selectedFocusIds, setSelectedFocusIds] = useState<string[]>(initialGoal.selectedIds);
   const [otherFocus, setOtherFocus] = useState(initialGoal.other);
+  const [allFocusAreas, setAllFocusAreas] = useState(initialGoal.allFocusAreas);
   const [weeklyTarget, setWeeklyTarget] = useState(
     weeklyGradedAnswerTarget === null ? '' : String(weeklyGradedAnswerTarget),
   );
@@ -121,6 +125,7 @@ export function RightPanel({
       const parsed = parseLearningGoal(learningGoal, testVersion);
       setSelectedFocusIds(parsed.selectedIds);
       setOtherFocus(parsed.other);
+      setAllFocusAreas(parsed.allFocusAreas);
       setWeeklyTarget(
         weeklyGradedAnswerTarget === null ? '' : String(weeklyGradedAnswerTarget),
       );
@@ -134,7 +139,12 @@ export function RightPanel({
       return;
     }
     const timer = window.setTimeout(() => {
-      const goal = serializeLearningGoal(selectedFocusIds, otherFocus, testVersion).trim();
+      const goal = serializeLearningGoal(
+        selectedFocusIds,
+        otherFocus,
+        testVersion,
+        allFocusAreas,
+      ).trim();
       const parsedTarget = weeklyTarget.trim() === '' ? null : Number(weeklyTarget);
       const updates: LearningGoalUpdates = { learning_goal: goal || null };
       if (parsedTarget !== weeklyGradedAnswerTarget) {
@@ -151,18 +161,28 @@ export function RightPanel({
   }, [
     selectedFocusIds,
     otherFocus,
+    allFocusAreas,
     weeklyTarget,
     testVersion,
     weeklyGradedAnswerTarget,
     onUpdateLearningGoals,
   ]);
 
-  const toggleFocusCategory = (id: string) => {
-    setSelectedFocusIds(current => {
-      if (current.includes(id)) return current.filter(item => item !== id);
-      if (current.length >= 3) return current;
-      return [...current, id];
-    });
+  const handleFocusSelection = (selection: FocusAreaSelection) => {
+    setSelectedFocusIds(selection.selectedIds);
+    setAllFocusAreas(selection.allFocusAreas);
+    // "All focus areas" is a complete goal on its own; a free-text Other would
+    // narrow it, so choosing All clears the custom entry.
+    if (selection.allFocusAreas) setOtherFocus('');
+  };
+
+  const handleOtherFocusChange = (value: string) => {
+    const next = value.slice(0, 80);
+    setOtherFocus(next);
+    // Typing a custom focus means the learner is no longer on "All", and
+    // clearing the last custom focus returns to the default.
+    if (next.trim()) setAllFocusAreas(false);
+    else if (selectedFocusIds.length === 0) setAllFocusAreas(true);
   };
   const isRequestInFlight = appStatus === 'processing' || appStatus === 'speaking';
   const isModeUnavailable = isCheckingStandardInterview || standardInterviewLookupFailed;
@@ -381,79 +401,77 @@ export function RightPanel({
           )}
         </section>
 
-        <div className="shrink-0 border-t border-immigo-gray-200" />
+        {/* Standard Interview has no focus areas, so the whole section stays hidden. */}
+        {simulationMode !== 'standard' && (
+          <>
+            <div className="shrink-0 border-t border-immigo-gray-200" />
 
-        {/* ── Section 2: Learning Goals ── */}
-        <section aria-labelledby="learning-goals-title">
-          <div className={`mb-2 flex items-center gap-2 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
-            <Target className="w-4 h-4 text-art-blue-600" />
-            <h3 id="learning-goals-title" className="text-xs font-bold uppercase tracking-widest text-immigo-gray-600">
-              {t('workspace.right.learningGoals')}
-            </h3>
-          </div>
-          <p className="text-[11px] text-immigo-gray-500">{t('workspace.right.learningGoalsDescription')}</p>
+            {/* ── Section 2: Learning Goals ── */}
+            <section aria-labelledby="learning-goals-title">
+              <div className={`mb-2 flex items-center gap-2 ${isArabic ? 'flex-row-reverse' : 'flex-row'}`}>
+                <Target className="w-4 h-4 text-art-blue-600" />
+                <h3 id="learning-goals-title" className="text-xs font-bold uppercase tracking-widest text-immigo-gray-600">
+                  {t('workspace.right.learningGoals')}
+                </h3>
+              </div>
+              <p className="text-[11px] text-immigo-gray-500">{t('workspace.right.learningGoalsDescription')}</p>
 
-          <fieldset className="mt-2 space-y-1">
-            <legend className="mb-1 text-[11px] font-semibold text-immigo-gray-700">
-              {t('workspace.right.focusLabel')}
-            </legend>
-            {focusCategories.map(category => {
-              const checked = selectedFocusIds.includes(category.id);
-              const atLimit = selectedFocusIds.length >= 3;
-              return (
-                <label key={category.id} className="flex min-h-8 cursor-pointer items-center gap-2 rounded-lg px-1 text-[11px] text-immigo-gray-700 hover:bg-immigo-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={!checked && atLimit}
-                    onChange={() => toggleFocusCategory(category.id)}
-                    className="h-3.5 w-3.5 rounded border-immigo-gray-300 text-art-blue-600 focus:ring-art-blue-500 disabled:opacity-40"
-                  />
-                  <span>{category.label}</span>
-                </label>
-              );
-            })}
-          </fieldset>
+              <div className="mt-2">
+                <FocusAreaCombobox
+                  categories={focusCategories}
+                  selectedIds={selectedFocusIds}
+                  allFocusAreas={allFocusAreas}
+                  onChange={handleFocusSelection}
+                  label={t('workspace.right.focusLabel')}
+                  allLabel={t('workspace.right.allFocusAreas')}
+                  searchPlaceholder={t('workspace.right.focusSearchPlaceholder')}
+                  noResultsLabel={t('workspace.right.focusNoResults')}
+                  limitLabel={count => t('workspace.right.focusLimit', { count, max: MAX_FOCUS_CATEGORIES })}
+                  idPrefix="right-panel-focus"
+                />
+              </div>
 
-          <label className="mt-2 block space-y-1">
-            <span className="text-[11px] font-semibold text-immigo-gray-700">
-              {t('workspace.right.otherFocusLabel')}
-            </span>
-            <input
-              type="text"
-              aria-label={t('workspace.right.otherFocusLabel')}
-              value={otherFocus}
-              maxLength={80}
-              onChange={event => setOtherFocus(event.target.value.slice(0, 80))}
-              placeholder={t('workspace.right.otherFocusPlaceholder')}
-              className="w-full rounded-lg border border-immigo-gray-300 bg-white px-2 py-1.5 text-[11px] text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
-            />
-          </label>
+              <label className="mt-2 block space-y-1">
+                <span className="text-[11px] font-semibold text-immigo-gray-700">
+                  {t('workspace.right.otherFocusLabel')}
+                </span>
+                <input
+                  type="text"
+                  aria-label={t('workspace.right.otherFocusLabel')}
+                  value={otherFocus}
+                  maxLength={80}
+                  onChange={event => handleOtherFocusChange(event.target.value)}
+                  placeholder={t('workspace.right.otherFocusPlaceholder')}
+                  className="w-full rounded-lg border border-immigo-gray-300 bg-white px-2 py-1.5 text-[11px] text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                />
+              </label>
 
-          <label className="mt-2 block space-y-1">
-            <span className="text-[11px] font-semibold text-immigo-gray-700">
-              {t('workspace.right.weeklyTargetLabel')}
-            </span>
-            <input
-              type="number"
-              aria-label={t('workspace.right.weeklyTargetLabel')}
-              min={1}
-              max={2_147_483_647}
-              step={1}
-              value={weeklyTarget}
-              onChange={event => setWeeklyTarget(event.target.value)}
-              placeholder={t('workspace.right.weeklyTargetPlaceholder')}
-              className="w-full rounded-lg border border-immigo-gray-300 bg-white px-2 py-1.5 text-[11px] text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
-            />
-          </label>
-          <p className="mt-1 text-[10px] text-immigo-gray-500" aria-live="polite">
-            {goalsSaveError
-              ? t('workspace.right.learningGoalsSaveFailed')
-              : t('workspace.right.learningGoalsAutoSave')}
-          </p>
-        </section>
+              <label className="mt-2 block space-y-1">
+                <span className="text-[11px] font-semibold text-immigo-gray-700">
+                  {t('workspace.right.weeklyTargetLabel')}
+                </span>
+                <input
+                  type="number"
+                  aria-label={t('workspace.right.weeklyTargetLabel')}
+                  min={1}
+                  max={2_147_483_647}
+                  step={1}
+                  value={weeklyTarget}
+                  onChange={event => setWeeklyTarget(event.target.value)}
+                  placeholder={t('workspace.right.weeklyTargetPlaceholder')}
+                  className="w-full rounded-lg border border-immigo-gray-300 bg-white px-2 py-1.5 text-[11px] text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                />
+              </label>
+              <p className="mt-1 text-[10px] text-immigo-gray-500" aria-live="polite">
+                {goalsSaveError
+                  ? t('workspace.right.learningGoalsSaveFailed')
+                  : t('workspace.right.learningGoalsAutoSave')}
+              </p>
+            </section>
 
-        <div className="shrink-0 border-t border-immigo-gray-200" />
+            <div className="shrink-0 border-t border-immigo-gray-200" />
+          </>
+        )}
 
         {/* ── Section 2: Session Utilities ── */}
         <section>
