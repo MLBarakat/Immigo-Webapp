@@ -128,7 +128,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - `Learning Modes` is the user-facing name for the mode selector; internal `SimulationMode`, API `simulationMode`, and database values remain unchanged.
 - First-time Standard Interviews use version-specific limits: 2008 ends at 10 questions with a pass at 6 correct or a fail at 5 incorrect; 2020 ends at 20 questions with a pass at 12 correct or a fail at 9 incorrect. The interview ends as soon as either threshold is reached.
 - First-time detection is per mode and test version. Standard is first-time when the learner has no completed interview with a real report; Practice and Study are first-time when no graded answer exists for that mode and version. Auto-closed abandoned interviews never count as completed reports.
-- A first-time Standard Interview opens with an AI icebreaker, then a rules card and deterministic rules, then a Ready gate, and only then the first question. A returning Standard Interview opens with the AI icebreaker plus a deterministic previous-score sentence, then the Ready gate.
+- A first-time Standard Interview opens with one assistant bubble containing the AI icebreaker, version facts, and deterministic rules, followed by a separate Ready bubble; the first question starts only after Ready. A returning Standard Interview opens with the AI icebreaker plus a deterministic previous-score sentence, then the Ready gate.
 - A resumed Standard Interview continues at its current question without replaying the intro. The returning score comes from the latest completed interview for the same test version.
 - The Standard AI icebreaker contains no digits and always has a deterministic fallback.
 - Standard ignores focus areas entirely and hides the Learning Goals section, including the weekly target.
@@ -137,8 +137,12 @@ This registry is the contract between the product, the tests, and every AI codin
 - The scheduler always serves the bucket furthest below its target share; ties break new, then weak, then review, then item ID.
 - English reading and writing run only after a civics pass when English is enabled, then the report; a civics fail goes straight to the report, and disabled English goes to the report after civics. English never changes civics pass/fail, and a post-fail report says English was not administered.
 - The English preference defaults on only for new accounts; an existing saved value, including off, is always respected in both test versions.
-- Practice and Study first-time onboarding shows a deterministic explanation and a focus card; the learner must choose at least one category or All focus areas, cannot skip, and the first question starts only after Continue.
-- Practice and Study returning onboarding shows per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts plus the same counts for the focus subset, lets the learner keep or change focus, and then starts the first question.
+- Practice and Study first-time onboarding shows a deterministic explanation in one assistant bubble; returning onboarding shows per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts plus the same counts for the focus subset, in one assistant bubble, and lets the learner keep or change focus.
+- Practice and Study intro bubbles expose Continue and Edit. Continue starts the first question with the focus already stored on the session or account, falling back to All focus areas; Edit opens the existing focus-area selector. The focus card never opens automatically on a mode change.
+- A first Learning Mode introduction is one assistant bubble only. For Standard, that bubble contains the icebreaker, version facts, and rules, and the separate Ready question is the next bubble.
+- A mode change renders a deterministic intro in the chat immediately, before the backend response; the response enriches the same bubble in place, and mode transitions skip speech synthesis so switching modes is instantaneous.
+- The first-run welcome introduces Learning Modes and offers Standard Interview, Practice, and Study as the first mode; choosing one closes the welcome and activates that mode.
+- Practice and Study advance through every bank item for the selected test version over the learner's lifetime in that mode, continuing an unfinished pass across sessions; a pass restarts only after every item has been seen.
 - Practice and Study focus constrains question selection; a category cycle restarts only after a full pass and shows a deterministic notice.
 - The Standard Ready gate reuses the existing opening-response path, returning `nextItemId: null` until the learner confirms; no database flag is added.
 - The Interview Report suggests two or three weakest categories from structured grading signals, never by reading qualitative report prose. The suggestion pre-fills the decision form only when the learner chooses Use this focus, and nothing persists until Save.
@@ -190,7 +194,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - A weekly target is optional and disabled when unset; the learning-goal card distinguishes an unset target from zero progress.
 - Applying a saved focus in Practice or Study requires confirmation and sends it through the existing conversation message flow.
 - Detailed reports refresh silently every ten account-local daily graded answers in Practice and Study.
-- Practice and Study show a one-line factual summary after each assistant response, based only on recorded daily grading counts; summaries are not persisted as conversation context.
+- Practice and Study show a one-line factual summary only at every ten-answer milestone, based only on recorded daily grading counts; there is no per-answer running commentary, and summaries are not persisted as conversation context.
+- The one-line summary and the silent detailed report share the same ten-answer milestone.
 - When voice is active, Polly speaks that summary only after the current response and AEC settle window; active user speech defers it.
 - Mastery means at least three graded attempts with more than 85% correct, counting every graded answer including Standard Interview answers.
 - Practice and Study returning onboarding reports per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts from authoritative graded answers, plus the same counts for the selected focus subset; this copy is deterministic and never model-generated.

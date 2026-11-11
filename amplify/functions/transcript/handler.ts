@@ -107,6 +107,8 @@ interface RequestBody {
   /** Practice/Study focus card submission; replaces free-text goal parsing. */
   focusAreaIds?: string[];
   allFocusAreas?: boolean;
+  /** Continue with the focus already stored on the session (intro bubble). */
+  confirmFocus?: boolean;
   preferredLanguage?: 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA';
   /** True when the client needs the first question selected before listening. */
   sessionStart?: boolean;
@@ -807,33 +809,37 @@ async function persistGradedAnswer(
 }
 
 /**
- * Every graded item for this session in the order it was asked. Focus passes
- * are reconstructed from this list, so ascending order matters.
+ * Every graded item for this learner in the order it was asked. Practice and
+ * Study passes are reconstructed from this lifetime list, so ascending order
+ * matters and closing a session cannot restart bank coverage.
  */
-async function getOrderedSessionItemIds(
+async function getLifetimeOrderedModeItemIds(
   token: string,
-  sessionId: string | null | undefined,
+  userId: string,
+  simulationMode: Exclude<SimulationMode, 'standard'>,
+  testVersion: TestVersion,
   traceId: string,
-  limit = 500,
+  limit = 5000,
 ): Promise<string[]> {
-  if (!sessionId) return [];
   try {
     const db = getUserScopedSupabase(token);
     const { data, error } = await db
       .from('graded_answers')
       .select('item_id')
-      .eq('session_id', sessionId)
+      .eq('user_id', userId)
+      .eq('simulation_mode', simulationMode)
+      .eq('test_version', testVersion)
       .order('created_at', { ascending: true })
       .limit(limit);
     if (error) {
-      console.warn(`[Lambda-Focus] [${traceId}] ordered-items query error: ${error.message}`);
+      console.warn(`[Lambda-Focus] [${traceId}] lifetime-items query error: ${error.message}`);
       return [];
     }
     return (data ?? [])
       .map(row => row.item_id)
       .filter((id): id is string => typeof id === 'string' && Boolean(id));
   } catch (err) {
-    console.error(`[Lambda-Focus] [${traceId}] ordered-items query exception:`, err);
+    console.error(`[Lambda-Focus] [${traceId}] lifetime-items query exception:`, err);
     return [];
   }
 }
@@ -922,18 +928,35 @@ async function loadModeProgressStats(
   };
 }
 
-/** Practice selection constrained by the current focus and pass. */
+/** Practice selection constrained by the current focus and lifetime pass. */
 async function selectPracticeQuestion(
   token: string,
-  _userId: string,
-  sessionId: string | null | undefined,
+  userId: string,
+  _sessionId: string | null | undefined,
   testVersion: TestVersion,
   focus: ParsedFocusGoal,
   currentItemId: string | null,
   traceId: string,
 ): Promise<{ item: CivicsItem; cycleRestarted: boolean }> {
-  const ordered = await getOrderedSessionItemIds(token, sessionId, traceId);
+  const ordered = await getLifetimeOrderedModeItemIds(
+    token, userId, 'practice', testVersion, traceId,
+  );
   return selectFocusedPracticeQuestion(testVersion, focus.categoryIds, ordered, currentItemId);
+}
+
+/** Study selection continues the lifetime bank-order pass, not the session. */
+async function selectStudyQuestion(
+  token: string,
+  userId: string,
+  testVersion: TestVersion,
+  focus: ParsedFocusGoal,
+  currentItemId: string | null,
+  traceId: string,
+): Promise<{ item: CivicsItem; cycleRestarted: boolean }> {
+  const ordered = await getLifetimeOrderedModeItemIds(
+    token, userId, 'study', testVersion, traceId,
+  );
+  return selectFocusedStudyQuestion(testVersion, focus.categoryIds, ordered, currentItemId);
 }
 
 interface MockExamRow {
@@ -1938,6 +1961,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (parsedBody.allFocusAreas !== undefined && typeof parsedBody.allFocusAreas !== 'boolean') {
       return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid focus area selection.' }) };
     }
+    if (parsedBody.confirmFocus !== undefined && typeof parsedBody.confirmFocus !== 'boolean') {
+      return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid focus confirmation.' }) };
+    }
     if (parsedBody.preferredLanguage !== undefined
       && !['en-US', 'es-ES', 'fr-FR', 'ar-SA'].includes(parsedBody.preferredLanguage)) {
       return {
@@ -2046,7 +2072,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // A proactive session-start call (item 6) legitimately has no transcript —
     // only the empty-guard for a REAL turn with nothing to process should fire.
     if (!cleanedTranscript && parsedBody.sessionStart !== true && parsedBody.silenceNudge !== true
-      && parsedBody.modeTransition !== true && !speechSynthesisOnly) {
+      && parsedBody.modeTransition !== true && parsedBody.modeGoalResponse !== true
+      && !speechSynthesisOnly) {
       console.log(`[Lambda-Execution] [${traceId}] Empty transcript received. Returning 200 empty payload.`);
       return {
         statusCode: 200,
@@ -2152,12 +2179,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         const selectedIds = (parsedBody.focusAreaIds ?? [])
           .map(id => normalizeFocusCategoryId(id))
           .filter((id): id is string => id !== null);
-        const hasFocusSelection = parsedBody.allFocusAreas === true || selectedIds.length > 0;
+        const confirmStoredFocus = parsedBody.confirmFocus === true && simulationMode !== 'standard';
+        const storedFocus = confirmStoredFocus
+          ? parseFocusGoal(sessionGoal.current_goal ?? '', testVersion)
+          : null;
+        const hasFocusSelection = confirmStoredFocus
+          || parsedBody.allFocusAreas === true
+          || selectedIds.length > 0;
 
         if (hasFocusSelection && simulationMode !== 'standard') {
           const uniqueIds = [...new Set(selectedIds)].slice(0, 3);
-          const allFocusAreas = parsedBody.allFocusAreas === true || uniqueIds.length === 0;
-          const categoryIds = allFocusAreas ? [] : uniqueIds;
+          const allFocusAreas = storedFocus
+            ? storedFocus.all
+            : parsedBody.allFocusAreas === true || uniqueIds.length === 0;
+          const categoryIds = storedFocus
+            ? storedFocus.categoryIds
+            : allFocusAreas ? [] : uniqueIds;
           const goal = serializeFocusGoal(categoryIds, allFocusAreas, testVersion);
           const labels = parseFocusGoal(goal, testVersion).labels;
           await db.from('sessions').update({ current_goal: goal, mode_goal_pending: false })
@@ -2165,7 +2202,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           modeGoalPending = false;
 
           const selected = simulationMode === 'study'
-            ? selectFocusedStudyQuestion(testVersion, categoryIds)
+            ? await selectStudyQuestion(
+              token, userId, testVersion,
+              { all: allFocusAreas, categoryIds, labels }, null, traceId,
+            )
             : await selectPracticeQuestion(
               token, userId, sessionId, testVersion,
               { all: allFocusAreas, categoryIds, labels }, null, traceId,
@@ -2321,7 +2361,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           } else {
             nextItemId = null;
             nextQuestion = '';
-            assistantSegments = [intro.icebreaker, intro.facts, ...intro.rules, intro.readyPrompt];
+            // One intro bubble carries the greeting, the format, and the
+            // rules. The Ready question stays a separate bubble so it reads
+            // as the learner's next action.
+            assistantSegments = [
+              [intro.icebreaker, intro.facts, ...intro.rules].join('\n\n'),
+              intro.readyPrompt,
+            ];
           }
           responseText = assistantSegments.join('\n\n');
         }
@@ -2348,7 +2394,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       } else {
         const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
         const first = simulationMode === 'study'
-          ? selectFocusedStudyQuestion(testVersion, focus.categoryIds).item
+          ? (await selectStudyQuestion(
+            token, userId, testVersion, focus, null, traceId,
+          )).item
           : (await selectPracticeQuestion(
             token, userId, parsedBody.sessionId, testVersion, focus, null, traceId,
           )).item;
@@ -2367,7 +2415,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         ? null
         : await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
       const focusedItem = askedItem ?? (simulationMode === 'study'
-        ? selectFocusedStudyQuestion(testVersion, focus?.categoryIds ?? []).item
+        ? (await selectStudyQuestion(
+          token, userId, testVersion,
+          focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
+        )).item
         : (await selectPracticeQuestion(
           token, userId, parsedBody.sessionId, testVersion,
           focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
@@ -2381,7 +2432,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         first = askedItem;
       } else if (simulationMode === 'study') {
         const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-        first = selectFocusedStudyQuestion(testVersion, focus.categoryIds).item;
+        first = (await selectStudyQuestion(
+          token, userId, testVersion, focus, null, traceId,
+        )).item;
       } else if (simulationMode === 'practice') {
         const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
         first = (await selectPracticeQuestion(
@@ -2462,7 +2515,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         ? null
         : await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
       const stay = askedItem ?? (simulationMode === 'study'
-        ? selectFocusedStudyQuestion(testVersion, focus?.categoryIds ?? []).item
+        ? (await selectStudyQuestion(
+          token, userId, testVersion,
+          focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
+        )).item
         : (await selectPracticeQuestion(
           token, userId, parsedBody.sessionId, testVersion,
           focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
@@ -2480,7 +2536,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         ? null
         : await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
       const first = simulationMode === 'study'
-        ? selectFocusedStudyQuestion(testVersion, focus?.categoryIds ?? []).item
+        ? (await selectStudyQuestion(
+          token, userId, testVersion,
+          focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
+        )).item
         : (await selectPracticeQuestion(
           token, userId, parsedBody.sessionId, testVersion,
           focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
@@ -2640,7 +2699,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         } else {
           const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
           if (simulationMode === 'study') {
-            const selected = selectFocusedStudyQuestion(testVersion, focus.categoryIds, askedItem.id);
+            const selected = await selectStudyQuestion(
+              token, userId, testVersion, focus, askedItem.id, traceId,
+            );
             next = selected.item;
             cycleRestarted = selected.cycleRestarted;
           } else {
@@ -2656,7 +2717,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           if (!next) {
             const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
             if (simulationMode === 'study') {
-              const selected = selectFocusedStudyQuestion(testVersion, focus.categoryIds, askedItem.id);
+              const selected = await selectStudyQuestion(
+                token, userId, testVersion, focus, askedItem.id, traceId,
+              );
               next = selected.item;
               cycleRestarted = selected.cycleRestarted;
             } else {
@@ -2698,6 +2761,32 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       } else {
         generatedAssistantText += ` ${nextQuestionText}`;
       }
+    }
+
+    // Mode transitions are navigation, not spoken turns. Returning here skips
+    // Polly synthesis entirely so the new mode opens immediately; the client
+    // has already rendered the deterministic intro locally.
+    if (parsedBody.modeTransition === true) {
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify({
+          responseText: generatedAssistantText,
+          assistantSegments: assistantSegments ?? [generatedAssistantText],
+          audioData: '',
+          verdict: null,
+          needsConfirmation: false,
+          nextItemId,
+          nextQuestion: nextQuestionText,
+          examRunId,
+          examCompleted: false,
+          examReport: null,
+          examReviewId: null,
+          examStage,
+          examIntro,
+          modeGoalPending,
+        }),
+      };
     }
 
     // 3. Polly Speech Synthesis

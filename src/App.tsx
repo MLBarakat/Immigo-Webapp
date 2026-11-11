@@ -305,6 +305,14 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   const handleWelcomeAction = async (messageId: string, action: MessageAction) => {
+    if (action.kind === 'focus') {
+      if (action.focusAction === 'edit') {
+        manager.openFocusEditor();
+        return;
+      }
+      await manager.confirmModeFocus();
+      return;
+    }
     if (action.kind === 'ready') {
       // The Standard intro waits here. The request is an opening response, so
       // the server ignores the label and asks the current first question.
@@ -359,6 +367,11 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       catch { /* ignore */ }
     }
     void updateUserSettings({ has_seen_welcome: true });
+  };
+
+  const handleWelcomeModeSelect = (mode: SimulationMode) => {
+    handleCloseWelcome();
+    void handleSimulationModeChange(mode);
   };
 
   const [showAppSettings, setShowAppSettings] = useState(false);
@@ -440,7 +453,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   if (!isDesktop) {
     return (
       <div className="flex flex-col h-dvh w-full bg-immigo-gray-50 dark:bg-gray-900 text-deep-navy dark:text-gray-100 font-sans antialiased overflow-hidden">
-        {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} />}
+        {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} onSelectMode={handleWelcomeModeSelect} />}
         {showAppSettings && (
           <ApplicationSettingsModal
             isOpen={showAppSettings}
@@ -629,7 +642,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     <div className="flex flex-col h-dvh w-full bg-immigo-gray-50 dark:bg-gray-900 text-deep-navy dark:text-gray-100 font-sans antialiased overflow-hidden">
 
       {/* Modals / Overlays */}
-      {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} />}
+      {showWelcomeModal && <WelcomeModal userName={displayUser.name} onClose={handleCloseWelcome} onSelectMode={handleWelcomeModeSelect} />}
 
       {showAppSettings && (
         <ApplicationSettingsModal

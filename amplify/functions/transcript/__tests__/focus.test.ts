@@ -83,16 +83,38 @@ describe('Practice/Study focus areas', () => {
       .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
 
     expect(selectFocusedStudyQuestion('2020', ['geography']).item.id).toBe(pool[0].id);
-    const next = selectFocusedStudyQuestion('2020', ['geography'], pool[0].id);
+    const next = selectFocusedStudyQuestion('2020', ['geography'], [pool[0].id]);
     expect(next.item.id).toBe(pool[1].id);
     expect(next.cycleRestarted).toBe(false);
 
     const restarted = selectFocusedStudyQuestion(
       '2020',
       ['geography'],
+      pool.map(item => item.id),
       pool[pool.length - 1].id,
     );
     expect(restarted.item.id).toBe(pool[0].id);
     expect(restarted.cycleRestarted).toBe(true);
+  });
+
+  it('covers every Study question across sessions before repeating', () => {
+    const pool = focusedItems('2020', ['geography'])
+      .slice()
+      .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+
+    // The first two questions were answered in an earlier session. The next
+    // session must continue at the first unanswered bank item, not restart.
+    const selected = selectFocusedStudyQuestion('2020', ['geography'], [pool[0].id, pool[1].id]);
+    expect(selected.item.id).toBe(pool[2].id);
+    expect(selected.cycleRestarted).toBe(false);
+
+    const completePass = selectFocusedStudyQuestion(
+      '2020',
+      ['geography'],
+      pool.map(item => item.id),
+      pool[pool.length - 1].id,
+    );
+    expect(completePass.item.id).toBe(pool[0].id);
+    expect(completePass.cycleRestarted).toBe(true);
   });
 });

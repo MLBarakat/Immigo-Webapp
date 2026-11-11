@@ -1,18 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Hand, Mic, MessageSquare, Zap, ArrowRight, X } from 'lucide-react';
+import { BookOpen, Hand, Mic, MessageSquare, Zap, ArrowRight, X } from 'lucide-react';
 import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import type { SimulationMode } from '../context/conversationContextTypes';
 
 interface WelcomeModalProps {
   userName: string;
   onClose: () => void;
+  /** Selects the learner's first Learning Mode and closes the welcome. */
+  onSelectMode?: (mode: SimulationMode) => void;
 }
 
 const STEP_KEYS = ['start', 'speak', 'interrupt'] as const;
 const STEP_ICONS = [Mic, MessageSquare, Zap];
+const MODE_OPTIONS = [
+  { mode: 'standard', icon: Mic },
+  { mode: 'practice', icon: Zap },
+  { mode: 'study', icon: BookOpen },
+] as const;
 
-export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose }) => {
+export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose, onSelectMode }) => {
   const { t, i18n } = useTranslation();
   const isArabic = i18n.language === 'ar-SA';
   const [step, setStep] = useState(0);
@@ -20,6 +28,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose })
   useFocusTrap(true, overlayRef);
   const StepIcon = STEP_ICONS[step];
   const stepKey = STEP_KEYS[step];
+  const isModeStep = step === STEP_KEYS.length - 1;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -52,8 +61,29 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose })
             <div className="w-16 h-16 bg-art-blue-100 text-art-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <StepIcon className="w-8 h-8" />
             </div>
-            <h3 className="text-2xl font-bold text-deep-navy mb-2">{t(`welcome.steps.${stepKey}.title`)}</h3>
-            <p className="text-immigo-gray-600 min-h-[72px]">{t(`welcome.steps.${stepKey}.description`)}</p>
+            {isModeStep ? (
+                <>
+                    <h3 className="text-2xl font-bold text-deep-navy mb-2">{t('welcome.modes.title')}</h3>
+                    <p className="text-immigo-gray-600 min-h-[72px]">{t('welcome.modes.description')}</p>
+                    <div className="mt-4 flex flex-col gap-2">
+                        {MODE_OPTIONS.map(({ mode, icon: ModeIcon }) => (
+                            <button
+                                key={mode}
+                                onClick={() => (onSelectMode ? onSelectMode(mode) : onClose())}
+                                className="flex items-center gap-3 w-full px-4 py-3 rounded-lg border border-immigo-gray-200 bg-star-white text-left hover:border-art-blue-500 hover:bg-art-blue-50 focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-colors"
+                            >
+                                <ModeIcon className="w-5 h-5 text-art-blue-600 shrink-0" />
+                                <span className="font-semibold text-deep-navy">{t(`welcome.modes.${mode}`)}</span>
+                            </button>
+                        ))}
+                    </div>
+                </>
+            ) : (
+                <>
+                    <h3 className="text-2xl font-bold text-deep-navy mb-2">{t(`welcome.steps.${stepKey}.title`)}</h3>
+                    <p className="text-immigo-gray-600 min-h-[72px]">{t(`welcome.steps.${stepKey}.description`)}</p>
+                </>
+            )}
         </main>
 
         <footer className="p-6 bg-immigo-gray-50 rounded-b-2xl flex items-center justify-between">
@@ -67,19 +97,12 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose })
                     />
                 ))}
             </div>
-            {step < STEP_KEYS.length - 1 ? (
+            {!isModeStep && (
                 <button
                     onClick={() => setStep(s => s + 1)}
                     className="flex items-center gap-2 px-5 py-2 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-art-blue-500 transition-transform transform hover:scale-105"
                 >
                     {t('welcome.next')} <ArrowRight className="w-5 h-5 rtl:rotate-180" />
-                </button>
-            ) : (
-                <button
-                    onClick={onClose}
-                    className="px-5 py-2 bg-art-blue-600 text-star-white font-bold rounded-lg shadow-md hover:bg-art-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-art-blue-500 transition-transform transform hover:scale-105"
-                >
-                    {t('welcome.start')}
                 </button>
             )}
         </footer>

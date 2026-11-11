@@ -256,6 +256,13 @@
     "goToStep": "Aller à l'étape {{step}}",
     "next": "Suivant",
     "start": "Commencer",
+    "modes": {
+      "title": "Choisissez un mode d’apprentissage",
+      "description": "Choisissez comment commencer. Vous pouvez changer de mode à tout moment.",
+      "standard": "Entretien standard",
+      "practice": "Mode Pratique",
+      "study": "Mode Étude"
+    },
     "steps": {
       "start": { "title": "Démarrez votre session", "description": "Appuyez sur le grand bouton animé pour commencer une session d'entraînement. L'IA vous saluera et attendra que vous parliez." },
       "speak": { "title": "Parlez naturellement", "description": "Lorsque l'IA écoute, parlez comme dans une conversation normale. Vos mots seront transcrits en temps réel." },

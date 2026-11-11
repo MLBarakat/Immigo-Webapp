@@ -135,8 +135,14 @@
         "practiceDescription": "Elige las áreas que quieres reforzar en el Modo práctica o mantén Todas las áreas de enfoque. No puedes omitir este paso; al elegir aquí comienza tu primera pregunta.",
         "studyDescription": "Elige las áreas que quieres estudiar con explicaciones o mantén Todas las áreas de enfoque. No puedes omitir este paso; al elegir aquí comienza tu primera pregunta.",
         "continue": "Continuar",
+        "edit": "Editar enfoque",
         "submitting": "Comenzando…",
         "error": "No se pudo guardar tu enfoque. Inténtalo de nuevo."
+      },
+      "modeIntro": {
+        "standard": "Has elegido la Entrevista estándar. Inicia la entrevista cuando estés listo.",
+        "practice": "El Modo práctica está listo. Continúa con tu enfoque guardado o edítalo antes de tu primera pregunta.",
+        "study": "El Modo estudio está listo. Continúa con tu enfoque guardado o edítalo antes de tu primera pregunta."
       }
     },
     "voice": {

@@ -135,8 +135,14 @@
         "practiceDescription": "Pick the areas you want to strengthen in Practice Mode, or keep All focus areas. There is no skip; choosing here starts your first question.",
         "studyDescription": "Pick the areas you want to study with explanations, or keep All focus areas. There is no skip; choosing here starts your first question.",
         "continue": "Continue",
+        "edit": "Edit focus",
         "submitting": "Starting…",
         "error": "Your focus could not be saved. Please try again."
+      },
+      "modeIntro": {
+        "standard": "You chose the Standard Interview. Start the interview when you are ready.",
+        "practice": "Practice Mode is ready. Continue with your saved focus, or edit it before your first question.",
+        "study": "Study Mode is ready. Continue with your saved focus, or edit it before your first question."
       }
     },
     "voice": {

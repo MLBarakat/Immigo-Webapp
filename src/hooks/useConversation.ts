@@ -211,6 +211,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const completedExamIdRef = useRef<string | null>(null);
   const nextExamActionRef = useRef<MockExamAction | undefined>(undefined);
   const modeGoalPendingRef = useRef(false);
+  const modeIntroMessageIdRef = useRef<string | null>(null);
+  const focusConfirmationPendingRef = useRef(false);
   const [focusOnboarding, setFocusOnboarding] = useState<FocusOnboardingState | null>(null);
   const focusOnboardingRef = useRef<FocusOnboardingState | null>(null);
   const updateFocusOnboarding = useCallback((next: FocusOnboardingState | null) => {
@@ -1296,7 +1298,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const sendTextMessage = useCallback(async (text: string, inputMethod: 'text' | 'voice' = 'text') => {
     // The focus card is a blocking onboarding step. Keyboard, voice, and
     // programmatic sends stay closed until the learner presses Continue.
-    if (focusOnboardingRef.current) return;
+    if (focusOnboardingRef.current || modeGoalPendingRef.current) return;
     // Unlock audible playback while still inside the user gesture — play()
     // calls below happen after an async gap where the gesture is long gone.
     // Text-only turns never create audio, so skip the unlock there.
@@ -1568,11 +1570,14 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
             return;
           }
 
-          queueProgressSummary(stats);
+          // The short spoken/on-screen summary is a ten-answer cadence, not a
+          // per-answer running commentary. The detailed report rides the same
+          // milestone so both stay predictable and cheap.
           if (stats && stats.answered > 0) {
             const dailyMilestone = Math.floor(stats.answered / 10) * 10;
             if (dailyMilestone > lastReportedDailyMilestoneRef.current) {
               lastReportedDailyMilestoneRef.current = dailyMilestone;
+              queueProgressSummary(stats);
               if (activeSessionId) void generatePeriodicProgressReport(activeSessionId);
             }
           }
@@ -1580,8 +1585,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           logger.error('Daily progress refresh failed after a committed answer.', undefined, {
             error: error instanceof Error ? error.message : String(error),
           });
-          if (submittedMode !== 'standard') queueProgressSummary(null);
-          else if (standardReportDue && activeSessionId) void generatePeriodicProgressReport(activeSessionId);
+          if (submittedMode === 'standard' && standardReportDue && activeSessionId) {
+            void generatePeriodicProgressReport(activeSessionId);
+          }
         });
       }
 
@@ -2648,9 +2654,89 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     analytics.track('transcript_downloaded');
   }, [conversationState.conversationHistory, conversationState.sessionId, conversationState.sessionTime, t, i18n.language]);
 
+  /**
+   * Presents the first focused question after the learner confirms a focus,
+   * either from the intro bubble or from the focus card.
+   */
+  const presentModeGoalResponse = useCallback((
+    response: Awaited<ReturnType<ApiClient['postTranscript']>>,
+    activeMode: SimulationMode,
+    activeSessionId: string,
+  ) => {
+    modeGoalPendingRef.current = response.modeGoalPending;
+    updateCurrentItemId(response.nextItemId);
+    updateFocusOnboarding(null);
+    if (modeIntroMessageIdRef.current) {
+      dispatch({
+        type: 'RESOLVE_MESSAGE_ACTIONS',
+        payload: { messageId: modeIntroMessageIdRef.current },
+      });
+    }
+    void ChatPersistenceService.saveDailySessionState(activeSessionId, {
+      current_item_id: response.nextItemId,
+      current_mode: activeMode,
+      test_version: testVersionRef.current,
+      include_english_simulation: includeEnglishSimulationRef.current,
+    });
+
+    const segments = response.assistantSegments.length > 0
+      ? response.assistantSegments
+      : [response.responseText];
+    for (const content of segments) {
+      dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: {
+        assistantMessageId: `focus-onboarding-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        content,
+      } });
+      if (content.trim()) void ChatPersistenceService.persistMessage(activeSessionId, userId ?? '', 'assistant', content);
+    }
+    if (voiceSessionRef.current && response.audioData.byteLength > 0) {
+      const url = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
+      const player = acquirePollyPlaybackElement(url);
+      player.onended = () => URL.revokeObjectURL(url);
+      void player.play().catch(() => URL.revokeObjectURL(url));
+    }
+  }, [dispatch, updateCurrentItemId, updateFocusOnboarding, userId]);
+
     const changeMode = useCallback(async (mode: SimulationMode) => {
     const activeSessionId = sessionIdRef.current;
     if (!apiClient || !userId || !activeSessionId) return false;
+    const focusMode = mode !== 'standard';
+    const introMessageId = `mode-goal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const focusActions: readonly MessageAction[] = focusMode
+      ? [
+          {
+            kind: 'focus',
+            focusAction: 'continue',
+            label: t('workspace.center.focusOnboarding.continue'),
+            variant: 'primary',
+          },
+          {
+            kind: 'focus',
+            focusAction: 'edit',
+            label: t('workspace.center.focusOnboarding.edit'),
+            variant: 'secondary',
+          },
+        ]
+      : [];
+
+    // Navigation is immediate: switch the mode and render the deterministic
+    // intro before the network call. The request then enriches the same bubble
+    // and owns the persisted copy.
+    simulationModeRef.current = mode;
+    completedExamIdRef.current = null;
+    setPostExamId(null);
+    modeGoalPendingRef.current = focusMode;
+    modeIntroMessageIdRef.current = introMessageId;
+    updateFocusOnboarding(null);
+    dispatch({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: {
+        assistantMessageId: introMessageId,
+        content: t(`workspace.center.modeIntro.${mode}`),
+        ...(focusActions.length ? { actions: focusActions } : {}),
+      },
+    });
+
     try {
       await ChatPersistenceService.saveDailySessionState(activeSessionId, {
         current_item_id: currentItemIdRef.current,
@@ -2665,24 +2751,35 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         testVersion: testVersionRef.current,
         includeEnglishSimulation: includeEnglishSimulationRef.current,
       });
-      simulationModeRef.current = mode;
-      completedExamIdRef.current = null;
-      setPostExamId(null);
+      // A newer transition won the race; its intro owns the conversation now.
+      if (simulationModeRef.current !== mode) return true;
+
       modeGoalPendingRef.current = response.modeGoalPending;
-      if (response.modeGoalPending && (mode === 'practice' || mode === 'study')) {
-        updateFocusOnboarding({ mode, submitting: false, error: null });
-      } else {
-        updateFocusOnboarding(null);
+      if (!response.modeGoalPending) updateFocusOnboarding(null);
+      updateCurrentItemId(
+        response.modeGoalPending ? null : response.nextItemId ?? currentItemIdRef.current,
+      );
+
+      const segments = Array.isArray(response.assistantSegments) && response.assistantSegments.length
+        ? response.assistantSegments
+        : [response.responseText];
+      if (segments[0]) {
+        dispatch({
+          type: 'UPDATE_ASSISTANT_MESSAGE',
+          payload: {
+            messageId: introMessageId,
+            content: segments[0],
+            ...(response.modeGoalPending && focusActions.length ? { actions: focusActions } : {}),
+          },
+        });
       }
-      updateCurrentItemId(response.modeGoalPending ? null : response.nextItemId ?? currentItemIdRef.current);
-        const segments = Array.isArray(response.assistantSegments) && response.assistantSegments.length
-          ? response.assistantSegments
-          : [response.responseText];
-      for (const content of segments) {
+      for (const content of segments.slice(1)) {
         dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: {
           assistantMessageId: `mode-goal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           content,
         } });
+      }
+      for (const content of segments) {
         if (content.trim()) void ChatPersistenceService.persistMessage(activeSessionId, userId, 'assistant', content);
       }
       if (voiceSessionRef.current && response.audioData.byteLength > 0) {
@@ -2696,7 +2793,49 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       logger.warn('Could not start the mode goal conversation.', { error: String(error) });
       return false;
     }
-  }, [apiClient, userId, dispatch, updateCurrentItemId, updateFocusOnboarding]);
+  }, [apiClient, userId, dispatch, updateCurrentItemId, updateFocusOnboarding, t]);
+
+  /** Opens the existing focus selector from the intro bubble's Edit action. */
+  const openFocusEditor = useCallback(() => {
+    const mode = simulationModeRef.current;
+    if (mode === 'standard' || focusOnboardingRef.current) return;
+    updateFocusOnboarding({ mode, submitting: false, error: null });
+  }, [updateFocusOnboarding]);
+
+  /** Continue with the focus already saved on the session. */
+  const confirmModeFocus = useCallback(async (): Promise<boolean> => {
+    const activeMode = simulationModeRef.current;
+    const activeSessionId = sessionIdRef.current || conversationState.sessionId;
+    if (!apiClient || !userId || !activeSessionId || activeMode === 'standard') return false;
+    if (!modeGoalPendingRef.current || focusConfirmationPendingRef.current) return false;
+    focusConfirmationPendingRef.current = true;
+    const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    try {
+      const response = await apiClient.postTranscript(
+        '',
+        [],
+        activeSessionId,
+        currentItemIdRef.current,
+        {
+          headers: { 'x-correlation-trace-id': traceId },
+          voiceId: voiceIdRef.current ?? undefined,
+          simulationMode: activeMode,
+          preferredLanguage: preferredLanguageRef.current,
+          testVersion: testVersionRef.current,
+          includeEnglishSimulation: includeEnglishSimulationRef.current,
+          modeGoalResponse: true,
+          confirmFocus: true,
+        },
+      );
+      presentModeGoalResponse(response, activeMode, activeSessionId);
+      return true;
+    } catch (error) {
+      logger.warn('Could not continue with the saved focus.', { error: String(error) });
+      return false;
+    } finally {
+      focusConfirmationPendingRef.current = false;
+    }
+  }, [apiClient, userId, conversationState.sessionId, presentModeGoalResponse]);
 
   const submitFocusOnboarding = useCallback(async (selection: FocusAreaSelection): Promise<boolean> => {
     const activeMode = focusOnboardingRef.current?.mode;
@@ -2731,34 +2870,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         },
       );
 
-      modeGoalPendingRef.current = response.modeGoalPending;
-      updateCurrentItemId(response.nextItemId);
-      updateFocusOnboarding(null);
-      if (sessionIdRef.current) {
-        void ChatPersistenceService.saveDailySessionState(sessionIdRef.current, {
-          current_item_id: response.nextItemId,
-          current_mode: activeMode,
-          test_version: testVersionRef.current,
-          include_english_simulation: includeEnglishSimulationRef.current,
-        });
-      }
-
-      const segments = response.assistantSegments.length > 0
-        ? response.assistantSegments
-        : [response.responseText];
-      for (const content of segments) {
-        dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: {
-          assistantMessageId: `focus-onboarding-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          content,
-        } });
-        if (content.trim()) void ChatPersistenceService.persistMessage(activeSessionId, userId, 'assistant', content);
-      }
-      if (voiceSessionRef.current && response.audioData.byteLength > 0) {
-        const url = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
-        const player = acquirePollyPlaybackElement(url);
-        player.onended = () => URL.revokeObjectURL(url);
-        void player.play().catch(() => URL.revokeObjectURL(url));
-      }
+      presentModeGoalResponse(response, activeMode, activeSessionId);
       return true;
     } catch (error) {
       logger.warn('Could not submit the Practice/Study focus selection.', { error: String(error) });
@@ -2769,7 +2881,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       });
       return false;
     }
-  }, [apiClient, userId, conversationState.sessionId, dispatch, updateCurrentItemId, updateFocusOnboarding, t]);
+  }, [apiClient, userId, conversationState.sessionId, presentModeGoalResponse, updateFocusOnboarding, t]);
 
   return {
     ...conversationState,
@@ -2785,6 +2897,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     startStandardInterview,
     changeMode,
     focusOnboarding,
+    openFocusEditor,
+    confirmModeFocus,
     submitFocusOnboarding,
     isAudioRetryPending,
     currentState,

@@ -135,8 +135,14 @@
         "practiceDescription": "Choisissez les domaines à renforcer en mode Pratique, ou conservez Tous les axes de travail. Cette étape est obligatoire : votre choix lance la première question.",
         "studyDescription": "Choisissez les domaines à étudier avec des explications, ou conservez Tous les axes de travail. Cette étape est obligatoire : votre choix lance la première question.",
         "continue": "Continuer",
+        "edit": "Modifier l’axe",
         "submitting": "Démarrage…",
         "error": "Votre axe de travail n’a pas pu être enregistré. Veuillez réessayer."
+      },
+      "modeIntro": {
+        "standard": "Vous avez choisi l’Entretien standard. Lancez l’entretien quand vous êtes prêt.",
+        "practice": "Le mode Pratique est prêt. Continuez avec votre axe enregistré ou modifiez-le avant votre première question.",
+        "study": "Le mode Étude est prêt. Continuez avec votre axe enregistré ou modifiez-le avant votre première question."
       }
     },
     "voice": {

@@ -482,8 +482,11 @@ describe('transcript handler — mock exam civics phase routing', () => {
       expect(body.responseText).toContain('When you are ready, choose Ready.');
       expect(body.responseText).not.toContain(FIRST_QUESTION.question);
       expect(body.nextItemId).toBeNull();
-      expect(body.assistantSegments).toHaveLength(4);
-      expect(body.assistantSegments[0]).toBe(body.examIntro?.icebreaker);
+      expect(body.assistantSegments).toHaveLength(2);
+      expect(body.assistantSegments[0]).toContain(body.examIntro?.icebreaker ?? '');
+      expect(body.assistantSegments[0]).toContain('up to 20 civics questions');
+      expect(body.assistantSegments[0]).toContain('nine USCIS civics topics');
+      expect(body.assistantSegments[1]).toContain('When you are ready, choose Ready.');
       expect(body.audioData).toBe('');
       expect(mocks.pollySend).not.toHaveBeenCalled();
     }
@@ -873,13 +876,16 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body) as {
       responseText: string;
+      audioData: string;
       nextItemId: string | null;
       modeGoalPending: boolean;
     };
     expect(body.responseText).toContain('Practice Mode is ready');
     expect(body.responseText).toContain('Choose one focus area');
+    expect(body.audioData).toBe('');
     expect(body.nextItemId).toBeNull();
     expect(body.modeGoalPending).toBe(true);
+    expect(mocks.pollySend).not.toHaveBeenCalled();
     expect(mocks.state.updates).toContainEqual(expect.objectContaining({
       table: 'sessions',
       payload: expect.objectContaining({
@@ -917,6 +923,38 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(body.responseText).toContain('You are currently covering All focus areas');
     expect(body.nextItemId).toBeNull();
     expect(body.modeGoalPending).toBe(true);
+  });
+
+  it('continues with the stored focus when the intro bubble confirms it without text', async () => {
+    mocks.state.sessionRow = {
+      id: 'session-1',
+      current_goal: 'Geography',
+      mode_goal_pending: true,
+      current_item_id: null,
+    };
+
+    const response = await handler(modeGoalResponseEvent({
+      transcript: '',
+      confirmFocus: true,
+    }));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      responseText: string;
+      nextItemId: string | null;
+      modeGoalPending: boolean;
+    };
+    const geography = focusedItems('2020', ['geography']).map(entry => entry.id);
+    expect(body.responseText).toContain('Great. We will use Geography in Practice Mode.');
+    expect(geography).toContain(body.nextItemId);
+    expect(body.modeGoalPending).toBe(false);
+    expect(mocks.state.updates).toContainEqual(expect.objectContaining({
+      table: 'sessions',
+      payload: expect.objectContaining({
+        current_goal: 'Geography',
+        mode_goal_pending: false,
+      }),
+    }));
   });
 
   it('starts the first focused Practice question only after the focus submission', async () => {

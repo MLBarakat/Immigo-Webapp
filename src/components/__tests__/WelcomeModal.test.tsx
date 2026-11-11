@@ -15,7 +15,7 @@ describe('WelcomeModal Component', () => {
     expect(screen.getByRole('button', { name: /next/i })).toBeDefined();
   });
 
-  it('steps through all onboarding tips and calls onClose on final step', () => {
+  it('steps through the onboarding tips and offers Learning Modes on the final step', () => {
     const handleClose = vi.fn();
     render(<WelcomeModal userName="Alex" onClose={handleClose} />);
 
@@ -23,15 +23,36 @@ describe('WelcomeModal Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(screen.getByText('Speak Naturally')).toBeDefined();
 
-    // Step 2 -> Step 3
+    // Step 2 -> Step 3 (Learning Modes)
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText('Pro Tip: Interrupt Anytime!')).toBeDefined();
+    expect(screen.getByText('Choose a Learning Mode')).toBeDefined();
+    expect(screen.getByRole('button', { name: /standard interview/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /practice mode/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /study mode/i })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /let's get started/i })).toBeNull();
+  });
 
-    // Final step button changes to "Let's Get Started"
-    const startBtn = screen.getByRole('button', { name: /let's get started/i });
-    expect(startBtn).toBeDefined();
+  it('selects the chosen Learning Mode and closes the welcome', () => {
+    const handleClose = vi.fn();
+    const handleSelectMode = vi.fn();
+    render(<WelcomeModal userName="Alex" onClose={handleClose} onSelectMode={handleSelectMode} />);
 
-    fireEvent.click(startBtn);
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    fireEvent.click(screen.getByRole('button', { name: /study mode/i }));
+
+    expect(handleSelectMode).toHaveBeenCalledWith('study');
+    expect(handleClose).not.toHaveBeenCalled();
+  });
+
+  it('falls back to closing when no Learning Mode handler is supplied', () => {
+    const handleClose = vi.fn();
+    render(<WelcomeModal userName="Alex" onClose={handleClose} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    fireEvent.click(screen.getByRole('button', { name: /practice mode/i }));
+
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 

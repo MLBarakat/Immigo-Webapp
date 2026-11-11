@@ -308,6 +308,13 @@
     "goToStep": "Go to step {{step}}",
     "next": "Next",
     "start": "Let's Get Started",
+    "modes": {
+      "title": "Choose a Learning Mode",
+      "description": "Pick how you want to begin. You can switch modes anytime.",
+      "standard": "Standard Interview",
+      "practice": "Practice Mode",
+      "study": "Study Mode"
+    },
     "steps": {
       "start": {
         "title": "Start Your Session",

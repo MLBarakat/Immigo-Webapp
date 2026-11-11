@@ -21,6 +21,12 @@ export type MessageAction =
     kind: 'ready';
     label: string;
     variant?: 'primary' | 'secondary';
+  }
+  | {
+    kind: 'focus';
+    focusAction: 'continue' | 'edit';
+    label: string;
+    variant?: 'primary' | 'secondary';
   };
 
 export interface Message {
@@ -80,6 +86,7 @@ export type ConversationAction =
   | { type: 'SET_LIVE_STATS'; payload: LiveSessionStats | null }
   | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[] } }
   | { type: 'ADD_STANDALONE_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[] } }
+  | { type: 'UPDATE_ASSISTANT_MESSAGE'; payload: { messageId: string; content: string; actions?: readonly MessageAction[] } }
   | { type: 'RESOLVE_MESSAGE_ACTIONS'; payload: { messageId?: string } };
 
 export const initialState: ConversationState = {
@@ -213,6 +220,20 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         assistantMessageId: action.payload.assistantMessageId,
       };
     }
+
+    case 'UPDATE_ASSISTANT_MESSAGE':
+      return {
+        ...state,
+        conversationHistory: state.conversationHistory.map(msg =>
+          msg.id === action.payload.messageId
+            ? {
+                ...msg,
+                content: action.payload.content,
+                ...(action.payload.actions ? { actions: action.payload.actions } : { actions: undefined }),
+              }
+            : msg
+        ),
+      };
 
     case 'RESOLVE_MESSAGE_ACTIONS':
       return {

@@ -346,8 +346,8 @@ export class ApiClient {
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     currentItemId?: string | null,
-    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean },
-    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean } = {}
+    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; confirmFocus?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean },
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; confirmFocus?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
@@ -403,6 +403,7 @@ export class ApiClient {
           includeEnglishSimulation: effectiveOptions.includeEnglishSimulation ?? false,
           ...(effectiveOptions.examRunId ? { examRunId: effectiveOptions.examRunId } : {}),
           ...(effectiveOptions.modeGoalResponse ? { modeGoalResponse: true } : {}),
+          ...(effectiveOptions.confirmFocus ? { confirmFocus: true } : {}),
           ...(effectiveOptions.examAction ? { examAction: effectiveOptions.examAction } : {}),
           ...(effectiveOptions.inputMethod ? { inputMethod: effectiveOptions.inputMethod } : {}),
           ...(effectiveOptions.requestId ? { requestId: effectiveOptions.requestId } : {}),

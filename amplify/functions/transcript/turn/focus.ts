@@ -199,12 +199,15 @@ export function selectFocusedPracticeQuestion(
 }
 
 /**
- * Study walks the focus pool in bank order. The notice appears on the turn
- * after the last item in the pool, which is the first pick of the new pass.
+ * Study walks the focus pool in bank order. The learner's ordered mode-scoped
+ * history is the pass state, so closing the app does not restart coverage:
+ * the next pick continues at the first question they have not studied yet.
+ * The notice appears on the first pick after every pool item has been seen.
  */
 export function selectFocusedStudyQuestion(
   version: TestVersion,
   categoryIds: string[],
+  orderedAskedIds: string[] = [],
   currentItemId: string | null = null,
 ): FocusedQuestionSelection {
   const pool = focusedItems(version, categoryIds)
@@ -214,8 +217,12 @@ export function selectFocusedStudyQuestion(
     const fallback = allItems(version);
     return { item: fallback[0], cycleRestarted: false };
   }
-  const index = pool.findIndex(item => item.id === currentItemId);
-  if (index < 0) return { item: pool[0], cycleRestarted: false };
-  if (index === pool.length - 1) return { item: pool[0], cycleRestarted: true };
-  return { item: pool[index + 1], cycleRestarted: false };
+  const state = focusCycleState(pool.map(item => item.id), orderedAskedIds);
+  const next = pool.find(item => !state.remaining.has(item.id) && item.id !== currentItemId)
+    ?? pool.find(item => !state.remaining.has(item.id))
+    ?? pool[0];
+  return {
+    item: next,
+    cycleRestarted: state.cycleRestarted && state.remaining.size === 0,
+  };
 }
