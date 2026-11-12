@@ -56,6 +56,38 @@ function mapDecision(value: unknown): MockExamReviewDecision | null {
 }
 
 export class MockExamService {
+  static async hasUserProceededAfterExam(userId: string, examId: string): Promise<boolean> {
+    if (!userId || !examId) return false;
+    try {
+      const supabase = getSupabaseClient();
+      const { data: exam, error: examError } = await supabase
+        .from('mock_exams')
+        .select('session_id,completed_at')
+        .eq('user_id', userId)
+        .eq('id', examId)
+        .maybeSingle();
+      if (examError) throw examError;
+      if (!exam?.session_id || !exam.completed_at) return false;
+
+      const { data: message, error: messageError } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('session_id', exam.session_id)
+        .eq('role', 'user')
+        .gt('created_at', exam.completed_at)
+        .limit(1)
+        .maybeSingle();
+      if (messageError) throw messageError;
+      return message !== null;
+    } catch (error) {
+      logger.error('Could not check whether the learner continued after the Standard Interview.', undefined, {
+        error: String(error),
+      });
+      throw error;
+    }
+  }
+
   static async getLatestInProgress(userId: string, testVersion: '2008' | '2020'): Promise<InProgressMockExam | null> {
     if (!userId) return null;
     try {

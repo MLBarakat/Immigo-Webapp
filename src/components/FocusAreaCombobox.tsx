@@ -103,9 +103,11 @@ export function FocusAreaCombobox({
       <label id={labelId} htmlFor={`${baseId}-input`} className="block text-sm font-medium text-deep-navy dark:text-white">
         {label}
       </label>
-      <div className="relative">
-        {/* Selected categories render as removable chips in a single wrapped view. */}
-        <div className="flex flex-wrap gap-1.5 mb-1.5">
+      <div
+        data-testid="focus-area-input"
+        className="rounded-xl border border-immigo-gray-300 bg-white p-2 focus-within:border-art-blue-600 focus-within:ring-2 focus-within:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:focus-within:ring-blue-900"
+      >
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
           {chips.map((chip) => (
             <button
               key={chip.id}
@@ -113,53 +115,55 @@ export function FocusAreaCombobox({
               aria-label={`Remove ${chip.label}`}
               onClick={() => removeChip(chip.id)}
               disabled={disabled}
-              className="flex items-center gap-1.5 rounded-xl border border-immigo-gray-300 bg-white px-2.5 py-1.5 text-xs text-deep-navy hover:bg-immigo-gray-50 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:hover:bg-gray-800"
+              className="flex min-h-8 items-center gap-1.5 rounded-full border border-immigo-gray-300 bg-immigo-gray-50 px-2.5 py-1 text-xs text-deep-navy hover:bg-immigo-gray-100 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
             >
               <span className="text-deep-navy dark:text-gray-300">{chip.label}</span>
               <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             </button>
           ))}
         </div>
-        <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-immigo-gray-400" aria-hidden="true" />
-        <input
-          id={`${baseId}-input`}
-          type="text"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={listboxId}
-          aria-autocomplete="list"
-          aria-activedescendant={activeIndex >= 0 ? `${baseId}-option-${activeIndex}` : undefined}
-          autoComplete="off"
-          value={query}
-          disabled={disabled}
-          placeholder={searchPlaceholder}
-          onChange={event => {
-            setQuery(event.target.value);
-            setActiveIndex(-1);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setOpen(false)}
-          onKeyDown={event => {
-            if (event.key === 'ArrowDown') {
-              event.preventDefault();
-              setOpen(true);
-              setActiveIndex(current => Math.min(current + 1, options.length - 1));
-            } else if (event.key === 'ArrowUp') {
-              event.preventDefault();
-              setActiveIndex(current => Math.max(current - 1, 0));
-            } else if (event.key === 'Enter' && activeIndex >= 0) {
-              event.preventDefault();
-              const option = options[activeIndex];
-              if (option && !option.disabled) select(option.id);
-            } else if (event.key === 'Escape') {
-              setQuery('');
+        <div className="relative min-w-[8rem]">
+          <Search className="pointer-events-none absolute start-2 top-1/2 h-4 w-4 -translate-y-1/2 text-immigo-gray-400" aria-hidden="true" />
+          <input
+            id={`${baseId}-input`}
+            type="text"
+            role="combobox"
+            aria-expanded={open}
+            aria-controls={listboxId}
+            aria-autocomplete="list"
+            aria-activedescendant={activeIndex >= 0 ? `${baseId}-option-${options[activeIndex]?.id}` : undefined}
+            autoComplete="off"
+            value={query}
+            disabled={disabled}
+            placeholder={searchPlaceholder}
+            onChange={event => {
+              setQuery(event.target.value);
               setActiveIndex(-1);
-              setOpen(false);
-            }
-          }}
-          className="min-h-11 w-full rounded-xl border border-immigo-gray-300 bg-white py-2 pe-3 ps-9 text-sm text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:ring-blue-900"
-        />
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setOpen(false)}
+            onKeyDown={event => {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setOpen(true);
+                setActiveIndex(current => Math.min(current + 1, options.length - 1));
+              } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setActiveIndex(current => Math.max(current - 1, 0));
+              } else if (event.key === 'Enter' && activeIndex >= 0) {
+                event.preventDefault();
+                const option = options[activeIndex];
+                if (option && !option.disabled) select(option.id);
+              } else if (event.key === 'Escape') {
+                setQuery('');
+                setActiveIndex(-1);
+                setOpen(false);
+              }
+            }}
+            className="min-h-8 w-full rounded-md border-0 bg-transparent py-1 pe-1 ps-8 text-sm text-deep-navy placeholder:text-immigo-gray-400 focus:outline-none focus:ring-0 disabled:opacity-60 dark:text-white"
+          />
+        </div>
       </div>
 
       {allFocusAreas ? (

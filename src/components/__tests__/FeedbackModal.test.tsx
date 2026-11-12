@@ -201,6 +201,36 @@ describe('FeedbackModal', () => {
     expect(props.onSaveDecision).not.toHaveBeenCalled();
   });
 
+  it('continues with the decision returned by Save before closing the report', async () => {
+    const props = makeProps();
+    const savedDecision = makeDecision('new_interview', null);
+    props.onSaveDecision.mockResolvedValue(savedDecision);
+    render(<FeedbackModal {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Begin another Standard Interview/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(props.onContinueDecision).toHaveBeenCalledWith(savedDecision);
+      expect(props.onClose).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('offers Save and Back before committing finish-for-now', () => {
+    render(<FeedbackModal {...makeProps()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Save this as your next step and close the report/ }));
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDefined();
+  });
+
+  it('hides the next-step section after the learner proceeds without saving a choice', () => {
+    render(<FeedbackModal {...makeProps()} showNextStep={false} />);
+
+    expect(screen.queryByRole('heading', { name: /choose your next step/i })).toBeNull();
+  });
+
   it('shows an existing decision without offering another immutable choice', () => {
     const props = makeProps();
     render(<FeedbackModal {...props} decision={makeDecision('finish_for_now', null)} />);

@@ -34,6 +34,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     ...DEFAULT_USER_SETTINGS,
     font_size: getStoredFontSize(),
   }));
+  const userSettingsRef = useRef(userSettings);
+  const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+  userSettingsRef.current = userSettings;
   const [initializationAttempt, setInitializationAttempt] = useState(0);
   const sessionLoadGenerationRef = useRef(0);
   const settingsRealtimeGenerationRef = useRef(0);
@@ -509,39 +512,51 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     if (error) throw error;
   }, [supabase]);
 
-  const updateUserSettings = useCallback(async (settings: Partial<UserSettings>): Promise<void> => {
+  const updateUserSettings = useCallback(async (
+    settings: Partial<UserSettings>,
+    options: { requireDatabase?: boolean } = {},
+  ): Promise<void> => {
     if (!user || !supabase) throw new Error('User not authenticated or Supabase client not initialized.');
-    const nextSettings = { ...userSettings, ...settings };
-    if (settings.font_size) {
-      applyFontSize(settings.font_size);
-    }
-    // Optimistic update — revert on any failure below.
-    setUserSettings(nextSettings);
+    const write = settingsWriteQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const previousSettings = userSettingsRef.current;
+        const nextSettings = { ...previousSettings, ...settings };
+        userSettingsRef.current = nextSettings;
+        if (settings.font_size) {
+          applyFontSize(settings.font_size);
+        }
+        setUserSettings(nextSettings);
 
-    // Write to the dedicated user_settings table (primary store).
-    const tableOk = await UserSettingsService.upsertSettings(supabase, user.id, nextSettings);
-    if (!tableOk) {
-      // Log but don't throw — fall through to user_metadata as a secondary write.
-      logger.warn('user_settings upsert failed; falling back to user_metadata only.', { userId: user.id });
-    }
+        const tableOk = await UserSettingsService.upsertSettings(supabase, user.id, nextSettings);
+        if (!tableOk) {
+          logger.warn('user_settings upsert failed.', { userId: user.id });
+          if (options.requireDatabase) {
+            userSettingsRef.current = previousSettings;
+            setUserSettings(previousSettings);
+            if (previousSettings.font_size) applyFontSize(previousSettings.font_size);
+            throw new Error('The account settings could not be saved to the database.');
+          }
+        }
 
-    // Also keep user_metadata in sync as a secondary / cache layer.
-    const { data, error } = await supabase.auth.updateUser({
-      data: { settings: nextSettings },
-    });
-    if (error) {
-      // Roll back optimistic update if both writes failed.
-      if (!tableOk) {
-        setUserSettings(userSettings);
-        if (userSettings.font_size) applyFontSize(userSettings.font_size);
-        throw error;
-      }
-      // Table write succeeded, so log the metadata failure but keep the new state.
-      logger.warn('user_metadata settings sync failed (table write succeeded).', { userId: user.id, error: error.message });
-      return;
-    }
-    if (data.user) setUser(data.user);
-  }, [supabase, user, userSettings]);
+        const { data, error } = await supabase.auth.updateUser({
+          data: { settings: nextSettings },
+        });
+        if (error) {
+          if (!tableOk) {
+            userSettingsRef.current = previousSettings;
+            setUserSettings(previousSettings);
+            if (previousSettings.font_size) applyFontSize(previousSettings.font_size);
+            throw error;
+          }
+          logger.warn('user_metadata settings sync failed (table write succeeded).', { userId: user.id, error: error.message });
+          return;
+        }
+        if (data.user) setUser(data.user);
+      });
+    settingsWriteQueueRef.current = write.catch(() => undefined);
+    await write;
+  }, [supabase, user]);
 
   const updateUserLanguage = useCallback(async (newLanguageCode: string): Promise<void> => {
     if (!user || !supabase) throw new Error("User not authenticated or Supabase client not initialized.");

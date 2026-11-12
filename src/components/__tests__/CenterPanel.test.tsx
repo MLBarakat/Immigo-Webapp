@@ -155,6 +155,23 @@ describe('CenterPanel text interview flow', () => {
     expect(screen.getByText('Ready')).toBeDefined();
   });
 
+  it('shows the Standard Interview timer below the status and formats long interviews', () => {
+    renderCenterPanel({ standardInterviewElapsedSeconds: 3661 });
+
+    const timer = screen.getByRole('timer', { name: 'Interview time: 01:01:01' });
+    expect(timer.textContent).toBe('01:01:01');
+    expect(timer.compareDocumentPosition(screen.getByTestId('app-status-island')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+  });
+
+  it('hides the Standard Interview timer when paused or complete', () => {
+    const { rerender } = renderCenterPanel({ standardInterviewElapsedSeconds: 65 });
+    expect(screen.getByTestId('standard-interview-timer').textContent).toBe('01:05');
+
+    rerender(centerPanelElement({ standardInterviewElapsedSeconds: null }));
+
+    expect(screen.queryByTestId('standard-interview-timer')).toBeNull();
+  });
+
   it('allows text input before a session without activating voice conversation', () => {
     const onStartSession = vi.fn();
     const onSendMessage = vi.fn();

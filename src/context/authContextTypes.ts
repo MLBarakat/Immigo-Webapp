@@ -32,7 +32,10 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   updateProfile: (fullName: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
-  updateUserSettings: (settings: Partial<UserSettings>) => Promise<void>;
+  updateUserSettings: (
+    settings: Partial<UserSettings>,
+    options?: { requireDatabase?: boolean },
+  ) => Promise<void>;
   updateUserLanguage: (newLanguageCode: string) => Promise<void>;
 }
 

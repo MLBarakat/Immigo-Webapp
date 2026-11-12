@@ -14,6 +14,7 @@ interface CenterPanelProps {
   displayUser: DisplayUser;
   interimTranscript: string;
   appStatus: AppStatus;
+  standardInterviewElapsedSeconds?: number | null;
   isModelLoading: boolean;
   isVadReady: boolean;
   isSessionActive: boolean;
@@ -79,6 +80,7 @@ export function CenterPanel({
   displayUser,
   interimTranscript,
   appStatus,
+  standardInterviewElapsedSeconds = null,
   isModelLoading,
   isVadReady,
   isSessionActive,
@@ -110,7 +112,7 @@ export function CenterPanel({
   const [message, setMessage] = useState('');
   const [isStatusVisible, setIsStatusVisible] = useState(true);
   const previousStatusRef = useRef(appStatus);
-  const { t } = useTranslation('conversation');
+  const { t, i18n } = useTranslation('conversation');
   const isReadyStatus = appStatus === 'idle' || appStatus === 'connecting';
   const statusLabelKeys: Record<AppStatus, string> = {
     idle: 'workspace.center.status.ready',
@@ -157,6 +159,22 @@ export function CenterPanel({
     setMessage(e.target.value);
   };
 
+  const interviewTime = standardInterviewElapsedSeconds === null
+    ? null
+    : (() => {
+        const totalSeconds = Math.max(0, Math.floor(standardInterviewElapsedSeconds));
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        const number = new Intl.NumberFormat(i18n.language, {
+          minimumIntegerDigits: 2,
+          useGrouping: false,
+        });
+        return hours > 0
+          ? `${number.format(hours)}:${number.format(minutes)}:${number.format(seconds)}`
+          : `${number.format(Math.floor(totalSeconds / 60))}:${number.format(seconds)}`;
+      })();
+
   const isEmpty = !message.trim();
 
   return (
@@ -166,7 +184,7 @@ export function CenterPanel({
         data-testid="app-status-island-wrapper"
         data-visible={isStatusVisible}
         aria-hidden={!isStatusVisible}
-        className={`pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-4 transition-transform duration-[800ms] ease-in-out motion-reduce:transition-none sm:px-6 transform-gpu will-change-transform ${
+        className={`pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col items-center px-4 transition-transform duration-[800ms] ease-in-out motion-reduce:transition-none sm:px-6 transform-gpu will-change-transform ${
           isStatusVisible ? 'translate-y-3' : '-translate-y-full'
         }`}
       >
@@ -210,6 +228,17 @@ export function CenterPanel({
             </span>
           </span>
         </div>
+        {interviewTime !== null && (
+          <span
+            data-testid="standard-interview-timer"
+            role="timer"
+            aria-live="off"
+            aria-label={t('workspace.center.interviewTimer', { time: interviewTime })}
+            className="mt-1 rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-semibold tabular-nums text-deep-navy shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/70 dark:text-gray-100"
+          >
+            {interviewTime}
+          </span>
+        )}
       </div>
 
       {onToggleFocus && (
@@ -329,5 +358,4 @@ export function CenterPanel({
     </main>
   );
 }
-
 

@@ -27,6 +27,8 @@ export interface UserSettingsRow {
   account_timezone?: string | null;
   learning_goal: string | null;
   weekly_graded_answer_target: number | null;
+  question_bank_test_version: '2008' | '2020' | null;
+  include_english_simulation: boolean | null;
   updated_at: string;
 }
 
@@ -51,6 +53,8 @@ export function userSettingsRowToSettings(row: UserSettingsRow): Partial<UserSet
     ...(row.account_timezone ? { account_timezone: row.account_timezone } : {}),
     learning_goal: row.learning_goal ?? null,
     weekly_graded_answer_target: row.weekly_graded_answer_target ?? null,
+    question_bank_test_version: row.question_bank_test_version ?? null,
+    include_english_simulation: row.include_english_simulation ?? null,
   };
 }
 
@@ -76,6 +80,8 @@ function settingsToRow(userId: string, settings: UserSettings): Omit<UserSetting
     account_timezone: settings.account_timezone ?? null,
     learning_goal: settings.learning_goal?.trim() || null,
     weekly_graded_answer_target: settings.weekly_graded_answer_target ?? null,
+    question_bank_test_version: settings.question_bank_test_version ?? null,
+    include_english_simulation: settings.include_english_simulation ?? null,
   };
 }
 

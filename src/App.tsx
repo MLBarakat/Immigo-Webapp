@@ -81,7 +81,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     try { return localStorage.getItem('immigo_include_english_simulation') === 'true'; }
     catch { return false; }
   });
-  const [englishPreferenceResolved, setEnglishPreferenceResolved] = useState(false);
+  const [questionBankPreferenceOwnerId, setQuestionBankPreferenceOwnerId] = useState<string | null>(null);
+  const [questionBankPreferenceError, setQuestionBankPreferenceError] = useState<string | null>(null);
   const currentLanguageCode = normalizeAppLanguage(userSettings.language || profile?.language);
   const [micAccessError, setMicAccessError] = useState<string | null>(null);
 
@@ -111,34 +112,91 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const [activeExamReviewId, setActiveExamReviewId] = useState<string | null>(null);
   const [examReviewCache, setExamReviewCache] = useState<Record<string, MockExamReview>>({});
   const [examReviewDecisionCache, setExamReviewDecisionCache] = useState<Record<string, MockExamReviewDecision | null>>({});
+  const [examReviewProceededCache, setExamReviewProceededCache] = useState<Record<string, boolean>>({});
   const [isExamReviewLoading, setIsExamReviewLoading] = useState(false);
   const [examReviewError, setExamReviewError] = useState<string | null>(null);
   const [isReviewDecisionSaving, setIsReviewDecisionSaving] = useState(false);
   const [reviewDecisionError, setReviewDecisionError] = useState<string | null>(null);
   useEffect(() => {
-    if (authLoading || englishPreferenceResolved || !user) return;
+    if (authLoading || !user || questionBankPreferenceOwnerId === user.id) return;
+    let storedVersion: string | null = null;
+    let storedEnglish: string | null = null;
     void Promise.resolve().then(() => {
       try {
-        const stored = localStorage.getItem('immigo_include_english_simulation');
-        if (stored !== null) {
-          // An explicit saved choice always wins, including an explicit "off".
-          setIncludeEnglishSimulation(stored === 'true');
-        } else if (userSettings.has_seen_welcome === false) {
-          // Brand-new accounts start with reading and writing practice enabled.
-          setIncludeEnglishSimulation(true);
-        }
-      } catch { /* preferences remain available for the current app lifetime */ }
-      setEnglishPreferenceResolved(true);
+        storedVersion = localStorage.getItem('immigo_test_version');
+        storedEnglish = localStorage.getItem('immigo_include_english_simulation');
+      } catch (error) {
+        logger.warn('Could not read legacy Question Bank preferences.', { error: String(error) });
+      }
+
+      const resolvedVersion = userSettings.question_bank_test_version
+        ?? (storedVersion === '2008' ? '2008' : '2020');
+      const resolvedEnglish = userSettings.include_english_simulation
+        ?? (storedEnglish !== null
+          ? storedEnglish === 'true'
+          : userSettings.has_seen_welcome === false);
+      setTestVersion(resolvedVersion);
+      setIncludeEnglishSimulation(resolvedEnglish);
+      setQuestionBankPreferenceOwnerId(user.id);
+      setQuestionBankPreferenceError(null);
+
+      if (userSettings.question_bank_test_version === null
+        || userSettings.include_english_simulation === null) {
+        void updateUserSettings({
+          question_bank_test_version: resolvedVersion,
+          include_english_simulation: resolvedEnglish,
+        }, { requireDatabase: true }).catch(error => {
+          logger.error('Could not migrate Question Bank preferences to account settings.', undefined, {
+            userId: user.id,
+            error: String(error),
+          });
+          setQuestionBankPreferenceError(tConversation('workspace.right.questionBankSaveFailed'));
+        });
+      }
     });
-  }, [authLoading, englishPreferenceResolved, user, userSettings.has_seen_welcome]);
+  }, [
+    authLoading,
+    questionBankPreferenceOwnerId,
+    user,
+    userSettings.has_seen_welcome,
+    userSettings.include_english_simulation,
+    userSettings.question_bank_test_version,
+    updateUserSettings,
+    tConversation,
+  ]);
 
   useEffect(() => {
-    if (!englishPreferenceResolved) return;
+    if (!user || questionBankPreferenceOwnerId !== user.id) return;
     try {
       localStorage.setItem('immigo_test_version', testVersion);
       localStorage.setItem('immigo_include_english_simulation', String(includeEnglishSimulation));
-    } catch { /* preferences remain available for the current app lifetime */ }
-  }, [testVersion, includeEnglishSimulation, englishPreferenceResolved]);
+    } catch (error) {
+      logger.warn('Could not cache Question Bank preferences in this browser.', { error: String(error) });
+    }
+  }, [testVersion, includeEnglishSimulation, questionBankPreferenceOwnerId, user]);
+
+  const saveQuestionBankPreferences = async (updates: Partial<UserSettings>) => {
+    setQuestionBankPreferenceError(null);
+    try {
+      await updateUserSettings(updates, { requireDatabase: true });
+    } catch (error) {
+      logger.error('Could not save Question Bank preferences.', undefined, {
+        userId: user?.id,
+        error: String(error),
+      });
+      setQuestionBankPreferenceError(tConversation('workspace.right.questionBankSaveFailed'));
+    }
+  };
+
+  const handleTestVersionChange = (version: TestVersion) => {
+    setTestVersion(version);
+    void saveQuestionBankPreferences({ question_bank_test_version: version });
+  };
+
+  const handleIncludeEnglishSimulationChange = (include: boolean) => {
+    setIncludeEnglishSimulation(include);
+    void saveQuestionBankPreferences({ include_english_simulation: include });
+  };
   useEffect(() => {
     if (!manager.dailySessionSettings) return;
     const settings = manager.dailySessionSettings;
@@ -156,7 +214,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     setReviewDecisionError(null);
     const cachedReview = examReviewCache[examId];
     const hasCachedDecision = Object.prototype.hasOwnProperty.call(examReviewDecisionCache, examId);
-    if (cachedReview && hasCachedDecision) return;
+    const savedDecision = examReviewDecisionCache[examId] ?? null;
+    if (cachedReview && hasCachedDecision
+      && (savedDecision !== null || examReviewProceededCache[examId] === true)) return;
     if (!apiClientInstance) {
       setExamReviewError(tConversation('workspace.examReview.unavailable'));
       return;
@@ -167,16 +227,22 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     }
     setIsExamReviewLoading(true);
     try {
-      const [review, decision] = await Promise.all([
+      const [review, decision, hasProceeded] = await Promise.all([
         cachedReview
           ? Promise.resolve(cachedReview)
           : apiClientInstance.getMockExamFeedback(examId, currentLanguageCode),
         hasCachedDecision
-          ? Promise.resolve(examReviewDecisionCache[examId] ?? null)
+          ? Promise.resolve(savedDecision)
           : MockExamService.getReviewDecision(user.id, examId),
+        savedDecision
+          ? Promise.resolve(false)
+          : MockExamService.hasUserProceededAfterExam(user.id, examId),
       ]);
       if (!cachedReview) setExamReviewCache(previous => ({ ...previous, [examId]: review }));
       setExamReviewDecisionCache(previous => ({ ...previous, [examId]: decision }));
+      if (!decision) {
+        setExamReviewProceededCache(previous => ({ ...previous, [examId]: hasProceeded }));
+      }
 
       // Capture the AI-recommended learning path so the welcome banner can offer
       // it as a next step after a saved decision.
@@ -562,6 +628,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               displayUser={displayUser}
               interimTranscript={manager.interimTranscript}
               appStatus={manager.appStatus}
+              standardInterviewElapsedSeconds={manager.standardInterviewElapsedSeconds}
               isModelLoading={manager.isModelLoading}
               isVadReady={manager.isVadReady}
               isSessionActive={manager.isVoiceSessionActive}
@@ -603,9 +670,10 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               onResumeStandardInterview={() => { void startStandardInterview('resume'); }}
               onStartNewStandardInterview={() => { void startStandardInterview('new'); }}
               testVersion={testVersion}
-              onTestVersionChange={setTestVersion}
+              onTestVersionChange={handleTestVersionChange}
               includeEnglishSimulation={includeEnglishSimulation}
-              onIncludeEnglishSimulationChange={setIncludeEnglishSimulation}
+              onIncludeEnglishSimulationChange={handleIncludeEnglishSimulationChange}
+              questionBankPreferenceError={questionBankPreferenceError}
               userId={user?.id}
               currentItemId={manager.currentItemId}
               onClearSession={manager.clearConversation}
@@ -656,6 +724,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           isLoading={isExamReviewLoading}
           review={activeExamReviewId ? examReviewCache[activeExamReviewId] ?? null : null}
           decision={activeExamReviewId ? examReviewDecisionCache[activeExamReviewId] ?? null : null}
+          showNextStep={!activeExamReviewId
+            || Boolean(examReviewDecisionCache[activeExamReviewId])
+            || examReviewProceededCache[activeExamReviewId] !== true}
           decisionSaving={isReviewDecisionSaving}
           decisionError={reviewDecisionError}
           error={examReviewError}
@@ -759,6 +830,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           displayUser={displayUser}
           interimTranscript={manager.interimTranscript}
           appStatus={manager.appStatus}
+          standardInterviewElapsedSeconds={manager.standardInterviewElapsedSeconds}
           isModelLoading={manager.isModelLoading}
           isVadReady={manager.isVadReady}
           isSessionActive={manager.isVoiceSessionActive}
@@ -801,9 +873,10 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onResumeStandardInterview={() => { void startStandardInterview('resume'); }}
           onStartNewStandardInterview={() => { void startStandardInterview('new'); }}
           testVersion={testVersion}
-          onTestVersionChange={setTestVersion}
+          onTestVersionChange={handleTestVersionChange}
           includeEnglishSimulation={includeEnglishSimulation}
-          onIncludeEnglishSimulationChange={setIncludeEnglishSimulation}
+          onIncludeEnglishSimulationChange={handleIncludeEnglishSimulationChange}
+          questionBankPreferenceError={questionBankPreferenceError}
           userId={user?.id}
           currentItemId={manager.currentItemId}
           onClearSession={manager.clearConversation}
@@ -826,6 +899,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
         isLoading={isExamReviewLoading}
         review={activeExamReviewId ? examReviewCache[activeExamReviewId] ?? null : null}
         decision={activeExamReviewId ? examReviewDecisionCache[activeExamReviewId] ?? null : null}
+        showNextStep={!activeExamReviewId
+          || Boolean(examReviewDecisionCache[activeExamReviewId])
+          || examReviewProceededCache[activeExamReviewId] !== true}
         decisionSaving={isReviewDecisionSaving}
         decisionError={reviewDecisionError}
         error={examReviewError}

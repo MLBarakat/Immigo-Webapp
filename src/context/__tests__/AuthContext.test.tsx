@@ -206,6 +206,52 @@ describe('AuthProvider', () => {
     });
   });
 
+  it('rejects account-preference updates when the user_settings database write fails', async () => {
+    const session = createSession('user-settings-failure');
+    const supabase = createSupabaseMock(session);
+    const profileQuery = {
+      select: () => profileQuery,
+      eq: () => profileQuery,
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'user-settings-failure', full_name: 'Alex', language: 'en-US', created_at: '', updated_at: '' },
+        error: null,
+      }),
+    };
+    const settingsQuery = {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      }),
+      upsert: vi.fn().mockResolvedValue({ error: new Error('Database unavailable') }),
+    };
+    supabase.client.from.mockImplementation((table: string) => (
+      table === 'active_user_sessions' ? supabase.activeSessionQuery
+        : table === 'user_settings' ? settingsQuery
+          : profileQuery
+    ));
+    getSupabaseClientMock.mockResolvedValue(supabase.client);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.user?.id).toBe('user-settings-failure'));
+
+    let updateError: unknown;
+    await act(async () => {
+      try {
+        await result.current.updateUserSettings(
+          { question_bank_test_version: '2008' },
+          { requireDatabase: true },
+        );
+      } catch (error) {
+        updateError = error;
+      }
+    });
+
+    expect(updateError).toBeInstanceOf(Error);
+    expect(result.current.userSettings.question_bank_test_version).toBeNull();
+    expect(supabase.client.auth.updateUser).not.toHaveBeenCalled();
+  });
+
   it('applies settings and profile updates received from another active session', async () => {
     const session = createSession('user-a');
     const supabase = createSupabaseMock(session);

@@ -130,6 +130,76 @@ describe('MockExamService', () => {
     expect(query.eq).toHaveBeenCalledWith('id', 'exam-1');
   });
 
+  it('detects an owner-scoped user message after the completed exam', async () => {
+    const examQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { session_id: 'session-1', completed_at: '2026-11-12T10:00:00.000Z' },
+        error: null,
+      }),
+    };
+    examQuery.select.mockReturnValue(examQuery);
+    examQuery.eq.mockReturnValue(examQuery);
+
+    const messageQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      gt: vi.fn(),
+      limit: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'message-1' }, error: null }),
+    };
+    messageQuery.select.mockReturnValue(messageQuery);
+    messageQuery.eq.mockReturnValue(messageQuery);
+    messageQuery.gt.mockReturnValue(messageQuery);
+    messageQuery.limit.mockReturnValue(messageQuery);
+
+    const from = vi.fn()
+      .mockReturnValueOnce(examQuery)
+      .mockReturnValueOnce(messageQuery);
+    vi.mocked(getSupabaseClient).mockReturnValue({ from } as never);
+
+    await expect(MockExamService.hasUserProceededAfterExam('user-1', 'exam-1')).resolves.toBe(true);
+
+    expect(examQuery.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(examQuery.eq).toHaveBeenCalledWith('id', 'exam-1');
+    expect(messageQuery.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(messageQuery.eq).toHaveBeenCalledWith('session_id', 'session-1');
+    expect(messageQuery.eq).toHaveBeenCalledWith('role', 'user');
+    expect(messageQuery.gt).toHaveBeenCalledWith('created_at', '2026-11-12T10:00:00.000Z');
+  });
+
+  it('does not hide the report section when no post-exam user message exists', async () => {
+    const examQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { session_id: 'session-1', completed_at: '2026-11-12T10:00:00.000Z' },
+        error: null,
+      }),
+    };
+    examQuery.select.mockReturnValue(examQuery);
+    examQuery.eq.mockReturnValue(examQuery);
+
+    const messageQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      gt: vi.fn(),
+      limit: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    messageQuery.select.mockReturnValue(messageQuery);
+    messageQuery.eq.mockReturnValue(messageQuery);
+    messageQuery.gt.mockReturnValue(messageQuery);
+    messageQuery.limit.mockReturnValue(messageQuery);
+    const from = vi.fn()
+      .mockReturnValueOnce(examQuery)
+      .mockReturnValueOnce(messageQuery);
+    vi.mocked(getSupabaseClient).mockReturnValue({ from } as never);
+
+    await expect(MockExamService.hasUserProceededAfterExam('user-1', 'exam-1')).resolves.toBe(false);
+  });
+
   it('atomically records the decision and goal and returns the persisted decision', async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [{

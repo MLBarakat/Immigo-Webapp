@@ -40,6 +40,24 @@ afterEach(() => {
 });
 
 describe('RightPanel learning goals', () => {
+  it('sends Question Bank selections to their persistence handlers', () => {
+    const onTestVersionChange = vi.fn();
+    const onIncludeEnglishSimulationChange = vi.fn();
+    renderPanel({ onTestVersionChange, onIncludeEnglishSimulationChange });
+
+    fireEvent.click(screen.getByRole('radio', { name: /2008/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include reading and writing practice' }));
+
+    expect(onTestVersionChange).toHaveBeenCalledWith('2008');
+    expect(onIncludeEnglishSimulationChange).toHaveBeenCalledWith(true);
+  });
+
+  it('shows a Question Bank persistence error inline', () => {
+    renderPanel({ questionBankPreferenceError: 'Question Bank settings could not be saved.' });
+
+    expect(screen.getByRole('alert').textContent).toBe('Question Bank settings could not be saved.');
+  });
+
   it('shows Learning Goals as its own section under the question bank', () => {
     renderPanel();
 

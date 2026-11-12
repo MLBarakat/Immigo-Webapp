@@ -215,6 +215,76 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const standardExamAnsweredCountRef = useRef(0);
   const lastReportedStandardExamMilestoneRef = useRef(0);
   const completedExamIdRef = useRef<string | null>(null);
+  const [standardInterviewElapsedSeconds, setStandardInterviewElapsedSeconds] = useState<number | null>(null);
+  const standardInterviewTimerExamIdRef = useRef<string | null>(null);
+  const standardInterviewElapsedMsRef = useRef(0);
+  const standardInterviewTimerStartedAtRef = useRef<number | null>(null);
+  const standardInterviewTimerStorageKey = useCallback((examId: string) => (
+    `immigo_standard_interview_timer:${userId ?? 'anonymous'}:${examId}`
+  ), [userId]);
+  const persistStandardInterviewElapsed = useCallback((examId: string, elapsedMs: number) => {
+    try {
+      localStorage.setItem(standardInterviewTimerStorageKey(examId), JSON.stringify({ elapsedMs }));
+    } catch (error) {
+      logger.warn('Could not persist Standard Interview elapsed time.', { error: String(error) });
+    }
+  }, [standardInterviewTimerStorageKey]);
+  const startStandardInterviewTimer = useCallback((examId: string) => {
+    if (!examId) return;
+    if (standardInterviewTimerExamIdRef.current !== examId) {
+      standardInterviewTimerExamIdRef.current = examId;
+      standardInterviewElapsedMsRef.current = 0;
+      try {
+        const stored = localStorage.getItem(standardInterviewTimerStorageKey(examId));
+        if (stored) {
+          const parsed: unknown = JSON.parse(stored);
+          if (typeof parsed === 'object' && parsed !== null
+            && 'elapsedMs' in parsed
+            && typeof parsed.elapsedMs === 'number'
+            && Number.isFinite(parsed.elapsedMs)
+            && parsed.elapsedMs >= 0) {
+            standardInterviewElapsedMsRef.current = parsed.elapsedMs;
+          }
+        }
+      } catch (error) {
+        logger.warn('Could not restore Standard Interview elapsed time.', { error: String(error) });
+      }
+    }
+    if (standardInterviewTimerStartedAtRef.current === null) {
+      if (document.hidden) {
+        persistStandardInterviewElapsed(examId, standardInterviewElapsedMsRef.current);
+        setStandardInterviewElapsedSeconds(null);
+        return;
+      }
+      standardInterviewTimerStartedAtRef.current = Date.now();
+    }
+    setStandardInterviewElapsedSeconds(Math.floor(
+      (standardInterviewElapsedMsRef.current
+        + Date.now() - standardInterviewTimerStartedAtRef.current) / 1000,
+    ));
+  }, [persistStandardInterviewElapsed, standardInterviewTimerStorageKey]);
+  const pauseStandardInterviewTimer = useCallback((clear = false) => {
+    const examId = standardInterviewTimerExamIdRef.current;
+    const startedAt = standardInterviewTimerStartedAtRef.current;
+    if (examId) {
+      if (startedAt !== null) {
+        standardInterviewElapsedMsRef.current += Math.max(0, Date.now() - startedAt);
+        standardInterviewTimerStartedAtRef.current = null;
+      }
+      if (clear) {
+        try {
+          localStorage.removeItem(standardInterviewTimerStorageKey(examId));
+          standardInterviewTimerExamIdRef.current = null;
+          standardInterviewElapsedMsRef.current = 0;
+        } catch (error) {
+          logger.warn('Could not clear completed Standard Interview elapsed time.', { error: String(error) });
+        }
+      } else if (startedAt !== null) {
+        persistStandardInterviewElapsed(examId, standardInterviewElapsedMsRef.current);
+      }
+    }
+    setStandardInterviewElapsedSeconds(null);
+  }, [persistStandardInterviewElapsed, standardInterviewTimerStorageKey]);
   const nextExamActionRef = useRef<MockExamAction | undefined>(undefined);
   const modeGoalPendingRef = useRef(false);
   const modeIntroMessageIdRef = useRef<string | null>(null);
@@ -1467,6 +1537,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       let nextItemId: string | null = null;
       let needsConfirmation = false;
       let verdict: 'correct' | 'incorrect' | 'partial' | null = null;
+      let examCompleted = false;
       let assistantSegments: string[] = [];
 
       // If we're mid-confirmation/mid-multi-part-answer on THIS item, tell the
@@ -1491,6 +1562,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           nextItemId = res.nextItemId;
           needsConfirmation = res.needsConfirmation;
           verdict = res.verdict;
+          examCompleted = res.examCompleted;
           if (res.examRunId !== null) {
             if (submittedMode === 'standard' && standardExamRunIdRef.current !== res.examRunId) {
               standardExamRunIdRef.current = res.examRunId;
@@ -1613,6 +1685,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         // typewriter remains reserved for voice mode where it tracks Polly.
         assistantReplyPendingRef.current = true;
         presentTextModeSegments(secureAssistantMessageId, displaySegments);
+        if (examCompleted) {
+          pauseStandardInterviewTimer(true);
+        } else if (submittedMode === 'standard' && nextItemId && examRunIdRef.current) {
+          startStandardInterviewTimer(examRunIdRef.current);
+        }
         activeTurnControllerRef.current = null;
         activeAssistantMessageIdRef.current = null;
         return;
@@ -1636,6 +1713,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // in order so the next-question bubble only appears once the previous
       // bubble's words have been spoken.
       startAssistantReveal(secureAssistantMessageId, displaySegments, audioPlaybackNode);
+      if (examCompleted) {
+        pauseStandardInterviewTimer(true);
+      } else if (submittedMode === 'standard' && nextItemId && examRunIdRef.current) {
+        startStandardInterviewTimer(examRunIdRef.current);
+      }
 
       // Keep capture active during playback so VAD can recognize a real
       // interruption; browser echo cancellation and the barge-in holdoff
@@ -1740,7 +1822,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
       releaseAssistantRequestHold();
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, presentTextModeSegments, flushTextModeSegments, generatePeriodicProgressReport, queueProgressSummary, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, flushProgressSummaryBeforeListening, updateCurrentItemId, updateFocusOnboarding]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, presentTextModeSegments, flushTextModeSegments, generatePeriodicProgressReport, queueProgressSummary, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, flushProgressSummaryBeforeListening, updateCurrentItemId, updateFocusOnboarding, startStandardInterviewTimer, pauseStandardInterviewTimer]);
 
   const requestSilenceNudge = useCallback(async () => {
     const currentItemId = currentItemIdRef.current;
@@ -2073,6 +2155,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           displaySegments,
           readyGate ? [{ kind: 'ready', label: t('workspace.center.ready') }] : undefined,
         );
+        if (simulationModeRef.current === 'standard' && res.nextItemId && res.examRunId) {
+          startStandardInterviewTimer(res.examRunId);
+        }
         return true;
       }
 
@@ -2163,6 +2248,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // another opening/greeting.
       openingResponseRef.current = false;
       startAssistantReveal(secureAssistantMessageId, [res.responseText], audioPlaybackNode);
+      if (simulationModeRef.current === 'standard' && res.nextItemId && res.examRunId) {
+        startStandardInterviewTimer(res.examRunId);
+      }
 
       isPollyPlayingRef.current = true;
       isAssistantAudioActiveRef.current = true;
@@ -2238,9 +2326,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       await startListeningWithMicGate();
       return false;
     }
-  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, stopRecording, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId, presentTextModeSegments, t]);
+  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, stopRecording, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId, presentTextModeSegments, startStandardInterviewTimer, t]);
 
   const terminateSession = useCallback(async () => {
+    pauseStandardInterviewTimer();
     sessionStartGenerationRef.current += 1;
     if (silenceNudgeTimerRef.current !== null) {
       window.clearTimeout(silenceNudgeTimerRef.current);
@@ -2293,7 +2382,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         setIsGeneratingProgressReport(false);
       }
     }
-  }, [conversationState.sessionId, conversationState.sessionTime, apiClient, dispatch, stopRecording, clearAudioPlayback, cancelTextModeSegments, updateCurrentItemId]);
+  }, [conversationState.sessionId, conversationState.sessionTime, apiClient, dispatch, stopRecording, clearAudioPlayback, cancelTextModeSegments, updateCurrentItemId, pauseStandardInterviewTimer]);
 
   /**
    * Microphone control: activate voice capture only. It deliberately does not
@@ -2369,6 +2458,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
    */
   const startStandardInterview = useCallback(async (examAction: MockExamAction): Promise<boolean> => {
     if (!apiClient || !userId) return false;
+    pauseStandardInterviewTimer();
     // Capturing the resume/new decision must never change the user's chosen
     // input mode: a text conversation stays text, an active voice session
     // stays voice (and keeps its microphone and Polly playback).
@@ -2399,7 +2489,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       nextExamActionRef.current = undefined;
       throw error;
     }
-  }, [apiClient, userId, standardInterviewLookup, initiateSession, refreshStandardInterviewLookup]);
+  }, [apiClient, userId, standardInterviewLookup, initiateSession, refreshStandardInterviewLookup, pauseStandardInterviewTimer]);
 
   const chooseWelcomeAction = useCallback(async (examAction: MockExamAction, messageId: string): Promise<boolean> => {
     const started = await startStandardInterview(examAction);
@@ -2421,6 +2511,39 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
     };
   }, [conversationState.isSessionActive, dispatch]);
+
+  const isStandardInterviewTimerRunning = standardInterviewElapsedSeconds !== null;
+  useEffect(() => {
+    if (!isStandardInterviewTimerRunning) return undefined;
+    const timerId = window.setInterval(() => {
+      const examId = standardInterviewTimerExamIdRef.current;
+      const startedAt = standardInterviewTimerStartedAtRef.current;
+      if (!examId || startedAt === null) return;
+      const elapsedMs = standardInterviewElapsedMsRef.current + Math.max(0, Date.now() - startedAt);
+      setStandardInterviewElapsedSeconds(Math.floor(elapsedMs / 1000));
+      persistStandardInterviewElapsed(examId, elapsedMs);
+    }, 1000);
+    return () => window.clearInterval(timerId);
+  }, [isStandardInterviewTimerRunning, persistStandardInterviewElapsed]);
+
+  useEffect(() => {
+    const resumeTimer = () => {
+      const examId = standardInterviewTimerExamIdRef.current;
+      if (!document.hidden && examId && examRunIdRef.current && simulationModeRef.current === 'standard') {
+        startStandardInterviewTimer(examId);
+      }
+    };
+    const pauseTimer = () => pauseStandardInterviewTimer();
+    document.addEventListener('visibilitychange', resumeTimer);
+    window.addEventListener('pagehide', pauseTimer);
+    window.addEventListener('pageshow', resumeTimer);
+    return () => {
+      document.removeEventListener('visibilitychange', resumeTimer);
+      window.removeEventListener('pagehide', pauseTimer);
+      window.removeEventListener('pageshow', resumeTimer);
+      pauseStandardInterviewTimer();
+    };
+  }, [pauseStandardInterviewTimer, startStandardInterviewTimer]);
 
   // On-screen welcome banner (TEXT ONLY, never spoken): fetched once when the
   // app loads, independent of tapping the microphone. Displayed as a plain
@@ -2604,6 +2727,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [cancelTextModeSegments, clearAudioPlayback]);
 
   const wipeConversationHistory = useCallback(async () => {
+    pauseStandardInterviewTimer();
     sessionStartGenerationRef.current += 1;
     completedExamIdRef.current = null;
     setPostExamId(null);
@@ -2662,7 +2786,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         setIsGeneratingProgressReport(false);
       }
     }
-  }, [conversationState.isSessionActive, conversationState.sessionId, clearAudioPlayback, cancelTextModeSegments, stopRecording, apiClient, dispatch, updateCurrentItemId]);
+  }, [conversationState.isSessionActive, conversationState.sessionId, clearAudioPlayback, cancelTextModeSegments, stopRecording, apiClient, dispatch, updateCurrentItemId, pauseStandardInterviewTimer]);
 
   const exportTranscriptFile = useCallback(() => {
     const exportedAt = new Date();
@@ -2737,6 +2861,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     const changeMode = useCallback(async (mode: SimulationMode) => {
     const activeSessionId = sessionIdRef.current;
     if (!apiClient || !userId || !activeSessionId) return false;
+    if (simulationModeRef.current === 'standard' && mode !== 'standard') {
+      pauseStandardInterviewTimer();
+    }
     const focusMode = mode !== 'standard';
     const introMessageId = `mode-goal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const focusActions: readonly MessageAction[] = focusMode
@@ -2830,7 +2957,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       logger.warn('Could not start the mode goal conversation.', { error: String(error) });
       return false;
     }
-  }, [apiClient, userId, dispatch, updateCurrentItemId, updateFocusOnboarding, t]);
+  }, [apiClient, userId, dispatch, updateCurrentItemId, updateFocusOnboarding, t, pauseStandardInterviewTimer]);
 
   /** Opens the existing focus selector from the intro bubble's Edit action. */
   const openFocusEditor = useCallback(() => {
@@ -2965,6 +3092,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     isVoiceSessionActive: conversationState.isSessionActive && isVoiceSessionActive,
     isGeneratingProgressReport,
     dailySessionSettings,
+    standardInterviewElapsedSeconds,
     postExamId,
     currentItemId,
     hasUnfinishedStandardInterview,

@@ -102,6 +102,32 @@ describe('supabase schema and RLS', () => {
     ]));
   });
 
+  it('stores account-wide Question Bank preferences in user settings', async () => {
+    const columns = await query<{ column_name: string; is_nullable: string }>(`
+      select column_name, is_nullable
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'user_settings'
+        and column_name in ('question_bank_test_version', 'include_english_simulation')
+      order by column_name
+    `);
+
+    expect(columns).toEqual([
+      { column_name: 'include_english_simulation', is_nullable: 'YES' },
+      { column_name: 'question_bank_test_version', is_nullable: 'YES' },
+    ]);
+
+    const constraints = await query<{ definition: string }>(`
+      select pg_get_constraintdef(oid) as definition
+      from pg_constraint
+      where conrelid = 'public.user_settings'::regclass
+        and conname = 'user_settings_question_bank_test_version_check'
+    `);
+    expect(constraints).toHaveLength(1);
+    expect(constraints[0]?.definition).toContain("'2008'");
+    expect(constraints[0]?.definition).toContain("'2020'");
+  });
+
   it('stores immutable per-exam decisions and grants the atomic save only to authenticated users', async () => {
     const columns = await query<{ column_name: string; data_type: string; is_nullable: string }>(`
       select column_name, data_type, is_nullable

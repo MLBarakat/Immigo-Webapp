@@ -56,6 +56,14 @@ describe('FocusAreaCombobox', () => {
     expect(onChange).toHaveBeenCalledWith({ selectedIds: ['symbols'], allFocusAreas: false });
   });
 
+  it('keeps removable selected chips inside the multi-select input container', () => {
+    renderCombobox({ selectedIds: ['symbols'], allFocusAreas: false });
+
+    const container = screen.getByTestId('focus-area-input');
+    const chip = screen.getByRole('button', { name: 'Remove Symbols' });
+    expect(container.contains(chip)).toBe(true);
+  });
+
   it('returns to All when the last chosen focus area is cleared', () => {
     const { onChange } = renderCombobox({ selectedIds: ['symbols'], allFocusAreas: false });
     fireEvent.focus(screen.getByRole('combobox'));
@@ -93,6 +101,7 @@ describe('FocusAreaCombobox', () => {
     const input = screen.getByRole('combobox');
     fireEvent.focus(input);
     fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(input.getAttribute('aria-activedescendant')).toBe(option('All focus areas').id);
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter' });
 

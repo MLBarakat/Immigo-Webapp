@@ -1426,6 +1426,91 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     }));
   });
 
+  it('starts the Standard Interview timer after the first question, resumes elapsed time, and clears it on completion', async () => {
+    vi.useFakeTimers();
+    const timerKey = 'immigo_standard_interview_timer:user-clock:exam-clock';
+    localStorage.removeItem(timerKey);
+    mockApiClient.postSessionStart
+      .mockResolvedValueOnce(transcriptResponse({
+        responseText: 'Welcome. Choose Ready when you are.',
+        examIntro: 'Interview introduction',
+        examRunId: 'exam-clock',
+      }))
+      .mockResolvedValueOnce(transcriptResponse({
+        responseText: 'Question one?',
+        nextItemId: 'q-1',
+        examRunId: 'exam-clock',
+      }));
+    mockApiClient.postTranscript
+      .mockResolvedValueOnce(transcriptResponse({
+        responseText: 'Question one?',
+        nextItemId: 'q-1',
+        examRunId: 'exam-clock',
+      }))
+      .mockResolvedValueOnce(transcriptResponse({
+        responseText: 'Your interview is complete.',
+        examCompleted: true,
+        examReviewId: 'review-clock',
+      }));
+    vi.mocked(MockExamService.getLatestInProgress).mockResolvedValue({
+      id: 'exam-clock',
+      test_version: '2020',
+      current_index: 2,
+      question_ids: ['q-1', 'q-2'],
+      correct_count: 1,
+      incorrect_count: 1,
+      include_english_simulation: false,
+      english_stage: 'none',
+    });
+
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-clock' }),
+      { wrapper: ConversationProvider },
+    );
+
+    try {
+      await act(async () => {
+        await result.current.startStandardInterview('new');
+      });
+      expect(result.current.standardInterviewElapsedSeconds).toBeNull();
+
+      await act(async () => {
+        await result.current.sendTextMessage('I am ready');
+      });
+      expect(result.current.standardInterviewElapsedSeconds).toBe(0);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2500);
+      });
+      expect(result.current.standardInterviewElapsedSeconds).toBe(2);
+
+      await act(async () => {
+        await result.current.endSession();
+      });
+      expect(result.current.standardInterviewElapsedSeconds).toBeNull();
+      expect(localStorage.getItem(timerKey)).toMatch(/"elapsedMs":\d+/);
+
+      await act(async () => {
+        await result.current.startStandardInterview('resume');
+      });
+      expect(result.current.standardInterviewElapsedSeconds).toBe(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1100);
+      });
+      expect(result.current.standardInterviewElapsedSeconds).toBe(3);
+
+      await act(async () => {
+        await result.current.sendTextMessage('My final answer');
+      });
+      expect(result.current.standardInterviewElapsedSeconds).toBeNull();
+      expect(localStorage.getItem(timerKey)).toBeNull();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps an active voice session in voice mode when a resume decision is captured', async () => {
     vi.mocked(MockExamService.getLatestInProgress).mockResolvedValue({
       id: 'exam-1',

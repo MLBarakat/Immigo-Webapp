@@ -123,8 +123,9 @@ This registry is the contract between the product, the tests, and every AI codin
 - The final graded answer of a Standard Interview explicitly states that the interview is complete, and the next assistant bubble is a warm summary with the recommended mode, an invitation to open the Interview Report, and a prompt to capture the decision and goals.
 - The completion summary never mentions questions to review.
 - The completed-exam review presents the interview report, score breakdown, question outcomes, strengths, focus areas, and one explicit next-step decision; it has no separate question-review or detailed-report entry points.
-- Dismissing the review is not a decision; a saved decision is immutable, and Practice/Study choices require one to three official USCIS focus categories or free-text Other that update the account goal atomically.
+- Dismissing the review is not a decision; Save persists each next-step choice and Back returns to the choices without saving. A saved decision is immutable, and Practice/Study choices require one to three official USCIS focus categories that update the account goal atomically.
 - A saved next-step decision is shown consistently in the report and remains distinct from the follow-on action, which can be retried without changing the saved decision.
+- When a decision is saved, the report shows that choice only. With no saved decision, the next-step section remains available until the learner sends a message after the completed interview; reopening the report after proceeding hides the section.
 - `Learning Modes` is the user-facing name for the mode selector; internal `SimulationMode`, API `simulationMode`, and database values remain unchanged.
 - First-time Standard Interviews use version-specific limits: 2008 ends at 10 questions with a pass at 6 correct or a fail at 5 incorrect; 2020 ends at 20 questions with a pass at 12 correct or a fail at 9 incorrect. The interview ends as soon as either threshold is reached.
 - First-time detection is per mode and test version. Standard is first-time when the learner has no completed interview with a real report; Practice and Study are first-time when no graded answer exists for that mode and version. Auto-closed abandoned interviews never count as completed reports.
@@ -145,8 +146,9 @@ This registry is the contract between the product, the tests, and every AI codin
 - Practice and Study advance through every bank item for the selected test version over the learner's lifetime in that mode, continuing an unfinished pass across sessions; a pass restarts only after every item has been seen.
 - Practice and Study focus constrains question selection; a category cycle restarts only after a full pass and shows a deterministic notice.
 - The Standard Ready gate reuses the existing opening-response path, returning `nextItemId: null` until the learner confirms; no database flag is added.
+- The Standard Interview timer starts when the first question is presented, pauses and hides when the interview is interrupted, resumes the same unfinished exam's elapsed time in the same browser, and clears on completion.
 - The Interview Report suggests two or three weakest categories from structured grading signals, never by reading qualitative report prose. The suggestion pre-fills the decision form only when the learner chooses Use this focus, and nothing persists until Save.
-- The decision form replaces Cancel with Back, which returns to the choice cards and discards unsaved edits, and Save my choice with Save. The focus combobox appears in the report only for Practice and Study decisions.
+- The decision form replaces Cancel with Back, which returns to the choice cards and discards unsaved edits, and Save my choice with Save. The focus combobox appears in the report only for Practice and Study decisions and offers only official USCIS categories.
 
 **Tests:** `src/hooks/__tests__/useConversation.test.tsx`, `src/services/__tests__/mockExamService.test.ts`, `src/components/__tests__/ConversationHub.test.tsx`, `src/components/__tests__/CenterPanel.test.tsx`, `src/components/__tests__/FeedbackModal.test.tsx`, `src/components/__tests__/FocusOnboardingCard.test.tsx`, `src/components/__tests__/FocusAreaCombobox.test.tsx`, `src/constants/__tests__/focusCategories.test.ts`, `amplify/functions/transcript/__tests__/english-exercises.test.ts`, `amplify/functions/transcript/__tests__/focus.test.ts`, `amplify/functions/transcript/__tests__/mode-onboarding.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `amplify/functions/transcript/turn/__tests__/mock-exam-selector.test.ts`, `tests/e2e/text-roundtrip.spec.ts`, `tests/e2e/edge-cases.spec.ts`
 
@@ -226,24 +228,25 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-08 — Settings and preferences
 
 **Status:** protected  
-**Entry points:** `src/services/userSettingsService.ts`, `src/components/ApplicationSettingsModal.tsx`, `src/components/RightPanel.tsx`, `src/components/FocusAreaCombobox.tsx`, `src/components/LeftPanel.tsx`, `src/components/FontSizeSelector.tsx`, `src/constants/focusCategories.ts`, `src/constants/voices.ts`, `src/constants/voicePreview.ts`, `src/hooks/useVoicePreview.ts`, `src/utils/fontSize.ts`, `src/utils/theme.ts`
+**Entry points:** `src/App.tsx`, `src/context/AuthContext.tsx`, `src/services/userSettingsService.ts`, `src/types/settings.ts`, `src/components/ApplicationSettingsModal.tsx`, `src/components/RightPanel.tsx`, `src/components/FocusAreaCombobox.tsx`, `src/components/LeftPanel.tsx`, `src/components/FontSizeSelector.tsx`, `src/constants/focusCategories.ts`, `src/constants/voices.ts`, `src/constants/voicePreview.ts`, `src/hooks/useVoicePreview.ts`, `src/utils/fontSize.ts`, `src/utils/theme.ts`
 
 **Invariants**
 
 - Settings persist per user and survive reloads.
+- Question Bank test-version and English-practice choices persist per account and are restored after refresh or sign-in.
 - Application Settings has no Save or Cancel action: every selection applies immediately, updates the visible UI, and is queued to the database in order.
 - Failed auto-saves surface an inline error while the chosen value remains selected for retry; a later successful save clears the error.
 - Language, voice, audio-device, notification, and accessibility preferences keep their existing keys.
 - Exactly two Polly voices exist per supported language: Ruth (default) and Matthew for English, Mía (default) and Andrés for Spanish, Léa (default) and Rémi for French, and Hala (default) and Zayd for Arabic.
 - Legacy voice IDs (Joanna, Lupe, Pedro, Stephen, and accented variants) normalize to their supported replacement, and a voice from another language falls back to the selected language's default.
 - Changing the selected voice previews one localized introduction in the newly chosen voice; consecutive previews for the same language never repeat the same sentence.
-- Up to three official USCIS focus categories plus a separate free-text Other persist as the account learning goal with an optional weekly graded-answer target.
+- Up to three official USCIS focus categories persist as the account learning goal with an optional weekly graded-answer target; the selector does not accept free-text Other.
 - Learning Goals are edited only in the right panel under Question bank and auto-save without a Save button; Application Settings does not edit or persist them.
 - The suggested weekly target is 20, but remains unset until the user chooses one.
 - The target week is Monday through Sunday in the account time zone and counts answers from every mode.
 - Invalid or missing settings fall back to documented defaults.
 - The mode selector is labeled Learning Modes; internal identifiers and API/database values stay unchanged.
-- Focus selection is a searchable, accessible multi-select combobox with All focus areas as the default. Choosing an individual category turns All off, removing the last category returns to All, and at most three categories plus one free-text Other are allowed.
+- Focus selection is a searchable, accessible multi-select combobox with selected chips inside the input and All focus areas as the default. Choosing an individual category turns All off, removing the last category returns to All, and at most three official categories are allowed.
 - The exact string `All focus areas` is stored in `learning_goal` as the All sentinel. Existing free-text goals are preserved as Other and are never discarded.
 - Standard Interview hides the entire Learning Goals section, including the weekly target; focus settings apply only to Practice and Study.
 - The English reading and writing preference defaults on only for new accounts; an existing saved value, including off, is respected in both test versions.

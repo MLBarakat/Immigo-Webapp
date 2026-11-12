@@ -39,6 +39,9 @@ export interface UserSettings {
   learning_goal?: string | null;
   /** Optional weekly graded-answer target; null means tracking is disabled. */
   weekly_graded_answer_target?: number | null;
+  /** Account-wide Question Bank selection; null lets legacy browser preferences migrate once. */
+  question_bank_test_version?: '2008' | '2020' | null;
+  include_english_simulation?: boolean | null;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -60,4 +63,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   account_timezone: 'UTC',
   learning_goal: null,
   weekly_graded_answer_target: null,
+  question_bank_test_version: null,
+  include_english_simulation: null,
 };

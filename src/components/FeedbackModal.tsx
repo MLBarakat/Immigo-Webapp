@@ -33,6 +33,7 @@ interface FeedbackModalProps {
   review: MockExamReview | null;
   error: string | null;
   decision: MockExamReviewDecision | null;
+  showNextStep?: boolean;
   decisionSaving: boolean;
   decisionError: string | null;
   onSaveDecision: (
@@ -88,6 +89,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   review,
   error,
   decision,
+  showNextStep = true,
   decisionSaving,
   decisionError,
   onSaveDecision,
@@ -192,7 +194,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
         return;
       }
       if (saved.choice === 'practice' || saved.choice === 'study' || saved.choice === 'new_interview') {
-        const continued = await continueWithSavedDecision();
+        const continued = await continueWithSavedDecision(saved);
         if (continued) close();
         // If continuing failed, continueError is set and the saved card stays
         // open so the learner can retry.
@@ -204,12 +206,14 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
     }
   };
 
-  const continueWithSavedDecision = async (): Promise<boolean> => {
-    if (!currentDecision || continuing) return false;
+  const continueWithSavedDecision = async (
+    savedDecision: MockExamReviewDecision | null = currentDecision,
+  ): Promise<boolean> => {
+    if (!savedDecision || continuing) return false;
     setContinuing(true);
     setContinueError(null);
     try {
-      const continued = await onContinueDecision(currentDecision);
+      const continued = await onContinueDecision(savedDecision);
       if (!continued) setContinueError(t('workspace.examReview.continueFailed'));
       return continued;
     } catch {
@@ -433,6 +437,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                 </div>
               </section>
 
+              {showNextStep && (
               <section aria-labelledby="exam-next-step-title" className="space-y-4 border-t border-immigo-gray-200 pt-5 dark:border-gray-700">
                 <div>
                   <h3 id="exam-next-step-title" className="font-semibold text-deep-navy dark:text-white">
@@ -529,6 +534,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                                 idPrefix={`exam-review-focus-${examId}`}
                               />
                             </div>
+                          </div>
+                        )}
                         <p className="text-xs text-immigo-gray-600 dark:text-gray-300">
                           {t(confirmChoiceFor(pendingChoice))}
                         </p>
@@ -563,8 +570,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                           </button>
                         </div>
                       </div>
-                    )}
-                      </div>
                     ) : (
                       <div className="grid gap-2 sm:grid-cols-2">
                         {choices.map(({ choice, titleKey, descriptionKey }) => (
@@ -591,6 +596,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                   </p>
                 )}
               </section>
+              )}
             </>
           )}
         </main>

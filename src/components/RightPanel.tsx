@@ -34,6 +34,7 @@ interface RightPanelProps {
   onTestVersionChange: (version: TestVersion) => void;
   includeEnglishSimulation: boolean;
   onIncludeEnglishSimulationChange: (include: boolean) => void;
+  questionBankPreferenceError?: string | null;
   userId?: string | null;
   currentItemId?: string | null;
   onClearSession: () => void;
@@ -63,6 +64,7 @@ export function RightPanel({
   onTestVersionChange,
   includeEnglishSimulation,
   onIncludeEnglishSimulationChange,
+  questionBankPreferenceError = null,
   userId,
   currentItemId,
   onClearSession,
@@ -378,6 +380,11 @@ export function RightPanel({
               <input type="checkbox" checked={includeEnglishSimulation} onChange={event => onIncludeEnglishSimulationChange(event.target.checked)} className="rounded border-immigo-gray-300 text-art-blue-600 focus:ring-art-blue-500" />
               <span>{t('workspace.right.includeEnglishSimulation')}</span>
             </label>
+            {questionBankPreferenceError && (
+              <p role="alert" className="text-xs text-art-red-700 dark:text-red-300">
+                {questionBankPreferenceError}
+              </p>
+            )}
           </div>
           {currentItemId && (
             <div className="mt-2 rounded-lg bg-immigo-gray-50 px-2.5 py-2 text-[11px] text-immigo-gray-600">
