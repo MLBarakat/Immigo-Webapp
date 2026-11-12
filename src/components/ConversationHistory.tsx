@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown } from 'lucide-react';
 import { Message, MessageAction } from '../context/conversationContextTypes';
@@ -39,8 +39,16 @@ export function ConversationHistory({
   const previousFirstIdRef = useRef<string | null>(null);
   const previousHeightRef = useRef<number>(0);
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const lastMessage = messages.at(-1) ?? null;
-  const firstMessage = messages.at(0) ?? null;
+  // Render messages in strict chronological order so the display order is
+  // deterministic on every device, regardless of how upstream hydration or
+  // concurrent assistant responses arrived.
+  const sortedMessages = useMemo(
+    () =>
+      [...messages].sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp)),
+    [messages],
+  );
+  const lastMessage = sortedMessages.at(-1) ?? null;
+  const firstMessage = sortedMessages.at(0) ?? null;
 
   const checkIfAtBottom = useCallback(() => {
     const viewport = conversationRef.current;
@@ -105,9 +113,9 @@ export function ConversationHistory({
         {hasMore && <span className="text-xs text-immigo-gray-400 italic flex justify-center py-1">{t('workspace.center.loadingOlder')}</span>}
       </div>
 
-      {messages.map((msg, index) => {
+      {sortedMessages.map((msg, index) => {
         const messageDate = new Date(msg.timestamp);
-        const previousDate = index > 0 ? new Date(messages[index - 1].timestamp) : null;
+        const previousDate = index > 0 ? new Date(sortedMessages[index - 1].timestamp) : null;
         const dateKey = messageDate.toDateString();
         const previousDateKey = previousDate?.toDateString();
         const startsNewDay = index === 0 || dateKey !== previousDateKey;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BookOpen, Hand, Mic, MessageSquare, Zap, ArrowRight, X } from 'lucide-react';
+import { BookOpen, ChevronRight, Hand, Mic, MessageSquare, Zap, ArrowRight, X } from 'lucide-react';
 import { useDraggableOverlay } from '../hooks/useDraggableOverlay';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { SimulationMode } from '../context/conversationContextTypes';
@@ -19,6 +19,12 @@ const MODE_OPTIONS = [
   { mode: 'practice', icon: Zap },
   { mode: 'study', icon: BookOpen },
 ] as const;
+
+const MODE_COLORS: Record<string, string> = {
+  standard: 'text-art-blue-600 bg-art-blue-50 border-art-blue-100',
+  practice: 'text-amber-600 bg-amber-50 border-amber-100',
+  study: 'text-emerald-600 bg-emerald-50 border-emerald-100',
+};
 
 export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose, onSelectMode }) => {
   const { t, i18n } = useTranslation();
@@ -66,16 +72,29 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ userName, onClose, o
                     <h3 className="text-2xl font-bold text-deep-navy mb-2">{t('welcome.modes.title')}</h3>
                     <p className="text-immigo-gray-600 min-h-[72px]">{t('welcome.modes.description')}</p>
                     <div className="mt-4 flex flex-col gap-2">
-                        {MODE_OPTIONS.map(({ mode, icon: ModeIcon }) => (
+                        {MODE_OPTIONS.map(({ mode, icon: ModeIcon }) => {
+                          const colorClass = MODE_COLORS[mode];
+                          return (
                             <button
-                                key={mode}
-                                onClick={() => (onSelectMode ? onSelectMode(mode) : onClose())}
-                                className="flex items-center gap-3 w-full px-4 py-3 rounded-lg border border-immigo-gray-200 bg-star-white text-left hover:border-art-blue-500 hover:bg-art-blue-50 focus:outline-none focus:ring-2 focus:ring-art-blue-500 transition-colors"
+                              key={mode}
+                              onClick={() => (onSelectMode ? onSelectMode(mode) : onClose())}
+                              className={`group flex items-center gap-3 w-full px-4 py-3.5 rounded-xl border border-immigo-gray-200 bg-star-white text-left hover:border-art-blue-400 hover:bg-art-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-art-blue-500 focus-visible:ring-offset-2 transition-all duration-200`}
                             >
-                                <ModeIcon className="w-5 h-5 text-art-blue-600 shrink-0" />
-                                <span className="font-semibold text-deep-navy">{t(`welcome.modes.${mode}`)}</span>
+                              <div className={`shrink-0 flex h-9 w-9 items-center justify-center rounded-lg ${colorClass}`}>
+                                <ModeIcon className="w-5 h-5 shrink-0" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="block font-semibold text-deep-navy group-hover:text-art-blue-600 transition-colors">
+                                  {t(`welcome.modes.${mode}.label`)}
+                                </span>
+                                <p className="mt-0.5 text-xs text-immigo-gray-500 leading-relaxed line-clamp-2">
+                                  {t(`welcome.modes.${mode}.description`)}
+                                </p>
+                              </div>
+                              <ChevronRight className="shrink-0 w-4 h-4 text-immigo-gray-300 group-hover:text-art-blue-500 transition-colors rtl:rotate-180" aria-hidden="true" />
                             </button>
-                        ))}
+                          );
+                        })}
                     </div>
                 </>
             ) : (

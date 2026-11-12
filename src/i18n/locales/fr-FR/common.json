@@ -257,11 +257,20 @@
     "next": "Suivant",
     "start": "Commencer",
     "modes": {
-      "title": "Choisissez un mode d’apprentissage",
+      "title": "Choisissez un mode d'apprentissage",
       "description": "Choisissez comment commencer. Vous pouvez changer de mode à tout moment.",
-      "standard": "Commencer un entretien simulé",
-      "practice": "S'entraîner aux questions d'entretien",
-      "study": "Étudier les sujets d'entretien"
+      "standard": {
+        "label": "Commencer un entretien simulé",
+        "description": "Un entretien complet d'éducation civique de l'USCIS chronométré, comme le véritable examen. Répondez à l'oral et obtenez une note."
+      },
+      "practice": {
+        "label": "S'entraîner aux questions d'entretien",
+        "description": "Entraînez-vous aux questions d'éducation civique avec des indices, des essais répétés et un retour immédiat pour gagner en confiance."
+      },
+      "study": {
+        "label": "Étudier les sujets d'entretien",
+        "description": "Apprenez chaque sujet d'éducation civique avec des explications et du contexte avant de vous tester."
+      }
     },
     "steps": {
       "start": { "title": "Démarrez votre session", "description": "Appuyez sur le grand bouton animé pour commencer une session d'entraînement. L'IA vous saluera et attendra que vous parliez." },

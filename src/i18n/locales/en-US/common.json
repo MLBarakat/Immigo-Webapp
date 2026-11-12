@@ -311,9 +311,18 @@
     "modes": {
       "title": "Choose a Learning Mode",
       "description": "Pick how you want to begin. You can switch modes anytime.",
-      "standard": "Start a Mock Interview",
-      "practice": "Practice Interview Questions",
-      "study": "Study Interview Topics"
+      "standard": {
+        "label": "Start a Mock Interview",
+        "description": "A timed, full USCIS civics interview just like the real test. Answer out loud and get scored."
+      },
+      "practice": {
+        "label": "Practice Interview Questions",
+        "description": "Practice civics questions with hints, retries, and instant feedback to build confidence."
+      },
+      "study": {
+        "label": "Study Interview Topics",
+        "description": "Learn each civics topic with explanations and background before you test yourself."
+      }
     },
     "steps": {
       "start": {

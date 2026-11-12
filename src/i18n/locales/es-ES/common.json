@@ -261,9 +261,18 @@
     "modes": {
       "title": "Elige un modo de aprendizaje",
       "description": "Elige cómo quieres empezar. Puedes cambiar de modo cuando quieras.",
-      "standard": "Iniciar entrevista simulada",
-      "practice": "Practicar preguntas de entrevista",
-      "study": "Estudiar temas de entrevista"
+      "standard": {
+        "label": "Iniciar entrevista simulada",
+        "description": "Una entrevista completa de cívica de USCIS con tiempo, igual que el examen real. Responde en voz alta y recibe una calificación."
+      },
+      "practice": {
+        "label": "Practicar preguntas de entrevista",
+        "description": "Practica preguntas de cívica con pistas, segundos intentos y retroalimentación instantánea para ganar confianza."
+      },
+      "study": {
+        "label": "Estudiar temas de entrevista",
+        "description": "Aprende cada tema de cívica con explicaciones y contexto antes de evaluarte."
+      }
     },
     "steps": {
       "start": { "title": "Inicia tu sesión", "description": "Presiona el botón animado grande para comenzar una sesión de práctica. La IA te saludará y esperará a que hables." },
