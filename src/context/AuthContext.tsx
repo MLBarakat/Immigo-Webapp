@@ -36,7 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   }));
   const userSettingsRef = useRef(userSettings);
   const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
-  userSettingsRef.current = userSettings;
+  useEffect(() => {
+    userSettingsRef.current = userSettings;
+  }, [userSettings]);
   const [initializationAttempt, setInitializationAttempt] = useState(0);
   const sessionLoadGenerationRef = useRef(0);
   const settingsRealtimeGenerationRef = useRef(0);

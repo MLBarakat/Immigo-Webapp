@@ -107,7 +107,9 @@
         "listening": "Écoute…",
         "thinking": "Réflexion…",
         "speaking": "Parole…",
-        "error": "Erreur"
+        "error": "Erreur",
+        "preparing": "Préparation…",
+        "preparingFailed": "Échec du changement — appuyez pour réessayer"
       },
       "interviewTimer": "Durée de l’entretien : {{time}}",
       "focus": "Concentration",

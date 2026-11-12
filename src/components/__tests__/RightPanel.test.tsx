@@ -129,4 +129,18 @@ describe('RightPanel learning goals', () => {
     expect(screen.queryByRole('spinbutton', { name: 'Weekly graded-answer target' })).toBeNull();
     expect(screen.queryByRole('combobox')).toBeNull();
   });
+
+  it('switches away from Standard Interview immediately without showing a pause dialog', () => {
+    const onSimulationModeChange = vi.fn();
+    renderPanel({
+      simulationMode: 'standard',
+      hasUnfinishedStandardInterview: true,
+      onSimulationModeChange,
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: /Practice Mode/i }));
+
+    expect(screen.queryByText(/Pause this Standard Interview/i)).toBeNull();
+    expect(onSimulationModeChange).toHaveBeenCalledWith('practice');
+  });
 });

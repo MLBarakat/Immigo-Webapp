@@ -6,7 +6,7 @@ import { createContext } from 'react';
 // confirmed yet. It renders as idle: mic consent/permission prompts must never
 // look like "Thinking", and the pill must not claim to listen before capture
 // actually runs.
-export type AppStatus = 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error';
+export type AppStatus = 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error' | 'preparing';
 export type SimulationMode = 'standard' | 'practice' | 'study';
 export type TestVersion = '2008' | '2020';
 
@@ -74,6 +74,7 @@ export interface ConversationState {
   /** Free, real-time stats computed from graded_answers — not the expensive
    * LLM-generated narrative report. Null until the first answer this session. */
   liveStats: LiveSessionStats | null;
+  transitionError: string | null;
 }
 
 export type ConversationAction =
@@ -98,7 +99,9 @@ export type ConversationAction =
   | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[] } }
   | { type: 'ADD_STANDALONE_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[] } }
   | { type: 'UPDATE_ASSISTANT_MESSAGE'; payload: { messageId: string; content: string; actions?: readonly MessageAction[] } }
-  | { type: 'RESOLVE_MESSAGE_ACTIONS'; payload: { messageId?: string } };
+  | { type: 'RESOLVE_MESSAGE_ACTIONS'; payload: { messageId?: string } }
+  | { type: 'SET_TRANSITION_ERROR'; payload: string }
+  | { type: 'CLEAR_TRANSITION_ERROR' };
 
 export const initialState: ConversationState = {
   conversationHistory: [],
@@ -114,6 +117,7 @@ export const initialState: ConversationState = {
   hasMoreHistory: false,
   oldestMessageCursor: null,
   liveStats: null,
+  transitionError: null,
 };
 
 export const conversationReducer = (state: ConversationState, action: ConversationAction): ConversationState => {
@@ -305,6 +309,12 @@ export const conversationReducer = (state: ConversationState, action: Conversati
 
     case 'CLEAR_ERROR':
       return { ...state, errorMessage: null, appStatus: 'idle' };
+
+    case 'SET_TRANSITION_ERROR':
+      return { ...state, transitionError: action.payload };
+
+    case 'CLEAR_TRANSITION_ERROR':
+      return { ...state, transitionError: null };
 
     default:
       return state;

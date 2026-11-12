@@ -84,6 +84,7 @@ describe('CenterPanel text interview flow', () => {
     ['processing', 'Thinking…'],
     ['speaking', 'Speaking…'],
     ['error', 'Error'],
+    ['preparing', 'Preparing…'],
   ] as const)('centres the dot and "%s" status label together as one unit on a single line', (appStatus, label) => {
     renderCenterPanel({ appStatus });
 
@@ -99,6 +100,20 @@ describe('CenterPanel text interview flow', () => {
     expect(status.contains(statusText)).toBe(true);
     expect(island.className).toContain('justify-center');
     expect(island.className).toContain('px-4');
+  });
+
+  it('disables the text composer and send button while preparing', () => {
+    renderCenterPanel({ appStatus: 'preparing' });
+
+    expect((screen.getByTestId('centerpanel-input') as HTMLTextAreaElement).disabled).toBe(true);
+    expect((screen.getByTestId('centerpanel-send') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('renders a transition error alert when transitionError is set', () => {
+    renderCenterPanel({ transitionError: 'Switching failed — tap to retry' });
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('Switching failed — tap to retry');
   });
 
   it('slides the status island away while the conversation is scrolled and reveals it on input interaction', () => {

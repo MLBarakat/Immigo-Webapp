@@ -111,7 +111,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - Standard Interview, Practice, and Study workflows preserve their turn semantics.
 - In text mode, consecutive assistant bubbles from one turn appear sequentially with a short readable delay; voice mode continues to reveal them in step with Polly playback.
 - Mode changes do not lose persisted history or corrupt the active exam run.
-- Leaving an unfinished Standard Interview requires confirmation; its progress remains saved.
+- Leaving an unfinished Standard Interview by selecting a different mode is itself the pause decision — the timer pauses immediately with no confirmation dialog; its progress remains saved.
 - Returning to an unfinished Standard Interview explicitly offers resume or start new.
 - Starting a new Standard Interview marks every previously unfinished Standard Interview as completed; those closed interviews do not receive a new report or scorecard.
 - The AI welcome appears once per account-local date even when prior conversation history is present; existing history is preserved.
@@ -141,7 +141,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - Practice and Study first-time onboarding shows a deterministic explanation in one assistant bubble; returning onboarding shows per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts plus the same counts for the focus subset, in one assistant bubble, and lets the learner keep or change focus.
 - Practice and Study intro bubbles expose Continue and Edit. Continue starts the first question with the focus already stored on the session or account, falling back to All focus areas; Edit opens the existing focus-area selector. The focus card never opens automatically on a mode change.
 - A first Learning Mode introduction is one assistant bubble only. For Standard, that bubble contains the icebreaker, version facts, and rules, and the separate Ready question is the next bubble.
-- A mode change renders a deterministic intro in the chat immediately, before the backend response; the response enriches the same bubble in place, and mode transitions skip speech synthesis so switching modes is instantaneous.
+- A mode change commits the selection in the UI immediately and enters 'preparing' state, which locks text input and voice capture. The backend response is revealed when the transition completes: immediately on desktop, and when the learner returns to the chat tab on mobile. If voice was active when the switch was accepted, Polly speaks the transition response (with typewriter reveal and barge-in support) before resuming listening; text-mode transitions render without Polly.
 - The first-run welcome introduces Learning Modes and offers Standard Interview, Practice, and Study as the first mode; choosing one closes the welcome and activates that mode.
 - Practice and Study advance through every bank item for the selected test version over the learner's lifetime in that mode, continuing an unfinished pass across sessions; a pass restarts only after every item has been seen.
 - Practice and Study focus constrains question selection; a category cycle restarts only after a full pass and shows a deterministic notice.

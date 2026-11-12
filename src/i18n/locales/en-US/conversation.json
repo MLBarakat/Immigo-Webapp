@@ -107,7 +107,9 @@
         "listening": "Listening…",
         "thinking": "Thinking…",
         "speaking": "Speaking…",
-        "error": "Error"
+        "error": "Error",
+        "preparing": "Preparing…",
+        "preparingFailed": "Switching failed — tap to retry"
       },
       "interviewTimer": "Interview time: {{time}}",
       "focus": "Focus",

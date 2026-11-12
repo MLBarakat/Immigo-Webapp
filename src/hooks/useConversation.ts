@@ -39,6 +39,7 @@ interface UseConversationManagerProps {
   preferredLanguage?: string;
   accountTimezone?: string;
   bargeIn?: BargeIn;
+  isChatVisible?: boolean;
 }
 
 interface AssistantReveal {
@@ -89,13 +90,23 @@ function findLatestMockExamReviewId(messages: readonly Message[]): string | null
   return null;
 }
 
-export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', testVersion = '2020', includeEnglishSimulation = false, preferredLanguage = 'en-US', accountTimezone = 'UTC', bargeIn = 'balanced' }: UseConversationManagerProps) {
+export function useConversation({ apiClient, userId, voiceId, simulationMode = 'standard', testVersion = '2020', includeEnglishSimulation = false, preferredLanguage = 'en-US', accountTimezone = 'UTC', bargeIn = 'balanced', isChatVisible = true }: UseConversationManagerProps) {
   const { t, i18n } = useTranslation('conversation');
   const context = useContext(ConversationContext);
   if (!context) {
     throw new Error('useConversation must be used within a ConversationProvider');
   }
   const { state: conversationState, dispatch } = context;
+  const isChatVisibleRef = useRef(isChatVisible);
+  useEffect(() => {
+    isChatVisibleRef.current = isChatVisible;
+  }, [isChatVisible]);
+  const modeTransitionGenerationRef = useRef(0);
+  const pendingTransitionRef = useRef<{
+    introMessageId: string;
+    segments: readonly string[];
+    focusActions?: readonly MessageAction[];
+  } | null>(null);
   const [isGeneratingProgressReport, setIsGeneratingProgressReport] = useState(false);
   const [dailySessionSettings, setDailySessionSettings] = useState<{ mode: SimulationMode; testVersion: TestVersion; includeEnglishSimulation: boolean } | null>(null);
   const [postExamId, setPostExamId] = useState<string | null>(null);
@@ -455,6 +466,74 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     queue.timerId = window.setTimeout(presentNext, TEXT_MODE_SEGMENT_DELAY_MS);
   }, [cancelTextModeSegments, dispatch, finishAssistantTurn]);
+
+  const presentModeTransitionSegments = useCallback((
+    introMessageId: string,
+    segments: readonly string[],
+    actions?: readonly MessageAction[],
+  ) => {
+    cancelTextModeSegments();
+    const [first, ...rest] = segments;
+    if (first === undefined) {
+      finishAssistantTurn();
+      return;
+    }
+
+    dispatch({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: { assistantMessageId: introMessageId, content: first, ...(actions?.length ? { actions } : {}) },
+    });
+    if (rest.length === 0) {
+      finishAssistantTurn();
+      return;
+    }
+
+    const queue: TextModeSegmentQueue = {
+      timerId: null,
+      pending: rest.map(content => ({
+        assistantMessageId: `mode-goal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        content,
+      })),
+    };
+    textModeSegmentQueueRef.current = queue;
+
+    const presentNext = () => {
+      if (textModeSegmentQueueRef.current !== queue) return;
+      const next = queue.pending.shift();
+      if (!next) {
+        textModeSegmentQueueRef.current = null;
+        finishAssistantTurn();
+        return;
+      }
+
+      dispatch({
+        type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+        payload: next,
+      });
+      if (queue.pending.length === 0) {
+        queue.timerId = null;
+        textModeSegmentQueueRef.current = null;
+        finishAssistantTurn();
+        return;
+      }
+      queue.timerId = window.setTimeout(presentNext, TEXT_MODE_SEGMENT_DELAY_MS);
+    };
+
+    queue.timerId = window.setTimeout(presentNext, TEXT_MODE_SEGMENT_DELAY_MS);
+  }, [cancelTextModeSegments, dispatch, finishAssistantTurn]);
+
+  const flushPendingTransition = useCallback(() => {
+    const pending = pendingTransitionRef.current;
+    if (!pending) return;
+    pendingTransitionRef.current = null;
+    presentModeTransitionSegments(pending.introMessageId, pending.segments, pending.focusActions);
+  }, [presentModeTransitionSegments]);
+
+  useEffect(() => {
+    if (isChatVisible) {
+      flushPendingTransition();
+    }
+  }, [isChatVisible, flushPendingTransition]);
 
   const stopAssistantReveal = useCallback((complete = false) => {
     const reveal = assistantRevealRef.current;
@@ -2858,65 +2937,138 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [dispatch, updateCurrentItemId, updateFocusOnboarding, userId]);
 
-    const changeMode = useCallback(async (mode: SimulationMode) => {
+  const playTransitionAudio = useCallback((
+    messageId: string,
+    segments: readonly string[],
+    audioData: ArrayBuffer,
+    actions?: readonly MessageAction[],
+  ) => {
+    const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
+    const audioBlobUrl = URL.createObjectURL(audioBlob);
+    const audioPlaybackNode = acquirePollyPlaybackElement(audioBlobUrl);
+    const playbackGeneration = ++audioPlaybackGenerationRef.current;
+    describePollyPlayback('Mode transition', traceId, audioPlaybackNode, audioData.byteLength, segments.join(' ').length);
+
+    audioPlaybackNode.onerror = () => {
+      if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+      completeBlockedAudioTurnAsText(traceId, new Error(`media decode failure (code ${audioPlaybackNode.error?.code ?? 'unknown'})`));
+      if (actions?.length) {
+        dispatch({
+          type: 'UPDATE_ASSISTANT_MESSAGE',
+          payload: { messageId, content: segments[0] ?? '', actions },
+        });
+      }
+      if (voiceSessionRef.current) void startListeningWithMicGate();
+    };
+
+    audioPlaybackRef.current = audioPlaybackNode;
+    audioPlaybackUrlRef.current = audioBlobUrl;
+    activePollyTextRef.current = segments.join(' ');
+    assistantReplyPendingRef.current = true;
+    dispatch({ type: 'SET_STATUS', payload: 'speaking' });
+    startAssistantReveal(messageId, segments, audioPlaybackNode);
+    isPollyPlayingRef.current = true;
+    isAssistantAudioActiveRef.current = true;
+    pauseVAD();
+
+    audioPlaybackNode.onended = () => {
+      if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+      isAssistantAudioActiveRef.current = false;
+      stopAssistantReveal(true);
+      if (actions?.length) {
+        dispatch({
+          type: 'UPDATE_ASSISTANT_MESSAGE',
+          payload: { messageId, content: segments[0] ?? '', actions },
+        });
+      }
+      finishAssistantTurn();
+      clearAudioPlayback();
+      pollyMuteGateTimerRef.current = window.setTimeout(() => {
+        isPollyPlayingRef.current = false;
+        pollyMuteGateTimerRef.current = null;
+      }, 300);
+      if (voiceSessionRef.current) {
+        void startListeningWithMicGate();
+      }
+    };
+
+    audioPlaybackNode.play().catch(error => {
+      if (playbackGeneration !== audioPlaybackGenerationRef.current) return;
+      if (error instanceof Error && error.name === 'NotAllowedError') {
+        parkTurnForGestureRetry({
+          scope: 'Mode transition',
+          traceId,
+          node: audioPlaybackNode,
+          blobUrl: audioBlobUrl,
+          playbackGeneration,
+          blockedError: error,
+        });
+        return;
+      }
+      completeBlockedAudioTurnAsText(traceId, error);
+      if (actions?.length) {
+        dispatch({
+          type: 'UPDATE_ASSISTANT_MESSAGE',
+          payload: { messageId, content: segments[0] ?? '', actions },
+        });
+      }
+      if (voiceSessionRef.current) void startListeningWithMicGate();
+    });
+  }, [
+    completeBlockedAudioTurnAsText,
+    describePollyPlayback,
+    dispatch,
+    finishAssistantTurn,
+    parkTurnForGestureRetry,
+    pauseVAD,
+    startAssistantReveal,
+    startListeningWithMicGate,
+    stopAssistantReveal,
+    clearAudioPlayback,
+  ]);
+
+  const changeMode = useCallback(async (mode: SimulationMode) => {
     const activeSessionId = sessionIdRef.current;
     if (!apiClient || !userId || !activeSessionId) return false;
-    if (simulationModeRef.current === 'standard' && mode !== 'standard') {
+    if (simulationModeRef.current === 'standard') {
       pauseStandardInterviewTimer();
     }
-    const focusMode = mode !== 'standard';
-    const introMessageId = `mode-goal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const focusActions: readonly MessageAction[] = focusMode
-      ? [
-          {
-            kind: 'focus',
-            focusAction: 'continue',
-            label: t('workspace.center.focusOnboarding.continue'),
-            variant: 'primary',
-          },
-          {
-            kind: 'focus',
-            focusAction: 'edit',
-            label: t('workspace.center.focusOnboarding.edit'),
-            variant: 'secondary',
-          },
-        ]
-      : [];
-
-    // Navigation is immediate: switch the mode and render the deterministic
-    // intro before the network call. The request then enriches the same bubble
-    // and owns the persisted copy.
+    const generation = ++modeTransitionGenerationRef.current;
     simulationModeRef.current = mode;
     completedExamIdRef.current = null;
     setPostExamId(null);
-    modeGoalPendingRef.current = focusMode;
-    modeIntroMessageIdRef.current = introMessageId;
+    modeGoalPendingRef.current = mode !== 'standard';
+    modeIntroMessageIdRef.current = null;
     updateFocusOnboarding(null);
-    dispatch({
-      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
-      payload: {
-        assistantMessageId: introMessageId,
-        content: t(`workspace.center.modeIntro.${mode}`),
-        ...(focusActions.length ? { actions: focusActions } : {}),
-      },
+
+    const wasVoiceActive = voiceSessionRef.current;
+    if (wasVoiceActive) {
+      stopRecording();
+      clearAudioPlayback();
+    }
+    dispatch({ type: 'CLEAR_TRANSITION_ERROR' });
+    dispatch({ type: 'SET_STATUS', payload: 'preparing' });
+
+    void ChatPersistenceService.saveDailySessionState(activeSessionId, {
+      current_item_id: currentItemIdRef.current,
+      current_mode: mode,
+      test_version: testVersionRef.current,
+      include_english_simulation: includeEnglishSimulationRef.current,
     });
 
     try {
-      await ChatPersistenceService.saveDailySessionState(activeSessionId, {
-        current_item_id: currentItemIdRef.current,
-        current_mode: mode,
-        test_version: testVersionRef.current,
-        include_english_simulation: includeEnglishSimulationRef.current,
-      });
       const response = await apiClient.postModeTransition(activeSessionId, currentItemIdRef.current, {
-        voiceId: voiceIdRef.current ?? undefined,
+        voiceId: wasVoiceActive ? voiceIdRef.current ?? undefined : undefined,
         simulationMode: mode,
         preferredLanguage: preferredLanguageRef.current,
         testVersion: testVersionRef.current,
         includeEnglishSimulation: includeEnglishSimulationRef.current,
       });
-      // A newer transition won the race; its intro owns the conversation now.
-      if (simulationModeRef.current !== mode) return true;
+
+      if (modeTransitionGenerationRef.current !== generation || simulationModeRef.current !== mode) {
+        return true;
+      }
 
       modeGoalPendingRef.current = response.modeGoalPending;
       if (!response.modeGoalPending) updateFocusOnboarding(null);
@@ -2927,37 +3079,73 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       const segments = Array.isArray(response.assistantSegments) && response.assistantSegments.length
         ? response.assistantSegments
         : [response.responseText];
-      if (segments[0]) {
-        dispatch({
-          type: 'UPDATE_ASSISTANT_MESSAGE',
-          payload: {
-            messageId: introMessageId,
-            content: segments[0],
-            ...(response.modeGoalPending && focusActions.length ? { actions: focusActions } : {}),
-          },
-        });
-      }
-      for (const content of segments.slice(1)) {
-        dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: {
-          assistantMessageId: `mode-goal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          content,
-        } });
-      }
+
+      const introMessageId = `mode-goal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      modeIntroMessageIdRef.current = introMessageId;
+
+      const focusActions: readonly MessageAction[] = mode !== 'standard'
+        ? [
+            {
+              kind: 'focus',
+              focusAction: 'continue',
+              label: t('workspace.center.focusOnboarding.continue'),
+              variant: 'primary',
+            },
+            {
+              kind: 'focus',
+              focusAction: 'edit',
+              label: t('workspace.center.focusOnboarding.edit'),
+              variant: 'secondary',
+            },
+          ]
+        : [];
+
       for (const content of segments) {
-        if (content.trim()) void ChatPersistenceService.persistMessage(activeSessionId, userId, 'assistant', content);
+        if (content.trim()) {
+          void ChatPersistenceService.persistMessage(activeSessionId, userId, 'assistant', content);
+        }
       }
-      if (voiceSessionRef.current && response.audioData.byteLength > 0) {
-        const url = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
-        const player = acquirePollyPlaybackElement(url);
-        player.onended = () => URL.revokeObjectURL(url);
-        void player.play().catch(() => URL.revokeObjectURL(url));
+
+      const shouldRevealNow = isChatVisibleRef.current;
+      if (wasVoiceActive && response.audioData.byteLength > 0) {
+        playTransitionAudio(introMessageId, segments, response.audioData, response.modeGoalPending ? focusActions : undefined);
+      } else if (shouldRevealNow) {
+        presentModeTransitionSegments(introMessageId, segments, response.modeGoalPending ? focusActions : undefined);
+      } else {
+        pendingTransitionRef.current = {
+          introMessageId,
+          segments,
+          focusActions: response.modeGoalPending ? focusActions : undefined,
+        };
+        dispatch({ type: 'SET_STATUS', payload: wasVoiceActive ? 'listening' : 'idle' });
+        if (wasVoiceActive) void startListeningWithMicGate();
       }
+
       return true;
     } catch (error) {
+      if (modeTransitionGenerationRef.current !== generation || simulationModeRef.current !== mode) {
+        return true;
+      }
       logger.warn('Could not start the mode goal conversation.', { error: String(error) });
+      dispatch({ type: 'SET_STATUS', payload: wasVoiceActive ? 'listening' : 'idle' });
+      dispatch({ type: 'SET_TRANSITION_ERROR', payload: t('workspace.center.status.preparingFailed') });
+      if (wasVoiceActive) void startListeningWithMicGate();
       return false;
     }
-  }, [apiClient, userId, dispatch, updateCurrentItemId, updateFocusOnboarding, t, pauseStandardInterviewTimer]);
+  }, [
+    apiClient,
+    clearAudioPlayback,
+    dispatch,
+    pauseStandardInterviewTimer,
+    playTransitionAudio,
+    presentModeTransitionSegments,
+    startListeningWithMicGate,
+    stopRecording,
+    t,
+    updateCurrentItemId,
+    updateFocusOnboarding,
+    userId,
+  ]);
 
   /** Opens the existing focus selector from the intro bubble's Edit action. */
   const openFocusEditor = useCallback(() => {
@@ -3136,6 +3324,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     clearConversation: wipeConversationHistory,
     downloadTranscript: exportTranscriptFile,
     clearError: () => dispatch({ type: 'CLEAR_ERROR' }),
+    clearTransitionError: () => dispatch({ type: 'CLEAR_TRANSITION_ERROR' }),
+    flushPendingTransition,
     setRecommendedPath,
     startRecommendedPath,
   };

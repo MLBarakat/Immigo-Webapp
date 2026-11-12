@@ -107,7 +107,9 @@
         "listening": "يستمع…",
         "thinking": "يفكّر…",
         "speaking": "يتحدث…",
-        "error": "خطأ"
+        "error": "خطأ",
+        "preparing": "جارٍ التحضير…",
+        "preparingFailed": "فشل التبديل — اضغط للمحاولة مرة أخرى"
       },
       "interviewTimer": "وقت المقابلة: {{time}}",
       "focus": "تركيز",

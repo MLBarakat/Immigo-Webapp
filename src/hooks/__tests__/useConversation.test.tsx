@@ -1433,7 +1433,13 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     mockApiClient.postSessionStart
       .mockResolvedValueOnce(transcriptResponse({
         responseText: 'Welcome. Choose Ready when you are.',
-        examIntro: 'Interview introduction',
+        examIntro: {
+          kind: 'first-time',
+          icebreaker: 'Interview introduction',
+          facts: '',
+          rules: [],
+          readyPrompt: 'Choose Ready when you are.',
+        },
         examRunId: 'exam-clock',
       }))
       .mockResolvedValueOnce(transcriptResponse({
@@ -2079,7 +2085,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-stream-url');
   });
 
-  it('renders the Practice intro immediately, then enriches the same bubble with focus actions', async () => {
+  it('enters preparing state immediately on mode switch and reveals the intro with focus actions when transition resolves', async () => {
     let resolveTransition!: (value: TranscriptResponse) => void;
     const pendingTransition = new Promise<TranscriptResponse>((resolve) => {
       resolveTransition = resolve;
@@ -2105,18 +2111,14 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       changePromise = result.current.changeMode('practice');
     });
 
-    // The bubble is local and synchronous: no backend round trip is awaited
-    // before the learner sees the new mode.
+    // The status becomes preparing immediately; no chat bubble is shown yet
     expect(mockDispatch).toHaveBeenCalledWith({
-      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
-      payload: expect.objectContaining({
-        content: expect.stringContaining('Practice Mode is ready'),
-        actions: expect.arrayContaining([
-          expect.objectContaining({ kind: 'focus', focusAction: 'continue', label: 'Continue' }),
-          expect.objectContaining({ kind: 'focus', focusAction: 'edit', label: 'Edit focus' }),
-        ]),
-      }),
+      type: 'SET_STATUS',
+      payload: 'preparing',
     });
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+    }));
     expect(mockApiClient.postModeTransition).toHaveBeenCalledWith(
       'daily-session',
       null,
@@ -2136,9 +2138,9 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     });
 
     expect(mockDispatch).toHaveBeenCalledWith({
-      type: 'UPDATE_ASSISTANT_MESSAGE',
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
       payload: expect.objectContaining({
-        messageId: expect.stringContaining('mode-goal-'),
+        assistantMessageId: expect.stringContaining('mode-goal-'),
         content: expect.stringContaining('one civics question at a time'),
         actions: expect.arrayContaining([
           expect.objectContaining({ focusAction: 'continue' }),
@@ -2146,12 +2148,201 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         ]),
       }),
     });
-    expect(mockDispatch).toHaveBeenCalledWith({
-      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
-      payload: expect.objectContaining({
-        content: expect.stringContaining('When you are ready, choose Ready.'),
-      }),
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith({
+        type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+        payload: expect.objectContaining({
+          content: expect.stringContaining('When you are ready, choose Ready.'),
+        }),
+      });
+      expect(mockDispatch).toHaveBeenCalledWith({
+        type: 'SET_STATUS',
+        payload: 'idle',
+      });
+    }, { timeout: 3000 });
+  });
+
+  it('voice mode switch goes preparing -> speaking with Polly -> listening', async () => {
+    mockContextValue.state = { ...mockContextValue.state, isSessionActive: true, appStatus: 'listening' };
+    const syntheticBuffer = new ArrayBuffer(8);
+    mockApiClient.postModeTransition.mockResolvedValue(transcriptResponse({
+      responseText: 'Study Mode is ready.',
+      assistantSegments: ['Study Mode is ready.'],
+      audioData: syntheticBuffer,
+      modeGoalPending: true,
+    }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'standard',
+    }), { wrapper });
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'SET_SESSION_ID',
+      payload: 'daily-session',
+    }));
+
+    await act(async () => {
+      await result.current.changeMode('study');
     });
+
+    expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_STATUS', payload: 'preparing' });
+    expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_STATUS', payload: 'speaking' });
+    expect(mockAudioInstance.play).toHaveBeenCalled();
+
+    await act(async () => {
+      mockAudioInstance.onended?.();
+    });
+    expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
+    expect(mockStartRecording).toHaveBeenCalled();
+  });
+
+  it('latest-wins: rapid mode switches discard superseded transitions', async () => {
+    let resolveFirst!: (value: TranscriptResponse) => void;
+    let resolveSecond!: (value: TranscriptResponse) => void;
+    const firstPromise = new Promise<TranscriptResponse>(res => { resolveFirst = res; });
+    const secondPromise = new Promise<TranscriptResponse>(res => { resolveSecond = res; });
+
+    mockApiClient.postModeTransition
+      .mockReturnValueOnce(firstPromise)
+      .mockReturnValueOnce(secondPromise);
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'standard',
+    }), { wrapper });
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'SET_SESSION_ID',
+      payload: 'daily-session',
+    }));
+
+    let firstChange!: Promise<boolean>;
+    let secondChange!: Promise<boolean>;
+    await act(async () => {
+      firstChange = result.current.changeMode('practice');
+      secondChange = result.current.changeMode('study');
+    });
+
+    // Resolve first (superseded)
+    await act(async () => {
+      resolveFirst(transcriptResponse({
+        responseText: 'Practice Mode is ready.',
+        assistantSegments: ['Practice Mode is ready.'],
+      }));
+      await firstChange;
+    });
+
+    // First response was NOT added to chat
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({ content: 'Practice Mode is ready.' }),
+    }));
+
+    // Resolve second (latest)
+    await act(async () => {
+      resolveSecond(transcriptResponse({
+        responseText: 'Study Mode is ready.',
+        assistantSegments: ['Study Mode is ready.'],
+      }));
+      await secondChange;
+    });
+
+    // Second response WAS added to chat
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({ content: 'Study Mode is ready.' }),
+    }));
+  });
+
+  it('holds the transition response on mobile until chat is visible', async () => {
+    mockApiClient.postModeTransition.mockResolvedValue(transcriptResponse({
+      responseText: 'Practice Mode is ready.',
+      assistantSegments: ['Practice Mode is ready.'],
+      modeGoalPending: false,
+    }));
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result, rerender } = renderHook(
+      (props: { isChatVisible?: boolean }) => useConversation({
+        apiClient: mockApiClient,
+        userId: 'user-1',
+        simulationMode: 'standard',
+        isChatVisible: props.isChatVisible,
+      }),
+      { wrapper, initialProps: { isChatVisible: false } },
+    );
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'SET_SESSION_ID',
+      payload: 'daily-session',
+    }));
+
+    await act(async () => {
+      await result.current.changeMode('practice');
+    });
+
+    // While chat is hidden, response is not yet added to chat
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({ content: 'Practice Mode is ready.' }),
+    }));
+
+    // When chat becomes visible:
+    rerender({ isChatVisible: true });
+
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({ content: 'Practice Mode is ready.' }),
+    }));
+  });
+
+  it('sets transitionError and keeps the selected mode on transition failure', async () => {
+    mockApiClient.postModeTransition.mockRejectedValue(new Error('Network error'));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'standard',
+    }), { wrapper });
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'SET_SESSION_ID',
+      payload: 'daily-session',
+    }));
+
+    let outcome!: boolean;
+    await act(async () => {
+      outcome = await result.current.changeMode('practice');
+    });
+
+    expect(outcome).toBe(false);
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'SET_STATUS',
+      payload: 'idle',
+    });
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'SET_TRANSITION_ERROR',
+      payload: expect.stringContaining('Switching failed'),
+    });
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+    }));
   });
 
   it('opens the existing focus selector from the intro bubble Edit action', async () => {

@@ -42,6 +42,8 @@ interface CenterPanelProps {
   learningGoal?: string | null;
   testVersion?: TestVersion;
   onFocusOnboardingSubmit?: (selection: FocusAreaSelection) => void;
+  transitionError?: string | null;
+  onClearTransitionError?: () => void;
 }
 
 const STATUS_COLORS: Record<AppStatus, string> = {
@@ -53,6 +55,7 @@ const STATUS_COLORS: Record<AppStatus, string> = {
   processing: 'text-amber-700 dark:text-amber-300',
   speaking: 'text-art-blue-700 dark:text-art-blue-200',
   error: 'text-art-red-700 dark:text-art-red-300',
+  preparing: 'text-violet-700 dark:text-violet-300',
 };
 
 const STATUS_DOT_COLORS: Record<AppStatus, string> = {
@@ -62,6 +65,7 @@ const STATUS_DOT_COLORS: Record<AppStatus, string> = {
   processing: 'bg-amber-500 animate-pulse',
   speaking: 'bg-art-blue-500 animate-pulse',
   error: 'bg-art-red-600',
+  preparing: 'bg-violet-500 animate-pulse',
 };
 
 // A soft tint inside the glass gives each state its own "liquid" colour without
@@ -73,6 +77,7 @@ const STATUS_GLOW_COLORS: Record<AppStatus, string> = {
   processing: 'bg-amber-400/30',
   speaking: 'bg-art-blue-400/30',
   error: 'bg-art-red-500/30',
+  preparing: 'bg-violet-400/30',
 };
 
 export function CenterPanel({
@@ -108,6 +113,8 @@ export function CenterPanel({
   learningGoal = null,
   testVersion = '2020',
   onFocusOnboardingSubmit,
+  transitionError = null,
+  onClearTransitionError,
 }: CenterPanelProps) {
   const [message, setMessage] = useState('');
   const [isStatusVisible, setIsStatusVisible] = useState(true);
@@ -121,6 +128,7 @@ export function CenterPanel({
     processing: 'workspace.center.status.thinking',
     speaking: 'workspace.center.status.speaking',
     error: 'workspace.center.status.error',
+    preparing: 'workspace.center.status.preparing',
   };
 
   useEffect(() => {
@@ -139,7 +147,7 @@ export function CenterPanel({
 
   const handleSend = () => {
     const text = message.trim();
-    if (!text || isVoiceSessionActive) return;
+    if (!text || isVoiceSessionActive || appStatus === 'preparing') return;
     onSendMessage(text);
     setMessage('');
   };
@@ -261,6 +269,14 @@ export function CenterPanel({
           <button onClick={onClearError} className="text-xs underline hover:text-art-red-900 cursor-pointer ml-4 shrink-0">{t('workspace.center.dismiss')}</button>
         </div>
       )}
+      {transitionError && (
+        <div className="mx-4 mt-14 p-3 bg-violet-50 border-l-4 border-violet-600 rounded text-sm text-violet-800 flex justify-between items-center shrink-0 sm:mx-6" role="alert">
+          <p className="font-medium">{transitionError}</p>
+          {onClearTransitionError && (
+            <button onClick={onClearTransitionError} className="text-xs underline hover:text-violet-900 cursor-pointer ml-4 shrink-0">{t('workspace.center.dismiss')}</button>
+          )}
+        </div>
+      )}
 
       {/* Conversation Area */}
       <div className="flex-1 overflow-hidden min-h-0">
@@ -319,14 +335,14 @@ export function CenterPanel({
                 value={message}
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
-                disabled={isVoiceSessionActive}
+                disabled={isVoiceSessionActive || appStatus === 'preparing'}
                 aria-label={t('workspace.center.inputAria')} data-testid="centerpanel-input"
               />
 
               <div className="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-1.5">
                 <button
                   onClick={handleSend}
-                  disabled={isEmpty || isVoiceSessionActive}
+                  disabled={isEmpty || isVoiceSessionActive || appStatus === 'preparing'}
                   className="w-11 h-11 flex items-center justify-center rounded-full bg-art-blue-600 text-star-white hover:bg-art-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 shrink-0 shadow-sm hover:shadow-md active:scale-95"
                   aria-label={t('workspace.center.send')} data-testid="centerpanel-send"
                 >

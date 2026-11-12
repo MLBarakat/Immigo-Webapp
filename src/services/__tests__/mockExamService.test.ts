@@ -73,6 +73,7 @@ describe('MockExamService', () => {
       include_english_simulation: false,
       english_stage: 'none',
     };
+    void zeroAnswerExam;
     const realProgressExam = {
       id: 'exam-real',
       test_version: '2020',

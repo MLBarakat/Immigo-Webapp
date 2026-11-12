@@ -129,6 +129,7 @@ const STATUS_MAP: Record<AppStatus, { component: JSX.Element; color: string }> =
   processing: { component: <ProcessingAnimation />, color: 'border-art-blue-400' },
   speaking: { component: <SpeakingAnimation />, color: 'border-art-blue-400' },
   error: { component: <ErrorAnimation />, color: 'border-art-red-600' },
+  preparing: { component: <ProcessingAnimation />, color: 'border-violet-500' },
 };
 
 

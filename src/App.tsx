@@ -72,6 +72,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const { t: tCommon } = useTranslation('common');
   const isArabic = i18n.language === 'ar-SA';
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  const [mobileWorkspace, setMobileWorkspace] = useState<'interview' | 'resources' | 'controls'>('interview');
   const [simulationMode, setSimulationMode] = useState<SimulationMode>('standard');
   const [testVersion, setTestVersion] = useState<TestVersion>(() => {
     try { return localStorage.getItem('immigo_test_version') === '2008' ? '2008' : '2020'; }
@@ -108,6 +109,7 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     preferredLanguage: currentLanguageCode,
     accountTimezone: userSettings.account_timezone || 'UTC',
     bargeIn: userSettings.barge_in,
+    isChatVisible: !isDesktop ? mobileWorkspace === 'interview' : true,
   });
   const [activeExamReviewId, setActiveExamReviewId] = useState<string | null>(null);
   const [examReviewCache, setExamReviewCache] = useState<Record<string, MockExamReview>>({});
@@ -427,15 +429,13 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     void manager.sendTextMessage(text);
   };
 
-  const handleSimulationModeChange = async (mode: SimulationMode): Promise<boolean> => {
-    if (mode === simulationMode) return true;
-    if (manager.sessionId && user?.id) {
-      const changed = await manager.changeMode(mode);
-      if (!changed) return false;
-    }
+  const handleSimulationModeChange = (mode: SimulationMode): void => {
+    if (mode === simulationMode) return;
     setSimulationMode(mode);
     setActiveExamReviewId(null);
-    return true;
+    if (manager.sessionId && user?.id) {
+      void manager.changeMode(mode);
+    }
   };
 
   // ── UI State ──
@@ -517,7 +517,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   // ── Panel collapse state ──
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [mobileWorkspace, setMobileWorkspace] = useState<'interview' | 'resources' | 'controls'>('interview');
 
   const displayUser: DisplayUser = {
     name: profile?.full_name || user?.email || 'User',
@@ -648,6 +647,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
               isAudioRetryPending={manager.isAudioRetryPending}
               onLoadOlder={manager.loadOlderMessages}
               onClearError={manager.clearError}
+              transitionError={manager.transitionError}
+              onClearTransitionError={manager.clearTransitionError}
               focusOnboarding={manager.focusOnboarding}
           learningGoal={userSettings.learning_goal}
           testVersion={testVersion}
@@ -850,6 +851,8 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           isAudioRetryPending={manager.isAudioRetryPending}
           onLoadOlder={manager.loadOlderMessages}
           onClearError={manager.clearError}
+          transitionError={manager.transitionError}
+          onClearTransitionError={manager.clearTransitionError}
           focusOnboarding={manager.focusOnboarding}
           learningGoal={userSettings.learning_goal}
           testVersion={testVersion}

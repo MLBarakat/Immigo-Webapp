@@ -107,7 +107,9 @@
         "listening": "Escuchando…",
         "thinking": "Procesando…",
         "speaking": "Hablando…",
-        "error": "Error"
+        "error": "Error",
+        "preparing": "Preparando…",
+        "preparingFailed": "Cambio fallido — toca para reintentar"
       },
       "interviewTimer": "Tiempo de entrevista: {{time}}",
       "focus": "Enfoque",
