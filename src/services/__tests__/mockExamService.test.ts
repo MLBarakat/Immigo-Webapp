@@ -27,12 +27,14 @@ describe('MockExamService', () => {
     const query = {
       select: vi.fn(),
       eq: vi.fn(),
+      or: vi.fn(),
       order: vi.fn(),
       limit: vi.fn(),
       maybeSingle: vi.fn().mockResolvedValue({ data: exam, error: null }),
     };
     query.select.mockReturnValue(query);
     query.eq.mockReturnValue(query);
+    query.or.mockReturnValue(query);
     query.order.mockReturnValue(query);
     query.limit.mockReturnValue(query);
     vi.mocked(getSupabaseClient).mockReturnValue({ from: vi.fn(() => query) } as never);
@@ -45,17 +47,63 @@ describe('MockExamService', () => {
     const query = {
       select: vi.fn(),
       eq: vi.fn(),
+      or: vi.fn(),
       order: vi.fn(),
       limit: vi.fn(),
       maybeSingle: vi.fn().mockResolvedValue({ data: null, error: new Error('Database unavailable') }),
     };
     query.select.mockReturnValue(query);
     query.eq.mockReturnValue(query);
+    query.or.mockReturnValue(query);
     query.order.mockReturnValue(query);
     query.limit.mockReturnValue(query);
     vi.mocked(getSupabaseClient).mockReturnValue({ from: vi.fn(() => query) } as never);
 
     await expect(MockExamService.getLatestInProgress('user-1', '2020')).rejects.toThrow('Database unavailable');
+  });
+
+  it('ignores a zero-answer in-progress interview (not resumable)', async () => {
+    const zeroAnswerExam = {
+      id: 'exam-zero',
+      test_version: '2020',
+      current_index: 0,
+      question_ids: ['q-1'],
+      correct_count: 0,
+      incorrect_count: 0,
+      include_english_simulation: false,
+      english_stage: 'none',
+    };
+    const realProgressExam = {
+      id: 'exam-real',
+      test_version: '2020',
+      current_index: 3,
+      question_ids: ['q-1', 'q-2', 'q-3'],
+      correct_count: 1,
+      incorrect_count: 1,
+      include_english_simulation: false,
+      english_stage: 'none',
+    };
+    const query = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      or: vi.fn(),
+      order: vi.fn(),
+      limit: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: realProgressExam, error: null }),
+    };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.or.mockReturnValue(query);
+    query.order.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
+    vi.mocked(getSupabaseClient).mockReturnValue({ from: vi.fn(() => query) } as never);
+
+    await expect(MockExamService.getLatestInProgress('user-1', '2020')).resolves.toEqual(realProgressExam);
+    // The zero-answer row must be excluded by the real-progress filter.
+    expect(query.eq).toHaveBeenCalledWith('status', 'in_progress');
+    expect(query.or).toHaveBeenCalledWith(
+      expect.stringContaining('current_index.gt.0'),
+    );
   });
 
   it('loads the owner-scoped immutable review decision for an exam', async () => {

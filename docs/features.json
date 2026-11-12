@@ -73,7 +73,7 @@
       "id": "F-03",
       "title": "Audio capture and playback lifecycle",
       "status": "protected",
-      "summary": "Microphone consent, VAD, audio ring buffer, barge-in, queued Polly progress-summary playback, device preferences, and cleanup.",
+      "summary": "Microphone consent, VAD, audio ring buffer, barge-in, queued Polly progress-summary playback, device preferences, and cleanup. Echo detection is hardened so Polly playback is not transcribed as user speech.",
       "entryPoints": [
         "src/hooks/useConversation.ts",
         "src/hooks/useVAD.ts",
@@ -108,7 +108,7 @@
       "id": "F-04",
       "title": "Conversation modes and Standard Interviews",
       "status": "protected",
-      "summary": "Learning Modes and Standard Interview, Practice, and Study workflows, including the first-run Learning Mode choice, daily AI welcomes, instant mode-intro bubbles with Continue/Edit focus confirmation, versioned first-time and returning onboarding, dynamic 20/80 Standard question selection, English reading/writing gates, structured interview reports with suggested focus, and immutable next-step decisions.",
+      "summary": "Learning Modes and Standard Interview, Practice, and Study workflows, including the first-run Learning Mode choice (Start a Mock Interview, Practice Interview Questions, Study Interview Topics), daily AI welcomes, instant mode-intro bubbles with Continue/Edit focus confirmation, versioned first-time and returning onboarding, dynamic 20/80 Standard question selection, English reading/writing gates, structured interview reports with per-option fine print and auto-close, suggested focus, AI-recommended learning paths persisted to the account, immutable next-step decisions, and codified (no free-text) focus areas.",
       "entryPoints": [
         "src/hooks/useConversation.ts",
         "src/context/ConversationContext.tsx",
@@ -155,7 +155,7 @@
         "The final graded answer of a Standard Interview explicitly states that the interview is complete, and the next assistant bubble is a warm summary with the recommended mode, an invitation to open the Interview Report, and a prompt to capture the decision and goals.",
         "The completion summary never mentions questions to review.",
         "Completed-interview review presents the report, score breakdown, question outcomes, strengths, focus areas, and one explicit next-step decision; it has no separate question-review or detailed-report entry points.",
-        "Dismissing a review does not save a decision; saved decisions are immutable, and Practice/Study choices require one to three official USCIS focus categories or free-text Other that synchronize the account goal atomically.",
+        "Dismissing a review does not save a decision; saved decisions are immutable, and Practice/Study choices require one to three official USCIS focus categories that synchronize the account goal atomically.",
         "Follow-on actions remain separate from the saved decision and can be retried without changing it.",
         "Standard interview, practice, and study modes preserve their turn semantics.",
         "In text mode, consecutive assistant bubbles from one turn appear sequentially with a short readable delay; voice mode continues to reveal them in step with Polly playback.",
@@ -304,7 +304,7 @@
       "id": "F-08",
       "title": "Settings and preferences",
       "status": "protected",
-      "summary": "User settings persistence for theme, font size, language, voice, audio devices, notifications, and accessibility.",
+      "summary": "User settings persistence for theme, font size, language, voice, audio devices, notifications, and accessibility. Focus areas are codified as chip-selected official USCIS categories (no free-text Other input).",
       "entryPoints": [
         "src/services/userSettingsService.ts",
         "src/components/ApplicationSettingsModal.tsx",

@@ -27,6 +27,17 @@ export type MessageAction =
     focusAction: 'continue' | 'edit';
     label: string;
     variant?: 'primary' | 'secondary';
+  }
+  | {
+    kind: 'learn';
+    /** The recommended Learning Mode. */
+    mode: SimulationMode;
+    /** Focus category ids to apply (empty when All focus areas). */
+    focusIds: string[];
+    /** Whether All focus areas is selected. */
+    allFocusAreas: boolean;
+    label: string;
+    variant?: 'primary' | 'secondary';
   };
 
 export interface Message {

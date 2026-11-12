@@ -11,8 +11,23 @@ export function getBargeInHoldDurationMs(style: BargeIn): number {
   }
 }
 
+/** Polly text-normalisation substitutions spoken aloud but written as symbols. */
+const POLLY_SUBSTITUTIONS: Record<string, string> = {
+  '%': 'percent',
+  '&': 'and',
+  '@': 'at',
+  '$': 'dollar',
+  '#': 'number',
+};
+
 function normalizeSpeech(text: string): string[] {
-  return text.toLocaleLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
+  let normalized = text.toLocaleLowerCase();
+  // Polly renders symbols as spoken words (e.g. "50%" → "50 percent"). Expand
+  // them so an echoed transcript can match the spoken response word-for-word.
+  for (const [symbol, word] of Object.entries(POLLY_SUBSTITUTIONS)) {
+    normalized = normalized.replace(new RegExp(`\\${symbol}`, 'g'), ` ${word} `);
+  }
+  return normalized.match(/[\p{L}\p{N}']+/gu) ?? [];
 }
 
 function isSameRecognizedWord(heard: string, spoken: string): boolean {
@@ -40,15 +55,34 @@ function isSameRecognizedWord(heard: string, spoken: string): boolean {
   return true;
 }
 
+/** True when every word of `needle` appears in order within `haystack`. */
+function isSubsequence(needle: string[], haystack: string[]): boolean {
+  let haystackIndex = 0;
+  for (const word of needle) {
+    let found = false;
+    while (haystackIndex < haystack.length) {
+      if (isSameRecognizedWord(word, haystack[haystackIndex])) {
+        found = true;
+        haystackIndex += 1;
+        break;
+      }
+      haystackIndex += 1;
+    }
+    if (!found) return false;
+  }
+  return true;
+}
+
 export function isPlaybackEchoTranscript(transcript: string, spokenResponse: string): boolean {
   const heardWords = normalizeSpeech(transcript);
   const spokenWords = normalizeSpeech(spokenResponse);
-  if (heardWords.length === 0 || heardWords.length > spokenWords.length) return false;
+  if (heardWords.length === 0 || spokenWords.length === 0) return false;
 
-  for (let start = 0; start <= spokenWords.length - heardWords.length; start += 1) {
-    if (heardWords.every((word, offset) => isSameRecognizedWord(word, spokenWords[start + offset]))) return true;
-  }
-  return false;
+  // An echo appears either as a partial repeat of what was spoken (heard is
+  // shorter) or as the full spoken response repeated inside a longer transcript
+  // (e.g. the mic re-hears the response plus its own opening — a duplicated
+  // echo that previously looked longer than the spoken text and was missed).
+  return isSubsequence(heardWords, spokenWords) || isSubsequence(spokenWords, heardWords);
 }
 
 export function hasEnoughBargeInSpeech(transcript: string): boolean {

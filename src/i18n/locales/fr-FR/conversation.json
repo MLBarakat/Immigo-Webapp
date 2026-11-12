@@ -221,6 +221,10 @@
       "otherFocusLabel": "Autre axe",
       "otherFocusPlaceholder": "Par exemple, m’entraîner avec mon voisin.",
       "confirmChoice": "Vérifiez votre choix avant de l’enregistrer. Votre axe de travail deviendra aussi votre objectif d’apprentissage.",
+      "confirmChoicePractice": "Vérifiez votre choix de pratique avant de l’enregistrer. Votre axe de travail deviendra aussi votre objectif d’apprentissage.",
+      "confirmChoiceStudy": "Vérifiez votre choix d’étude avant de l’enregistrer. Votre axe de travail deviendra aussi votre objectif d’apprentissage.",
+      "confirmChoiceNewInterview": "Vérifiez votre choix de commencer un nouvel entretien standard avant de l’enregistrer.",
+      "confirmChoiceFinishForNow": "Vérifiez votre choix de terminer pour le moment avant de l’enregistrer.",
       "save": "Enregistrer",
       "back": "Retour",
       "saveChoice": "Enregistrer mon choix",
@@ -257,7 +261,9 @@
       "resumeEnglish": "Vous avez un entretien standard {{version}} inachevé, prêt à reprendre l’entraînement d’anglais ({{stage}}). Comment souhaitez-vous continuer ?",
       "continueExam": "Reprendre l’entretien",
       "startNewExam": "Commencer un nouvel entretien",
-      "startMockExam": "Commencer un entretien standard"
+      "startMockExam": "Commencer un entretien standard",
+      "startLearningPath": "Commencer {{mode}} : {{focus}}",
+      "startLearningPathAll": "Commencer {{mode}} (Tous les axes de travail)"
     },
     "right": {
       "title": "Configuration et commandes",

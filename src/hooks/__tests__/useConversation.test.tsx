@@ -1220,6 +1220,81 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(MockExamService.getLatestInProgress).toHaveBeenCalledWith('user-exam', '2020');
   });
 
+  it('does not offer resume for a brand-new user with no prior Standard Interview', async () => {
+    // Brand-new user: no prior in-progress interview at all.
+    vi.mocked(MockExamService.getLatestInProgress).mockResolvedValue(null);
+    const storageKey = 'welcome-banner-shown:user-new:2026-10-26';
+    localStorage.removeItem(storageKey);
+    mockApiClient.fetchWelcomeBanner = vi.fn().mockResolvedValue({ message: 'Welcome!', isNewUser: false });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-new', accountTimezone: 'UTC' }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({
+        actions: expect.arrayContaining([
+          expect.objectContaining({ examAction: 'new', label: 'Start a Standard Interview' }),
+        ]),
+      }),
+    })));
+    // No resume action is offered to a brand-new user.
+    const resumeCalls = mockDispatch.mock.calls.filter(([action]) =>
+      action.type === 'ADD_ASSISTANT_MESSAGE'
+      && Array.isArray(action.payload.actions)
+      && action.payload.actions.some((a: { examAction?: string }) => a.examAction === 'resume'),
+    );
+    expect(resumeCalls).toHaveLength(0);
+  });
+
+  it('offers the AI-recommended learning path alongside starting a new interview', async () => {
+    vi.mocked(MockExamService.getLatestInProgress).mockResolvedValue(null);
+    const storageKey = 'welcome-banner-shown:user-path:2026-10-26';
+    localStorage.removeItem(storageKey);
+    mockApiClient.fetchWelcomeBanner = vi.fn().mockResolvedValue({ message: 'Welcome back!', isNewUser: false });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(
+      () => useConversation({ apiClient: mockApiClient, userId: 'user-path', accountTimezone: 'UTC' }),
+      { wrapper }
+    );
+
+    // The recommended path is exposed and can be set before the welcome banner is shown.
+    act(() => {
+      result.current.setRecommendedPath({
+        mode: 'study',
+        focusIds: ['rights-and-responsibilities', 'geography'],
+        allFocusAreas: false,
+      });
+    });
+
+    // startRecommendedPath starts a session in the recommended mode and applies focus.
+    vi.mocked(mockApiClient.postSessionStart).mockResolvedValue(transcriptResponse({
+      responseText: "Let's study.",
+      nextItemId: 'q-1',
+      nextQuestion: 'Question one?',
+    }));
+    const started = await result.current.startRecommendedPath(
+      'study',
+      ['rights-and-responsibilities', 'geography'],
+      false,
+    );
+    expect(started).toBe(true);
+    expect(mockApiClient.postSessionStart).toHaveBeenCalled();
+    expect(mockApiClient.postTranscript).toHaveBeenCalled(); // focus onboarding submitted
+  });
+
   it('surfaces and retries unfinished Standard Interview lookup failures', async () => {
     vi.mocked(MockExamService.getLatestInProgress).mockRejectedValueOnce(new Error('Database unavailable'));
     const wrapper = ({ children }: { children: React.ReactNode }) => (

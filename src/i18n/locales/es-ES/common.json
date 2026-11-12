@@ -261,9 +261,9 @@
     "modes": {
       "title": "Elige un modo de aprendizaje",
       "description": "Elige cómo quieres empezar. Puedes cambiar de modo cuando quieras.",
-      "standard": "Entrevista estándar",
-      "practice": "Modo práctica",
-      "study": "Modo estudio"
+      "standard": "Iniciar entrevista simulada",
+      "practice": "Practicar preguntas de entrevista",
+      "study": "Estudiar temas de entrevista"
     },
     "steps": {
       "start": { "title": "Inicia tu sesión", "description": "Presiona el botón animado grande para comenzar una sesión de práctica. La IA te saludará y esperará a que hables." },

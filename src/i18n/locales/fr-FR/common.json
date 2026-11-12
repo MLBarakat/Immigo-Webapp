@@ -259,9 +259,9 @@
     "modes": {
       "title": "Choisissez un mode d’apprentissage",
       "description": "Choisissez comment commencer. Vous pouvez changer de mode à tout moment.",
-      "standard": "Entretien standard",
-      "practice": "Mode Pratique",
-      "study": "Mode Étude"
+      "standard": "Commencer un entretien simulé",
+      "practice": "S'entraîner aux questions d'entretien",
+      "study": "Étudier les sujets d'entretien"
     },
     "steps": {
       "start": { "title": "Démarrez votre session", "description": "Appuyez sur le grand bouton animé pour commencer une session d'entraînement. L'IA vous saluera et attendra que vous parliez." },

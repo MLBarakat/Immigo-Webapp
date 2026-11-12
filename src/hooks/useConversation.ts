@@ -22,6 +22,7 @@ import {
 import { unlockAudioPlayback, describeAudioEnvironment, acquirePollyPlaybackElement } from '../utils/audioUtils';
 import { tokenizeAssistantReveal } from '../utils/revealTokens';
 import {
+  getFocusCategories,
   serializeLearningGoal,
   type FocusTestVersion,
 } from '../constants/focusCategories';
@@ -98,6 +99,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   const [isGeneratingProgressReport, setIsGeneratingProgressReport] = useState(false);
   const [dailySessionSettings, setDailySessionSettings] = useState<{ mode: SimulationMode; testVersion: TestVersion; includeEnglishSimulation: boolean } | null>(null);
   const [postExamId, setPostExamId] = useState<string | null>(null);
+  const recommendedPathRef = useRef<{
+    mode: SimulationMode;
+    focusIds: string[];
+    allFocusAreas: boolean;
+  } | null>(null);
   const [standardInterviewLookup, setStandardInterviewLookup] = useState<{
     key: string;
     status: 'checking' | 'ready' | 'error';
@@ -2506,12 +2512,43 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           },
         ];
       } else if (bannerFetched && !standardInterviewLookupFailed) {
-        actions = [{
+        const examAction: MessageAction = {
           kind: 'exam',
           examAction: 'new',
           label: t('workspace.welcome.startMockExam'),
           variant: 'primary',
-        }];
+        };
+        // After a saved decision (e.g. "finish for now"), the chat offers the
+        // AI-recommended learning path alongside starting a fresh Standard
+        // Interview. Choosing the path persists the mode and focus areas.
+        const path = recommendedPathRef.current;
+        if (path) {
+          const modeLabel = t(`workspace.right.${path.mode}.label`);
+          const focusLabel =
+            path.allFocusAreas
+              ? t('workspace.right.allFocusAreas')
+              : path.focusIds
+                  .map(id => {
+                    const cat = getFocusCategories(testVersionRef.current).find(c => c.id === id);
+                    return cat ? cat.label : id;
+                  })
+                  .join(', ');
+          actions = [
+            examAction,
+            {
+              kind: 'learn',
+              mode: path.mode,
+              focusIds: path.focusIds,
+              allFocusAreas: path.allFocusAreas,
+              label: focusLabel
+                ? t('workspace.welcome.startLearningPath', { mode: modeLabel, focus: focusLabel })
+                : t('workspace.welcome.startLearningPathAll', { mode: modeLabel }),
+              variant: 'secondary',
+            },
+          ];
+        } else {
+          actions = [examAction];
+        }
       }
 
       if (!content) {
@@ -2883,6 +2920,46 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [apiClient, userId, conversationState.sessionId, presentModeGoalResponse, updateFocusOnboarding, t]);
 
+  /**
+   * Starts a fresh session in the recommended Learning Mode and applies the
+   * suggested focus so the first question uses it. Used by the welcome-card
+   * learning-path recommendation after a saved "finish for now" decision.
+   */
+  const startRecommendedPath = useCallback(async (
+    mode: SimulationMode,
+    focusIds: string[],
+    allFocusAreas: boolean,
+  ): Promise<boolean> => {
+    if (!apiClient || !userId) return false;
+    const previousMode = simulationModeRef.current;
+    simulationModeRef.current = mode;
+    try {
+      const started = await initiateSession(true, false);
+      if (!started) {
+        simulationModeRef.current = previousMode;
+        return false;
+      }
+      // Practice/Study need a focus applied before the first question.
+      if (mode !== 'standard') {
+        modeGoalPendingRef.current = true;
+        updateFocusOnboarding({ mode, submitting: false, error: null });
+        await submitFocusOnboarding({ selectedIds: focusIds, allFocusAreas });
+      }
+      return true;
+    } catch {
+      simulationModeRef.current = previousMode;
+      return false;
+    }
+  }, [apiClient, userId, initiateSession, submitFocusOnboarding, updateFocusOnboarding]);
+
+  const setRecommendedPath = useCallback((path: {
+    mode: SimulationMode;
+    focusIds: string[];
+    allFocusAreas: boolean;
+  } | null) => {
+    recommendedPathRef.current = path;
+  }, []);
+
   return {
     ...conversationState,
     isVoiceSessionActive: conversationState.isSessionActive && isVoiceSessionActive,
@@ -2931,5 +3008,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     clearConversation: wipeConversationHistory,
     downloadTranscript: exportTranscriptFile,
     clearError: () => dispatch({ type: 'CLEAR_ERROR' }),
+    setRecommendedPath,
+    startRecommendedPath,
   };
 }

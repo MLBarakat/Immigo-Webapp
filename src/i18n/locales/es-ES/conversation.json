@@ -221,6 +221,10 @@
       "otherFocusLabel": "Otro enfoque",
       "otherFocusPlaceholder": "Por ejemplo, practicar con mi vecino.",
       "confirmChoice": "Revisa tu elección antes de guardarla. El enfoque también se guardará como tu objetivo de aprendizaje.",
+      "confirmChoicePractice": "Revisa tu elección de práctica antes de guardarla. El enfoque también se guardará como tu objetivo de aprendizaje.",
+      "confirmChoiceStudy": "Revisa tu elección de estudio antes de guardarla. El enfoque también se guardará como tu objetivo de aprendizaje.",
+      "confirmChoiceNewInterview": "Revisa tu elección de iniciar una nueva entrevista estándar antes de guardarla.",
+      "confirmChoiceFinishForNow": "Revisa tu elección de terminar por ahora antes de guardarla.",
       "save": "Guardar",
       "back": "Volver",
       "saveChoice": "Guardar mi elección",
@@ -257,7 +261,9 @@
       "resumeEnglish": "Tienes una entrevista estándar {{version}} sin terminar y lista para continuar con la práctica de inglés {{stage}}. ¿Cómo quieres continuar?",
       "continueExam": "Continuar entrevista",
       "startNewExam": "Empezar una entrevista nueva",
-      "startMockExam": "Empezar una entrevista estándar"
+      "startMockExam": "Empezar una entrevista estándar",
+      "startLearningPath": "Iniciar {{mode}}: {{focus}}",
+      "startLearningPathAll": "Iniciar {{mode}} (Todas las áreas de enfoque)"
     },
     "right": {
       "title": "Configuración y controles",

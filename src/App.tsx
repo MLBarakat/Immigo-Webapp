@@ -177,6 +177,17 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       ]);
       if (!cachedReview) setExamReviewCache(previous => ({ ...previous, [examId]: review }));
       setExamReviewDecisionCache(previous => ({ ...previous, [examId]: decision }));
+
+      // Capture the AI-recommended learning path so the welcome banner can offer
+      // it as a next step after a saved decision.
+      if (review.feedback?.recommendedMode) {
+        const suggested = review.suggestedFocus ?? [];
+        manager.setRecommendedPath({
+          mode: review.feedback.recommendedMode,
+          focusIds: suggested.map(item => item.id),
+          allFocusAreas: suggested.length === 0,
+        });
+      }
     } catch (error) {
       logger.warn('Could not generate mock exam feedback.', { examId, error: String(error) });
       setExamReviewError(tConversation('workspace.examReview.loadFailed'));
@@ -313,6 +324,18 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       await manager.confirmModeFocus();
       return;
     }
+    if (action.kind === 'learn') {
+      setSimulationMode(action.mode);
+      const started = await manager.startRecommendedPath(
+        action.mode,
+        action.focusIds,
+        action.allFocusAreas,
+      );
+      if (started) {
+        setActiveExamReviewId(null);
+      }
+      return;
+    }
     if (action.kind === 'ready') {
       // The Standard intro waits here. The request is an opening response, so
       // the server ignores the label and asks the current first question.
@@ -369,9 +392,16 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
     void updateUserSettings({ has_seen_welcome: true });
   };
 
-  const handleWelcomeModeSelect = (mode: SimulationMode) => {
+  const handleWelcomeModeSelect = async (mode: SimulationMode) => {
     handleCloseWelcome();
-    void handleSimulationModeChange(mode);
+    // Standard Interview is the default mode, so `handleSimulationModeChange`
+    // would return early without doing anything. Explicitly start a new
+    // Standard Interview so the first-run choice is never a no-op.
+    if (mode === 'standard') {
+      void startStandardInterview('new');
+    } else {
+      void handleSimulationModeChange(mode);
+    }
   };
 
   const [showAppSettings, setShowAppSettings] = useState(false);

@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react';
-import { Check, Search } from 'lucide-react';
+import { Check, Search, X } from 'lucide-react';
 import { MAX_FOCUS_CATEGORIES, type FocusCategory } from '../constants/focusCategories';
 
 export interface FocusAreaSelection {
@@ -22,9 +22,11 @@ interface FocusAreaComboboxProps {
 }
 
 /**
- * Searchable, accessible multi-select for USCIS study categories. The "All
+ * Chip-based, searchable multi-select for USCIS study categories. Selected
+ * categories render as removable chips above an inline search box. The "All
  * focus areas" option is exclusive; choosing a single category turns it off,
- * and removing the last category turns it back on.
+ * and removing the last category turns it back on. The dropdown expands on
+ * typing or focus, as before.
  */
 export function FocusAreaCombobox({
   categories,
@@ -67,6 +69,16 @@ export function FocusAreaCombobox({
     [allFocusAreas, allLabel, atLimit, filtered, selectedIds],
   );
 
+  // Individually selected categories render as removable chips. When "All" is
+  // active there are no individual chips; the summary line below names it.
+  const chips = useMemo(() => {
+    if (allFocusAreas) return [];
+    return selectedIds.map(id => {
+      const category = categories.find(c => c.id === id);
+      return { id, label: category?.label ?? id };
+    });
+  }, [allFocusAreas, categories, selectedIds]);
+
   const select = (id: string) => {
     if (id === '__all__') {
       onChange({ selectedIds: [], allFocusAreas: true });
@@ -78,12 +90,36 @@ export function FocusAreaCombobox({
     onChange({ selectedIds: nextIds, allFocusAreas: nextIds.length === 0 });
   };
 
+  const removeChip = (id: string) => {
+    if (id === '__all__') {
+      onChange({ selectedIds: [], allFocusAreas: true });
+      return;
+    }
+    select(id);
+  };
+
   return (
     <div className="space-y-2">
       <label id={labelId} htmlFor={`${baseId}-input`} className="block text-sm font-medium text-deep-navy dark:text-white">
         {label}
       </label>
       <div className="relative">
+        {/* Selected categories render as removable chips in a single wrapped view. */}
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              aria-label={`Remove ${chip.label}`}
+              onClick={() => removeChip(chip.id)}
+              disabled={disabled}
+              className="flex items-center gap-1.5 rounded-xl border border-immigo-gray-300 bg-white px-2.5 py-1.5 text-xs text-deep-navy hover:bg-immigo-gray-50 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:hover:bg-gray-800"
+            >
+              <span className="text-deep-navy dark:text-gray-300">{chip.label}</span>
+              <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
         <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-immigo-gray-400" aria-hidden="true" />
         <input
           id={`${baseId}-input`}
@@ -127,9 +163,7 @@ export function FocusAreaCombobox({
       </div>
 
       {allFocusAreas ? (
-        <p className="text-xs text-immigo-gray-500 dark:text-gray-400">
-          {allLabel}
-        </p>
+        <p className="text-xs text-immigo-gray-500 dark:text-gray-400">{allLabel}</p>
       ) : (
         <p className="text-xs text-immigo-gray-500 dark:text-gray-400">
           {limitLabel(selectedIds.length)}
@@ -144,10 +178,10 @@ export function FocusAreaCombobox({
           aria-multiselectable="true"
           className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-immigo-gray-200 bg-white p-1.5 shadow-sm dark:border-gray-700 dark:bg-gray-900"
         >
-          {options.map((option, index) => (
+          {options.map((option) => (
             <li
               key={option.id}
-              id={`${baseId}-option-${index}`}
+              id={`${baseId}-option-${option.id}`}
               role="option"
               aria-selected={option.selected}
               aria-disabled={option.disabled || disabled}

@@ -26,9 +26,9 @@ describe('WelcomeModal Component', () => {
     // Step 2 -> Step 3 (Learning Modes)
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(screen.getByText('Choose a Learning Mode')).toBeDefined();
-    expect(screen.getByRole('button', { name: /standard interview/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /practice mode/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /study mode/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /start a mock interview/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /practice interview questions/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /study interview topics/i })).toBeDefined();
     expect(screen.queryByRole('button', { name: /let's get started/i })).toBeNull();
   });
 
@@ -39,7 +39,7 @@ describe('WelcomeModal Component', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
-    fireEvent.click(screen.getByRole('button', { name: /study mode/i }));
+    fireEvent.click(screen.getByRole('button', { name: /study interview topics/i }));
 
     expect(handleSelectMode).toHaveBeenCalledWith('study');
     expect(handleClose).not.toHaveBeenCalled();
@@ -51,7 +51,7 @@ describe('WelcomeModal Component', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
-    fireEvent.click(screen.getByRole('button', { name: /practice mode/i }));
+    fireEvent.click(screen.getByRole('button', { name: /practice interview questions/i }));
 
     expect(handleClose).toHaveBeenCalledTimes(1);
   });

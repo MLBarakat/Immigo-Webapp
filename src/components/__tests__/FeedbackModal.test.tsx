@@ -137,7 +137,7 @@ describe('FeedbackModal', () => {
     });
   });
 
-  it('limits focus choices to three and records free-text Other in the same decision', async () => {
+  it('limits focus choices to three and saves the selected categories', async () => {
     const props = makeProps();
     render(<FeedbackModal {...props} />);
 
@@ -156,15 +156,12 @@ describe('FeedbackModal', () => {
     const blocked = screen.getByRole('option', { name: categories[3] }).querySelector('button');
     expect(blocked?.disabled).toBe(true);
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Other focus' }), {
-      target: { value: 'Local government' },
-    });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
       expect(props.onSaveDecision).toHaveBeenCalledWith(
         'study',
-        `${categories[0]}; ${categories[1]}; ${categories[2]}; Local government`,
+        `${categories[0]}; ${categories[1]}; ${categories[2]}`,
       );
     });
   });
@@ -175,9 +172,6 @@ describe('FeedbackModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Practice a focus/ }));
     chooseFocus('Symbols');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Other focus' }), {
-      target: { value: 'Neighbour practice' },
-    });
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 
     expect(screen.queryByRole('combobox')).toBeNull();
@@ -186,9 +180,6 @@ describe('FeedbackModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Practice a focus/ }));
     expect(screen.getByText('All focus areas')).toBeDefined();
-    expect(
-      (screen.getByRole('textbox', { name: 'Other focus' }) as HTMLTextAreaElement).value,
-    ).toBe('');
   });
 
   it('does not offer question review or the detailed report from the scorecard', () => {

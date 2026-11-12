@@ -311,9 +311,9 @@
     "modes": {
       "title": "Choose a Learning Mode",
       "description": "Pick how you want to begin. You can switch modes anytime.",
-      "standard": "Standard Interview",
-      "practice": "Practice Mode",
-      "study": "Study Mode"
+      "standard": "Start a Mock Interview",
+      "practice": "Practice Interview Questions",
+      "study": "Study Interview Topics"
     },
     "steps": {
       "start": {

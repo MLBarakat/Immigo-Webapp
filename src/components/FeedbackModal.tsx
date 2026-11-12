@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowRight,
   BrainCircuit,
@@ -97,10 +97,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   const { t, i18n } = useTranslation('conversation');
   const modalRef = useFocusTrap(isOpen);
   const [pendingChoice, setPendingChoice] = useState<MockExamReviewDecisionChoice | null>(null);
-  const [goal, setGoal] = useState('');
   const [selectedFocusIds, setSelectedFocusIds] = useState<string[]>([]);
   const [allFocusAreas, setAllFocusAreas] = useState(true);
-  const focusFormRef = useRef<HTMLDivElement | null>(null);
   const [locallySavedDecision, setLocallySavedDecision] = useState<MockExamReviewDecision | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [continuing, setContinuing] = useState(false);
@@ -112,7 +110,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   if (!isOpen) return null;
 
   const resetFocusForm = () => {
-    setGoal('');
     setSelectedFocusIds([]);
     setAllFocusAreas(true);
   };
@@ -135,18 +132,9 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   const handleFocusSelection = (selection: FocusAreaSelection) => {
     setSelectedFocusIds(selection.selectedIds);
     setAllFocusAreas(selection.allFocusAreas);
-    // "All focus areas" is a complete goal on its own, so a free-text Other
-    // would contradict it; choosing All clears the custom entry.
-    if (selection.allFocusAreas) setGoal('');
-  };
-
-  const handleOtherFocusChange = (value: string) => {
-    const next = value.slice(0, 120);
-    setGoal(next);
-    // A custom focus narrows the goal, and removing the last one returns the
-    // form to its default instead of saving an empty decision note.
-    if (next.trim()) setAllFocusAreas(false);
-    else if (selectedFocusIds.length === 0) setAllFocusAreas(true);
+    // "All focus areas" is a complete goal on its own; choosing All clears any
+    // individual selection. Free-text Other is no longer supported.
+    if (selection.allFocusAreas) setSelectedFocusIds([]);
   };
 
   const applySuggestedFocus = () => {
@@ -155,11 +143,21 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
     // Suggestion only pre-fills the form; nothing is persisted until Save.
     setSelectedFocusIds(suggestedIds.slice(0, MAX_FOCUS_CATEGORIES));
     setAllFocusAreas(false);
-    setGoal('');
   };
 
-  const editSuggestedFocus = () => {
-    focusFormRef.current?.querySelector<HTMLInputElement>('input[role="combobox"]')?.focus();
+  const confirmChoiceFor = (choice: MockExamReviewDecisionChoice): string => {
+    switch (choice) {
+      case 'practice':
+        return t('workspace.examReview.confirmChoicePractice');
+      case 'study':
+        return t('workspace.examReview.confirmChoiceStudy');
+      case 'new_interview':
+        return t('workspace.examReview.confirmChoiceNewInterview');
+      case 'finish_for_now':
+        return t('workspace.examReview.confirmChoiceFinishForNow');
+      default:
+        return t('workspace.examReview.confirmChoice');
+    }
   };
 
   const saveChoice = async () => {
@@ -167,11 +165,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
     const needsGoal = pendingChoice === 'practice' || pendingChoice === 'study';
     const note = needsGoal
       ? serializeLearningGoal(
-        selectedFocusIds,
-        goal,
-        review?.scorecard.testVersion ?? '2020',
-        allFocusAreas,
-      )
+          selectedFocusIds,
+          '',
+          review?.scorecard.testVersion ?? '2020',
+          allFocusAreas,
+        )
       : null;
     if (needsGoal && (!note || note.length > 300)) return;
 
@@ -186,6 +184,19 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
       setLocallySavedDecision(saved);
       setPendingChoice(null);
       resetFocusForm();
+
+      // Auto-apply the saved choice and close the report. finish_for_now
+      // closes immediately; practice/study/new_interview continue the session.
+      if (saved.choice === 'finish_for_now') {
+        close();
+        return;
+      }
+      if (saved.choice === 'practice' || saved.choice === 'study' || saved.choice === 'new_interview') {
+        const continued = await continueWithSavedDecision();
+        if (continued) close();
+        // If continuing failed, continueError is set and the saved card stays
+        // open so the learner can retry.
+      }
     } catch {
       setLocalError(t('workspace.examReview.saveFailed'));
     } finally {
@@ -193,27 +204,24 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
     }
   };
 
-  const continueWithSavedDecision = async () => {
-    if (!currentDecision || continuing) return;
+  const continueWithSavedDecision = async (): Promise<boolean> => {
+    if (!currentDecision || continuing) return false;
     setContinuing(true);
     setContinueError(null);
     try {
       const continued = await onContinueDecision(currentDecision);
       if (!continued) setContinueError(t('workspace.examReview.continueFailed'));
+      return continued;
     } catch {
       setContinueError(t('workspace.examReview.continueFailed'));
+      return false;
     } finally {
       setContinuing(false);
     }
   };
 
-  const modeForDecision = currentDecision?.choice === 'practice'
-    ? 'practice'
-    : currentDecision?.choice === 'study'
-      ? 'study'
-      : null;
   const focusCategories = review ? getFocusCategories(review.scorecard.testVersion) : [];
-  const focusReady = allFocusAreas || selectedFocusIds.length > 0 || goal.trim().length > 0;
+  const focusReady = allFocusAreas || selectedFocusIds.length > 0;
   const englishStatus = (passed: boolean | null) => passed === null
     ? t('workspace.examReview.notAdministered')
     : passed
@@ -449,34 +457,22 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                         {currentDecision.note}
                       </p>
                     )}
-                    {(modeForDecision || currentDecision.choice === 'new_interview') && (
-                      <button
-                        type="button"
-                        onClick={() => { void continueWithSavedDecision(); }}
-                        disabled={continuing}
-                        className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-art-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-art-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-art-blue-700 disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {continuing && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                        {modeForDecision
-                          ? t('workspace.examReview.continueInMode', {
-                            mode: t(`workspace.examReview.modes.${modeForDecision}`),
-                          })
-                          : t('workspace.examReview.startNewInterview')}
-                        {!continuing && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
-                      </button>
+                    {(continueError || decisionError) && (
+                      <>
+                        <p className="mt-3 text-sm text-art-red-800 dark:text-red-200" role="alert">
+                          {continueError ?? decisionError}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => { void continueWithSavedDecision(); }}
+                          disabled={continuing}
+                          className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-art-red-300 px-4 py-2 text-sm font-semibold text-art-red-800 hover:bg-art-red-50 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-art-red-600"
+                        >
+                          {continuing && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                          {!continuing && t('workspace.examReview.retry')}
+                        </button>
+                      </>
                     )}
-                    {continueError || decisionError ? (
-                      <p className="mt-3 text-sm text-art-red-800 dark:text-red-200" role="alert">
-                        {continueError ?? decisionError}
-                      </p>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={close}
-                      className="ms-2 mt-4 min-h-11 rounded-xl px-4 py-2 text-sm font-semibold text-immigo-gray-700 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-art-blue-600 dark:text-gray-200"
-                    >
-                      {t('workspace.examReview.closeReport')}
-                    </button>
                   </div>
                 ) : (
                   <>
@@ -513,17 +509,10 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                                   >
                                     {t('workspace.examReview.useSuggestedFocus')}
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={editSuggestedFocus}
-                                    className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-amber-950 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-700 dark:text-amber-100"
-                                  >
-                                    {t('workspace.examReview.editSuggestedFocus')}
-                                  </button>
                                 </div>
                               </div>
                             )}
-                            <div ref={focusFormRef}>
+                            <div>
                               <FocusAreaCombobox
                                 categories={focusCategories}
                                 selectedIds={selectedFocusIds}
@@ -540,27 +529,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                                 idPrefix={`exam-review-focus-${examId}`}
                               />
                             </div>
-                            <div>
-                              <label htmlFor={`exam-review-other-${examId}`} className="mb-1.5 block text-sm font-medium text-deep-navy dark:text-white">
-                                {t('workspace.examReview.otherFocusLabel')}
-                              </label>
-                              <textarea
-                                id={`exam-review-other-${examId}`}
-                                value={goal}
-                                onChange={event => handleOtherFocusChange(event.target.value)}
-                                rows={2}
-                                maxLength={120}
-                                className="w-full rounded-xl border border-immigo-gray-300 bg-white p-3 text-sm text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:ring-blue-900"
-                                placeholder={t('workspace.examReview.otherFocusPlaceholder')}
-                              />
-                              <p className="mt-1 text-end text-xs text-immigo-gray-500 dark:text-gray-400">
-                                {goal.trim().length}/120
-                              </p>
-                            </div>
-                          </div>
-                        )}
                         <p className="text-xs text-immigo-gray-600 dark:text-gray-300">
-                          {t('workspace.examReview.confirmChoice')}
+                          {t(confirmChoiceFor(pendingChoice))}
                         </p>
                         {(decisionError || localError) && (
                           <p role="alert" className="text-sm text-art-red-800 dark:text-red-200">
@@ -592,6 +562,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                             {t('workspace.examReview.back')}
                           </button>
                         </div>
+                      </div>
+                    )}
                       </div>
                     ) : (
                       <div className="grid gap-2 sm:grid-cols-2">

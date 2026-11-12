@@ -65,6 +65,11 @@ export class MockExamService {
         .eq('user_id', userId)
         .eq('test_version', testVersion)
         .eq('status', 'in_progress')
+        // A freshly created, zero-answer interview is not resumable: only rows
+        // with real progress (a question answered, or any correct/incorrect
+        // count) qualify. This prevents the welcome banner and RightPanel from
+        // offering "resume" / "start new" to a brand-new user.
+        .or('current_index.gt.0,correct_count.gt.0,incorrect_count.gt.0')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();

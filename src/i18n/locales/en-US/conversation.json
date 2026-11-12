@@ -221,6 +221,10 @@
       "otherFocusLabel": "Other focus",
       "otherFocusPlaceholder": "For example, practice with my neighbor.",
       "confirmChoice": "Review your choice before saving it. The learning focus will also become your account goal.",
+      "confirmChoicePractice": "Review your Practice choice before saving it. The learning focus will also become your account goal.",
+      "confirmChoiceStudy": "Review your Study choice before saving it. The learning focus will also become your account goal.",
+      "confirmChoiceNewInterview": "Review your choice to start a new Standard Interview before saving it.",
+      "confirmChoiceFinishForNow": "Review your choice to finish for now before saving it.",
       "save": "Save",
       "back": "Back",
       "saveChoice": "Save my choice",
@@ -257,7 +261,9 @@
       "resumeEnglish": "You have an unfinished {{version}} Standard Interview that is ready to continue with English {{stage}} practice. How would you like to continue?",
       "continueExam": "Resume interview",
       "startNewExam": "Start a new interview",
-      "startMockExam": "Start a Standard Interview"
+      "startMockExam": "Start a Standard Interview",
+      "startLearningPath": "Start {{mode}}: {{focus}}",
+      "startLearningPathAll": "Start {{mode}} (All focus areas)"
     },
     "right": {
       "title": "Configuration & Control",

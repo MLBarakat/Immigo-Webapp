@@ -221,6 +221,10 @@
       "otherFocusLabel": "تركيز آخر",
       "otherFocusPlaceholder": "مثلًا: التدرب مع جاري.",
       "confirmChoice": "راجع اختيارك قبل حفظه. وسيُحفظ مجال التركيز أيضًا كهدف تعلّم لحسابك.",
+      "confirmChoicePractice": "راجع اختيارك لممارسة التركيز قبل حفظه. وسيُحفظ مجال التركيز أيضًا كهدف تعلّم لحسابك.",
+      "confirmChoiceStudy": "راجع اختيارك للدراسة قبل حفظه. وسيُحفظ مجال التركيز أيضًا كهدف تعلّم لحسابك.",
+      "confirmChoiceNewInterview": "راجع اختيارك لبدء مقابلة قياسية جديدة قبل حفظه.",
+      "confirmChoiceFinishForNow": "راجع اختيارك لإنهاء الجلسة الآن قبل حفظه.",
       "save": "حفظ",
       "back": "رجوع",
       "saveChoice": "احفظ اختياري",
@@ -257,7 +261,9 @@
       "resumeEnglish": "لديك مقابلة قياسية {{version}} غير مكتملة وجاهزة لمتابعة تدريب الإنجليزية {{stage}}. كيف تود المتابعة؟",
       "continueExam": "متابعة المقابلة",
       "startNewExam": "بدء مقابلة جديدة",
-      "startMockExam": "بدء مقابلة قياسية"
+      "startMockExam": "بدء مقابلة قياسية",
+      "startLearningPath": "بدء {{mode}}: {{focus}}",
+      "startLearningPathAll": "بدء {{mode}} (جميع مجالات التركيز)"
     },
     "right": {
       "title": "الإعدادات وعناصر التحكم",

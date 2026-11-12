@@ -87,19 +87,16 @@ describe('RightPanel learning goals', () => {
     );
   });
 
-  it('auto-saves a free-text Other goal and the weekly target', async () => {
+  it('auto-saves the weekly target without a Save button', async () => {
     const { onUpdateLearningGoals } = renderPanel();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Other focus' }), {
-      target: { value: 'Practice with my neighbor' },
-    });
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Weekly graded-answer target' }), {
       target: { value: '20' },
     });
 
     await waitFor(
       () => expect(onUpdateLearningGoals).toHaveBeenCalledWith({
-        learning_goal: 'Practice with my neighbor',
+        learning_goal: 'All focus areas',
         weekly_graded_answer_target: 20,
       }),
       { timeout: 2000 },

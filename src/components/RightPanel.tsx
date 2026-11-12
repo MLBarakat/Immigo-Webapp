@@ -103,7 +103,6 @@ export function RightPanel({
 
   const initialGoal = parseLearningGoal(learningGoal, testVersion);
   const [selectedFocusIds, setSelectedFocusIds] = useState<string[]>(initialGoal.selectedIds);
-  const [otherFocus, setOtherFocus] = useState(initialGoal.other);
   const [allFocusAreas, setAllFocusAreas] = useState(initialGoal.allFocusAreas);
   const [weeklyTarget, setWeeklyTarget] = useState(
     weeklyGradedAnswerTarget === null ? '' : String(weeklyGradedAnswerTarget),
@@ -124,7 +123,6 @@ export function RightPanel({
     } else {
       const parsed = parseLearningGoal(learningGoal, testVersion);
       setSelectedFocusIds(parsed.selectedIds);
-      setOtherFocus(parsed.other);
       setAllFocusAreas(parsed.allFocusAreas);
       setWeeklyTarget(
         weeklyGradedAnswerTarget === null ? '' : String(weeklyGradedAnswerTarget),
@@ -132,7 +130,7 @@ export function RightPanel({
     }
   }
 
-  // Auto-save: no Save button. Debounce so typing and multi-select settle first.
+  // Auto-save: no Save button. Debounce so multi-select settles first.
   useEffect(() => {
     if (!goalsMounted.current) {
       goalsMounted.current = true;
@@ -141,7 +139,7 @@ export function RightPanel({
     const timer = window.setTimeout(() => {
       const goal = serializeLearningGoal(
         selectedFocusIds,
-        otherFocus,
+        '',
         testVersion,
         allFocusAreas,
       ).trim();
@@ -160,7 +158,6 @@ export function RightPanel({
     return () => window.clearTimeout(timer);
   }, [
     selectedFocusIds,
-    otherFocus,
     allFocusAreas,
     weeklyTarget,
     testVersion,
@@ -171,18 +168,9 @@ export function RightPanel({
   const handleFocusSelection = (selection: FocusAreaSelection) => {
     setSelectedFocusIds(selection.selectedIds);
     setAllFocusAreas(selection.allFocusAreas);
-    // "All focus areas" is a complete goal on its own; a free-text Other would
-    // narrow it, so choosing All clears the custom entry.
-    if (selection.allFocusAreas) setOtherFocus('');
-  };
-
-  const handleOtherFocusChange = (value: string) => {
-    const next = value.slice(0, 80);
-    setOtherFocus(next);
-    // Typing a custom focus means the learner is no longer on "All", and
-    // clearing the last custom focus returns to the default.
-    if (next.trim()) setAllFocusAreas(false);
-    else if (selectedFocusIds.length === 0) setAllFocusAreas(true);
+    // "All focus areas" is a complete goal on its own; choosing All clears any
+    // individual selection. Free-text Other is no longer supported.
+    if (selection.allFocusAreas) setSelectedFocusIds([]);
   };
   const isRequestInFlight = appStatus === 'processing' || appStatus === 'speaking';
   const isModeUnavailable = isCheckingStandardInterview || standardInterviewLookupFailed;
@@ -430,21 +418,6 @@ export function RightPanel({
                   idPrefix="right-panel-focus"
                 />
               </div>
-
-              <label className="mt-2 block space-y-1">
-                <span className="text-[11px] font-semibold text-immigo-gray-700">
-                  {t('workspace.right.otherFocusLabel')}
-                </span>
-                <input
-                  type="text"
-                  aria-label={t('workspace.right.otherFocusLabel')}
-                  value={otherFocus}
-                  maxLength={80}
-                  onChange={event => handleOtherFocusChange(event.target.value)}
-                  placeholder={t('workspace.right.otherFocusPlaceholder')}
-                  className="w-full rounded-lg border border-immigo-gray-300 bg-white px-2 py-1.5 text-[11px] text-deep-navy focus:border-art-blue-600 focus:outline-none focus:ring-2 focus:ring-art-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
-                />
-              </label>
 
               <label className="mt-2 block space-y-1">
                 <span className="text-[11px] font-semibold text-immigo-gray-700">
