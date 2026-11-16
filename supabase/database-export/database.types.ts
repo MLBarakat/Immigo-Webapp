@@ -87,14 +87,14 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
-                    "content": string,"created_at": string,"id": string,"role": string,"session_id": string,"updated_at": string,"user_id": string
+                    "actions": Json | null,"content": string,"created_at": string,"id": string,"role": string,"session_id": string,"speaker": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "content": string,"created_at"?: string,"id"?: string,"role": string,"session_id": string,"updated_at"?: string,"user_id": string
+                    "actions"?: Json | null,"content": string,"created_at"?: string,"id"?: string,"role": string,"session_id": string,"speaker"?: string | null,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "content"?: string,"created_at"?: string,"id"?: string,"role"?: string,"session_id"?: string,"updated_at"?: string,"user_id"?: string
+                    "actions"?: Json | null,"content"?: string,"created_at"?: string,"id"?: string,"role"?: string,"session_id"?: string,"speaker"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -209,14 +209,14 @@ isOneToOne: false
                   ]
                 },"user_settings": {
                   Row: {
-                    "account_timezone": string | null,"ai_voice_id": string,"barge_in": string,"barge_in_sensitivity": number,"created_at": string,"font_size": string,"has_seen_welcome": boolean | null,"input_device_id": string | null,"language": string,"learning_goal": string | null,"live_feedback_enabled": boolean,"location_state": string | null,"mic_consent_version": string | null,"mic_mode": string,"notifications_enabled": boolean,"output_device_id": string | null,"progress_report_frequency": string,"reminder_time": string,"theme": string,"updated_at": string,"user_id": string,"weekly_graded_answer_target": number | null
+                    "account_timezone": string | null,"ai_voice_id": string,"barge_in": string,"barge_in_sensitivity": number,"created_at": string,"font_size": string,"has_seen_welcome": boolean | null,"include_english_simulation": boolean | null,"input_device_id": string | null,"language": string,"learning_goal": string | null,"live_feedback_enabled": boolean,"location_state": string | null,"mic_consent_version": string | null,"mic_mode": string,"notifications_enabled": boolean,"output_device_id": string | null,"progress_report_frequency": string,"question_bank_test_version": string | null,"reminder_time": string,"theme": string,"updated_at": string,"user_id": string,"weekly_graded_answer_target": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "account_timezone"?: string | null,"ai_voice_id"?: string,"barge_in"?: string,"barge_in_sensitivity"?: number,"created_at"?: string,"font_size"?: string,"has_seen_welcome"?: boolean | null,"input_device_id"?: string | null,"language"?: string,"learning_goal"?: string | null,"live_feedback_enabled"?: boolean,"location_state"?: string | null,"mic_consent_version"?: string | null,"mic_mode"?: string,"notifications_enabled"?: boolean,"output_device_id"?: string | null,"progress_report_frequency"?: string,"reminder_time"?: string,"theme"?: string,"updated_at"?: string,"user_id": string,"weekly_graded_answer_target"?: number | null
+                    "account_timezone"?: string | null,"ai_voice_id"?: string,"barge_in"?: string,"barge_in_sensitivity"?: number,"created_at"?: string,"font_size"?: string,"has_seen_welcome"?: boolean | null,"include_english_simulation"?: boolean | null,"input_device_id"?: string | null,"language"?: string,"learning_goal"?: string | null,"live_feedback_enabled"?: boolean,"location_state"?: string | null,"mic_consent_version"?: string | null,"mic_mode"?: string,"notifications_enabled"?: boolean,"output_device_id"?: string | null,"progress_report_frequency"?: string,"question_bank_test_version"?: string | null,"reminder_time"?: string,"theme"?: string,"updated_at"?: string,"user_id": string,"weekly_graded_answer_target"?: number | null
                   }
                   Update: {
-                    "account_timezone"?: string | null,"ai_voice_id"?: string,"barge_in"?: string,"barge_in_sensitivity"?: number,"created_at"?: string,"font_size"?: string,"has_seen_welcome"?: boolean | null,"input_device_id"?: string | null,"language"?: string,"learning_goal"?: string | null,"live_feedback_enabled"?: boolean,"location_state"?: string | null,"mic_consent_version"?: string | null,"mic_mode"?: string,"notifications_enabled"?: boolean,"output_device_id"?: string | null,"progress_report_frequency"?: string,"reminder_time"?: string,"theme"?: string,"updated_at"?: string,"user_id"?: string,"weekly_graded_answer_target"?: number | null
+                    "account_timezone"?: string | null,"ai_voice_id"?: string,"barge_in"?: string,"barge_in_sensitivity"?: number,"created_at"?: string,"font_size"?: string,"has_seen_welcome"?: boolean | null,"include_english_simulation"?: boolean | null,"input_device_id"?: string | null,"language"?: string,"learning_goal"?: string | null,"live_feedback_enabled"?: boolean,"location_state"?: string | null,"mic_consent_version"?: string | null,"mic_mode"?: string,"notifications_enabled"?: boolean,"output_device_id"?: string | null,"progress_report_frequency"?: string,"question_bank_test_version"?: string | null,"reminder_time"?: string,"theme"?: string,"updated_at"?: string,"user_id"?: string,"weekly_graded_answer_target"?: number | null
                   }
                   Relationships: [
                     

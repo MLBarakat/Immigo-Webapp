@@ -12,6 +12,9 @@
 | 20261102130000 | uniform_timestamps |
 | 20261103120000 | durable_learning_goals |
 | 20261103172426 | mock_exam_review_decisions |
+| 20261112010000 | question_bank_preferences |
+| 20261114000000 | messages_actions |
+| 20261115000000 | messages_speaker |
 
 ## Tables
 
@@ -158,6 +161,8 @@ Row level security: **enabled**
 | `content` | `text` | no |  |
 | `created_at` | `timestamp with time zone` | no | `now()` |
 | `updated_at` | `timestamp with time zone` | no | `now()` |
+| `actions` | `jsonb` | yes |  |
+| `speaker` | `text` | yes |  |
 
 Policies:
 
@@ -172,6 +177,7 @@ Foreign keys:
 
 Indexes:
 
+- `CREATE INDEX idx_messages_actions ON public.messages USING gin (actions)`
 - `CREATE INDEX idx_messages_session ON public.messages USING btree (session_id, created_at DESC)`
 - `CREATE INDEX idx_messages_user ON public.messages USING btree (user_id, created_at DESC)`
 - `CREATE UNIQUE INDEX messages_pkey ON public.messages USING btree (id)`
@@ -410,6 +416,8 @@ Row level security: **enabled**
 | `account_timezone` | `text` | yes |  |
 | `learning_goal` | `text` | yes |  |
 | `weekly_graded_answer_target` | `integer` | yes |  |
+| `question_bank_test_version` | `text` | yes |  |
+| `include_english_simulation` | `boolean` | yes |  |
 
 Policies:
 

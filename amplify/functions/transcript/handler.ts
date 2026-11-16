@@ -20,6 +20,8 @@ import {
   buildFocusConfirmation,
   buildReturningOnboarding,
   buildStandardModeSwitchCopy,
+  recommendationReason,
+  recommendLearningMode,
   type ModeOnboardingStats,
   type OnboardingLanguage,
 } from './turn/mode-onboarding';
@@ -33,6 +35,8 @@ import {
 import { dynamicAnswersRequireLocation, withDynamicAnswers } from './turn/dynamic-answers';
 import { formatStudyFeedback, formatStudyQuestion, TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn, sanitizeFinalAnswerFeedback } from './turn/turn-policy';
+import { feedbackFallback, practiceFirstQuestion, questionTransition } from './turn/feedback-copy';
+import { serverCopy } from './turn/server-copy';
 import type { CivicsItem, ConversationTurn, SimulationMode, TestVersion } from './turn/types';
 import { getEnglishExercise, gradeEnglishReading, parseEnglishWritingGrade, pickEnglishExercisePrompts, resolveEnglishSectionProgress, type EnglishExerciseSection } from './english-exercises';
 
@@ -362,74 +366,6 @@ export function sanitizeSpeechText(text: string): string {
   return spoken.trim();
 }
 
-function getLocalizedStudyFallback(flags: string[], language: string): string | null {
-  const flag = [
-    'legal_advice_refusal',
-    'manipulation_detected',
-    'off_topic',
-    'parse_failure',
-    'answer_without_grade',
-    'answer_without_active_question',
-    'unclear_input',
-    'dynamic_ungraded',
-    'awaiting_confirmation',
-    'near_miss',
-  ].find((candidate) => flags.includes(candidate));
-  if (!flag) return null;
-
-  const replies: Record<string, Record<string, string>> = {
-    'en-US': {
-      legal_advice_refusal: 'I can help you study civics, but I cannot give legal advice. Please ask a licensed immigration attorney or DOJ-accredited representative.',
-      manipulation_detected: 'Let’s stay focused on your civics lesson.',
-      off_topic: 'That is outside this civics lesson. I can help you study the current topic.',
-      parse_failure: 'I had trouble understanding that response. Let’s try again.',
-      answer_without_grade: 'I could not evaluate that answer. Please try saying it another way.',
-      answer_without_active_question: 'There is no active civics question yet. Let’s start with a question.',
-      unclear_input: 'I could not understand that. Please say it another way.',
-      dynamic_ungraded: 'This answer changes over time, so I cannot verify it from the stored official bank. I will leave it unscored and continue.',
-      awaiting_confirmation: 'I may have misheard you. Please say your answer once more.',
-      near_miss: 'I may have misheard you. Please say your answer once more.',
-    },
-    'es-ES': {
-      legal_advice_refusal: 'Puedo ayudarte a estudiar educación cívica, pero no puedo ofrecer asesoramiento legal. Consulta a un abogado de inmigración autorizado o a un representante acreditado por el Departamento de Justicia.',
-      manipulation_detected: 'Sigamos centrados en tu lección de educación cívica.',
-      off_topic: 'Eso queda fuera de esta lección de educación cívica. Puedo ayudarte con el tema actual.',
-      parse_failure: 'Me costó entender esa respuesta. Intentémoslo de nuevo.',
-      answer_without_grade: 'No pude evaluar esa respuesta. Intenta expresarla de otra manera.',
-      answer_without_active_question: 'Todavía no hay una pregunta activa. Empecemos con una pregunta.',
-      unclear_input: 'No entendí eso. Intenta decirlo de otra manera.',
-      dynamic_ungraded: 'Esta respuesta cambia con el tiempo y no puedo verificarla con el banco oficial guardado. No la calificaré y continuaré.',
-      awaiting_confirmation: 'Es posible que te haya oído mal. Repite tu respuesta, por favor.',
-      near_miss: 'Es posible que te haya oído mal. Repite tu respuesta, por favor.',
-    },
-    'fr-FR': {
-      legal_advice_refusal: 'Je peux vous aider à étudier l’éducation civique, mais pas vous donner de conseil juridique. Consultez un avocat spécialisé en immigration ou un représentant accrédité par le ministère de la Justice.',
-      manipulation_detected: 'Restons concentrés sur votre leçon d’éducation civique.',
-      off_topic: 'Cela ne fait pas partie de cette leçon d’éducation civique. Je peux vous aider sur le sujet actuel.',
-      parse_failure: 'J’ai eu du mal à comprendre cette réponse. Réessayons.',
-      answer_without_grade: 'Je n’ai pas pu évaluer cette réponse. Essayez de la formuler autrement.',
-      answer_without_active_question: 'Aucune question de civique n’est active. Commençons par une question.',
-      unclear_input: 'Je n’ai pas compris. Essayez de le dire autrement.',
-      dynamic_ungraded: 'Cette réponse change avec le temps et je ne peux pas la vérifier à partir de la banque officielle enregistrée. Je ne la noterai pas et je vais continuer.',
-      awaiting_confirmation: 'J’ai peut-être mal entendu. Répétez votre réponse, s’il vous plaît.',
-      near_miss: 'J’ai peut-être mal entendu. Répétez votre réponse, s’il vous plaît.',
-    },
-    'ar-SA': {
-      legal_advice_refusal: 'يمكنني مساعدتك في دراسة التربية المدنية، لكن لا أستطيع تقديم مشورة قانونية. يُرجى استشارة محامٍ مختص بالهجرة أو ممثل معتمد من وزارة العدل.',
-      manipulation_detected: 'لنبقَ مركزين على درس التربية المدنية.',
-      off_topic: 'هذا خارج موضوع درس التربية المدنية. يمكنني مساعدتك في دراسة الموضوع الحالي.',
-      parse_failure: 'واجهت صعوبة في فهم إجابتك. لنحاول مرة أخرى.',
-      answer_without_grade: 'لم أتمكن من تقييم هذه الإجابة. حاول صياغتها بطريقة أخرى.',
-      answer_without_active_question: 'لا يوجد سؤال مدني نشط بعد. لنبدأ بسؤال.',
-      unclear_input: 'لم أفهم ذلك. حاول صياغته بطريقة أخرى.',
-      dynamic_ungraded: 'تتغير هذه الإجابة بمرور الوقت ولا يمكنني التحقق منها من البنك الرسمي المحفوظ. لن أقيّمها وسأتابع.',
-      awaiting_confirmation: 'ربما لم أسمعك جيدًا. أعد إجابتك من فضلك.',
-      near_miss: 'ربما لم أسمعك جيدًا. أعد إجابتك من فضلك.',
-    },
-  };
-  return replies[language]?.[flag] ?? null;
-}
-
 interface ExtendedSdkStream {
   transformToByteArray(): Promise<Uint8Array>;
 }
@@ -659,7 +595,7 @@ async function answerProgressQuery(
     const milestone = (Math.floor(answered / 10) + 1) * 10;
     const untilMilestone = milestone - answered;
     facts = [
-      `Practice today: ${answered} practice questions answered, ${correct} right, ${accuracy}% accuracy.`,
+      `Today's activity: ${answered} practice questions answered, ${correct} right, ${accuracy}% accuracy.`,
       `Next ten-answer milestone: ${milestone} answers (${untilMilestone} away).`,
       weeklyTarget === null
         ? 'Weekly graded-answer target: not set.'
@@ -991,6 +927,10 @@ interface MockExamReviewScorecard {
     incorrect: number;
     total: number;
     accuracyPercent: number;
+    /** Correct answers required by this question bank's passing threshold. */
+    passAt: number;
+    /** Whether this attempt reached the passing threshold. */
+    thresholdReached: boolean;
   };
   english: {
     included: boolean;
@@ -1059,13 +999,21 @@ async function createMockExamFeedback(
     .filter((item): item is CivicsItem => Boolean(item));
   const scored = exam.correct_count + exam.incorrect_count;
   const accuracy = scored ? Math.round(exam.correct_count / scored * 100) : 0;
-  const report = exam.report_markdown ?? `${exam.test_version} Civics Mock Exam\nScore: ${exam.correct_count} correct and ${exam.incorrect_count} incorrect (${accuracy}% accuracy).`;
+  const civicsPassAt = exam.test_version === '2008' ? 6 : 12;
+  const civicsPassed = exam.correct_count >= civicsPassAt;
+  const report = exam.report_markdown ?? [
+    `${exam.test_version} Civics Mock Exam`,
+    `Practice result: ${civicsPassed ? 'passing threshold reached.' : 'passing threshold not reached this time.'}`,
+    `Passing threshold: ${civicsPassAt} correct answers.`,
+    `Score: ${exam.correct_count} correct and ${exam.incorrect_count} incorrect (${accuracy}% accuracy).`,
+  ].join('\n');
+  const recommendedMode = recommendLearningMode(accuracy);
   const fallback: MockExamFeedback = {
     summary: `You answered ${scored} civics questions and got ${accuracy}% correct. ${exam.include_english_simulation ? 'Your report also includes the English practice portions.' : ''}`.trim(),
     strengths: exam.correct_count > 0 ? [`You answered ${exam.correct_count} civics question${exam.correct_count === 1 ? '' : 's'} correctly.`] : ['You completed a full mock exam attempt.'],
     suggestions: missed.length ? [`Review ${missed.slice(0, 2).map(item => item.question).join('; ')}.`] : ['Keep your knowledge fresh with a short practice set.'],
-    recommendedMode: accuracy < 60 ? 'study' : 'practice',
-    recommendationReason: accuracy < 60 ? 'A guided review can help rebuild the concepts behind missed answers.' : 'A short practice set can reinforce what you know and strengthen recall.',
+    recommendedMode: recommendedMode,
+    recommendationReason: recommendationReason(recommendedMode, preferredLanguage),
   };
   const questionOutcomes: MockExamQuestionOutcome[] = answers.map(answer => {
     const item = getItem(answer.item_id, exam.test_version);
@@ -1082,8 +1030,6 @@ async function createMockExamFeedback(
     result: answer.verdict === 'correct' ? 'correct' : 'needs review',
     acceptableAnswers: answer.acceptableAnswers ?? undefined,
   }));
-  const civicsPassAt = exam.test_version === '2008' ? 6 : 12;
-  const civicsPassed = exam.correct_count >= civicsPassAt;
   const englishAdministered = exam.include_english_simulation && civicsPassed;
   const categoryStats = new Map<string, { id: string; label: string; correct: number; total: number }>();
   for (const answer of answers) {
@@ -1125,6 +1071,8 @@ async function createMockExamFeedback(
       incorrect: exam.incorrect_count,
       total: scored,
       accuracyPercent: accuracy,
+      passAt: civicsPassAt,
+      thresholdReached: civicsPassed,
     },
     english: {
       included: exam.include_english_simulation,
@@ -1135,7 +1083,7 @@ async function createMockExamFeedback(
   const englishResult = !exam.include_english_simulation
     ? 'English practice was not included.'
     : !civicsPassed
-      ? 'English practice was not administered because civics ended at the fail threshold.'
+      ? 'English practice was not administered because the passing threshold was not reached.'
       : `English reading: ${exam.reading_passed ? 'passed' : 'not passed'}; English writing: ${exam.writing_passed ? 'passed' : 'not passed'}.`;
   let rawFeedback = '';
   try {
@@ -1190,11 +1138,10 @@ type ExamIntroCopy = {
   topics: string;
   english: string;
   ready: string;
-  returning: (correct: number, incorrect: number, total: number, passed: boolean, endedEarly: boolean) => string;
+  returning: (correct: number, incorrect: number, total: number, thresholdReached: boolean, endedEarly: boolean) => string;
   resume: (answered: number, correct: number, incorrect: number, needed: number, remaining: number) => string;
-  resumeIcebreaker: string;
-  firstFallback: string;
-  returningFallback: string;
+  opener: string;
+  resumeOpener: string;
 };
 
 const EXAM_INTRO_COPY: Record<'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA', ExamIntroCopy> = {
@@ -1203,74 +1150,51 @@ const EXAM_INTRO_COPY: Record<'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA', ExamIntroCo
     topics: 'The questions come from the nine USCIS civics topics.',
     english: 'If you pass civics, reading and writing practice follows. If you do not pass, English practice is not administered.',
     ready: 'When you are ready, choose Ready. I will ask the first question.',
-    returning: (correct, incorrect, total, passed, endedEarly) => `Last time you answered ${correct} correctly and ${incorrect} incorrectly (${total} graded answers). ${passed ? 'You passed that practice interview.' : 'You did not pass that practice interview.'}${endedEarly ? ' It ended early when a pass or fail threshold was reached.' : ' It used the full question set.'}`,
+    returning: (correct, incorrect, total, thresholdReached, endedEarly) => `Last time you answered ${correct} correctly and ${incorrect} incorrectly (${total} graded answers). ${thresholdReached ? 'You reached the passing threshold that time.' : 'You did not reach the passing threshold that time.'}${endedEarly ? ' The interview ended early when a threshold was reached.' : ' It used the full question set.'}`,
     resume: (answered, correct, incorrect, needed, remaining) => `You have answered ${answered} questions: ${correct} correct and ${incorrect} incorrect. You need ${needed} more correct answers to pass; ${remaining} more incorrect answers would end the interview.`,
-    resumeIcebreaker: "Welcome back. Let's pick up where you left off.",
-    firstFallback: "I'm glad you're here. Let's get comfortable and begin your practice interview.",
-    returningFallback: "It's good to see you again. Let's build on your last practice interview.",
+    opener: 'Welcome to your civics practice interview. I will ask questions one at a time, and you answer in your own words. Choose Ready when you are set to begin.',
+    resumeOpener: 'Welcome back to your civics practice interview. We will continue from where you left off. Choose Ready when you are set to continue.',
   },
   'es-ES': {
     firstFacts: (max, passAt, failAt) => `Esta entrevista de práctica tiene hasta ${max} preguntas de civismo. Apruebas con ${passAt} respuestas correctas. Termina antes al llegar a ${passAt} correctas o ${failAt} incorrectas.`,
     topics: 'Las preguntas provienen de los nueve temas de civismo de USCIS.',
     english: 'Si apruebas civismo, seguirás con práctica de lectura y escritura. Si no apruebas, la práctica de inglés no se realiza.',
     ready: 'Cuando estés listo, elige Listo. Te haré la primera pregunta.',
-    returning: (correct, incorrect, total, passed, endedEarly) => `La última vez respondiste ${correct} correctas y ${incorrect} incorrectas (${total} respuestas calificadas). ${passed ? 'Aprobaste esa entrevista de práctica.' : 'No aprobaste esa entrevista de práctica.'}${endedEarly ? ' Terminó antes al alcanzar un umbral de aprobación o fallo.' : ' Usó el conjunto completo de preguntas.'}`,
+    returning: (correct, incorrect, total, thresholdReached, endedEarly) => `La última vez respondiste ${correct} correctas y ${incorrect} incorrectas (${total} respuestas calificadas). ${thresholdReached ? 'Alcanzaste el umbral de aprobación esa vez.' : 'No alcanzaste el umbral de aprobación esa vez.'}${endedEarly ? ' La entrevista terminó antes al alcanzarse un umbral.' : ' Se usó el conjunto completo de preguntas.'}`,
     resume: (answered, correct, incorrect, needed, remaining) => `Has respondido ${answered} preguntas: ${correct} correctas y ${incorrect} incorrectas. Necesitas ${needed} respuestas correctas más para aprobar; ${remaining} incorrectas más terminarían la entrevista.`,
-    resumeIcebreaker: 'Bienvenido de nuevo. Sigamos donde lo dejaste.',
-    firstFallback: 'Me alegra que estés aquí. Empecemos con calma tu entrevista de práctica.',
-    returningFallback: 'Qué bueno verte de nuevo. Sigamos construyendo sobre tu última entrevista de práctica.',
+    opener: 'Bienvenido a tu entrevista de práctica de civismo. Haré preguntas una a la vez, y tú respondes con tus propias palabras. Elige Listo cuando estés listo para comenzar.',
+    resumeOpener: 'Bienvenido de nuevo a tu entrevista de práctica de civismo. Continuaremos desde donde lo dejaste. Elige Listo cuando estés listo para continuar.',
   },
   'fr-FR': {
     firstFacts: (max, passAt, failAt) => `Cet entretien d’entraînement comporte jusqu’à ${max} questions de civisme. Vous réussissez avec ${passAt} bonnes réponses. Il s’arrête dès ${passAt} bonnes réponses ou ${failAt} mauvaises réponses.`,
     topics: 'Les questions proviennent des neuf thèmes de civisme de l’USCIS.',
     english: 'Si vous réussissez le civisme, la lecture et l’écriture suivent. Sinon, l’entraînement d’anglais n’est pas administré.',
     ready: 'Quand vous êtes prêt, choisissez Prêt. Je poserai la première question.',
-    returning: (correct, incorrect, total, passed, endedEarly) => `La dernière fois, vous avez répondu correctement à ${correct} questions et incorrectement à ${incorrect} (${total} réponses évaluées). ${passed ? 'Vous avez réussi cet entretien d’entraînement.' : 'Vous n’avez pas réussi cet entretien d’entraînement.'}${endedEarly ? ' Il s’est arrêté tôt à un seuil de réussite ou d’échec.' : ' Il a utilisé toutes les questions.'}`,
+    returning: (correct, incorrect, total, thresholdReached, endedEarly) => `La dernière fois, vous avez répondu correctement à ${correct} questions et incorrectement à ${incorrect} (${total} réponses évaluées). ${thresholdReached ? 'Vous avez atteint le seuil de réussite cette fois-là.' : 'Vous n’avez pas atteint le seuil de réussite cette fois-là.'}${endedEarly ? ' L’entretien s’est arrêté tôt lorsqu’un seuil a été atteint.' : ' Toutes les questions ont été utilisées.'}`,
     resume: (answered, correct, incorrect, needed, remaining) => `Vous avez répondu à ${answered} questions : ${correct} correctes et ${incorrect} incorrectes. Il vous faut ${needed} bonnes réponses de plus pour réussir ; ${remaining} mauvaises réponses de plus mettraient fin à l’entretien.`,
-    resumeIcebreaker: 'Bon retour. Reprenons là où vous vous êtes arrêté.',
-    firstFallback: 'Je suis content de vous voir. Commençons tranquillement votre entretien d’entraînement.',
-    returningFallback: 'Ravi de vous revoir. Appuyons-nous sur votre dernier entretien d’entraînement.',
+    opener: 'Bienvenue à votre entretien d’entraînement en civisme. Je poserai les questions une par une, et vous répondrez avec vos propres mots. Choisissez Prêt quand vous êtes prêt à commencer.',
+    resumeOpener: 'Bienvenue à nouveau à votre entretien d’entraînement en civisme. Nous reprendrons là où vous vous êtes arrêté. Choisissez Prêt quand vous êtes prêt à continuer.',
   },
   'ar-SA': {
     firstFacts: (max, passAt, failAt) => `تتضمن مقابلة التدريب هذه ما يصل إلى ${max} سؤالًا في التربية المدنية. تنجح بـ ${passAt} إجابات صحيحة. تنتهي مبكرًا عند الوصول إلى ${passAt} صحيحة أو ${failAt} خاطئة.`,
     topics: 'تأتي الأسئلة من موضوعات التربية المدنية التسعة لدى USCIS.',
     english: 'إذا نجحت في التربية المدنية، تتبعها تدريبات القراءة والكتابة. وإذا لم تنجح، لا يُجرى تدريب اللغة الإنجليزية.',
     ready: 'عندما تكون مستعدًا، اختر "جاهز". سأطرح السؤال الأول.',
-    returning: (correct, incorrect, total, passed, endedEarly) => `في المرة الماضية أجبت عن ${correct} إجابة صحيحة و${incorrect} خاطئة (${total} إجابات مصححة). ${passed ? 'لقد نجحت في مقابلة التدريب تلك.' : 'لم تنجح في مقابلة التدريب تلك.'}${endedEarly ? ' انتهت مبكرًا عند بلوغ حد النجاح أو الرسوب.' : ' استُخدمت مجموعة الأسئلة كاملة.'}`,
+    returning: (correct, incorrect, total, thresholdReached, endedEarly) => `في المرة الماضية أجبت عن ${correct} إجابة صحيحة و${incorrect} خاطئة (${total} إجابات مصححة). ${thresholdReached ? 'لقد بلغت حد النجاح في تلك المرة.' : 'لم تبلغ حد النجاح في تلك المرة.'}${endedEarly ? ' انتهت المقابلة مبكرًا عند بلوغ أحد الحدود.' : ' استُخدمت مجموعة الأسئلة كاملة.'}`,
     resume: (answered, correct, incorrect, needed, remaining) => `أجبت حتى الآن عن ${answered} سؤالًا: ${correct} صحيحة و${incorrect} خاطئة. تحتاج إلى ${needed} إجابات صحيحة إضافية للنجاح؛ و${remaining} إجابات خاطئة إضافية ستُنهي المقابلة.`,
-    resumeIcebreaker: 'مرحبًا بعودتك. لنكمل من حيث توقفت.',
-    firstFallback: 'يسعدني وجودك. لنبدأ مقابلة التدريب بهدوء.',
-    returningFallback: 'من الجيد رؤيتك مجددًا. لنبنِ على مقابلة التدريب السابقة.',
+    opener: 'مرحبًا بك في مقابلة التدريب على التربية المدنية. سأطرح عليك الأسئلة واحدة تلو الأخرى، وتجاوبك بلغتك الخاصة. اختر جاهز عندما تكون مستعدًا للبدء.',
+    resumeOpener: 'مرحبًا بعودتك إلى مقابلة التدريب على التربية المدنية. سنكمل من حيث توقفت. اختر جاهز عندما تكون مستعدًا للمتابعة.',
   },
 };
 
-async function generateExamIcebreaker(
-  language: 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA',
-  returning: boolean,
-): Promise<string> {
-  const copy = EXAM_INTRO_COPY[language];
-  const fallback = returning ? copy.returningFallback : copy.firstFallback;
-  try {
-    const raw = await modelComplete({
-      system: [
-        'Write exactly one warm, natural sentence to open a USCIS civics practice interview.',
-        'Sound like a friendly coach starting a conversation, not a script or a warning.',
-        'Do not use any digits or spelled-out numbers. Do not state scores, counts, rules, thresholds, or question topics.',
-        'Do not mention focus areas. Do not ask a question.',
-        `Write in ${language}. Return only the sentence.`,
-      ].join(' '),
-      user: returning
-        ? 'The learner has completed a practice interview before and is starting another one.'
-        : 'The learner is starting their first practice interview with you.',
-    });
-    const cleaned = raw.replace(/\s+/g, ' ').trim().replace(/^["'“”]+|["'“”]+$/g, '').trim();
-    if (cleaned && cleaned.length <= 220 && !/\d/.test(cleaned)) return cleaned;
-  } catch (error) {
-    console.warn('[Lambda-ExamIntro] Icebreaker unavailable; using the deterministic fallback.', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-  return fallback;
+/**
+ * Deterministic, neutral threshold result. Shared by both completion paths so
+ * the score line can never drift from the report or the scorecard.
+ */
+function passingThresholdResult(correct: number, passAt: number): string {
+  return correct >= passAt
+    ? `You reached the passing threshold: ${correct} correct answers.`
+    : `You did not reach the passing threshold this time: ${correct} correct answers (${passAt} needed).`;
 }
 
 async function buildStandardInterviewIntro(
@@ -1287,7 +1211,7 @@ async function buildStandardInterviewIntro(
   if (start.resumed && start.answeredCount > 0) {
     return {
       kind: 'resume',
-      icebreaker: copy.resumeIcebreaker,
+      icebreaker: copy.resumeOpener,
       facts: copy.resume(
         start.answeredCount,
         start.exam.correct_count,
@@ -1306,7 +1230,7 @@ async function buildStandardInterviewIntro(
     const previous = start.previous.summary;
     return {
       kind: 'returning',
-      icebreaker: await generateExamIcebreaker(language, true),
+      icebreaker: copy.resumeOpener,
       facts: copy.returning(
         previous.correct,
         previous.incorrect,
@@ -1320,7 +1244,7 @@ async function buildStandardInterviewIntro(
   }
   return {
     kind: 'first-time',
-    icebreaker: await generateExamIcebreaker(language, false),
+    icebreaker: copy.opener,
     facts: copy.firstFacts(maxQuestions, passAt, failAt),
     rules,
     readyPrompt: copy.ready,
@@ -1581,16 +1505,15 @@ async function advanceMockExam(
     const scored = correct + incorrect;
     const accuracy = scored ? Math.round((correct / scored) * 100) : 0;
     const status = civicsPassed
-      ? 'Practice result: pass threshold reached.'
-      : incorrect >= failAt
-        ? 'Practice result: fail threshold reached.'
-        : 'Practice result: exam ended before a passing threshold was reached.';
+      ? 'Practice result: passing threshold reached.'
+      : 'Practice result: passing threshold not reached this time.';
     const englishLine = exam.include_english_simulation && !civicsPassed
-      ? 'English practice: not administered — civics ended at the fail threshold.'
+      ? 'English practice: not administered — the passing threshold was not reached.'
       : '';
     const civicsReport = [
       `${exam.test_version} Civics Mock Exam`,
       `${status} Score: ${correct} correct and ${incorrect} incorrect out of ${scored} graded answers (${accuracy}% accuracy).`,
+      `Passing threshold: ${passAt} correct answers.`,
       weakLines.length ? `Areas to strengthen: ${[...new Set(weakLines)].join(' | ')}` : 'No incorrect answers were recorded.',
       englishLine,
     ].filter(Boolean).join('\n');
@@ -1629,9 +1552,10 @@ async function advanceMockExam(
     const accuracy = scored ? Math.round((correct / scored) * 100) : 0;
     report = [
       `${exam.test_version} Civics Mock Exam`,
-      `Practice result: exam ended before a passing threshold was reached. Score: ${correct} correct and ${incorrect} incorrect (${accuracy}% accuracy).`,
+      `Practice result: passing threshold not reached this time. Score: ${correct} correct and ${incorrect} incorrect (${accuracy}% accuracy).`,
+      `Passing threshold: ${passAt} correct answers.`,
       exam.include_english_simulation
-        ? 'English practice: not administered — civics ended at the fail threshold.'
+        ? 'English practice: not administered — the passing threshold was not reached.'
         : '',
     ].filter(Boolean).join('\n');
     const update = await db.from('mock_exams').update({
@@ -2308,16 +2232,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         const correct = englishResult.correct ?? 0;
         const incorrect = englishResult.incorrect ?? 0;
         const total = correct + incorrect;
+        const passAt = testVersion === '2008' ? 6 : 12;
         const summary = await turnInterpreter.generateCompletionSummary({
           correct,
           incorrect,
           total,
           accuracyPercent: total ? Math.round((correct / total) * 100) : 0,
+          passAt,
+          thresholdReached: correct >= passAt,
           recommendedMode: 'Practice Mode',
         }, preferredLanguage);
         const finalFeedback = englishResult.segments[0] ?? 'Thank you for completing the English practice.';
         assistantSegments = [
-          `${finalFeedback}\n\nThat completes your Standard Interview.`,
+          `${finalFeedback}\n\nThat completes your Standard Interview. ${passingThresholdResult(correct, passAt)}`,
           summary,
         ];
         generatedAssistantText = assistantSegments.join('\n');
@@ -2423,7 +2350,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           token, userId, parsedBody.sessionId, testVersion,
           focus ?? { all: true, categoryIds: [], labels: [] }, null, traceId,
         )).item);
-      generatedAssistantText = `Take your time. Let's return to the question: ${focusedItem.question}`;
+      generatedAssistantText = serverCopy('silenceReturnToQuestion', preferredLanguageCode as OnboardingLanguage)
+        .replace('{question}', focusedItem.question);
       nextItemId = focusedItem.id;
       nextQuestionText = focusedItem.question;
     } else if (parsedBody.openingResponse === true) {
@@ -2490,7 +2418,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           assistantSegments = [acknowledgement, formatStudyQuestion(first, explanation, preferredLanguage)];
           generatedAssistantText = assistantSegments.join('\n');
         } else {
-          assistantSegments = [acknowledgement, `The first question is: ${first.question}`];
+          assistantSegments = [acknowledgement, practiceFirstQuestion(first.question, preferredLanguageCode as OnboardingLanguage)];
           generatedAssistantText = assistantSegments.join('\n');
         }
       }
@@ -2599,21 +2527,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         // fresh attempt at the same still-current question.
         needsConfirmation = outcome.replyKind === 'needs_confirmation'
           || outcome.flags.includes('practice_retry');
-        const practiceRetryReplies = {
-          'en-US': "That's not quite right. Try once more, or ask me for a hint.",
-          'es-ES': 'Esa respuesta no es del todo correcta. Inténtalo una vez más o pídeme una pista.',
-          'fr-FR': 'Ce n’est pas tout à fait exact. Réessayez ou demandez-moi un indice.',
-          'ar-SA': 'هذه الإجابة ليست صحيحة تمامًا. حاول مرة أخرى أو اطلب مني تلميحًا.',
-        } as const;
-        const safeReply = outcome.flags.includes('practice_retry')
-          ? practiceRetryReplies[preferredLanguageCode]
-          : simulationMode === 'study' && !outcome.useModelReply
-            ? getLocalizedStudyFallback(outcome.flags, preferredLanguageCode) ?? outcome.safeReply
-            : outcome.safeReply;
+        const language = preferredLanguageCode as OnboardingLanguage;
+        const safeReply = outcome.safeReplyKey
+          ? serverCopy(outcome.safeReplyKey, language)
+          : outcome.safeReply;
         const turnReply = simulationMode === 'study' && outcome.effectiveIntent === 'repeat'
           ? ''
           : outcome.effectiveIntent === 'unclear'
-          ? `I didn't catch that clearly. Let's return to the question: ${askedItem.question}`
+          ? serverCopy('unclearReturnToQuestion', language).replace('{question}', askedItem.question)
           : outcome.useModelReply
           ? (interp?.reply || safeReply)
           : safeReply;
@@ -2645,11 +2566,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           );
         }
 
-        const rawFeedback = simulationMode === 'study' && !outcome.useModelReply
-          ? getLocalizedStudyFallback(outcome.flags, preferredLanguageCode) ?? outcome.safeReply
-          : outcome.useModelReply
-          ? (interp?.reply || outcome.safeReply)
+        const language = preferredLanguageCode as OnboardingLanguage;
+        const safeReply = outcome.safeReplyKey
+          ? serverCopy(outcome.safeReplyKey, language)
           : outcome.safeReply;
+        const rawFeedback = outcome.useModelReply
+          ? (interp?.reply || safeReply)
+          : safeReply;
 
         // Advance to the next question, avoiding not just the one just asked
         // but everything asked so far this session (up to a bound) — the
@@ -2667,17 +2590,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             examRunId = null;
             nextItemId = null;
             nextQuestionText = '';
-            const scored = (examProgress.exam?.correct_count ?? 0) + (examProgress.exam?.incorrect_count ?? 0);
-            const accuracy = scored ? Math.round(((examProgress.exam?.correct_count ?? 0) / scored) * 100) : 0;
+            const correct = examProgress.exam?.correct_count ?? 0;
+            const incorrect = examProgress.exam?.incorrect_count ?? 0;
+            const scored = correct + incorrect;
+            const accuracy = scored ? Math.round((correct / scored) * 100) : 0;
+            const passAt = examProgress.exam?.test_version === '2008' ? 6 : 12;
             const summary = await turnInterpreter.generateCompletionSummary({
-              correct: examProgress.exam?.correct_count ?? 0,
-              incorrect: examProgress.exam?.incorrect_count ?? 0,
+              correct,
+              incorrect,
               total: scored,
               accuracyPercent: accuracy,
+              passAt,
+              thresholdReached: correct >= passAt,
               recommendedMode: 'Practice Mode',
             }, preferredLanguage);
             assistantSegments = [
-              `${rawFeedback}\n\nThat completes your Standard Interview.`,
+              `${rawFeedback}\n\nThat completes your Standard Interview. ${passingThresholdResult(correct, passAt)}`,
               summary,
             ];
             generatedAssistantText = assistantSegments.join('\n');
@@ -2732,7 +2660,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           }
           nextItemId = next.id;
           nextQuestionText = next.question;
-          const feedback = sanitizeFinalAnswerFeedback(rawFeedback, next.question);
+          const fallbackCopy = feedbackFallback({
+            verdict: outcome.committedVerdict,
+            mode: simulationMode,
+            language,
+            answer: askedItem.acceptableAnswers[0] ?? null,
+          });
+          const feedback = sanitizeFinalAnswerFeedback(rawFeedback, next.question, fallbackCopy);
 
           // A completed answer and its new prompt are separate chat bubbles.
           const explanation = simulationMode === 'study'
@@ -2740,7 +2674,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             : '';
           const questionSegments = simulationMode === 'study'
             ? [formatStudyFeedback(askedItem, feedback, preferredLanguage), formatStudyQuestion(next, explanation, preferredLanguage)]
-            : [feedback, `Next question: ${next.question}`];
+            : [feedback, questionTransition(simulationMode, next, language)];
           assistantSegments = cycleRestarted
             ? [buildCycleNotice(preferredLanguageCode as OnboardingLanguage), ...questionSegments]
             : questionSegments;
@@ -2750,7 +2684,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     if (!generatedAssistantText) {
-      generatedAssistantText = "Let's keep going.";
+      generatedAssistantText = serverCopy('keepGoing', preferredLanguageCode as OnboardingLanguage);
     }
 
     if (examStage === 'writing' && nextQuestionText) {

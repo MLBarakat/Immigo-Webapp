@@ -100,8 +100,7 @@
     "center": {
       "title": "Naturalization Interview",
       "subtitle": "Practice Session",
-      "progressSummary": "Today's progress: {{correct}} of {{answered}} correct ({{accuracyPct}}%).",
-      "progressUnavailable": "Today's progress could not be refreshed yet.",
+      "progressSummary": "Today's activity: {{correct}} of {{answered}} correct ({{accuracyPct}}%).",
       "status": {
         "ready": "Ready",
         "listening": "Listening…",
@@ -186,6 +185,9 @@
       "questionBank": "Question bank: {{version}}",
       "scoreBreakdown": "Score breakdown",
       "accuracy": "Civics accuracy",
+      "resultNotReached": "You did not reach the passing threshold this time ({{passAt}} correct answers needed).",
+      "resultReached": "You reached the passing threshold ({{passAt}} correct answers).",
+      "passingThreshold": "Passing threshold: {{passAt}} correct answers",
       "correct": "Correct answers",
       "incorrect": "Incorrect answers",
       "scoreOfTotal": "{{score}} / {{total}}",
@@ -257,6 +259,10 @@
         "finishTitle": "Finish for now",
         "finishDescription": "Save this as your next step and close the report."
       },
+      "finishCardTitle": "You've finished for now",
+      "finishCardDescription": "Start {{mode}} to keep practicing what you reviewed.",
+      "startRecommendedPath": "Start recommended path",
+      "maybeLater": "Maybe later",
       "modes": { "standard": "Standard Interview", "practice": "Practice Mode", "study": "Study Mode" }
     },
     "welcome": {
@@ -340,5 +346,35 @@
       "officer": "USCIS Officer",
       "user": "User"
     }
+  },
+  "server": {
+    "legalAdvice": "I can help you study civics, but I cannot give legal advice. Please ask a licensed immigration attorney or DOJ-accredited representative.",
+    "manipulation": "Let's stay focused on your civics lesson.",
+    "clarify": "Sorry, I didn't catch that. Could you say it again?",
+    "safeFail": "Sorry, something went wrong on my side. Let's try that again.",
+    "offTopic": "That's outside what I can help with here, but I'm happy to keep practicing civics with you.",
+    "confirm": "I want to make sure I heard you correctly. Could you say your answer once more?",
+    "practiceRetry": "That's not quite right. Try once more, or ask me for a hint.",
+    "dynamicAnswer": "I can't verify this current answer from the available reference data, so I'll leave it unscored and move on.",
+    "parseFailure": "I had trouble understanding that response. Let's try again.",
+    "answerWithoutGrade": "I could not evaluate that answer. Please try saying it another way.",
+    "answerWithoutActiveQuestion": "There is no active civics question yet. Let's start with a question.",
+    "unclearInput": "I couldn't understand that. Please say it another way.",
+    "dynamicUngraded": "This answer changes over time, so I can't verify it from the stored official bank. I'll leave it unscored and continue.",
+    "awaitingConfirmation": "I may have misheard you. Please say your answer once more.",
+    "nearMiss": "I may have misheard you. Please say your answer once more.",
+    "practiceNearMissRetry": "You're close — try once more, or ask me for a hint.",
+    "feedbackCorrect": "That's correct. Let's continue.",
+    "feedbackIncorrect": "One correct answer is {answer}. Let's continue.",
+    "feedbackPartial": "Good start. Let's continue.",
+    "feedbackDynamic": "Thanks for your answer. Let's continue.",
+    "studyFeedbackIncorrect": "Good effort. Let's review the answer.",
+    "standardNextQuestion": "Next question:",
+    "practiceNextOne": "Next one:",
+    "practiceNextHere": "Here's the next one:",
+    "practiceFirstQuestion": "The first question is:",
+    "unclearReturnToQuestion": "I didn't catch that clearly. Let's return to the question: {question}",
+    "silenceReturnToQuestion": "Take your time. Let's return to the question: {question}",
+    "keepGoing": "Let's keep going."
   }
 }

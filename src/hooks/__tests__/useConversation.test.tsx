@@ -68,19 +68,25 @@ vi.mock('../../logger', () => ({
   },
 }));
 
-vi.mock('../../services/chatPersistenceService', () => ({
-  ChatPersistenceService: {
-    getDeviceLocalDate: vi.fn(() => '2026-10-26'),
-    getSessionDate: vi.fn(() => '2026-10-26'),
-    getOrCreateDailySession: vi.fn().mockResolvedValue({ id: 'daily-session', current_item_id: null, mode_goal_pending: false, current_mode: 'standard', test_version: '2020', include_english_simulation: false }),
-    saveDailySessionState: vi.fn().mockResolvedValue(undefined),
-    createSession: vi.fn().mockResolvedValue(null),
-    closeSession: vi.fn().mockResolvedValue(undefined),
-    persistMessage: vi.fn().mockResolvedValue(null),
-    loadRecentMessages: vi.fn().mockResolvedValue({ messages: [], hasMore: false, oldestCursor: null }),
-    loadOlderMessages: vi.fn().mockResolvedValue({ messages: [], hasMore: false, oldestCursor: null }),
-  },
-}));
+vi.mock('../../services/chatPersistenceService', async () => {
+  const actual = await vi.importActual<typeof import('../../services/chatPersistenceService')>(
+    '../../services/chatPersistenceService',
+  );
+  return {
+    ...actual,
+    ChatPersistenceService: {
+      getDeviceLocalDate: vi.fn(() => '2026-10-26'),
+      getSessionDate: vi.fn(() => '2026-10-26'),
+      getOrCreateDailySession: vi.fn().mockResolvedValue({ id: 'daily-session', current_item_id: null, mode_goal_pending: false, current_mode: 'standard', test_version: '2020', include_english_simulation: false }),
+      saveDailySessionState: vi.fn().mockResolvedValue(undefined),
+      createSession: vi.fn().mockResolvedValue(null),
+      closeSession: vi.fn().mockResolvedValue(undefined),
+      persistMessage: vi.fn().mockResolvedValue(null),
+      loadRecentMessages: vi.fn().mockResolvedValue({ messages: [], hasMore: false, oldestCursor: null }),
+      loadOlderMessages: vi.fn().mockResolvedValue({ messages: [], hasMore: false, oldestCursor: null }),
+    },
+  };
+});
 
 describe('Orchestration Hook Runtime Validation: useConversation', () => {
   // Functional execution context tracker references
@@ -322,7 +328,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(result.current.interimTranscript).toBe('I think the answer is the executive branch');
   });
 
-  it('refreshes detailed progress reports silently and shows one Practice summary at the ten-answer milestone', async () => {
+  it('refreshes detailed progress reports silently and shows one silent Practice activity card at the ten-answer milestone', async () => {
     mockContextValue.state.sessionId = 'report-session';
     let statsReadCount = 0;
     vi.mocked(fetchDailyProgressStats).mockImplementation(async () => ({
@@ -350,6 +356,8 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       userId: 'user-1',
       simulationMode: 'practice',
     }), { wrapper });
+    await waitFor(() => expect(fetchDailyProgressStats).toHaveBeenCalled());
+    statsReadCount = 0;
 
     for (let answer = 0; answer < 10; answer += 1) {
       await act(async () => {
@@ -358,15 +366,19 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     }
 
     await waitFor(() => expect(mockApiClient.completeSession).toHaveBeenCalledOnce());
-    await waitFor(() => {
-      const progressSummaries = mockDispatch.mock.calls
-        .map(([action]) => action)
-        .filter((action): action is StandaloneAssistantAction =>
-          action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
-          && action.payload.content.includes("Today's progress")
-        );
-      expect(progressSummaries).toHaveLength(1);
-    });
+    const progressCards = mockDispatch.mock.calls
+      .map(([action]) => action)
+      .filter((action): action is StandaloneAssistantAction =>
+        action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
+        && action.payload.presentation === 'progress'
+      );
+    expect(progressCards).toHaveLength(1);
+    expect(progressCards[0]?.payload.content).toBe("Today's activity: 10 of 10 correct (100%).");
+    expect(progressCards[0]?.payload.progress).toEqual({ answered: 10, correct: 10, accuracyPct: 100 });
+    expect(mockApiClient.synthesizeSpeechText).not.toHaveBeenCalled();
+    expect(vi.mocked(ChatPersistenceService.persistMessage).mock.calls.some(
+      call => String(call[3]).includes("Today's activity")
+    )).toBe(false);
     const dispatchedAssistantContent = mockDispatch.mock.calls
       .map(([action]) => action)
       .filter((action): action is AssistantMessageAction =>
@@ -518,7 +530,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(dispatchedAssistantContent.join('\n')).not.toContain('You answered ten questions.');
   });
 
-  it('queues a spoken Practice progress summary until the answer audio and AEC settle window finish', async () => {
+  it('shows a silent full-width progress card after the ten-answer milestone', async () => {
     mockContextValue.state.sessionId = 'voice-session';
     mockContextValue.state.isSessionActive = true;
     vi.mocked(fetchDailyProgressStats).mockResolvedValue({
@@ -555,36 +567,28 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       await result.current.sendTextMessage('The answer', 'voice');
     });
     await waitFor(() => expect(fetchDailyProgressStats).toHaveBeenCalledTimes(progressReadsBeforeAnswer + 1));
+
+    const progressCard = mockDispatch.mock.calls
+      .map(([action]) => action)
+      .find((action): action is StandaloneAssistantAction =>
+        action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
+        && action.payload.presentation === 'progress'
+      );
+    expect(progressCard).toBeDefined();
+    expect(progressCard?.payload.content).toBe("Today's activity: 10 of 10 correct (100%).");
+    expect(progressCard?.payload.progress).toEqual({ answered: 10, correct: 10, accuracyPct: 100 });
+    expect(mockApiClient.synthesizeSpeechText).not.toHaveBeenCalled();
+
+    act(() => mockAudioInstance.onended());
+    await act(async () => new Promise(resolve => setTimeout(resolve, 350)));
     expect(mockApiClient.synthesizeSpeechText).not.toHaveBeenCalled();
     expect(mockDispatch.mock.calls.some(([action]) =>
-      action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
-      && action.payload.content.includes("Today's progress")
+      (action.type === 'ADD_ASSISTANT_MESSAGE' || action.type === 'RECEIVE_ASSISTANT_CHUNK')
+      && action.payload.content.includes("Today's activity")
     )).toBe(false);
-
-    expect(mockAudioInstance.onended).toBeTypeOf('function');
-    act(() => mockAudioInstance.onended());
-    await waitFor(() => expect(mockApiClient.synthesizeSpeechText).toHaveBeenCalledOnce());
-    expect(mockApiClient.synthesizeSpeechText).toHaveBeenCalledWith(
-      "Today's progress: 10 of 10 correct (100%).",
-      expect.objectContaining({ simulationMode: 'practice', preferredLanguage: 'en-US' })
-    );
-    expect(mockAudioInstance.play).toHaveBeenCalledTimes(2);
-
-    expect(mockAudioInstance.onended).toBeTypeOf('function');
-    act(() => mockAudioInstance.onended());
-    await waitFor(() => {
-      const visibleProgressText = mockDispatch.mock.calls
-        .map(([action]) => action)
-        .filter((action): action is AssistantMessageAction =>
-          action.type === 'ADD_ASSISTANT_MESSAGE' || action.type === 'RECEIVE_ASSISTANT_CHUNK'
-        )
-        .map(action => action.payload.content)
-        .join('');
-      expect(visibleProgressText).toContain("Today's progress: 10 of 10 correct (100%).");
-    });
   });
 
-  it('waits to speak a queued progress summary while the user is transcribing', async () => {
+  it('shows the silent activity card while the user is already transcribing and never speaks it', async () => {
     mockContextValue.state.sessionId = 'voice-session';
     mockContextValue.state.isSessionActive = true;
     const stats = {
@@ -656,11 +660,24 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       resolveStats(stats);
       await pendingStats;
     });
+
+    const progressCard = mockDispatch.mock.calls
+      .map(([action]) => action)
+      .find((action): action is StandaloneAssistantAction =>
+        action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
+        && action.payload.presentation === 'progress'
+      );
+    expect(progressCard?.payload.content).toBe("Today's activity: 10 of 10 correct (100%).");
     expect(mockApiClient.synthesizeSpeechText).not.toHaveBeenCalled();
 
     transcriptionState = 'LISTENING';
     rerender();
-    await waitFor(() => expect(mockApiClient.synthesizeSpeechText).toHaveBeenCalledOnce());
+    await act(async () => new Promise(resolve => setTimeout(resolve, 350)));
+    expect(mockApiClient.synthesizeSpeechText).not.toHaveBeenCalled();
+    expect(mockDispatch.mock.calls.some(([action]) =>
+      (action.type === 'ADD_ASSISTANT_MESSAGE' || action.type === 'RECEIVE_ASSISTANT_CHUNK')
+      && action.payload.content.includes("Today's activity")
+    )).toBe(false);
   });
 
   it('creates a reportable Practice session for text-only graded answers', async () => {
@@ -836,7 +853,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     // Typing is not voice: each bubble appears whole, never as word chunks.
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'ADD_ASSISTANT_MESSAGE',
-      payload: { assistantMessageId: expect.any(String), content: 'First part.' },
+      payload: { assistantMessageId: expect.any(String), content: 'First part.', speaker: 'officer' },
     });
     expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
       type: 'RECEIVE_ASSISTANT_CHUNK',
@@ -955,7 +972,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(mockDispatch).toHaveBeenCalledWith({ type: 'FINISH_ASSISTANT_RESPONSE' });
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'ADD_ASSISTANT_MESSAGE',
-      payload: { assistantMessageId: expect.any(String), content: 'Understood.' },
+      payload: { assistantMessageId: expect.any(String), content: 'Understood.', speaker: 'officer' },
     });
   });
 
@@ -1148,7 +1165,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(localStorage.getItem(storageKey)).toBe('done');
   });
 
-  it('fetches the daily welcome banner when hydrated conversation history exists', async () => {
+  it('does not fetch or show the welcome banner when conversation history already exists (F1 guard)', async () => {
     const storageKey = 'welcome-banner-shown:user-welcome-history:2026-10-26';
     localStorage.removeItem(storageKey);
     mockApiClient.fetchWelcomeBanner = vi.fn().mockResolvedValue({
@@ -1175,8 +1192,8 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       { wrapper }
     );
 
-    await waitFor(() => expect(mockApiClient.fetchWelcomeBanner).toHaveBeenCalledOnce());
-    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+    await waitFor(() => expect(mockApiClient.fetchWelcomeBanner).not.toHaveBeenCalled());
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
       type: 'ADD_ASSISTANT_MESSAGE',
       payload: expect.objectContaining({ content: 'Welcome back today!' }),
     }));
@@ -1614,21 +1631,10 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     expect(result.current.isVoiceSessionActive).toBe(true);
   });
 
-  it('shows the AI opening after a welcome-card decision even with existing history', async () => {
+  it('shows the AI opening after a welcome-card decision (F1: fresh user, no prior history)', async () => {
     localStorage.removeItem('welcome-banner-shown:user-welcome-decision:2026-10-26');
-    vi.mocked(ChatPersistenceService.loadRecentMessages).mockResolvedValueOnce({
-      messages: [{
-        id: 'old-1',
-        session_id: 'old-session',
-        user_id: 'user-welcome-decision',
-        role: 'assistant',
-        content: 'Yesterday we practiced the Bill of Rights.',
-        audio_url: null,
-        created_at: '2026-10-25T18:00:00.000Z',
-      }],
-      hasMore: false,
-      oldestCursor: null,
-    });
+    // F1: welcome banner only appears before the session day's first turn,
+    // so no prior conversation history is loaded here.
     const responseText = "Let's begin your Standard Interview.\n\nQuestion one?";
     mockApiClient.fetchWelcomeBanner = vi.fn().mockResolvedValue({
       message: 'Welcome back!',
@@ -1659,9 +1665,6 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     await waitFor(() => expect(
       result.current.conversationHistory.some(message => message.content === responseText)
     ).toBe(true));
-    expect(result.current.conversationHistory.some(
-      message => message.content === 'Yesterday we practiced the Bill of Rights.'
-    )).toBe(true);
     expect(result.current.isVoiceSessionActive).toBe(false);
     expect(mockStartRecording).not.toHaveBeenCalled();
   });
@@ -1787,6 +1790,50 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         })
       );
     });
+  });
+
+  it('keeps the ephemeral activity card out of the LLM conversation window', async () => {
+    mockContextValue.state.conversationHistory = [
+      {
+        id: 'progress-card-1',
+        role: 'assistant',
+        content: "Today's activity: 10 of 10 correct (100%).",
+        timestamp: '2026-10-26T09:58:00.000Z',
+        presentation: 'progress',
+        progress: { answered: 10, correct: 10, accuracyPct: 100 },
+      },
+      {
+        id: 'user-msg-1',
+        role: 'user',
+        content: 'What is the supreme law of the land?',
+        timestamp: '2026-10-26T09:59:00.000Z',
+      },
+    ];
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: 'The Constitution. Next question?',
+      nextItemId: 'q-2',
+      nextQuestion: 'Next question?',
+    }));
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'practice',
+    }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendTextMessage('The Constitution');
+    });
+
+    const history = mockApiClient.postTranscript.mock.calls.at(-1)?.[1];
+    expect(history).toEqual([
+      { role: 'user', content: 'What is the supreme law of the land?' },
+    ]);
   });
 
   it('should submit the next speech utterance after the transcript is cleared', async () => {
@@ -2142,10 +2189,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       payload: expect.objectContaining({
         assistantMessageId: expect.stringContaining('mode-goal-'),
         content: expect.stringContaining('one civics question at a time'),
-        actions: expect.arrayContaining([
-          expect.objectContaining({ focusAction: 'continue' }),
-          expect.objectContaining({ focusAction: 'edit' }),
-        ]),
+        // F8: intro bubble has no Continue/Edit focus actions — card is the only action surface
       }),
     });
     await waitFor(() => {
@@ -2345,41 +2389,6 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
     }));
   });
 
-  it('opens the existing focus selector from the intro bubble Edit action', async () => {
-    mockApiClient.postModeTransition.mockResolvedValue(transcriptResponse({
-      responseText: 'Practice Mode is ready.',
-      assistantSegments: ['Practice Mode is ready.'],
-      modeGoalPending: true,
-    }));
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <ConversationContext.Provider value={mockContextValue}>
-        {children}
-      </ConversationContext.Provider>
-    );
-    const { result } = renderHook(() => useConversation({
-      apiClient: mockApiClient,
-      userId: 'user-1',
-      simulationMode: 'standard',
-    }), { wrapper });
-    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith({
-      type: 'SET_SESSION_ID',
-      payload: 'daily-session',
-    }));
-
-    await act(async () => {
-      await result.current.changeMode('study');
-    });
-    expect(result.current.focusOnboarding).toBeNull();
-
-    act(() => result.current.openFocusEditor());
-
-    expect(result.current.focusOnboarding).toEqual(expect.objectContaining({
-      mode: 'study',
-      submitting: false,
-      error: null,
-    }));
-  });
-
   it('continues with the stored focus from the intro bubble without transcript text', async () => {
     mockApiClient.postModeTransition.mockResolvedValue(transcriptResponse({
       responseText: 'Practice Mode is ready.',
@@ -2415,37 +2424,74 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       .map(([action]) => action)
       .find((action): action is StandaloneAssistantAction =>
         action.type === 'ADD_STANDALONE_ASSISTANT_MESSAGE'
-        && action.payload.content.includes('Practice Mode is ready')
-        && Array.isArray(action.payload.actions));
+        && action.payload.content.includes('Practice Mode is ready'));
     expect(introDispatch).toBeDefined();
+    // F8: intro bubble has no Continue/Edit focus actions
+    expect(introDispatch!.payload.actions).toBeUndefined();
 
     let continued = false;
     await act(async () => {
       continued = await result.current.confirmModeFocus();
     });
+    // F8: confirmModeFocus is a no-op — focus confirmation lives on the post-report card
+    expect(continued).toBe(false);
+  });
 
-    expect(continued).toBe(true);
-    expect(mockApiClient.postTranscript).toHaveBeenCalledWith(
-      '',
-      [],
-      'daily-session',
-      null,
-      expect.objectContaining({
-        modeGoalResponse: true,
-        confirmFocus: true,
-        simulationMode: 'practice',
-      }),
+  it('exports the loaded conversation with speaker labels, no session id, and a partial-history note', async () => {
+    const captured: string[] = [];
+    const NativeBlob = globalThis.Blob;
+    vi.stubGlobal('Blob', class extends NativeBlob {
+      constructor(parts: BlobPart[], options?: BlobPropertyBag) {
+        super(parts, options);
+        captured.push(parts.map(part => (typeof part === 'string' ? part : '')).join(''));
+      }
+    });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    mockContextValue.state = {
+      ...mockContextValue.state,
+      sessionId: 'daily-session',
+      sessionTime: 125,
+      hasMoreHistory: true,
+      conversationHistory: [
+        { id: 'u1', role: 'user', content: 'What is the supreme law?', timestamp: '2026-11-14T15:00:00.000Z' },
+        {
+          id: 'a1',
+          role: 'assistant',
+          content: 'The Constitution is the supreme law.',
+          timestamp: '2026-11-14T15:01:00.000Z',
+          speaker: 'practice_coach',
+        },
+        {
+          id: 'progress-card-1',
+          role: 'assistant',
+          content: "Today's activity: 10 of 10 correct (100%).",
+          timestamp: '2026-11-14T15:02:00.000Z',
+          presentation: 'progress',
+        },
+      ],
+    };
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
     );
-    expect(mockDispatch).toHaveBeenCalledWith({
-      type: 'RESOLVE_MESSAGE_ACTIONS',
-      payload: { messageId: introDispatch!.payload.assistantMessageId },
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+    }), { wrapper });
+
+    await act(async () => {
+      result.current.downloadTranscript();
+      // Let the deferred object-URL revoke run while the URL stub is installed.
+      await new Promise(resolve => setTimeout(resolve, 0));
     });
-    expect(mockDispatch).toHaveBeenCalledWith({
-      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
-      payload: expect.objectContaining({
-        content: expect.stringContaining('Great. We will use Geography in Practice Mode.'),
-      }),
-    });
-    expect(result.current.focusOnboarding).toBeNull();
+    const text = captured.at(-1) ?? '';
+
+    expect(text).not.toMatch(/session id/i);
+    expect(text).not.toContain('daily-session');
+    expect(text).toContain('Practice Coach:');
+    expect(text).toContain('Only the most recent portion');
+    expect(text).not.toContain("Today's activity");
+    clickSpy.mockRestore();
   });
 });

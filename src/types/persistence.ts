@@ -1,4 +1,15 @@
+import type { MessageAction } from '../context/conversationContextTypes';
+
 export type UscisCategory = 'american_government' | 'american_history' | 'integrated_civics';
+
+/** Speaker attribution for transcript export (F6). */
+export type MessageSpeaker =
+  | 'officer'
+  | 'practice_coach'
+  | 'study_coach'
+  | 'system'
+  | 'report'
+  | 'user';
 
 export interface SessionRecord {
   id: string;
@@ -16,6 +27,10 @@ export interface PersistedMessage {
   content: string;
   audio_url: string | null;
   created_at: string;
+  /** Speaker attribution persisted with the message (F6 transcript export). */
+  speaker?: MessageSpeaker;
+  /** In-chat actions persisted with the message (F3, narrowed by F8). */
+  actions?: readonly MessageAction[];
 }
 
 export interface DailyProgressReport {

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "updated": "2026-11-09",
+  "updated": "2026-11-16",
   "policy": {
     "canonicalContract": "AGENTS.md",
     "constitution": "docs/CONSTITUTION.md",
@@ -73,7 +73,7 @@
       "id": "F-03",
       "title": "Audio capture and playback lifecycle",
       "status": "protected",
-      "summary": "Microphone consent, VAD, audio ring buffer, barge-in, queued Polly progress-summary playback, device preferences, and cleanup. Echo detection is hardened so Polly playback is not transcribed as user speech.",
+      "summary": "Microphone consent, VAD, audio ring buffer, barge-in, playback, device preferences, and cleanup. Echo detection is hardened so Polly playback is not transcribed as user speech.",
       "entryPoints": [
         "src/hooks/useConversation.ts",
         "src/hooks/useVAD.ts",
@@ -99,7 +99,7 @@
         "Microphone access is user-initiated and consent-gated.",
         "Workers, audio nodes, media streams, timers, and subscriptions are released on teardown.",
         "Barge-in must not leave two playback paths active.",
-        "Spoken progress summaries wait for the assistant response and post-playback AEC settle window to finish; active user speech defers them.",
+        "The ten-answer activity card is silent: it never synthesizes or queues Polly audio, and it does not delay listening beyond the post-playback AEC settle window.",
         "Device preferences are applied before the next session starts.",
         "Long-running audio work stays out of synchronous Lambda requests."
       ]
@@ -108,7 +108,7 @@
       "id": "F-04",
       "title": "Conversation modes and Standard Interviews",
       "status": "protected",
-      "summary": "Learning Modes and Standard Interview, Practice, and Study workflows, including the first-run Learning Mode choice (Start a Mock Interview, Practice Interview Questions, Study Interview Topics), daily AI welcomes, instant mode-intro bubbles with Continue/Edit focus confirmation, versioned first-time and returning onboarding, dynamic 20/80 Standard question selection, English reading/writing gates, an elapsed Standard Interview timer, structured interview reports with Save/Back decisions and post-progression hiding, suggested focus, AI-recommended learning paths persisted to the account, immutable next-step decisions, and codified (no free-text) focus areas.",
+      "summary": "Learning Modes and Standard Interview, Practice, and Study workflows, including the first-run Learning Mode choice (Start a Mock Interview, Practice Interview Questions, Study Interview Topics), daily AI welcomes, instant mode-intro bubbles with an automatic focus card, versioned first-time and returning onboarding, dynamic 20/80 Standard question selection, English reading/writing gates, an elapsed Standard Interview timer, structured interview reports with Save/Back decisions and post-progression hiding, suggested focus, AI-recommended learning paths persisted to the account, immutable next-step decisions, and codified (no free-text) focus areas. A shared recommendLearningMode rule recommends Practice or Study from accuracy, with localized mode labels via modeLabel (French practice canonical: Mode entraînement).",
       "entryPoints": [
         "src/hooks/useConversation.ts",
         "src/context/ConversationContext.tsx",
@@ -152,8 +152,10 @@
         "Detailed progress reports refresh silently after every ten scored civics answers in the active Standard Interview.",
         "Interview reading/writing stages and stable prompt selections are preserved.",
         "Interview review is server-generated; the client does not invent scores.",
-        "The final graded answer of a Standard Interview explicitly states that the interview is complete, and the next assistant bubble is a warm summary with the recommended mode, an invitation to open the Interview Report, and a prompt to capture the decision and goals.",
+        "The final graded answer of a Standard Interview explicitly states that the interview is complete and names the deterministic threshold result, and the next assistant bubble is a warm summary with the recommended mode, an invitation to open the Interview Report, and a prompt to capture the decision and goals.",
         "The completion summary never mentions questions to review.",
+        "Completion, returning intro, report, and scorecard describe the civics result as reaching or not reaching the passing threshold; the word failed is never used.",
+        "The scorecard exposes passAt and thresholdReached so the client renders the recorded result without recalculating it.",
         "Completed-interview review presents the report, score breakdown, question outcomes, strengths, focus areas, and one explicit next-step decision; it has no separate question-review or detailed-report entry points.",
         "Dismissing a review does not save a decision; saved decisions are immutable, and Practice/Study choices require one to three official USCIS focus categories that synchronize the account goal atomically.",
         "Save commits each next-step decision and Back returns without saving. A saved choice remains visible by itself; without a saved choice, the next-step section is hidden after a later user message in the completed interview's session.",
@@ -174,7 +176,7 @@
         "English reading and writing run only after a civics pass when English is enabled, then the report; a civics fail goes straight to the report, and disabled English goes to the report after civics. English never changes civics pass/fail, and a post-fail report says English was not administered.",
         "The English preference defaults on only for new accounts; an existing saved value, including off, is always respected in both test versions.",
         "Practice and Study first-time onboarding shows a deterministic explanation in one assistant bubble; returning onboarding shows per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts plus the same counts for the focus subset, in one assistant bubble, and lets the learner keep or change focus.",
-        "Practice and Study intro bubbles expose Continue and Edit. Continue starts the first question with the focus already stored on the session or account, falling back to All focus areas; Edit opens the existing focus-area selector. The focus card never opens automatically on a mode change.",
+        "Practice and Study intro bubbles carry no Continue or Edit actions; the focus card opens automatically and is the only action surface. The card states the limit of three focus areas, starts the first question through the focus submission flow, and stays actionable when submission fails.",
         "A first Learning Mode introduction is one assistant bubble only. For Standard, that bubble contains the icebreaker, version facts, and rules, and the separate Ready question is the next bubble.",
         "A mode change commits the selection in the UI immediately and enters 'preparing' state, which locks text input and voice capture. The backend response is revealed when the transition completes: immediately on desktop, and when the learner returns to the chat tab on mobile. If voice was active when the switch was accepted, Polly speaks the transition response (with typewriter reveal and barge-in support) before resuming listening; text-mode transitions render without Polly.",
         "The first-run welcome introduces Learning Modes and offers Standard Interview, Practice, and Study as the first mode; choosing one closes the welcome and activates that mode.",
@@ -182,14 +184,15 @@
         "Practice and Study focus constrains question selection; a category cycle restarts only after a full pass and shows a deterministic notice.",
         "The Standard Ready gate reuses the existing opening-response path, returning nextItemId null until the learner confirms; no database flag is added.",
         "The Interview Report suggests two or three weakest categories from structured grading signals, never by reading qualitative report prose. The suggestion pre-fills the decision form only when the learner chooses Use this focus, and nothing persists until Save.",
-        "The decision form replaces Cancel with Back, which returns to the choice cards and discards unsaved edits, and Save my choice with Save. The focus combobox appears in the report only for Practice and Study decisions and offers official USCIS categories only."
+        "The decision form replaces Cancel with Back, which returns to the choice cards and discards unsaved edits, and Save my choice with Save. The focus combobox appears in the report only for Practice and Study decisions and offers official USCIS categories only.",
+        "The shared recommendLearningMode rule recommends study below 60% accuracy and practice at or above, applied identically across all modes; mode labels are localized via modeLabel, with French practice canonicalized as Mode entraînement."
       ]
     },
     {
       "id": "F-05",
       "title": "Civics grading and turn policy",
       "status": "protected",
-      "summary": "Server-authoritative civics grading, maintained dynamic answers, state-aware matching, confirmations, hints, repeats, progress questions, and question-bank routing.",
+      "summary": "Server-authoritative civics grading, maintained dynamic answers, state-aware matching, confirmations, hints, repeats, progress questions, and question-bank routing. A typed server copy catalog (safeReplyKey) localizes system/coach voice—safety, help, silence, and completion—in all supported locales while exam content stays English. Feedback sanitization preserves complete statements while removing model-added question sentences, and verdict-aware fallbacks and mode-specific transitions are localized.",
       "entryPoints": [
         "amplify/functions/transcript/turn/turn-policy.ts",
         "amplify/functions/transcript/turn/turn-interpreter.ts",
@@ -199,7 +202,13 @@
         "amplify/functions/transcript/handler.ts",
         "amplify/functions/transcript/civics-bank.2020-128.json",
         "amplify/functions/transcript/civics-bank.2008-100.json",
-        "amplify/functions/transcript/civics-dynamic-answers.json"
+        "amplify/functions/transcript/civics-dynamic-answers.json",
+        "amplify/functions/transcript/turn/server-copy.ts",
+        "src/i18n/locales/en-US/conversation.json",
+        "src/i18n/locales/es-ES/conversation.json",
+        "src/i18n/locales/fr-FR/conversation.json",
+        "src/i18n/locales/ar-SA/conversation.json",
+        "amplify/functions/transcript/turn/feedback-copy.ts"
       ],
       "tests": [
         "amplify/functions/transcript/turn/__tests__/turn-policy.test.ts",
@@ -214,7 +223,10 @@
         "amplify/functions/transcript/turn/__tests__/welcomeBanner.test.ts",
         "amplify/functions/transcript/__tests__/mock-exam-routing.test.ts",
         "amplify/functions/transcript/__tests__/ssml.test.ts",
-        "eval/civics/__tests__/civics-eval.test.ts"
+        "amplify/functions/transcript/turn/__tests__/server-copy.test.ts",
+        "eval/civics/__tests__/civics-eval.test.ts",
+        "amplify/functions/transcript/turn/__tests__/feedback-copy.test.ts",
+        "eval/feedback/__tests__/feedback-eval.test.ts"
       ],
       "invariants": [
         "Civics answers are graded server-side.",
@@ -223,14 +235,18 @@
         "For the representative question, any current House member from the selected state is accepted because registration does not collect a congressional district.",
         "graded_answers is the authoritative record for progress reports.",
         "A grading change requires an eval run and a reviewed prompt change.",
-        "Question-bank IDs and test-version routing remain stable."
+        "Server copy (safeReplyKey) is typed and localized for all four supported locales; exam content remains in English.",
+        "Question-bank IDs and test-version routing remain stable.",
+        "Final-answer feedback removes model-authored question sentences and next-question announcements without truncating complete statements before or after them.",
+        "When feedback sanitizes to nothing, the fallback is verdict-aware and localized; it is never an empty non-answer.",
+        "Practice near-miss retry copy is distinct from the generic retry; grading, scoring, and advancement are unchanged by that copy choice."
       ]
     },
     {
       "id": "F-06",
       "title": "Progress reports and daily learning",
       "status": "protected",
-      "summary": "Daily progress report aggregation from persisted messages and graded answers, including Bedrock generation and upsert.",
+      "summary": "Daily progress report aggregation from persisted messages and graded answers, including Bedrock generation, upsert, and the silent ten-answer activity card.",
       "entryPoints": [
         "amplify/functions/aggregateSession/handler.ts",
         "amplify/functions/aggregateSession/reportFormat.ts",
@@ -265,9 +281,10 @@
         "A weekly target is optional and disabled when unset; the learning-goal card distinguishes an unset target from zero progress.",
         "Applying a saved focus in Practice or Study requires confirmation and sends it through the existing conversation message flow.",
         "Detailed reports refresh silently every ten account-local daily graded answers in Practice and Study.",
-        "Practice and Study show a one-line factual summary only at every ten-answer milestone, based only on recorded daily grading counts; there is no per-answer running commentary, and summaries are not persisted as conversation context.",
-        "The one-line summary and the silent detailed report share the same ten-answer milestone.",
-        "When voice is active, Polly speaks the summary only after the current response and AEC settle window; active user speech defers it.",
+        "Practice and Study show a silent, full-width, one-line activity card only at every ten-answer milestone, based only on recorded account-day grading counts; there is no per-answer running commentary.",
+        "The silent activity card and the silent detailed report share the same ten-answer milestone.",
+        "The activity card, the Practice progress answer, and the left-panel counters all use the same account-day daily stats.",
+        "The activity card is never spoken, persisted, exported, or included in the LLM conversation window.",
         "Mastery means at least three graded attempts with more than 85% correct, counting every graded answer including Standard Interview answers.",
         "Practice and Study returning onboarding reports per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts from authoritative graded answers, plus the same counts for the selected focus subset; this copy is deterministic and never model-generated.",
         "Suggested focus is derived from structured signals only: question mastery, previous exam misses, and recent graded answers by category. Qualitative report prose is never read by a model to produce it."
@@ -298,6 +315,8 @@
         "History is user-scoped and RLS-protected.",
         "Loading older messages preserves scroll position and the active session.",
         "Transcript download reflects the persisted conversation.",
+        "Transcript export labels each message by its durable speaker (USCIS Officer, Practice Coach, Study Coach, ImmiGO, Interview Report, User) using the persisted speaker and falling back to persisted actions.",
+        "Transcript export omits ephemeral banner, progress-card, and error bubbles, renders the exam-review marker as a localized report line, shows elapsed duration for same-day history or a date range across days, notes partial history when older pages are not loaded, and never includes a session id.",
         "Assistant messages render safe rich text — headings, paragraphs, lists, quotes, emphasis, code, and http(s) links — without injecting raw HTML; user-authored messages remain literal.",
         "The assistant reveal keeps paragraph breaks and list indentation so Markdown structure survives the typewriter and reconstructs the stored message exactly."
       ]
@@ -363,7 +382,7 @@
       "id": "F-09",
       "title": "Internationalization and RTL",
       "status": "protected",
-      "summary": "English, Spanish, French, and Arabic localization, RTL layout, and language persistence.",
+      "summary": "English, Spanish, French, and Arabic localization, RTL layout, and language persistence. Server feedback, retry, transition, silence, and unclear-session copy resolves through the typed transcript catalog.",
       "entryPoints": [
         "src/i18n/index.ts",
         "src/i18n/I18nProvider.tsx",
@@ -375,7 +394,9 @@
         "src/i18n/locales/fr-FR/conversation.json",
         "src/i18n/locales/fr-FR/settings.json",
         "src/i18n/locales/ar-SA/conversation.json",
-        "src/i18n/locales/ar-SA/settings.json"
+        "src/i18n/locales/ar-SA/settings.json",
+        "amplify/functions/transcript/turn/server-copy.ts",
+        "amplify/functions/transcript/turn/feedback-copy.ts"
       ],
       "tests": [
         "src/i18n/__tests__/i18n.test.tsx",
@@ -383,7 +404,10 @@
         "src/components/__tests__/PanelHeaders.test.tsx",
         "src/components/__tests__/FocusAreaCombobox.test.tsx",
         "src/components/__tests__/FocusOnboardingCard.test.tsx",
-        "amplify/functions/transcript/__tests__/mode-onboarding.test.ts"
+        "amplify/functions/transcript/__tests__/mode-onboarding.test.ts",
+        "amplify/functions/transcript/turn/__tests__/server-copy.test.ts",
+        "amplify/functions/transcript/turn/__tests__/feedback-copy.test.ts",
+        "eval/feedback/__tests__/feedback-eval.test.ts"
       ],
       "invariants": [
         "English, Spanish, French, and Arabic remain supported.",
@@ -392,7 +416,10 @@
         "Language changes persist and do not reset the active session.",
         "Learning Modes, Standard Interview onboarding, Practice/Study focus onboarding, the focus combobox, and report actions and statuses are localized in English, Spanish, French, and Arabic.",
         "Deterministic onboarding and report status copy is localized rather than model-generated; the All focus areas sentinel is displayed through a localized label.",
-        "The focus combobox and onboarding card support RTL and dark mode without a new dependency."
+        "The focus combobox and onboarding card support RTL and dark mode without a new dependency.",
+        "Ten-answer activity cards, threshold result lines, and report result labels are localized in English, Spanish, French, and Arabic.",
+        "Server fallback, question-transition, Practice retry, silence, and unclear-session copy is localized in all four locales through a typed catalog; the official USCIS question remains English.",
+        "Feedback copy preserves the official question in English while translating only the lead-in."
       ]
     },
     {
@@ -497,7 +524,8 @@
         "Speech-only requests use the same voice resolver and speech sanitizer as conversation turns.",
         "Polly receives a sanitized copy of the reply: Markdown, emoji, raw HTML, decorative symbols, and date separators are removed or spoken as words without changing the visible response text.",
         "Only the two canonical voices for the requested language are synthesized; legacy IDs are mapped and cross-language or unknown voices fall back to that language's default.",
-        "Completed-exam review responses include server-generated scorecards and question outcomes, which the client validates without calculating scores."
+        "Completed-exam review responses include server-generated scorecards and question outcomes, which the client validates without calculating scores.",
+        "Completed-exam scorecards carry additive civics fields passAt and thresholdReached; the client rejects a scorecard that omits them or whose thresholdReached contradicts the recorded correct count."
       ]
     },
     {

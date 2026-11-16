@@ -27,7 +27,14 @@ describe('ApiClient active route contracts', () => {
       },
       scorecard: {
         testVersion: '2020',
-        civics: { correct: 1, incorrect: 0, total: 1, accuracyPercent: 100 },
+        civics: {
+          correct: 1,
+          incorrect: 0,
+          total: 1,
+          accuracyPercent: 100,
+          passAt: 12,
+          thresholdReached: false,
+        },
         english: { included: false, readingPassed: null, writingPassed: null },
       },
       questionOutcomes: [{
@@ -58,6 +65,31 @@ describe('ApiClient active route contracts', () => {
           recommendationReason: '',
         },
         scorecard: { testVersion: '2020', civics: {}, english: {} },
+        questionOutcomes: [],
+      }), { status: 200 }),
+    ));
+
+    await expect(
+      new ApiClient('token', 'https://api.example.test').getMockExamFeedback('exam-1', 'en-US'),
+    ).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('rejects an exam scorecard without the threshold fields', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        report: '',
+        feedback: {
+          summary: '',
+          strengths: [],
+          suggestions: [],
+          recommendedMode: 'practice',
+          recommendationReason: '',
+        },
+        scorecard: {
+          testVersion: '2020',
+          civics: { correct: 1, incorrect: 0, total: 1, accuracyPercent: 100 },
+          english: { included: false, readingPassed: null, writingPassed: null },
+        },
         questionOutcomes: [],
       }), { status: 200 }),
     ));

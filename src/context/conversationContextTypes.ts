@@ -1,5 +1,6 @@
 import type React from 'react';
 import { createContext } from 'react';
+import type { MessageSpeaker } from '../types/persistence';
 
 // Synchronized directly with the Authoritative FSM state machine targets
 // 'connecting' = a session is being set up and the microphone has not been
@@ -23,12 +24,6 @@ export type MessageAction =
     variant?: 'primary' | 'secondary';
   }
   | {
-    kind: 'focus';
-    focusAction: 'continue' | 'edit';
-    label: string;
-    variant?: 'primary' | 'secondary';
-  }
-  | {
     kind: 'learn';
     /** The recommended Learning Mode. */
     mode: SimulationMode;
@@ -45,8 +40,20 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  /** Speaker attribution used by transcript export (F6). */
+  speaker?: MessageSpeaker;
   /** Optional in-chat actions rendered with the message (e.g. welcome choices). */
   actions?: readonly MessageAction[];
+  /** Optional visual treatment. Progress cards are silent and ephemeral. */
+  presentation?: 'progress';
+  /** Recorded daily facts that back a progress card. Never persisted. */
+  progress?: MessageProgress;
+}
+
+export interface MessageProgress {
+  answered: number;
+  correct: number;
+  accuracyPct: number;
 }
 
 export interface LiveSessionStats {
@@ -96,8 +103,18 @@ export type ConversationAction =
   | { type: 'SET_SESSION_ID'; payload: string | null }
   | { type: 'LOAD_HISTORICAL_MESSAGES'; payload: { messages: Message[]; hasMore: boolean; oldestCursor: string | null; replace?: boolean } }
   | { type: 'SET_LIVE_STATS'; payload: LiveSessionStats | null }
-  | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[] } }
-  | { type: 'ADD_STANDALONE_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[] } }
+  | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[]; speaker?: MessageSpeaker } }
+  | {
+    type: 'ADD_STANDALONE_ASSISTANT_MESSAGE';
+    payload: {
+      assistantMessageId: string;
+      content: string;
+      actions?: readonly MessageAction[];
+      presentation?: 'progress';
+      progress?: MessageProgress;
+      speaker?: MessageSpeaker;
+    };
+  }
   | { type: 'UPDATE_ASSISTANT_MESSAGE'; payload: { messageId: string; content: string; actions?: readonly MessageAction[] } }
   | { type: 'RESOLVE_MESSAGE_ACTIONS'; payload: { messageId?: string } }
   | { type: 'SET_TRANSITION_ERROR'; payload: string }
@@ -158,6 +175,7 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         content: action.payload.content,
         timestamp: new Date().toISOString(),
         ...(action.payload.actions?.length ? { actions: action.payload.actions } : {}),
+        ...(action.payload.speaker ? { speaker: action.payload.speaker } : {}),
       };
       return {
         ...state,
@@ -173,6 +191,9 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         content: action.payload.content,
         timestamp: new Date().toISOString(),
         ...(action.payload.actions?.length ? { actions: action.payload.actions } : {}),
+        ...(action.payload.presentation ? { presentation: action.payload.presentation } : {}),
+        ...(action.payload.progress ? { progress: action.payload.progress } : {}),
+        ...(action.payload.speaker ? { speaker: action.payload.speaker } : {}),
       };
       return { ...state, conversationHistory: [...state.conversationHistory, message] };
     }

@@ -1,7 +1,8 @@
 import { getSupabaseClient } from '../supabaseClient';
-import { PersistedMessage, SessionHydrationPayload } from '../types/persistence';
+import { MessageSpeaker, PersistedMessage, SessionHydrationPayload } from '../types/persistence';
 import { logger } from '../logger';
 import type { Database } from '../../supabase/database-export/database.types';
+import type { MessageAction } from '../context/conversationContextTypes';
 
 type MessageRow = Database['public']['Tables']['messages']['Row'];
 
@@ -9,6 +10,9 @@ function toPersistedMessage(row: MessageRow): PersistedMessage {
   if (row.role !== 'user' && row.role !== 'assistant') {
     throw new Error(`Unsupported persisted message role: ${row.role}`);
   }
+
+  const actions = (row as { actions?: unknown }).actions ?? undefined;
+  const speaker = (row as { speaker?: unknown }).speaker;
 
   return {
     id: row.id,
@@ -18,7 +22,22 @@ function toPersistedMessage(row: MessageRow): PersistedMessage {
     content: row.content,
     audio_url: null,
     created_at: row.created_at,
+    speaker: isMessageSpeaker(speaker) ? speaker : undefined,
+    actions: Array.isArray(actions) ? actions : undefined,
   };
+}
+
+const MESSAGE_SPEAKERS: readonly MessageSpeaker[] = [
+  'officer',
+  'practice_coach',
+  'study_coach',
+  'system',
+  'report',
+  'user',
+];
+
+function isMessageSpeaker(value: unknown): value is MessageSpeaker {
+  return typeof value === 'string' && (MESSAGE_SPEAKERS as readonly string[]).includes(value);
 }
 
 interface DailySessionRecord {
@@ -151,20 +170,25 @@ export class ChatPersistenceService {
     sessionId: string,
     userId: string,
     role: 'user' | 'assistant',
-    content: string
+    content: string,
+    actions?: readonly MessageAction[],
+    speaker?: MessageSpeaker
   ): Promise<PersistedMessage | null> {
     if (!sessionId || !userId || !content.trim()) return null;
 
     try {
       const supabase = getSupabaseClient();
+      const insertPayload: Record<string, unknown> = {
+        session_id: sessionId,
+        user_id: userId,
+        role,
+        content: content.trim(),
+      };
+      if (actions) insertPayload.actions = actions;
+      if (speaker) insertPayload.speaker = speaker;
       const { data, error } = await supabase
         .from('messages')
-        .insert({
-          session_id: sessionId,
-          user_id: userId,
-          role,
-          content: content.trim(),
-        })
+        .insert(insertPayload as never)
         .select('*')
         .single();
 
@@ -272,4 +296,219 @@ export class ChatPersistenceService {
       return { messages: [], hasMore: false, oldestCursor: null };
     }
   }
+}
+
+/**
+ * One message accepted by the transcript formatter. Both `PersistedMessage`
+ * (loaded from the database) and the live client `Message` shape can be mapped
+ * onto it, so export never needs a second formatter.
+ */
+export interface TranscriptMessage {
+  id?: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+  speaker?: MessageSpeaker;
+  actions?: readonly { kind: string; mode?: string }[];
+  presentation?: 'progress';
+}
+
+export interface BuildTranscriptOptions {
+  locale: string;
+  /** True when older pages are still available in the database. */
+  hasMoreHistory?: boolean;
+}
+
+const REPORT_MARKER = /^\[\[MOCK_EXAM_REVIEW:[0-9a-f-]+\]\]$/i;
+
+const TRANSCRIPT_COPY: Record<string, Record<string, string>> = {
+  en: {
+    title_standard: 'ImmiGO Naturalization Interview Transcript',
+    title_practice: 'ImmiGO Practice Coach Transcript',
+    title_study: 'ImmiGO Study Coach Transcript',
+    title_neutral: 'ImmiGO Conversation Transcript',
+    user: 'User',
+    officer: 'USCIS Officer',
+    practice_coach: 'Practice Coach',
+    study_coach: 'Study Coach',
+    system: 'ImmiGO',
+    report: 'Interview Report',
+    reportAvailable: 'Interview report available in ImmiGO.',
+    duration: 'Duration',
+    dateRange: 'Date range',
+    exported: 'Exported',
+    partialHistory: 'Note: Only the most recent portion of the conversation is included.',
+  },
+  es: {
+    title_standard: 'Transcripción de la entrevista de naturalización de ImmiGO',
+    title_practice: 'Transcripción del entrenador de práctica de ImmiGO',
+    title_study: 'Transcripción del entrenador de estudio de ImmiGO',
+    title_neutral: 'Transcripción de la conversación de ImmiGO',
+    user: 'Usuario',
+    officer: 'Oficial de USCIS',
+    practice_coach: 'Entrenador de práctica',
+    study_coach: 'Entrenador de estudio',
+    system: 'ImmiGO',
+    report: 'Informe de entrevista',
+    reportAvailable: 'Informe de entrevista disponible en ImmiGO.',
+    duration: 'Duración',
+    dateRange: 'Rango de fechas',
+    exported: 'Exportado',
+    partialHistory: 'Nota: Solo se incluye la porción más reciente de la conversación.',
+  },
+  fr: {
+    title_standard: 'Transcription de l’entretien de naturalisation ImmiGO',
+    title_practice: 'Transcription du coach d’entraînement ImmiGO',
+    title_study: 'Transcription du coach d’étude ImmiGO',
+    title_neutral: 'Transcription de la conversation ImmiGO',
+    user: 'Utilisateur',
+    officer: 'Agent de l’USCIS',
+    practice_coach: 'Coach d’entraînement',
+    study_coach: 'Coach d’étude',
+    system: 'ImmiGO',
+    report: 'Rapport d’entretien',
+    reportAvailable: 'Rapport d’entretien disponible dans ImmiGO.',
+    duration: 'Durée',
+    dateRange: 'Période',
+    exported: 'Exporté',
+    partialHistory: 'Note : Seule la portion la plus récente de la conversation est incluse.',
+  },
+  ar: {
+    title_standard: 'نسخة مقابلة التجنّس من ImmiGO',
+    title_practice: 'نسخة مدرب التدريب من ImmiGO',
+    title_study: 'نسخة مدرب الدراسة من ImmiGO',
+    title_neutral: 'نسخة المحادثة من ImmiGO',
+    user: 'المستخدم',
+    officer: 'موظف USCIS',
+    practice_coach: 'مدرب التدريب',
+    study_coach: 'مدرب الدراسة',
+    system: 'ImmiGO',
+    report: 'تقرير المقابلة',
+    reportAvailable: 'تقرير المقابلة متاح في ImmiGO.',
+    duration: 'المدة',
+    dateRange: 'نطاق التاريخ',
+    exported: 'تم التصدير',
+    partialHistory: 'ملاحظة: تم تضمين أحدث جزء من المحادثة فقط.',
+  },
+};
+
+/**
+ * Ephemeral UI-only bubbles never appear in a transcript:
+ * - silent ten-answer activity cards,
+ * - the daily greeting banner,
+ * - empty placeholders.
+ * Report markers are kept and rendered as a localized line instead.
+ */
+function isEphemeralMessage(message: TranscriptMessage): boolean {
+  const id = message.id ?? '';
+  return message.presentation === 'progress'
+    || id.startsWith('progress-card-')
+    || id.startsWith('progress-report-')
+    || id.startsWith('progress-summary-')
+    || id.startsWith('banner-')
+    || !message.content.trim();
+}
+
+/** Prefer the persisted speaker; fall back to persisted actions, then ImmiGO. */
+function speakerForMessage(message: TranscriptMessage): MessageSpeaker {
+  if (message.role === 'user') return 'user';
+  if (REPORT_MARKER.test(message.content.trim())) return 'report';
+  if (message.speaker) return message.speaker;
+  const action = message.actions?.[0];
+  if (action?.kind === 'ready' || action?.kind === 'exam') return 'officer';
+  if (action?.kind === 'learn') return action.mode === 'study' ? 'study_coach' : 'practice_coach';
+  if (action?.kind === 'report') return 'report';
+  return 'system';
+}
+
+function transcriptTitleKey(messages: readonly TranscriptMessage[]): string {
+  const modes = new Set<string>();
+  messages.forEach((message) => {
+    const speaker = speakerForMessage(message);
+    if (speaker === 'officer') modes.add('standard');
+    else if (speaker === 'practice_coach') modes.add('practice');
+    else if (speaker === 'study_coach') modes.add('study');
+  });
+  return modes.size === 1 ? `title_${[...modes][0]}` : 'title_neutral';
+}
+
+/**
+ * Build the transcript text for download (F6).
+ * - Sorted by timestamp ascending.
+ * - Speaker comes from the persisted `speaker`, then from persisted actions.
+ * - Report markers become a localized "report available" line.
+ * - Same-day transcripts show elapsed duration; multi-day ones show a range.
+ * - `hasMoreHistory` adds a note that only the loaded portion is included.
+ * - There is no Session ID line.
+ */
+export function buildTranscriptText(
+  messages: readonly TranscriptMessage[],
+  options: BuildTranscriptOptions,
+): string {
+  const { locale, hasMoreHistory } = options;
+  const lang = locale.split('-')[0];
+  const dict = TRANSCRIPT_COPY[lang] ?? TRANSCRIPT_COPY.en;
+
+  const t = (key: string, vars?: Record<string, string>) => {
+    let result = dict[key] ?? key;
+    if (vars) {
+      Object.entries(vars).forEach(([k, v]) => {
+        result = result.replace(new RegExp(`{{${k}}}`, 'g'), v);
+      });
+    }
+    return result;
+  };
+
+  const relevant = messages.filter((message) => !isEphemeralMessage(message));
+  if (relevant.length === 0) return '';
+
+  const sorted = [...relevant].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+
+  const firstTime = new Date(sorted[0].created_at);
+  const lastTime = new Date(sorted[sorted.length - 1].created_at);
+  const sameDay = firstTime.toDateString() === lastTime.toDateString();
+
+  const formatTime = (date: Date) => date.toLocaleString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  const formatDate = (date: Date) => date.toLocaleDateString(locale, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const headerLines: string[] = [t(transcriptTitleKey(sorted)), ''];
+
+  if (sameDay) {
+    const elapsedMs = lastTime.getTime() - firstTime.getTime();
+    const elapsedMins = Math.floor(elapsedMs / 60000);
+    const elapsedSecs = Math.floor((elapsedMs % 60000) / 1000);
+    headerLines.push(`${t('duration')}: ${elapsedMins.toString().padStart(2, '0')}:${elapsedSecs.toString().padStart(2, '0')}`);
+  } else {
+    headerLines.push(`${t('dateRange')}: ${formatDate(firstTime)} – ${formatDate(lastTime)}`);
+  }
+
+  headerLines.push(`${t('exported')}: ${new Date().toLocaleString(locale)}`);
+  headerLines.push('');
+
+  if (hasMoreHistory) {
+    headerLines.push(t('partialHistory'));
+    headerLines.push('');
+  }
+
+  const bodyLines = sorted.map((message) => {
+    const timestamp = formatTime(new Date(message.created_at));
+    const speaker = speakerForMessage(message);
+    const content = REPORT_MARKER.test(message.content.trim())
+      ? t('reportAvailable')
+      : message.content;
+    return `[${timestamp}] ${t(speaker)}:\n${content}`;
+  });
+
+  return [...headerLines, ...bodyLines].join('\n');
 }

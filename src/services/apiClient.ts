@@ -49,6 +49,10 @@ export interface MockExamReviewScorecard {
     incorrect: number;
     total: number;
     accuracyPercent: number;
+    /** Correct answers required by this question bank's passing threshold. */
+    passAt: number;
+    /** Whether this attempt reached the passing threshold. */
+    thresholdReached: boolean;
   };
   english: {
     included: boolean;
@@ -667,7 +671,7 @@ function isMockExamReviewScorecard(value: unknown): value is MockExamReviewScore
     || !isRecord(value.civics) || !isRecord(value.english)) {
     return false;
   }
-  const { correct, incorrect, total, accuracyPercent } = value.civics;
+  const { correct, incorrect, total, accuracyPercent, passAt, thresholdReached } = value.civics;
   const { included, readingPassed, writingPassed } = value.english;
   const isCount = (entry: unknown): entry is number => Number.isInteger(entry) && Number(entry) >= 0;
   const isResult = (entry: unknown): entry is boolean | null => entry === null || typeof entry === 'boolean';
@@ -676,6 +680,10 @@ function isMockExamReviewScorecard(value: unknown): value is MockExamReviewScore
     && isCount(incorrect)
     && isCount(total)
     && isCount(accuracyPercent)
+    && isCount(passAt)
+    && passAt > 0
+    && typeof thresholdReached === 'boolean'
+    && thresholdReached === (Number(correct) >= passAt)
     && total === correct + incorrect
     && accuracyPercent <= 100
     && typeof included === 'boolean'

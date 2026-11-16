@@ -14,7 +14,14 @@ const review: MockExamReview = {
   },
   scorecard: {
     testVersion: '2020',
-    civics: { correct: 8, incorrect: 2, total: 10, accuracyPercent: 80 },
+    civics: {
+      correct: 8,
+      incorrect: 2,
+      total: 10,
+      accuracyPercent: 80,
+      passAt: 12,
+      thresholdReached: false,
+    },
     english: { included: true, readingPassed: true, writingPassed: false },
   },
   questionOutcomes: [
@@ -79,6 +86,9 @@ describe('FeedbackModal', () => {
     expect(screen.getByRole('heading', { name: 'Strengths and focus areas' })).toBeDefined();
     expect(screen.getByText('80%')).toBeDefined();
     expect(screen.getByText('8 / 10')).toBeDefined();
+    expect(screen.getByText('You did not reach the passing threshold this time (12 correct answers needed).')).toBeDefined();
+    expect(screen.getByText('Passing threshold: 12 correct answers')).toBeDefined();
+    expect(screen.queryByText(/failed/i)).toBeNull();
     expect(screen.getByText('Reading practice: passed')).toBeDefined();
     expect(screen.getByText('Writing practice: needs review')).toBeDefined();
     fireEvent.click(questionReview);
@@ -87,12 +97,41 @@ describe('FeedbackModal', () => {
     expect(screen.getByText('Good recall of the three branches')).toBeDefined();
   });
 
+  it('states when the passing threshold was reached', () => {
+    const passedReview: MockExamReview = {
+      ...review,
+      scorecard: {
+        ...review.scorecard,
+        civics: {
+          correct: 12,
+          incorrect: 0,
+          total: 12,
+          accuracyPercent: 100,
+          passAt: 12,
+          thresholdReached: true,
+        },
+      },
+    };
+    render(<FeedbackModal {...makeProps()} review={passedReview} />);
+
+    expect(screen.getByText('You reached the passing threshold (12 correct answers).')).toBeDefined();
+    expect(screen.getByText('Passing threshold: 12 correct answers')).toBeDefined();
+    expect(screen.queryByText(/failed/i)).toBeNull();
+  });
+
   it('says English was not administered when a civics fail skipped it', () => {
     const notAdministeredReview: MockExamReview = {
       ...review,
       scorecard: {
         ...review.scorecard,
-        civics: { correct: 5, incorrect: 5, total: 10, accuracyPercent: 50 },
+        civics: {
+          correct: 5,
+          incorrect: 5,
+          total: 10,
+          accuracyPercent: 50,
+          passAt: 12,
+          thresholdReached: false,
+        },
         english: { included: true, readingPassed: null, writingPassed: null },
       },
     };

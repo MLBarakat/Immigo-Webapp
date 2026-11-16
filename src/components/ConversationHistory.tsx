@@ -11,6 +11,35 @@ import ImmigoLogo from '../assets/immigo_logo.png';
 // overshoot on touch devices.
 const BOTTOM_THRESHOLD = 8;
 
+/**
+ * Silent full-width activity card. It is a visual summary only: no officer
+ * avatar, no actions, and no spoken playback.
+ */
+function ProgressActivityCard({ message, accuracyLabel }: { message: Message; accuracyLabel: string }): JSX.Element {
+  const accuracyPct = Math.min(100, Math.max(0, Math.round(message.progress?.accuracyPct ?? 0)));
+  return (
+    <div
+      data-testid="progress-card"
+      className="w-full rounded-2xl border border-art-blue-100 bg-art-blue-50/60 px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+    >
+      <p className="text-sm leading-relaxed text-deep-navy dark:text-white">{message.content}</p>
+      <div
+        className="mt-2 h-2 w-full overflow-hidden rounded-full bg-immigo-gray-200 dark:bg-gray-700"
+        role="progressbar"
+        aria-label={accuracyLabel}
+        aria-valuenow={accuracyPct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className="h-full rounded-full bg-art-blue-600 transition-all"
+          style={{ width: `${accuracyPct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 interface ConversationHistoryProps {
   messages: readonly Message[];
   displayUser: DisplayUser;
@@ -140,6 +169,9 @@ export function ConversationHistory({
                 <span className="h-px flex-1 bg-immigo-gray-200" />
               </div>
             )}
+            {msg.presentation === 'progress' ? (
+              <ProgressActivityCard message={msg} accuracyLabel={t('workspace.left.answerAccuracy')} />
+            ) : (
             <div className={`flex items-end gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
               {/* Avatar */}
               {msg.role === 'assistant' ? (
@@ -208,6 +240,7 @@ export function ConversationHistory({
                 </p>
               </div>
             </div>
+            )}
           </div>
         );
       })}

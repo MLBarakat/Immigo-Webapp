@@ -54,6 +54,30 @@ describe('confirm-on-mismatch, targeted (near-miss vs far-miss)', () => {
     expect(out.advanceQuestion).toBe(true);
   });
 
+  it('practice mode tags a near-miss retry without changing grading or advancement', () => {
+    const out = resolveTurn(
+      interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+      { askedItem: nameItem, rawTranscript: 'vashintun', simulationMode: 'practice' }
+    );
+    expect(out.replyKind).toBe('needs_confirmation');
+    expect(out.committedVerdict).toBeNull();
+    expect(out.scoreChanged).toBe(false);
+    expect(out.advanceQuestion).toBe(false);
+    expect(out.flags).toContain('practice_retry');
+    expect(out.flags).toContain('near_miss');
+  });
+
+  it('practice mode keeps the generic retry for a far-miss', () => {
+    const out = resolveTurn(
+      interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+      { askedItem: nameItem, rawTranscript: 'jefferson', simulationMode: 'practice' }
+    );
+    expect(out.committedVerdict).toBeNull();
+    expect(out.advanceQuestion).toBe(false);
+    expect(out.flags).toContain('practice_retry');
+    expect(out.flags).not.toContain('near_miss');
+  });
+
   it('study mode gives tutor feedback and records a wrong answer without a retry', () => {
     const out = resolveTurn(
       interp({ grade: { verdict: 'incorrect', matchedAnswer: null }, reply: 'El Senado tiene cien miembros.' }),

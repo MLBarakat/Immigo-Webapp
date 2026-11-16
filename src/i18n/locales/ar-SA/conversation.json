@@ -100,8 +100,7 @@
     "center": {
       "title": "مقابلة التجنّس",
       "subtitle": "جلسة تدريب",
-      "progressSummary": "تقدّم اليوم: {{correct}} من أصل {{answered}} إجابات صحيحة ({{accuracyPct}}٪).",
-      "progressUnavailable": "تعذّر تحديث تقدّم اليوم حتى الآن.",
+      "progressSummary": "نشاط اليوم: {{correct}} من أصل {{answered}} إجابات صحيحة ({{accuracyPct}}٪).",
       "status": {
         "ready": "جاهز",
         "listening": "يستمع…",
@@ -186,6 +185,9 @@
       "questionBank": "بنك الأسئلة: {{version}}",
       "scoreBreakdown": "تفصيل النتيجة",
       "accuracy": "دقة إجابات التربية المدنية",
+      "resultNotReached": "لم تبلغ حد النجاح هذه المرة (كنت تحتاج إلى {{passAt}} إجابات صحيحة).",
+      "resultReached": "لقد بلغت حد النجاح ({{passAt}} إجابات صحيحة).",
+      "passingThreshold": "حد النجاح: {{passAt}} إجابات صحيحة",
       "correct": "الإجابات الصحيحة",
       "incorrect": "الإجابات غير الصحيحة",
       "scoreOfTotal": "{{score}} / {{total}}",
@@ -257,6 +259,10 @@
         "finishTitle": "الانتهاء الآن",
         "finishDescription": "احفظ هذه الخطوة وأغلق التقرير."
       },
+      "finishCardTitle": "لقد انتهيت الآن",
+      "finishCardDescription": "ابدأ {{mode}} لممارسة ما راجعته.",
+      "startRecommendedPath": "ابدأ المسار الموصى به",
+      "maybeLater": "في وقت لاحق",
       "modes": { "standard": "المقابلة القياسية", "practice": "وضع التدريب", "study": "وضع الدراسة" }
     },
     "welcome": {
@@ -340,5 +346,35 @@
       "officer": "موظف USCIS",
       "user": "المستخدم"
     }
+  },
+  "server": {
+    "legalAdvice": "يمكنني مساعدتك في دراسة التربية المدنية، لكن لا أستطيع تقديم مشورة قانونية. يُرجى استشارة محامٍ مختص بالهجرة أو ممثل معتمد من وزارة العدل.",
+    "manipulation": "لنبقَ مركزين على درس التربية المدنية.",
+    "clarify": "عذرًا، لم أستطع سماعك بوضوح. هل يمكنك تكرار ذلك؟",
+    "safeFail": "عذرًا، حدث خطأ من جانبي. دعنا نحاول مرة أخرى.",
+    "offTopic": "هذا خارج عن نطاق ما يمكنني مساعدتك به هنا، لكني سعيد بالاستمرار في ممارسة التربية المدنية معك.",
+    "confirm": "أريد التأكد من أنني سمعتك بشكل صحيح. هل يمكنك تكرار إجابتك مرة أخرى؟",
+    "practiceRetry": "هذه الإجابة ليست صحيحة تمامًا. حاول مرة أخرى أو اطلب مني تلميحًا.",
+    "dynamicAnswer": "لا يمكنني التحقق من هذه الإجابة الحالية من البيانات المرجعية المتاحة، لذا سأتركها بدون نتيجة وسأنتقل.",
+    "parseFailure": "لقد واجهت صعوبة في فهم ذلك الرد. دعنا نحاول مرة أخرى.",
+    "answerWithoutGrade": "لم أتمكن من تقييم تلك الإجابة. يُرجى محاولة قولها بطريقة أخرى.",
+    "answerWithoutActiveQuestion": "لا يوجد سؤال تربية مدنية نشط بعد. دعنا نبدأ بسؤال.",
+    "unclearInput": "لم أستطع فهم ذلك. يُرجى قوله بطريقة أخرى.",
+    "dynamicUngraded": "تتغير هذه الإجابة بمرور الوقت، لذا لا يمكنني التحقق منها من البنك الرسمي المخزن. سأتركها بدون نتيجة وأواصل.",
+    "awaitingConfirmation": "ربما سمعتك بشكل خاطئ. يُرجى تكرار إجابتك.",
+    "nearMiss": "ربما سمعتك بشكل خاطئ. يُرجى تكرار إجابتك.",
+    "practiceNearMissRetry": "أنت قريب — جرّب مرة أخرى، أو اطلب مني تلميحًا.",
+    "feedbackCorrect": "هذا صحيح. لنواصل.",
+    "feedbackIncorrect": "إحدى الإجابات الصحيحة هي {answer}. لنواصل.",
+    "feedbackPartial": "بداية جيدة. لنواصل.",
+    "feedbackDynamic": "شكرًا على إجابتك. لنواصل.",
+    "studyFeedbackIncorrect": "محاولة جيدة. لنراجع الإجابة.",
+    "standardNextQuestion": "السؤال التالي:",
+    "practiceNextOne": "التالي:",
+    "practiceNextHere": "إليك السؤال التالي:",
+    "practiceFirstQuestion": "السؤال الأول هو:",
+    "unclearReturnToQuestion": "لم أفهم ذلك بوضوح. لنعد إلى السؤال: {question}",
+    "silenceReturnToQuestion": "خذ وقتك. لنعد إلى السؤال: {question}",
+    "keepGoing": "لنواصل."
   }
 }

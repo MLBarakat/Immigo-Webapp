@@ -119,6 +119,9 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   const [examReviewError, setExamReviewError] = useState<string | null>(null);
   const [isReviewDecisionSaving, setIsReviewDecisionSaving] = useState(false);
   const [reviewDecisionError, setReviewDecisionError] = useState<string | null>(null);
+  /** F2: post-report finish_for_now card — shown once per exam, deduplicated by exam ID. */
+  const [showFinishCard, setShowFinishCard] = useState(false);
+  const [finishCardExamId, setFinishCardExamId] = useState<string | null>(null);
   useEffect(() => {
     if (authLoading || !user || questionBankPreferenceOwnerId === user.id) return;
     let storedVersion: string | null = null;
@@ -345,6 +348,12 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       if (!result.wasCreated && (result.decision.choice !== choice || result.decision.note !== note)) {
         setReviewDecisionError(tConversation('workspace.examReview.alreadyDecided'));
       }
+      // F2: after a successful finish_for_now, show the post-report card so the
+      // learner can start the recommended learning path. Deduplicated by exam ID.
+      if (result.decision.choice === 'finish_for_now' && result.wasCreated) {
+        setFinishCardExamId(activeExamReviewId);
+        setShowFinishCard(true);
+      }
       return result.decision;
     } catch (error) {
       logger.error('Could not save the Standard Interview decision.', undefined, {
@@ -384,14 +393,6 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
   };
 
   const handleWelcomeAction = async (messageId: string, action: MessageAction) => {
-    if (action.kind === 'focus') {
-      if (action.focusAction === 'edit') {
-        manager.openFocusEditor();
-        return;
-      }
-      await manager.confirmModeFocus();
-      return;
-    }
     if (action.kind === 'learn') {
       setSimulationMode(action.mode);
       const started = await manager.startRecommendedPath(
@@ -422,6 +423,24 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       }
     } catch (error) {
       logger.error('Could not start the Standard Interview from the welcome card.', undefined, { error: String(error) });
+    }
+  };
+
+  /** F2: start the recommended learning path from the post-report finish_for_now card. */
+  const continueFinishCard = async () => {
+    if (!activeExamReviewId || !user?.id) return;
+    const review = examReviewCache[activeExamReviewId];
+    if (!review?.feedback?.recommendedMode) return;
+    const suggested = review.suggestedFocus ?? [];
+    const started = await manager.startRecommendedPath(
+      review.feedback.recommendedMode,
+      suggested.map(item => item.id),
+      suggested.length === 0,
+    );
+    if (started) {
+      setShowFinishCard(false);
+      setFinishCardExamId(null);
+      setActiveExamReviewId(null);
     }
   };
 
@@ -735,6 +754,36 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
           onContinueDecision={continueWithReviewDecision}
           onRetry={() => { if (activeExamReviewId) void openExamReview(activeExamReviewId); }}
         />
+        {showFinishCard && finishCardExamId === activeExamReviewId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-w-md w-full p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {tConversation('workspace.examReview.cardTitle')}
+              </h2>
+              <p className="text-gray-600 dark:text-gray-300 mb-4">
+                {tConversation('workspace.examReview.finishCardDescription', {
+                  mode: examReviewCache[activeExamReviewId!]?.feedback?.recommendedMode === 'practice'
+                    ? tConversation('workspace.right.practice.label')
+                    : tConversation('workspace.right.study.label'),
+                })}
+              </p>
+              <button
+                type="button"
+                onClick={continueFinishCard}
+                className="w-full btn-primary"
+              >
+                {tConversation('workspace.examReview.startRecommendedPath')}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowFinishCard(false); setFinishCardExamId(null); }}
+                className="w-full mt-2 btn-secondary"
+              >
+                {tConversation('workspace.examReview.maybeLater')}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

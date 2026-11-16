@@ -100,8 +100,7 @@
     "center": {
       "title": "Entretien de naturalisation",
       "subtitle": "Session d’entraînement",
-      "progressSummary": "Progrès du jour : {{correct}} réponses correctes sur {{answered}} ({{accuracyPct}} %).",
-      "progressUnavailable": "Les progrès du jour n’ont pas encore pu être actualisés.",
+      "progressSummary": "Activité du jour : {{correct}} réponses correctes sur {{answered}} ({{accuracyPct}} %).",
       "status": {
         "ready": "Prêt",
         "listening": "Écoute…",
@@ -186,6 +185,9 @@
       "questionBank": "Banque de questions : {{version}}",
       "scoreBreakdown": "Détail du score",
       "accuracy": "Précision en civisme",
+      "resultNotReached": "Vous n’avez pas atteint le seuil de réussite cette fois (il fallait {{passAt}} bonnes réponses).",
+      "resultReached": "Vous avez atteint le seuil de réussite ({{passAt}} bonnes réponses).",
+      "passingThreshold": "Seuil de réussite : {{passAt}} bonnes réponses",
       "correct": "Réponses correctes",
       "incorrect": "Réponses incorrectes",
       "scoreOfTotal": "{{score}} / {{total}}",
@@ -257,6 +259,10 @@
         "finishTitle": "Terminer pour le moment",
         "finishDescription": "Enregistrer cette étape et fermer le rapport."
       },
+      "finishCardTitle": "Vous avez terminé pour le moment",
+      "finishCardDescription": "Commencez {{mode}} pour continuer à pratiquer ce que vous avez révisé.",
+      "startRecommendedPath": "Commencer le parcours recommandé",
+      "maybeLater": "Peut-être plus tard",
       "modes": { "standard": "Entretien standard", "practice": "Mode pratique", "study": "Mode étude" }
     },
     "welcome": {
@@ -340,5 +346,35 @@
       "officer": "Agent de l’USCIS",
       "user": "Utilisateur"
     }
+  },
+  "server": {
+    "legalAdvice": "Je peux vous aider à étudier l’éducation civique, mais pas vous donner de conseil juridique. Consultez un avocat spécialisé en immigration ou un représentant accrédité par le ministère de la Justice.",
+    "manipulation": "Restons concentrés sur votre leçon d’éducation civique.",
+    "clarify": "Désolé, je n'ai pas bien saisi. Pouvez-vous répéter ?",
+    "safeFail": "Désolé, quelque chose a échoué de mon côté. Réessayons.",
+    "offTopic": "Cela ne fait pas partie de cette leçon d’éducation civique. Je peux vous aider sur le sujet actuel.",
+    "confirm": "Je veux m'assurer de vous avoir bien compris. Pourriez-vous répéter votre réponse ?",
+    "practiceRetry": "Ce n’est pas tout à fait exact. Réessayez ou demandez-moi un indice.",
+    "dynamicAnswer": "Je ne peux pas vérifier cette réponse actuelle à partir des données de référence disponibles, donc je la laisserai non notée et passerai à la suite.",
+    "parseFailure": "J'ai eu du mal à comprendre cette réponse. Réessayons.",
+    "answerWithoutGrade": "Je n'ai pas pu évaluer cette réponse. Essayez de la formuler autrement.",
+    "answerWithoutActiveQuestion": "Aucune question de civique n'est active. Commençons par une question.",
+    "unclearInput": "Je n'ai pas compris. Essayez de le dire autrement.",
+    "dynamicUngraded": "Cette réponse change avec le temps et je ne peux pas la vérifier à partir de la banque officielle enregistrée. Je ne la noterai pas et je vais continuer.",
+    "awaitingConfirmation": "J’ai peut-être mal entendu. Répétez votre réponse, s’il vous plaît.",
+    "nearMiss": "J’ai peut-être mal entendu. Répétez votre réponse, s’il vous plaît.",
+    "practiceNearMissRetry": "Vous y êtes presque — réessayez une fois, ou demandez-moi un indice.",
+    "feedbackCorrect": "C’est exact. Continuons.",
+    "feedbackIncorrect": "Une réponse correcte est {answer}. Continuons.",
+    "feedbackPartial": "Bon début. Continuons.",
+    "feedbackDynamic": "Merci pour votre réponse. Continuons.",
+    "studyFeedbackIncorrect": "Bon effort. Revoyons la réponse.",
+    "standardNextQuestion": "Question suivante :",
+    "practiceNextOne": "La suivante :",
+    "practiceNextHere": "Voici la suivante :",
+    "practiceFirstQuestion": "La première question est :",
+    "unclearReturnToQuestion": "Je n’ai pas bien compris. Revenons à la question : {question}",
+    "silenceReturnToQuestion": "Prenez votre temps. Revenons à la question : {question}",
+    "keepGoing": "Continuons."
   }
 }

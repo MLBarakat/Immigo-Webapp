@@ -7,6 +7,8 @@ import {
   buildReturningOnboarding,
   buildStandardModeSwitchCopy,
   localizedAllFocusLabel,
+  modeLabel,
+  recommendLearningMode,
   type ModeOnboardingStats,
   type OnboardingLanguage,
 } from '../turn/mode-onboarding';
@@ -70,5 +72,30 @@ describe('Practice/Study onboarding copy', () => {
       expect(buildCycleNotice(language).length).toBeGreaterThan(30);
       expect(buildStandardModeSwitchCopy(language).length).toBeGreaterThan(30);
     }
+  });
+
+  describe('recommendLearningMode (F4 shared rule)', () => {
+    it('recommends study below the passing threshold', () => {
+      expect(recommendLearningMode(59)).toBe('study');
+      expect(recommendLearningMode(0)).toBe('study');
+    });
+
+    it('recommends practice at or above the passing threshold', () => {
+      expect(recommendLearningMode(60)).toBe('practice');
+      expect(recommendLearningMode(100)).toBe('practice');
+    });
+  });
+
+  describe('modeLabel (F4 localized summary label)', () => {
+    it('returns Mode entraînement for French practice', () => {
+      expect(modeLabel('practice', 'fr-FR')).toBe('Mode entraînement');
+    });
+
+    it('returns localized labels for every supported locale', () => {
+      expect(modeLabel('practice', 'en-US')).toBe('Practice Mode');
+      expect(modeLabel('practice', 'es-ES')).toBe('Modo práctica');
+      expect(modeLabel('study', 'fr-FR')).toBe('Mode Étude');
+      expect(modeLabel('study', 'ar-SA')).toBe('وضع الدراسة');
+    });
   });
 });

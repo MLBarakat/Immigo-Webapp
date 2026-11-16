@@ -93,6 +93,47 @@ describe('ConversationHistory', () => {
     );
   });
 
+  it('renders the ephemeral activity card full width with a progress bar', () => {
+    render(
+      <ConversationHistory
+        messages={[{
+          ...message('progress-card-1', '2025-01-01T12:00:00.000Z'),
+          content: "Today's activity: 10 of 10 correct (100%).",
+          presentation: 'progress',
+          progress: { answered: 10, correct: 10, accuracyPct: 100 },
+        }]}
+        displayUser={displayUser}
+        interimTranscript=""
+      />
+    );
+
+    const card = screen.getByTestId('progress-card');
+    expect(card.className).toContain('w-full');
+    expect(screen.getByText("Today's activity: 10 of 10 correct (100%).")).toBeTruthy();
+    const bar = screen.getByRole('progressbar', { name: 'Answer Accuracy' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('100');
+    expect(bar.getAttribute('aria-valuemin')).toBe('0');
+    expect(bar.getAttribute('aria-valuemax')).toBe('100');
+  });
+
+  it('does not render the officer avatar or message actions for an activity card', () => {
+    render(
+      <ConversationHistory
+        messages={[{
+          ...message('progress-card-1', '2025-01-01T12:00:00.000Z'),
+          content: "Today's activity: 10 of 10 correct (100%).",
+          presentation: 'progress',
+          progress: { answered: 10, correct: 10, accuracyPct: 100 },
+        }]}
+        displayUser={displayUser}
+        interimTranscript=""
+      />
+    );
+
+    expect(screen.queryByAltText('USCIS Officer')).toBeNull();
+    expect(screen.queryByTestId('message-actions')).toBeNull();
+  });
+
   it('scrolls to the latest message when a new message is appended', () => {
     const { rerender } = render(
       <ConversationHistory messages={[message('first', '2025-01-01T12:00:00.000Z')]} displayUser={displayUser} interimTranscript="" />

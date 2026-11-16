@@ -352,6 +352,17 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                   </div>
                 </div>
 
+                <div className="mt-3 rounded-xl border border-art-blue-200 bg-art-blue-50 px-3 py-2 dark:border-blue-900 dark:bg-blue-950/30">
+                  <p className="text-sm font-semibold text-deep-navy dark:text-white">
+                    {review.scorecard.civics.thresholdReached
+                      ? t('workspace.examReview.resultReached', { passAt: review.scorecard.civics.passAt })
+                      : t('workspace.examReview.resultNotReached', { passAt: review.scorecard.civics.passAt })}
+                  </p>
+                  <p className="mt-1 text-xs text-immigo-gray-600 dark:text-gray-300">
+                    {t('workspace.examReview.passingThreshold', { passAt: review.scorecard.civics.passAt })}
+                  </p>
+                </div>
+
                 {review.scorecard.english.included && (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border border-immigo-gray-200 p-3 text-sm dark:border-gray-700">

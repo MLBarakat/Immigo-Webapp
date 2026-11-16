@@ -53,7 +53,7 @@ describe('workspace panel headers', () => {
     expect(screen.getAllByText('Not measured yet')).toHaveLength(2);
   });
 
-  it('asks before leaving an unfinished Standard Interview', async () => {
+  it('switches away from an unfinished Standard Interview without a pause dialog', () => {
     const onSimulationModeChange = vi.fn().mockResolvedValue(true);
     const props = {
       isCollapsed: false,
@@ -76,20 +76,19 @@ describe('workspace panel headers', () => {
     render(<RightPanel {...props} />);
     fireEvent.click(screen.getByRole('radio', { name: /study mode/i }));
 
-    expect(screen.getByRole('dialog', { name: /pause this standard interview/i })).toBeDefined();
-    expect(onSimulationModeChange).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: /switch to study mode/i }));
+    // F-04: leaving an unfinished Standard Interview is itself the pause
+    // decision, so the selection commits immediately with no confirmation.
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(onSimulationModeChange).toHaveBeenCalledWith('study');
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
-  it('keeps the mode decision open and explains when switching fails', async () => {
+  it('commits the mode selection before a transition reports failure', () => {
+    const onSimulationModeChange = vi.fn().mockResolvedValue(false);
     const props = {
       isCollapsed: false,
       onToggleCollapse: vi.fn(),
       simulationMode: 'standard' as const,
-      onSimulationModeChange: vi.fn().mockResolvedValue(false),
+      onSimulationModeChange,
       testVersion: '2020' as const,
       onTestVersionChange: vi.fn(),
       includeEnglishSimulation: false,
@@ -103,21 +102,21 @@ describe('workspace panel headers', () => {
 
     render(<RightPanel {...props} />);
     fireEvent.click(screen.getByRole('radio', { name: /study mode/i }));
-    fireEvent.click(screen.getByRole('button', { name: /switch to study mode/i }));
 
-    const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toBe(
-      "We couldn't update the interview. Your current mode and progress are unchanged. Please try again."
-    );
-    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(onSimulationModeChange).toHaveBeenCalledWith('study');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // The conversation surface owns transition failures; the panel must not
+    // keep a stale decision prompt open or invent a second error surface.
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('does not silently change modes when a direct transition fails', async () => {
+  it('keeps the rendered mode controlled by the parent when a transition fails', async () => {
+    const onSimulationModeChange = vi.fn().mockResolvedValue(false);
     const props = {
       isCollapsed: false,
       onToggleCollapse: vi.fn(),
       simulationMode: 'practice' as const,
-      onSimulationModeChange: vi.fn().mockResolvedValue(false),
+      onSimulationModeChange,
       testVersion: '2020' as const,
       onTestVersionChange: vi.fn(),
       includeEnglishSimulation: false,
@@ -131,8 +130,12 @@ describe('workspace panel headers', () => {
     render(<RightPanel {...props} />);
     fireEvent.click(screen.getByRole('radio', { name: /study mode/i }));
 
-    expect(await screen.findByRole('alert')).toBeDefined();
+    await waitFor(() => expect(onSimulationModeChange).toHaveBeenCalledWith('study'));
+    // RightPanel does not roll back locally; the parent keeps the selected
+    // mode and useConversation/CenterPanel surface the transition error.
     expect((screen.getByRole('radio', { name: /practice mode/i }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('offers resume or new when returning to Standard with an unfinished interview', () => {

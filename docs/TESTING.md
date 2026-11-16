@@ -19,7 +19,7 @@ Tests must exercise production code. Re-implementing production logic inside a t
 | Contract | Vitest | `amplify/functions/**/__tests__` | API status codes, payload shapes, auth, downstream failures |
 | Integration | Vitest | `tests/integration` | Migrations, RLS assumptions, cross-module wiring |
 | E2E | Playwright | `tests/e2e` | Browser flows, layout, voice lifecycle, network failure |
-| Eval | Vitest | `eval/**/__tests__` | Civics grading quality and STT scoring |
+| Eval | Vitest | `eval/**/__tests__` | Civics grading quality, STT scoring, daily-report integrity, and feedback copy |
 | Governance | Node scripts | `scripts/` | Registry integrity, skipped tests, agent-doc drift |
 
 ## 3. Commands
@@ -36,6 +36,7 @@ Tests must exercise production code. Re-implementing production logic inside a t
 | `npm run test:e2e` | Full Playwright suite |
 | `npm run eval:civics` | Civics grading benchmark |
 | `npm run eval:reports` | Synthetic daily-report integrity golden set |
+| `npm run eval:feedback` | Deterministic feedback-copy golden set |
 | `npm run lint` | ESLint with warnings as errors |
 | `npm run typecheck:test` | TypeScript check for source and tests |
 | `npm run build` | Production TypeScript and Vite build |
@@ -109,6 +110,7 @@ Rules:
 
 - `npm run eval:civics` protects grading quality.
 - `npm run eval:reports` checks daily-report formatting against synthetic qualitative and adversarial outputs; numeric results must be assembled from recorded grading facts.
+- `npm run eval:feedback` checks the deterministic feedback sanitizer and verdict-aware fallbacks against a synthetic golden set. It measures non-empty output, no trailing question sentence, no duplicate next question, and exact expected copy in all four locales.
 - A prompt, model, or matching change requires an eval run.
 - Eval thresholds are reviewed with the prompt change, not adjusted afterward to fit the output.
 - Evals are not a substitute for deterministic contract tests.

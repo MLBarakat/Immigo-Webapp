@@ -37,6 +37,94 @@ describe('sanitizeFinalAnswerFeedback', () => {
     expect(sanitizeFinalAnswerFeedback('Good answer. Can you explain why?', 'What is the capital?'))
       .toBe('Good answer.');
   });
+
+  it('preserves statements that follow a question sentence', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Can you name one right? Freedom of speech is one.',
+      'What is the capital?',
+    )).toBe('Freedom of speech is one.');
+  });
+
+  it('removes each question sentence but keeps statements before and after it', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Good answer. Can you explain why? The First Amendment protects speech.',
+      'What is the capital?',
+    )).toBe('Good answer. The First Amendment protects speech.');
+  });
+
+  it('keeps a statement that contains a quoted question mark', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'He asked, "What is the capital?" and then answered it himself.',
+      'What is the capital?',
+    )).toBe('He asked, "What is the capital?" and then answered it himself.');
+  });
+
+  it('does not split a statement on common abbreviations', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Mr. Smith became a citizen in 1999. Was that correct? Yes, it was.',
+      'What is the capital?',
+    )).toBe('Mr. Smith became a citizen in 1999. Yes, it was.');
+  });
+
+  it('uses the provided verdict-aware fallback when only questions remain', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Can you explain why?',
+      'What is the capital?',
+      "That's correct. Let's continue.",
+    )).toBe("That's correct. Let's continue.");
+  });
+
+  it('removes a duplicate next question without dropping a later statement', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Correct. When was the Declaration of Independence adopted? It was adopted in 1776.',
+      'When was the Declaration of Independence adopted?',
+    )).toBe('Correct. It was adopted in 1776.');
+  });
+
+  it('removes a next-question announcement without dropping a later statement', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Correct. Next question: When was it adopted? It was adopted in 1776.',
+      'What is the capital?',
+    )).toBe('Correct. It was adopted in 1776.');
+  });
+});
+
+describe('TurnPolicy safeReplyKey (F5 catalog wiring)', () => {
+  it('exposes the catalog key that matches each canned safe reply', () => {
+    expect(resolveTurn(interp({ intent: 'manipulation' }), { askedItem: q21 }).safeReplyKey)
+      .toBe('manipulation');
+    expect(resolveTurn(interp({ intent: 'off_topic' }), { askedItem: q21 }).safeReplyKey)
+      .toBe('offTopic');
+    expect(resolveTurn(interp({ intent: 'unclear' }), { askedItem: q21 }).safeReplyKey)
+      .toBe('unclearInput');
+    expect(resolveTurn(interp({ intent: 'legal_advice' }), { askedItem: q21 }).safeReplyKey)
+      .toBe('legalAdvice');
+    expect(resolveTurn(null, { askedItem: q21 }).safeReplyKey)
+      .toBe('parseFailure');
+    expect(resolveTurn(interp({ intent: 'answer', grade: null }), { askedItem: q21 }).safeReplyKey)
+      .toBe('answerWithoutGrade');
+    expect(resolveTurn(interp({ grade: { verdict: 'correct', matchedAnswer: 'One hundred (100)' } }), { askedItem: null }).safeReplyKey)
+      .toBe('answerWithoutActiveQuestion');
+  });
+
+  it('keeps safeReply as the English policy fallback', () => {
+    expect(resolveTurn(null, { askedItem: q21 }).safeReply)
+      .toContain('something went wrong on my side');
+  });
+
+  it('uses practiceRetry for a first Practice mismatch and nearMiss for a Standard near-miss', () => {
+    const practice = resolveTurn(
+      interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+      { askedItem: q21, rawTranscript: 'jefferson', simulationMode: 'practice' },
+    );
+    expect(practice.safeReplyKey).toBe('practiceRetry');
+
+    const nearMiss = resolveTurn(
+      interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+      { askedItem: { ...q21, acceptableAnswers: ['Washington'] }, rawTranscript: 'vashintun', simulationMode: 'standard' },
+    );
+    expect(nearMiss.safeReplyKey).toBe('nearMiss');
+  });
 });
 
 describe('TurnPolicy.resolveTurn — grading guarantees', () => {

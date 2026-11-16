@@ -100,8 +100,7 @@
     "center": {
       "title": "Entrevista de naturalización",
       "subtitle": "Sesión de práctica",
-      "progressSummary": "Progreso de hoy: {{correct}} de {{answered}} respuestas correctas ({{accuracyPct}}%).",
-      "progressUnavailable": "Aún no se pudo actualizar el progreso de hoy.",
+      "progressSummary": "Actividad de hoy: {{correct}} de {{answered}} respuestas correctas ({{accuracyPct}}%).",
       "status": {
         "ready": "Listo",
         "listening": "Escuchando…",
@@ -186,6 +185,9 @@
       "questionBank": "Banco de preguntas: {{version}}",
       "scoreBreakdown": "Desglose de resultados",
       "accuracy": "Precisión en civismo",
+      "resultNotReached": "No alcanzaste el umbral de aprobación esta vez (se necesitaban {{passAt}} respuestas correctas).",
+      "resultReached": "Alcanzaste el umbral de aprobación ({{passAt}} respuestas correctas).",
+      "passingThreshold": "Umbral de aprobación: {{passAt}} respuestas correctas",
       "correct": "Respuestas correctas",
       "incorrect": "Respuestas incorrectas",
       "scoreOfTotal": "{{score}} / {{total}}",
@@ -257,6 +259,10 @@
         "finishTitle": "Terminar por ahora",
         "finishDescription": "Guarda este paso y cierra el informe."
       },
+      "finishCardTitle": "Has terminado por ahora",
+      "finishCardDescription": "Inicia {{mode}} para seguir practicando lo que revisaste.",
+      "startRecommendedPath": "Iniciar ruta recomendada",
+      "maybeLater": "Quizás después",
       "modes": { "standard": "Entrevista estándar", "practice": "Modo práctica", "study": "Modo estudio" }
     },
     "welcome": {
@@ -340,5 +346,35 @@
       "officer": "Oficial de USCIS",
       "user": "Usuario"
     }
+  },
+  "server": {
+    "legalAdvice": "Puedo ayudarte a estudiar educación cívica, pero no puedo ofrecer asesoramiento legal. Consulta a un abogado de inmigración autorizado o a un representante acreditado por el Departamento de Justicia.",
+    "manipulation": "Sigamos centrados en tu lección de educación cívica.",
+    "clarify": "Disculpa, no te escuché bien. ¿Podrías decirlo otra vez?",
+    "safeFail": "Lo siento, algo salió mal de mi lado. Intentémoslo de nuevo.",
+    "offTopic": "Eso queda fuera de esta lección de educación cívica. Puedo ayudarte con el tema actual.",
+    "confirm": "Quiero asegurarme de que te escuché correctamente. ¿Podrías repetir tu respuesta?",
+    "practiceRetry": "Esa respuesta no es del todo correcta. Inténtalo una vez más o pídeme una pista.",
+    "dynamicAnswer": "No puedo verificar esta respuesta actual con los datos de referencia disponibles, así que la dejaré sin calificar y seguiré adelante.",
+    "parseFailure": "Me costó entender esa respuesta. Intentémoslo de nuevo.",
+    "answerWithoutGrade": "No pude evaluar esa respuesta. Intenta expresarla de otra manera.",
+    "answerWithoutActiveQuestion": "Todavía no hay una pregunta activa. Empecemos con una pregunta.",
+    "unclearInput": "No entendí eso. Intenta decirlo de otra manera.",
+    "dynamicUngraded": "Esta respuesta cambia con el tiempo y no puedo verificarla con el banco oficial guardado. No la calificaré y continuaré.",
+    "awaitingConfirmation": "Es posible que te haya oído mal. Repite tu respuesta, por favor.",
+    "nearMiss": "Es posible que te haya oído mal. Repite tu respuesta, por favor.",
+    "practiceNearMissRetry": "Estás cerca — inténtalo una vez más o pídeme una pista.",
+    "feedbackCorrect": "Es correcto. Continuemos.",
+    "feedbackIncorrect": "Una respuesta correcta es {answer}. Continuemos.",
+    "feedbackPartial": "Buen comienzo. Continuemos.",
+    "feedbackDynamic": "Gracias por tu respuesta. Continuemos.",
+    "studyFeedbackIncorrect": "Buen esfuerzo. Repasemos la respuesta.",
+    "standardNextQuestion": "Siguiente pregunta:",
+    "practiceNextOne": "La siguiente:",
+    "practiceNextHere": "Aquí tienes la siguiente:",
+    "practiceFirstQuestion": "La primera pregunta es:",
+    "unclearReturnToQuestion": "No entendí eso con claridad. Volvamos a la pregunta: {question}",
+    "silenceReturnToQuestion": "Tómate tu tiempo. Volvamos a la pregunta: {question}",
+    "keepGoing": "Sigamos."
   }
 }

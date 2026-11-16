@@ -26,7 +26,7 @@ export interface ModeOnboardingStats {
 const MODE_LABELS: Record<OnboardingLanguage, Record<'practice' | 'study', string>> = {
   'en-US': { practice: 'Practice Mode', study: 'Study Mode' },
   'es-ES': { practice: 'Modo práctica', study: 'Modo estudio' },
-  'fr-FR': { practice: 'Mode Pratique', study: 'Mode Étude' },
+  'fr-FR': { practice: 'Mode entraînement', study: 'Mode Étude' },
   'ar-SA': { practice: 'وضع التدريب', study: 'وضع الدراسة' },
 };
 
@@ -161,6 +161,36 @@ export function modeLabel(
   language: OnboardingLanguage,
 ): string {
   return MODE_LABELS[language][mode];
+}
+
+/** Shared rule: below 60% accuracy recommends guided review, at/above recommends practice. */
+export function recommendLearningMode(accuracyPercent: number): 'practice' | 'study' {
+  return accuracyPercent < 60 ? 'study' : 'practice';
+}
+
+const RECOMMENDATION_REASONS: Record<OnboardingLanguage, Record<'practice' | 'study', string>> = {
+  'en-US': {
+    practice: 'A short practice set can reinforce what you know and strengthen recall.',
+    study: 'A guided review can help rebuild the concepts behind missed answers.',
+  },
+  'es-ES': {
+    practice: 'Un breve conjunto de práctica puede reforzar lo que sabes y fortalecer tu memoria.',
+    study: 'Una revisión guiada puede ayudar a reconstruir los conceptos detrás de las respuestas falladas.',
+  },
+  'fr-FR': {
+    practice: 'Un court ensemble d’exercices peut renforcer ce que vous savez et consolider votre mémorisation.',
+    study: 'Une révision guidée peut aider à reconstruire les concepts derrière les réponses manquées.',
+  },
+  'ar-SA': {
+    practice: 'يمكن لمجموعة تدريبية قصيرة أن تعزز ما تعرفه وتقوي استدعاءك.',
+    study: 'يمكن للمراجعة الموجهة أن تساعد في إعادة بناء المفاهيم وراء الإجابات الخاطئة.',
+  },
+};
+
+/** Localized reason for the recommended mode, shown in the report fallback. */
+export function recommendationReason(mode: 'practice' | 'study', language?: string | null): string {
+  const lng: OnboardingLanguage = (language as OnboardingLanguage) ?? 'en-US';
+  return RECOMMENDATION_REASONS[lng]?.[mode] ?? RECOMMENDATION_REASONS['en-US'][mode];
 }
 
 /** Deterministic acknowledgement when the learner switches to Standard. */

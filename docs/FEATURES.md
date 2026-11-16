@@ -92,7 +92,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - Microphone access is user-initiated and consent-gated.
 - Workers, audio nodes, media streams, timers, and subscriptions are released on session end, unmount, and visibility changes.
 - Barge-in must not leave two playback paths active.
-- Spoken progress summaries are queued until the current assistant response and post-playback AEC settle window are complete; active user speech defers them.
+- The ten-answer activity card is silent: it never synthesizes or queues Polly audio, and it does not delay listening beyond the post-playback AEC settle window.
 - Device preferences are applied before the next session starts.
 - Long-running audio work stays out of synchronous Lambda requests.
 
@@ -120,8 +120,10 @@ This registry is the contract between the product, the tests, and every AI codin
 - Detailed progress reports refresh silently after every ten scored civics answers in the active Standard Interview.
 - Reading/writing stages and stable prompt selections are preserved.
 - An interview review is server-generated; the client renders it without inventing scores.
-- The final graded answer of a Standard Interview explicitly states that the interview is complete, and the next assistant bubble is a warm summary with the recommended mode, an invitation to open the Interview Report, and a prompt to capture the decision and goals.
+- The final graded answer of a Standard Interview explicitly states that the interview is complete and names the deterministic threshold result, and the next assistant bubble is a warm summary with the recommended mode, an invitation to open the Interview Report, and a prompt to capture the decision and goals.
 - The completion summary never mentions questions to review.
+- Completion, returning intro, report, and scorecard describe the civics result as reaching or not reaching the passing threshold; the word failed is never used.
+- The scorecard exposes `passAt` and `thresholdReached` so the client renders the recorded result without recalculating it.
 - The completed-exam review presents the interview report, score breakdown, question outcomes, strengths, focus areas, and one explicit next-step decision; it has no separate question-review or detailed-report entry points.
 - Dismissing the review is not a decision; Save persists each next-step choice and Back returns to the choices without saving. A saved decision is immutable, and Practice/Study choices require one to three official USCIS focus categories that update the account goal atomically.
 - A saved next-step decision is shown consistently in the report and remains distinct from the follow-on action, which can be retried without changing the saved decision.
@@ -139,7 +141,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - English reading and writing run only after a civics pass when English is enabled, then the report; a civics fail goes straight to the report, and disabled English goes to the report after civics. English never changes civics pass/fail, and a post-fail report says English was not administered.
 - The English preference defaults on only for new accounts; an existing saved value, including off, is always respected in both test versions.
 - Practice and Study first-time onboarding shows a deterministic explanation in one assistant bubble; returning onboarding shows per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts plus the same counts for the focus subset, in one assistant bubble, and lets the learner keep or change focus.
-- Practice and Study intro bubbles expose Continue and Edit. Continue starts the first question with the focus already stored on the session or account, falling back to All focus areas; Edit opens the existing focus-area selector. The focus card never opens automatically on a mode change.
+- Practice and Study intro bubbles carry no Continue or Edit actions; the focus card opens automatically and is the only action surface. The card states the limit of three focus areas, starts the first question through the focus submission flow, and stays actionable when submission fails.
 - A first Learning Mode introduction is one assistant bubble only. For Standard, that bubble contains the icebreaker, version facts, and rules, and the separate Ready question is the next bubble.
 - A mode change commits the selection in the UI immediately and enters 'preparing' state, which locks text input and voice capture. The backend response is revealed when the transition completes: immediately on desktop, and when the learner returns to the chat tab on mobile. If voice was active when the switch was accepted, Polly speaks the transition response (with typewriter reveal and barge-in support) before resuming listening; text-mode transitions render without Polly.
 - The first-run welcome introduces Learning Modes and offers Standard Interview, Practice, and Study as the first mode; choosing one closes the welcome and activates that mode.
@@ -149,6 +151,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - The Standard Interview timer starts when the first question is presented, pauses and hides when the interview is interrupted, resumes the same unfinished exam's elapsed time in the same browser, and clears on completion.
 - The Interview Report suggests two or three weakest categories from structured grading signals, never by reading qualitative report prose. The suggestion pre-fills the decision form only when the learner chooses Use this focus, and nothing persists until Save.
 - The decision form replaces Cancel with Back, which returns to the choice cards and discards unsaved edits, and Save my choice with Save. The focus combobox appears in the report only for Practice and Study decisions and offers only official USCIS categories.
+- The shared `recommendLearningMode` rule recommends Study below 60% accuracy and Practice at or above, applied identically across all modes. Mode labels are localized via `modeLabel`; French Practice is canonicalized as `Mode entraînement`.
 
 **Tests:** `src/hooks/__tests__/useConversation.test.tsx`, `src/services/__tests__/mockExamService.test.ts`, `src/components/__tests__/ConversationHub.test.tsx`, `src/components/__tests__/CenterPanel.test.tsx`, `src/components/__tests__/FeedbackModal.test.tsx`, `src/components/__tests__/FocusOnboardingCard.test.tsx`, `src/components/__tests__/FocusAreaCombobox.test.tsx`, `src/constants/__tests__/focusCategories.test.ts`, `amplify/functions/transcript/__tests__/english-exercises.test.ts`, `amplify/functions/transcript/__tests__/focus.test.ts`, `amplify/functions/transcript/__tests__/mode-onboarding.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `amplify/functions/transcript/turn/__tests__/mock-exam-selector.test.ts`, `tests/e2e/text-roundtrip.spec.ts`, `tests/e2e/edge-cases.spec.ts`
 
@@ -157,7 +160,7 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-05 — Civics grading and turn policy
 
 **Status:** protected  
-**Entry points:** `amplify/functions/transcript/turn/turn-policy.ts`, `amplify/functions/transcript/turn/turn-interpreter.ts`, `amplify/functions/transcript/turn/matching.ts`, `amplify/functions/transcript/turn/bank.ts`, `amplify/functions/transcript/turn/dynamic-answers.ts`, `amplify/functions/transcript/civics-dynamic-answers.json`, `amplify/functions/transcript/handler.ts`
+**Entry points:** `amplify/functions/transcript/turn/turn-policy.ts`, `amplify/functions/transcript/turn/turn-interpreter.ts`, `amplify/functions/transcript/turn/matching.ts`, `amplify/functions/transcript/turn/bank.ts`, `amplify/functions/transcript/turn/dynamic-answers.ts`, `amplify/functions/transcript/turn/server-copy.ts`, `amplify/functions/transcript/turn/feedback-copy.ts`, `src/i18n/locales/en-US/conversation.json`, `src/i18n/locales/es-ES/conversation.json`, `src/i18n/locales/fr-FR/conversation.json`, `src/i18n/locales/ar-SA/conversation.json`, `amplify/functions/transcript/civics-dynamic-answers.json`, `amplify/functions/transcript/handler.ts`
 
 **Invariants**
 
@@ -167,9 +170,13 @@ This registry is the contract between the product, the tests, and every AI codin
 - For the representative question, any current U.S. House member listed for the selected state is accepted because registration does not collect a congressional district.
 - `graded_answers` is the authoritative record for progress reports.
 - A grading change requires an eval run and a reviewed prompt change.
+- Server copy (`safeReplyKey`) is typed and localized for all four supported locales; exam content remains in English.
+- Final-answer feedback removes model-authored question sentences and next-question announcements without truncating complete statements before or after them.
+- When feedback sanitizes to nothing, the fallback is verdict-aware and localized; it is never an empty non-answer.
+- Practice near-miss retry copy is distinct from the generic retry; grading, scoring, and advancement are unchanged by that copy choice.
 - Question-bank IDs and test-version routing remain stable.
 
-**Tests:** `amplify/functions/transcript/turn/__tests__/turn-policy.test.ts`, `turn-policy.flow.test.ts`, `turn-policy.confirmation.test.ts`, `turn-interpreter.test.ts`, `turn-interpreter.transcript-fixes.test.ts`, `turn-interpreter.prompts.test.ts`, `matching.test.ts`, `bank.test.ts`, `dynamic-answers.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `welcomeBanner.test.ts`, `amplify/functions/transcript/__tests__/ssml.test.ts`, `eval/civics/__tests__/civics-eval.test.ts`
+**Tests:** `amplify/functions/transcript/turn/__tests__/turn-policy.test.ts`, `turn-policy.flow.test.ts`, `turn-policy.confirmation.test.ts`, `turn-interpreter.test.ts`, `turn-interpreter.transcript-fixes.test.ts`, `turn-interpreter.prompts.test.ts`, `matching.test.ts`, `bank.test.ts`, `dynamic-answers.test.ts`, `feedback-copy.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `welcomeBanner.test.ts`, `amplify/functions/transcript/__tests__/ssml.test.ts`, `amplify/functions/transcript/turn/__tests__/server-copy.test.ts`, `eval/civics/__tests__/civics-eval.test.ts`, `eval/feedback/__tests__/feedback-eval.test.ts`
 
 ---
 
@@ -196,9 +203,10 @@ This registry is the contract between the product, the tests, and every AI codin
 - A weekly target is optional and disabled when unset; the learning-goal card distinguishes an unset target from zero progress.
 - Applying a saved focus in Practice or Study requires confirmation and sends it through the existing conversation message flow.
 - Detailed reports refresh silently every ten account-local daily graded answers in Practice and Study.
-- Practice and Study show a one-line factual summary only at every ten-answer milestone, based only on recorded daily grading counts; there is no per-answer running commentary, and summaries are not persisted as conversation context.
-- The one-line summary and the silent detailed report share the same ten-answer milestone.
-- When voice is active, Polly speaks that summary only after the current response and AEC settle window; active user speech defers it.
+- Practice and Study show a silent, full-width, one-line activity card only at every ten-answer milestone, based only on recorded account-day grading counts; there is no per-answer running commentary.
+- The silent activity card and the silent detailed report share the same ten-answer milestone.
+- The activity card, the Practice progress answer, and the left-panel counters all use the same account-day daily stats.
+- The activity card is never spoken, persisted, exported, or included in the LLM conversation window.
 - Mastery means at least three graded attempts with more than 85% correct, counting every graded answer including Standard Interview answers.
 - Practice and Study returning onboarding reports per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts from authoritative graded answers, plus the same counts for the selected focus subset; this copy is deterministic and never model-generated.
 - Suggested focus is derived from structured signals only: question mastery, previous exam misses, and recent graded answers by category. Qualitative report prose is never read by a model to produce it.
@@ -218,6 +226,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - History is user-scoped and RLS-protected.
 - Loading older messages preserves scroll position and the active session.
 - Transcript download reflects the persisted conversation.
+- Transcript export labels each message by its durable speaker — USCIS Officer, Practice Coach, Study Coach, ImmiGO, Interview Report, or User — using the persisted speaker and falling back to persisted actions.
+- Transcript export omits ephemeral banner, progress-card, and error bubbles, renders the exam-review marker as a localized report line, shows elapsed duration for same-day history or a date range across days, notes partial history when older pages are not loaded, and never includes a session id.
 - Assistant messages render safe rich text — headings, paragraphs, lists, quotes, emphasis, code, and http(s) links — without injecting raw HTML; user-authored messages remain literal.
 - The assistant reveal keeps paragraph breaks and list indentation so Markdown structure survives the typewriter and reconstructs the stored message exactly.
 
@@ -258,7 +268,7 @@ This registry is the contract between the product, the tests, and every AI codin
 ## F-09 — Internationalization and RTL
 
 **Status:** protected  
-**Entry points:** `src/i18n/index.ts`, `src/i18n/I18nProvider.tsx`, `src/components/LanguageSelector.tsx`, `src/i18n/locales/{en-US,es-ES,fr-FR,ar-SA}/{conversation,settings}.json`
+**Entry points:** `src/i18n/index.ts`, `src/i18n/I18nProvider.tsx`, `src/components/LanguageSelector.tsx`, `src/i18n/locales/{en-US,es-ES,fr-FR,ar-SA}/{conversation,settings}.json`, `amplify/functions/transcript/turn/{server-copy,feedback-copy}.ts`
 
 **Invariants**
 
@@ -269,8 +279,11 @@ This registry is the contract between the product, the tests, and every AI codin
 - Learning Modes, Standard Interview onboarding, Practice/Study focus onboarding, the focus combobox, and report actions and statuses are localized in English, Spanish, French, and Arabic.
 - Deterministic onboarding and report status copy is localized rather than model-generated; the All focus areas sentinel is displayed through a localized label.
 - The focus combobox and onboarding card support RTL and dark mode without a new dependency.
+- Ten-answer activity cards, threshold result lines, and report result labels are localized in English, Spanish, French, and Arabic.
+- Server fallback, question-transition, Practice retry, silence, and unclear-session copy is localized in all four locales through a typed catalog; the official USCIS question remains English.
+- Feedback copy preserves the official question in English while translating only the lead-in.
 
-**Tests:** `src/i18n/__tests__/i18n.test.tsx`, `src/components/__tests__/RtlOverlays.test.tsx`, `src/components/__tests__/PanelHeaders.test.tsx`, `src/components/__tests__/FocusAreaCombobox.test.tsx`, `src/components/__tests__/FocusOnboardingCard.test.tsx`, `amplify/functions/transcript/__tests__/mode-onboarding.test.ts`
+**Tests:** `src/i18n/__tests__/i18n.test.tsx`, `src/components/__tests__/RtlOverlays.test.tsx`, `src/components/__tests__/PanelHeaders.test.tsx`, `src/components/__tests__/FocusAreaCombobox.test.tsx`, `src/components/__tests__/FocusOnboardingCard.test.tsx`, `amplify/functions/transcript/__tests__/mode-onboarding.test.ts`, `amplify/functions/transcript/turn/__tests__/server-copy.test.ts`, `amplify/functions/transcript/turn/__tests__/feedback-copy.test.ts`, `eval/feedback/__tests__/feedback-eval.test.ts`
 
 ---
 
@@ -341,6 +354,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - Polly receives a sanitized copy of the reply: Markdown, emoji, raw HTML, decorative symbols, and date separators are removed or spoken as words without changing the visible response text.
 - Only the two canonical voices for the requested language are synthesized; legacy IDs are mapped and cross-language or unknown voices fall back to that language's default.
 - The completed-exam review response includes server-generated scorecard and question-outcome data; the client validates and presents those facts without calculating scores.
+- Completed-exam scorecards carry additive civics fields `passAt` and `thresholdReached`; the client rejects a scorecard that omits them or whose `thresholdReached` contradicts the recorded correct count.
 
 **Tests:** `src/services/__tests__/apiClient.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `amplify/functions/transcript/__tests__/ssml.test.ts`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `amplify/functions/deleteAccount/__tests__/handler.test.ts`, `tests/integration/websocket_api.test.ts`
 

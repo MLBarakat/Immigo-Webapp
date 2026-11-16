@@ -1,0 +1,165 @@
+[
+  {
+    "name": "correct statement is preserved",
+    "rawReply": "That's right. The Constitution is the supreme law of the land.",
+    "nextQuestion": "What is the capital of the United States?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "That's right. The Constitution is the supreme law of the land.",
+    "note": "A complete statement with no model-added question survives unchanged."
+  },
+  {
+    "name": "statement after a question sentence survives",
+    "rawReply": "Can you name one right? Freedom of speech is one.",
+    "nextQuestion": "What is the capital of the United States?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "Freedom of speech is one.",
+    "note": "Removing the question must not discard the teaching statement after it."
+  },
+  {
+    "name": "next-question announcement is removed but a later statement survives",
+    "rawReply": "Good. Next question: When was it adopted? It was adopted in 1776.",
+    "nextQuestion": "What is the capital of the United States?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "Good. It was adopted in 1776.",
+    "note": "The handler appends exactly one official question; the model may not announce its own."
+  },
+  {
+    "name": "duplicate official question is removed without truncating the statement after it",
+    "rawReply": "Correct. When was the Declaration of Independence adopted? It was adopted in 1776.",
+    "nextQuestion": "When was the Declaration of Independence adopted?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "Correct. It was adopted in 1776.",
+    "note": "A duplicate of the canonical next question is removed, not used as a cut point."
+  },
+  {
+    "name": "only-question feedback uses the correct fallback",
+    "rawReply": "Can you explain why?",
+    "nextQuestion": "What is the capital of the United States?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "That's correct. Let's continue.",
+    "note": "The fallback is verdict-aware and never an empty non-answer."
+  },
+  {
+    "name": "only-question feedback uses the incorrect answer fallback",
+    "rawReply": "Can you explain why?",
+    "nextQuestion": "What is the form of government of the United States?",
+    "verdict": "incorrect",
+    "mode": "standard",
+    "language": "en-US",
+    "answer": "Republic",
+    "expected": "One correct answer is Republic. Let's continue.",
+    "note": "A model failure still teaches one acceptable answer."
+  },
+  {
+    "name": "empty Study feedback uses the review fallback",
+    "rawReply": "",
+    "nextQuestion": "What is the form of government of the United States?",
+    "verdict": "incorrect",
+    "mode": "study",
+    "language": "en-US",
+    "answer": "Republic",
+    "expected": "Good effort. Let's review the answer.",
+    "note": "Study supplies its own answer list, so its fallback does not repeat the answer."
+  },
+  {
+    "name": "empty partial feedback uses the partial fallback",
+    "rawReply": "",
+    "nextQuestion": "Name two rights in the First Amendment.",
+    "verdict": "partial",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "Good start. Let's continue.",
+    "note": "Partial answers get an encouraging, non-final fallback."
+  },
+  {
+    "name": "empty dynamic feedback uses the neutral fallback",
+    "rawReply": "",
+    "nextQuestion": "Who is the President of the United States now?",
+    "verdict": null,
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "Thanks for your answer. Let's continue.",
+    "note": "An ungraded dynamic answer gets no invented score or answer."
+  },
+  {
+    "name": "a quoted question inside a statement is preserved",
+    "rawReply": "He asked, \"What is the capital?\" and then answered it himself.",
+    "nextQuestion": "What is the form of government of the United States?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "He asked, \"What is the capital?\" and then answered it himself.",
+    "note": "A question mark inside a complete statement is not a model-added question."
+  },
+  {
+    "name": "abbreviations do not split a statement",
+    "rawReply": "Mr. Smith became a citizen in 1999. Was that correct? Yes, it was.",
+    "nextQuestion": "What is the form of government of the United States?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "Mr. Smith became a citizen in 1999. Yes, it was.",
+    "note": "Sentence removal must not treat abbreviations as sentence boundaries."
+  },
+  {
+    "name": "Spanish incorrect fallback is localized",
+    "rawReply": "¿Puedes explicar por qué?",
+    "nextQuestion": "What is the form of government of the United States?",
+    "verdict": "incorrect",
+    "mode": "standard",
+    "language": "es-ES",
+    "answer": "Republic",
+    "expected": "Una respuesta correcta es Republic. Continuemos.",
+    "note": "System voice follows the learner's language while the answer stays English."
+  },
+  {
+    "name": "Arabic correct fallback is localized",
+    "rawReply": "هل يمكنك التوضيح؟",
+    "nextQuestion": "What is the form of government of the United States?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "ar-SA",
+    "expected": "هذا صحيح. لنواصل.",
+    "note": "Arabic fallback uses Arabic script and stays RTL-safe."
+  },
+  {
+    "name": "French partial fallback is localized",
+    "rawReply": "Pouvez-vous expliquer ?",
+    "nextQuestion": "Name two rights in the First Amendment.",
+    "verdict": "partial",
+    "mode": "standard",
+    "language": "fr-FR",
+    "expected": "Bon début. Continuons.",
+    "note": "Every verdict fallback exists in all four locales."
+  },
+  {
+    "name": "statement before and after a question survives",
+    "rawReply": "Good answer. Can you explain why? The First Amendment protects speech.",
+    "nextQuestion": "What is the capital of the United States?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "Good answer. The First Amendment protects speech.",
+    "note": "Sentence removal keeps every complete statement on both sides."
+  },
+  {
+    "name": "a statement without terminal punctuation survives",
+    "rawReply": "Good answer",
+    "nextQuestion": "What is the capital of the United States?",
+    "verdict": "correct",
+    "mode": "standard",
+    "language": "en-US",
+    "expected": "Good answer",
+    "note": "The sanitizer must not require a period to preserve feedback."
+  }
+]

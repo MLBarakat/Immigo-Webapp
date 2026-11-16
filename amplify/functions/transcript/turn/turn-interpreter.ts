@@ -395,6 +395,10 @@ export interface CompletionSummaryFacts {
   incorrect: number;
   total: number;
   accuracyPercent: number;
+  /** Correct answers required by this question bank's passing threshold. */
+  passAt: number;
+  /** Whether this attempt reached the passing threshold. */
+  thresholdReached: boolean;
   recommendedMode: 'Practice Mode' | 'Study Mode';
 }
 
@@ -407,7 +411,7 @@ export function buildCompletionSummaryPrompt(
     system: [
       'You are a warm, very encouraging, friendly civics tutor celebrating the end of a Standard Interview.',
       'Write 3 to 4 short conversational sentences as one spoken bubble. No markdown, no bullet points, no lists.',
-      'Gently name the recorded result using the supplied numbers. Never predict pass or fail and never say the learner passed or failed.',
+      'Name the recorded threshold result neutrally using the supplied numbers. Say the learner reached or did not reach the passing threshold this time. Never predict, and never say the learner failed or use the word failure.',
       `Recommend ${facts.recommendedMode} as the next step in the same bubble.`,
       'Invite the learner to open the Interview Report scorecard for details, then capture their decision and goals next.',
       'Never mention questions to review.',
@@ -420,6 +424,8 @@ export function buildCompletionSummaryPrompt(
       `Incorrect answers: ${facts.incorrect}`,
       `Graded answers: ${facts.total}`,
       `Accuracy: ${facts.accuracyPercent}%`,
+      `Passing threshold: ${facts.passAt} correct answers`,
+      `Threshold reached: ${facts.thresholdReached ? 'yes' : 'no'}`,
       `Recommended next step: ${facts.recommendedMode}`,
     ].join('\n'),
   };
