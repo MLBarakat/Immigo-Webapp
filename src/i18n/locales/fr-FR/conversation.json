@@ -375,6 +375,13 @@
     "practiceFirstQuestion": "La première question est :",
     "unclearReturnToQuestion": "Je n’ai pas bien compris. Revenons à la question : {question}",
     "silenceReturnToQuestion": "Prenez votre temps. Revenons à la question : {question}",
-    "keepGoing": "Continuons."
+    "keepGoing": "Continuons.",
+    "completionAnnouncement": "Votre entretien standard est terminé.",
+    "completionThresholdReached": "Vous avez atteint le seuil de réussite : {correct} bonnes réponses.",
+    "completionThresholdMissed": "Vous n’avez pas atteint le seuil de réussite cette fois-ci : {correct} bonnes réponses ({passAt} nécessaires).",
+    "englishCompletionFallback": "Merci d’avoir terminé l’exercice d’anglais.",
+    "englishReadingTransition": "Vous avez terminé les questions de civisme. Place maintenant à l’exercice de lecture en anglais.",
+    "englishWritingTransition": "Vous avez terminé les questions de civisme. Place maintenant à l’exercice d’écriture en anglais.",
+    "openingAcknowledgement": "Merci pour ce partage. Concentrons-nous sur la pratique civique du jour."
   }
 }

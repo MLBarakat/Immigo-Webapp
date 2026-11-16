@@ -68,6 +68,13 @@ export const SERVER_COPY: Readonly<Record<ServerCopyKey, ServerCopyEntry>> = {
   unclearReturnToQuestion: entry('unclearReturnToQuestion'),
   silenceReturnToQuestion: entry('silenceReturnToQuestion'),
   keepGoing: entry('keepGoing'),
+  completionAnnouncement: entry('completionAnnouncement'),
+  completionThresholdReached: entry('completionThresholdReached'),
+  completionThresholdMissed: entry('completionThresholdMissed'),
+  englishCompletionFallback: entry('englishCompletionFallback'),
+  englishReadingTransition: entry('englishReadingTransition'),
+  englishWritingTransition: entry('englishWritingTransition'),
+  openingAcknowledgement: entry('openingAcknowledgement'),
 };
 
 /** Resolve a localized server copy string by key and language. */

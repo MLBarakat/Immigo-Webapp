@@ -20,6 +20,8 @@ import {
   buildFocusConfirmation,
   buildReturningOnboarding,
   buildStandardModeSwitchCopy,
+  LANGUAGE_PROMPT_NAMES,
+  modeLabel,
   recommendationReason,
   recommendLearningMode,
   type ModeOnboardingStats,
@@ -1191,10 +1193,11 @@ const EXAM_INTRO_COPY: Record<'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA', ExamIntroCo
  * Deterministic, neutral threshold result. Shared by both completion paths so
  * the score line can never drift from the report or the scorecard.
  */
-function passingThresholdResult(correct: number, passAt: number): string {
-  return correct >= passAt
-    ? `You reached the passing threshold: ${correct} correct answers.`
-    : `You did not reach the passing threshold this time: ${correct} correct answers (${passAt} needed).`;
+function passingThresholdResult(correct: number, passAt: number, language: OnboardingLanguage): string {
+  const key = correct >= passAt ? 'completionThresholdReached' : 'completionThresholdMissed';
+  return serverCopy(key, language)
+    .replace('{correct}', String(correct))
+    .replace('{passAt}', String(passAt));
 }
 
 async function buildStandardInterviewIntro(
@@ -1897,12 +1900,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     }
     const preferredLanguageCode = parsedBody.preferredLanguage ?? 'en-US';
-    const preferredLanguage = ({
-      'en-US': 'English',
-      'es-ES': 'Spanish',
-      'fr-FR': 'French',
-      'ar-SA': 'Arabic',
-    } as const)[preferredLanguageCode];
+    const language = preferredLanguageCode as OnboardingLanguage;
+    const preferredLanguage = LANGUAGE_PROMPT_NAMES[language];
 
     if (parsedBody.speechSynthesis !== undefined && typeof parsedBody.speechSynthesis !== 'boolean') {
       return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid speech synthesis flag.' }) };
@@ -2240,11 +2239,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           accuracyPercent: total ? Math.round((correct / total) * 100) : 0,
           passAt,
           thresholdReached: correct >= passAt,
-          recommendedMode: 'Practice Mode',
+          recommendedMode: modeLabel('practice', language),
         }, preferredLanguage);
-        const finalFeedback = englishResult.segments[0] ?? 'Thank you for completing the English practice.';
+        const finalFeedback = englishResult.segments[0] ?? serverCopy('englishCompletionFallback', language);
         assistantSegments = [
-          `${finalFeedback}\n\nThat completes your Standard Interview. ${passingThresholdResult(correct, passAt)}`,
+          `${finalFeedback}\n\n${serverCopy('completionAnnouncement', language)} ${passingThresholdResult(correct, passAt, language)}`,
           summary,
         ];
         generatedAssistantText = assistantSegments.join('\n');
@@ -2406,7 +2405,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         const acknowledgement = await turnInterpreter.respondToOpening(
           cleanedTranscript,
           getRecentTurns(parsedBody.conversationWindow),
-          simulationMode === 'study' ? preferredLanguage : undefined,
+          simulationMode === 'study' ? language : undefined,
         );
         if (resumedEnglish) {
           assistantSegments = [acknowledgement, englishTaskMessage(resumedEnglish.section, resumedEnglish.prompt, resumedEnglish.index)];
@@ -2602,10 +2601,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
               accuracyPercent: accuracy,
               passAt,
               thresholdReached: correct >= passAt,
-              recommendedMode: 'Practice Mode',
+              recommendedMode: modeLabel('practice', language),
             }, preferredLanguage);
             assistantSegments = [
-              `${rawFeedback}\n\nThat completes your Standard Interview. ${passingThresholdResult(correct, passAt)}`,
+              `${rawFeedback}\n\n${serverCopy('completionAnnouncement', language)} ${passingThresholdResult(correct, passAt, language)}`,
               summary,
             ];
             generatedAssistantText = assistantSegments.join('\n');
@@ -2618,8 +2617,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
               nextItemId = null;
               nextQuestionText = prompt ?? '';
               const intro = examProgress.englishStage === 'reading'
-                ? 'You have finished the civics questions. Next is English reading practice.'
-                : 'You have finished the civics questions. Next is English writing practice.';
+                ? serverCopy('englishReadingTransition', language)
+                : serverCopy('englishWritingTransition', language);
               assistantSegments = [rawFeedback, intro, ...(prompt ? [englishTaskMessage(examProgress.englishStage, prompt, 0)] : [])];
               generatedAssistantText = assistantSegments.join('\n');
             }

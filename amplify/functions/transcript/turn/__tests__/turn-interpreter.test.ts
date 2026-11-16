@@ -206,6 +206,41 @@ describe('buildGreetingPrompt and TurnInterpreterAdapter.generateGreeting', () =
   });
 });
 
+describe('TurnInterpreterAdapter.respondToOpening — localized fallback', () => {
+  it('asks the model to answer in the learner language', async () => {
+    const complete: ModelComplete = vi.fn(async () => 'Gracias por compartir.');
+    const adapter = new TurnInterpreterAdapter(complete);
+
+    await adapter.respondToOpening('hola', [], 'es-ES');
+
+    expect(complete).toHaveBeenCalledWith(expect.objectContaining({
+      system: expect.stringContaining('Write in Spanish.'),
+    }));
+  });
+
+  it('falls back to localized copy when the model fails', async () => {
+    const complete: ModelComplete = vi.fn(async () => {
+      throw new Error('timeout');
+    });
+    const adapter = new TurnInterpreterAdapter(complete);
+
+    expect(await adapter.respondToOpening('hola', [], 'es-ES')).toBe(
+      'Gracias por compartirlo. Centrémonos en la práctica de educación cívica de hoy.'
+    );
+  });
+
+  it('keeps the English fallback for English', async () => {
+    const complete: ModelComplete = vi.fn(async () => {
+      throw new Error('timeout');
+    });
+    const adapter = new TurnInterpreterAdapter(complete);
+
+    expect(await adapter.respondToOpening('hello', [], 'en-US')).toBe(
+      "Thanks for sharing. Let's focus on today's civics practice."
+    );
+  });
+});
+
 describe('buildProgressQueryPrompt and TurnInterpreterAdapter.answerProgressQuery', () => {
   it('answers progress query using the transport', async () => {
     const complete: ModelComplete = vi.fn(async () =>

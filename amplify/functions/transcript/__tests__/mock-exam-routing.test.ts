@@ -548,6 +548,45 @@ describe('transcript handler — mock exam civics phase routing', () => {
     }));
   });
 
+  it('localizes the English reading transition while keeping the exercise prompt in English', async () => {
+    const readingPromptIds = pickEnglishExercisePrompts('reading');
+    mocks.state.exam = examRow({
+      question_ids: [FIRST_QUESTION.id],
+      current_index: 0,
+      correct_count: 11,
+      incorrect_count: 0,
+      include_english_simulation: true,
+      reading_prompt_ids: readingPromptIds,
+    });
+    mocks.bedrockSend.mockResolvedValue(bedrockText(JSON.stringify({
+      intent: 'answer',
+      targetItemId: FIRST_QUESTION.id,
+      grade: { verdict: 'correct', matchedAnswer: 'Republic' },
+      reply: 'That is correct.',
+    })));
+
+    const event = transcribeEvent();
+    const request = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    request.transcript = 'Republic';
+    request.preferredLanguage = 'es-ES';
+    const response = await handler({ ...event, body: JSON.stringify(request) });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      examStage: string | null;
+      assistantSegments: string[];
+      nextQuestion: string | null;
+    };
+    expect(body.examStage).toBe('reading');
+    const transition = body.assistantSegments.find(segment =>
+      segment.includes('Has terminado las preguntas de educación cívica.'));
+    expect(transition).toBeDefined();
+    expect(transition).toContain('práctica de lectura en inglés');
+    expect(body.assistantSegments.join(' ')).not.toContain('You have finished the civics questions');
+    // The exercise sentence is exam content and must remain English.
+    expect(body.nextQuestion).toBeTruthy();
+  });
+
   it('does not administer English when civics ends at the fail threshold', async () => {
     const readingPromptIds = pickEnglishExercisePrompts('reading');
     mocks.state.exam = examRow({
@@ -825,6 +864,89 @@ describe('transcript handler — mock exam civics phase routing', () => {
     );
     expect(summaryPrompt).toContain('Passing threshold: 12');
     expect(summaryPrompt).toContain('Threshold reached: no');
+  });
+
+  it('localizes the neutral completion result and recommendation label', async () => {
+    mocks.state.exam = examRow({
+      question_ids: [FIRST_QUESTION.id],
+      current_index: 0,
+      correct_count: 3,
+      incorrect_count: 8,
+      include_english_simulation: true,
+    });
+    mocks.state.answers = [{ item_id: FIRST_QUESTION.id, verdict: 'incorrect' }];
+    let bedrockCalls = 0;
+    mocks.bedrockSend.mockImplementation(async () => {
+      bedrockCalls += 1;
+      if (bedrockCalls === 1) {
+        return bedrockText(JSON.stringify({
+          intent: 'answer',
+          targetItemId: null,
+          grade: { verdict: 'incorrect', matchedAnswer: null },
+          reply: 'Gracias por intentarlo.',
+        }));
+      }
+      throw new Error('summary model unavailable in test');
+    });
+
+    const event = transcribeEvent();
+    const request = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    request.transcript = 'No estoy seguro';
+    request.preferredLanguage = 'es-ES';
+    const response = await handler({ ...event, body: JSON.stringify(request) });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { assistantSegments: string[] };
+    expect(body.assistantSegments[0]).toContain('Eso completa tu Entrevista estándar.');
+    expect(body.assistantSegments[0]).toContain(
+      'Esta vez no has alcanzado el umbral de aprobación: 3 respuestas correctas (se necesitaban 12).',
+    );
+    expect(body.assistantSegments[0]).not.toContain('That completes your Standard Interview');
+    expect(body.assistantSegments[1]).toContain('Modo práctica');
+    expect(body.assistantSegments[1]).not.toContain('Practice Mode');
+  });
+
+  it('localizes the English-section completion path too', async () => {
+    const writingPromptIds = pickEnglishExercisePrompts('writing');
+    mocks.state.exam = examRow({
+      question_ids: [FIRST_QUESTION.id],
+      current_index: 0,
+      correct_count: 12,
+      incorrect_count: 0,
+      include_english_simulation: true,
+      english_stage: 'writing',
+      reading_passed: true,
+      writing_prompt_ids: writingPromptIds,
+    });
+    mocks.state.answers = [];
+    let bedrockCalls = 0;
+    mocks.bedrockSend.mockImplementation(async () => {
+      bedrockCalls += 1;
+      if (bedrockCalls === 1) {
+        return bedrockText(JSON.stringify({ verdict: 'correct', feedback: 'Nice writing.' }));
+      }
+      throw new Error('summary model unavailable in test');
+    });
+
+    const event = transcribeEvent();
+    const request = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    request.transcript = 'The people elect the president.';
+    request.inputMethod = 'text';
+    request.preferredLanguage = 'es-ES';
+    const response = await handler({ ...event, body: JSON.stringify(request) });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      examCompleted: boolean;
+      assistantSegments: string[];
+    };
+    expect(body.examCompleted).toBe(true);
+    expect(body.assistantSegments[0]).toContain('Eso completa tu Entrevista estándar.');
+    expect(body.assistantSegments[0]).toContain(
+      'Has alcanzado el umbral de aprobación: 12 respuestas correctas.',
+    );
+    expect(body.assistantSegments[0]).not.toContain('That completes your Standard Interview');
+    expect(body.assistantSegments[1]).toContain('Modo práctica');
   });
 
   it('reports Standard Interview progress as answered and remaining questions', async () => {

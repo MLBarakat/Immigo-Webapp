@@ -375,6 +375,13 @@
     "practiceFirstQuestion": "The first question is:",
     "unclearReturnToQuestion": "I didn't catch that clearly. Let's return to the question: {question}",
     "silenceReturnToQuestion": "Take your time. Let's return to the question: {question}",
-    "keepGoing": "Let's keep going."
+    "keepGoing": "Let's keep going.",
+    "completionAnnouncement": "That completes your Standard Interview.",
+    "completionThresholdReached": "You reached the passing threshold: {correct} correct answers.",
+    "completionThresholdMissed": "You did not reach the passing threshold this time: {correct} correct answers ({passAt} needed).",
+    "englishCompletionFallback": "Thank you for completing the English practice.",
+    "englishReadingTransition": "You have finished the civics questions. Next is English reading practice.",
+    "englishWritingTransition": "You have finished the civics questions. Next is English writing practice.",
+    "openingAcknowledgement": "Thanks for sharing. Let's focus on today's civics practice."
   }
 }

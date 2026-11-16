@@ -171,6 +171,9 @@ This registry is the contract between the product, the tests, and every AI codin
 - `graded_answers` is the authoritative record for progress reports.
 - A grading change requires an eval run and a reviewed prompt change.
 - Server copy (`safeReplyKey`) is typed and localized for all four supported locales; exam content remains in English.
+- The Standard completion announcement, its deterministic threshold result, and the recommended-mode label are localized; English exercise sentences and official civics questions stay English.
+- The civics-to-English reading and writing transition lines, and the English-completion fallback, are localized; only the exercise prompt and task content remain English.
+- The Standard Ready gate opening acknowledgement is localized when Study requests it; Practice keeps the English-immersion path.
 - Final-answer feedback removes model-authored question sentences and next-question announcements without truncating complete statements before or after them.
 - When feedback sanitizes to nothing, the fallback is verdict-aware and localized; it is never an empty non-answer.
 - Practice near-miss retry copy is distinct from the generic retry; grading, scoring, and advancement are unchanged by that copy choice.

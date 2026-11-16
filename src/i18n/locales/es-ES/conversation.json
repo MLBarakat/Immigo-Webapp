@@ -375,6 +375,13 @@
     "practiceFirstQuestion": "La primera pregunta es:",
     "unclearReturnToQuestion": "No entendí eso con claridad. Volvamos a la pregunta: {question}",
     "silenceReturnToQuestion": "Tómate tu tiempo. Volvamos a la pregunta: {question}",
-    "keepGoing": "Sigamos."
+    "keepGoing": "Sigamos.",
+    "completionAnnouncement": "Eso completa tu Entrevista estándar.",
+    "completionThresholdReached": "Has alcanzado el umbral de aprobación: {correct} respuestas correctas.",
+    "completionThresholdMissed": "Esta vez no has alcanzado el umbral de aprobación: {correct} respuestas correctas (se necesitaban {passAt}).",
+    "englishCompletionFallback": "Gracias por completar la práctica de inglés.",
+    "englishReadingTransition": "Has terminado las preguntas de educación cívica. Ahora sigue la práctica de lectura en inglés.",
+    "englishWritingTransition": "Has terminado las preguntas de educación cívica. Ahora sigue la práctica de escritura en inglés.",
+    "openingAcknowledgement": "Gracias por compartirlo. Centrémonos en la práctica de educación cívica de hoy."
   }
 }

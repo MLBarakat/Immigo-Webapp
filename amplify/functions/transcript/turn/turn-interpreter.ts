@@ -4,6 +4,8 @@
 
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { getStudyCategoryTitle } from './bank';
+import { LANGUAGE_PROMPT_NAMES, type OnboardingLanguage } from './mode-onboarding';
+import { serverCopy } from './server-copy';
 import type { CivicsItem, ConversationTurn, Intent, ProposedGrade, TurnContext, TurnInterpretation, SessionStartContext, WelcomeBannerContext } from './types';
 
 const INTENTS: readonly Intent[] = [
@@ -399,7 +401,7 @@ export interface CompletionSummaryFacts {
   passAt: number;
   /** Whether this attempt reached the passing threshold. */
   thresholdReached: boolean;
-  recommendedMode: 'Practice Mode' | 'Study Mode';
+  recommendedMode: string;
 }
 
 export function buildCompletionSummaryPrompt(
@@ -579,10 +581,14 @@ export class TurnInterpreterAdapter {
   async respondToOpening(
     utterance: string,
     recentTurns: ConversationTurn[],
-    preferredLanguage?: string,
+    language?: OnboardingLanguage,
   ): Promise<string> {
     try {
-      const response = await this.complete(buildOpeningResponsePrompt(utterance, recentTurns, preferredLanguage));
+      const response = await this.complete(buildOpeningResponsePrompt(
+        utterance,
+        recentTurns,
+        language ? LANGUAGE_PROMPT_NAMES[language] : undefined,
+      ));
       if (response.trim()) return response.trim();
       console.warn('[TurnInterpreter] Opening response model returned an empty response.');
     } catch (error) {
@@ -590,7 +596,7 @@ export class TurnInterpreterAdapter {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    return "Thanks for sharing. Let's focus on today's civics practice.";
+    return serverCopy('openingAcknowledgement', language ?? 'en-US');
   }
 
   async answerProgressQuery(
@@ -629,7 +635,7 @@ export class TurnInterpreterAdapter {
     }
 
     const localizedFallbacks: Record<string, string> = {
-      Spanish: `¡Lo lograste! Estoy muy orgulloso del esfuerzo que pusiste. Respondiste ${facts.total} preguntas, con ${facts.correct} correctas y ${facts.incorrect} por reforzar. Según este resultado, te recomiendo ${facts.recommendedMode} para tu próxima repaso. Abre tu Interview Report para ver todos los detalles y luego registra tu decisión y tus metas; cuando quieras, seguimos avanzando juntos.`,
+      Spanish: `¡Lo lograste! Estoy muy orgulloso del esfuerzo que pusiste. Respondiste ${facts.total} preguntas, con ${facts.correct} correctas y ${facts.incorrect} por reforzar. Según este resultado, te recomiendo el ${facts.recommendedMode} para tu próxima revisión. Abre tu Interview Report para ver todos los detalles y luego registra tu decisión y tus metas; cuando quieras, seguimos avanzando juntos.`,
       French: `Vous l’avez fait — je suis vraiment fier de l’effort que vous avez fourni. Vous avez répondu à ${facts.total} questions, avec ${facts.correct} bonnes réponses et ${facts.incorrect} à renforcer. D’après ce résultat, je recommande ${facts.recommendedMode} pour votre prochaine révision. Ouvrez votre Interview Report pour voir tous les détails, puis notez votre décision et vos objectifs — nous pouvons continuer ensemble quand vous le souhaitez.`,
       Arabic: `لقد فعلتها — أنا فخور جدًا بالجهد الذي بذلته. أجبت عن ${facts.total} سؤالًا، منها ${facts.correct} إجابة صحيحة و${facts.incorrect} تحتاج إلى تعزيز. بناءً على هذه النتيجة، أوصي بـ ${facts.recommendedMode} لمراجعتك القادمة. افتح Interview Report لرؤية كل التفاصيل، ثم سجّل قرارك وأهدافك — ويمكننا المتابعة معًا متى كنت مستعدًا.`,
     };

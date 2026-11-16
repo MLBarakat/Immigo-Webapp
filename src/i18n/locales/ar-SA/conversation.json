@@ -375,6 +375,13 @@
     "practiceFirstQuestion": "السؤال الأول هو:",
     "unclearReturnToQuestion": "لم أفهم ذلك بوضوح. لنعد إلى السؤال: {question}",
     "silenceReturnToQuestion": "خذ وقتك. لنعد إلى السؤال: {question}",
-    "keepGoing": "لنواصل."
+    "keepGoing": "لنواصل.",
+    "completionAnnouncement": "بهذا تكتمل مقابلتك القياسية.",
+    "completionThresholdReached": "لقد وصلت إلى حد النجاح: {correct} إجابات صحيحة.",
+    "completionThresholdMissed": "لم تصل هذه المرة إلى حد النجاح: {correct} إجابات صحيحة (كنت تحتاج إلى {passAt}).",
+    "englishCompletionFallback": "شكرًا لإكمال تدريب اللغة الإنجليزية.",
+    "englishReadingTransition": "لقد أكملت أسئلة التربية المدنية. الآن يبدأ تدريب القراءة باللغة الإنجليزية.",
+    "englishWritingTransition": "لقد أكملت أسئلة التربية المدنية. الآن يبدأ تدريب الكتابة باللغة الإنجليزية.",
+    "openingAcknowledgement": "شكرًا لمشاركتك. لنركز على تدريب التربية المدنية اليوم."
   }
 }

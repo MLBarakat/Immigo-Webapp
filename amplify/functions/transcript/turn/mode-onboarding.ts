@@ -10,6 +10,14 @@ import type { SimulationMode, TestVersion } from './types';
 
 export type OnboardingLanguage = 'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA';
 
+/** English display name used inside model prompts for each supported locale. */
+export const LANGUAGE_PROMPT_NAMES: Record<OnboardingLanguage, string> = {
+  'en-US': 'English',
+  'es-ES': 'Spanish',
+  'fr-FR': 'French',
+  'ar-SA': 'Arabic',
+};
+
 export interface ModeProgressCounts {
   mastered: number;
   practicedNotMastered: number;
