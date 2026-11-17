@@ -5,7 +5,11 @@
     "canonicalContract": "AGENTS.md",
     "constitution": "docs/CONSTITUTION.md",
     "humanRegistry": "docs/FEATURES.md",
-    "requireTestsForStatuses": ["active", "protected", "experimental"],
+    "requireTestsForStatuses": [
+      "active",
+      "protected",
+      "experimental"
+    ],
     "protectedChangeRequires": [
       "spec delta",
       "failing test",
@@ -121,7 +125,9 @@
         "amplify/functions/transcript/turn/mock-exam-selector.ts",
         "amplify/functions/transcript/turn/focus.ts",
         "amplify/functions/transcript/turn/mode-onboarding.ts",
-        "amplify/functions/transcript/english-exercises.ts"
+        "amplify/functions/transcript/english-exercises.ts",
+        "amplify/functions/transcript/turn/seeded-random.ts",
+        "amplify/functions/transcript/turn/topic-diversity.ts"
       ],
       "tests": [
         "src/hooks/__tests__/useConversation.test.tsx",
@@ -185,7 +191,8 @@
         "The Standard Ready gate reuses the existing opening-response path, returning nextItemId null until the learner confirms. Practice and Study persist their gate in sessions.mode_ready_pending, which is cleared when Ready is confirmed; the focus card and Ready gate flags are mutually exclusive.",
         "The Interview Report suggests two or three weakest categories from structured grading signals, never by reading qualitative report prose. The suggestion pre-fills the decision form only when the learner chooses Use this focus, and nothing persists until Save.",
         "The decision form replaces Cancel with Back, which returns to the choice cards and discards unsaved edits, and Save my choice with Save. The focus combobox appears in the report only for Practice and Study decisions and offers official USCIS categories only.",
-        "The shared recommendLearningMode rule recommends study below 60% accuracy and practice at or above, applied identically across all modes; mode labels are localized via modeLabel, with French practice canonicalized as Mode entraînement."
+        "The shared recommendLearningMode rule recommends study below 60% accuracy and practice at or above, applied identically across all modes; mode labels are localized via modeLabel, with French practice canonicalized as Mode entraînement.",
+        "Topic diversity layers on top of the 20/80 rule: 2020 Standard and Practice use at least 7 of the 9 USCIS categories, no category more than 3 times, never more than 2 consecutive; 2008 Standard uses at least 5 categories with the same caps. topicCluster metadata suppresses the same cluster within the last 3 questions. Selection is seeded by exam/session id. Cross-bucket fall-back is preferred over constraint relaxation; relaxations are logged and never silently dropped. Study is sequential and does not use topic diversity."
       ]
     },
     {
@@ -208,7 +215,10 @@
         "src/i18n/locales/es-ES/conversation.json",
         "src/i18n/locales/fr-FR/conversation.json",
         "src/i18n/locales/ar-SA/conversation.json",
-        "amplify/functions/transcript/turn/feedback-copy.ts"
+        "amplify/functions/transcript/turn/feedback-copy.ts",
+        "amplify/functions/transcript/turn/paraphrase-grader.ts",
+        "amplify/functions/transcript/turn/seeded-random.ts",
+        "amplify/functions/transcript/turn/topic-diversity.ts"
       ],
       "tests": [
         "amplify/functions/transcript/turn/__tests__/turn-policy.test.ts",
@@ -245,7 +255,8 @@
         "When feedback sanitizes to nothing, the fallback is verdict-aware and localized; it is never an empty non-answer.",
         "Committed civics feedback begins with a deterministic, mode-specific verdict prefix in the learner's locale, and the same verdict renders as a chat badge, so text and UI can never disagree. The prefix is applied after sanitization so a question-only model reply still falls back to verdict-aware copy.",
         "When a learner offers several ideas and more than one matches the acceptable answers, feedback acknowledges every matched idea rather than only the first.",
-        "Practice near-miss retry copy is distinct from the generic retry; grading, scoring, and advancement are unchanged by that copy choice."
+        "Practice near-miss retry copy is distinct from the generic retry; grading, scoring, and advancement are unchanged by that copy choice.",
+        "HYBRID PARAPHRASE GRADING: after the deterministic bank match, a non-numeric static answer that failed deterministic verification may receive a second LLM semantic-review pass. The model proposes an equivalent verdict plus a canonical bank answer; code accepts only when the canonical answer is in the bank, non-numeric, and confidence >= 4. Accepted paraphrases are committed as correct with matchedBy: llm_semantic, the canonical bank answer as matchedAnswer, and the model confidence as matchConfidence. The canonical bank answer is restated in the reply. Deterministic bank and raw-transcript matches keep matchedBy: bank / raw_transcript; numbers and dates never use semantic acceptance."
       ]
     },
     {

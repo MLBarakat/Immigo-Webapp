@@ -11,6 +11,8 @@
 // interview that ends early still keeps the intended mix.
 
 import { allItems } from './bank';
+import { chooseDiverseCandidate, RELAXATION_LADDER, type DiversityRelaxation, type DiversityScope } from './topic-diversity';
+import { createSeededRandom, shuffleWithSeed } from './seeded-random';
 import type { CivicsItem, TestVersion } from './types';
 
 export type MockExamQuestionBucket = 'new' | 'weak' | 'review';
@@ -157,6 +159,100 @@ export function selectNextMockExamItem(input: MockExamSelectionInput): CivicsIte
     }
   }
   return fallback;
+}
+
+/**
+ * Extended selection for the Standard Interview that layers topic diversity on
+ * top of the 20/80 bucket quota. Returns the chosen item plus the selection
+ * metadata the handler logs for audit and diagnostics.
+ *
+ *   - `preferredBucket`: the bucket the 20/80 rule wanted.
+ *   - `bucket`: the bucket actually used (may differ via cross-bucket fall-back).
+ *   - `crossBucket`: true when `bucket !== preferredBucket` because diversity
+ *     rules blocked every candidate in the preferred pool.
+ *   - `relaxations`: diversity constraints that had to be relaxed because no
+ *     candidate could satisfy them (logged, never silently dropped).
+ *
+ * When a `seed` is supplied (the exam id), candidate ordering within a pool is
+ * seeded and reproducible.
+ */
+export interface MockExamSelectionResult {
+  item: CivicsItem;
+  preferredBucket: MockExamQuestionBucket;
+  bucket: MockExamQuestionBucket;
+  crossBucket: boolean;
+  relaxations: DiversityRelaxation[];
+}
+
+export interface MockExamSelectionInputWithSeed extends MockExamSelectionInput {
+  seed?: string;
+}
+export function selectNextMockExamSelection(
+  input: MockExamSelectionInputWithSeed,
+): MockExamSelectionResult | null {
+  if (input.askedItemIds.length >= MAX_EXAM_QUESTIONS[input.version]) return null;
+
+  const mastery = new Map(input.mastery.map(snapshot => [snapshot.itemId, snapshot]));
+  const asked = new Set(input.askedItemIds);
+  const pools: Record<MockExamQuestionBucket, CivicsItem[]> = {
+    new: candidatePool('new', input, mastery, asked),
+    weak: candidatePool('weak', input, mastery, asked),
+    review: candidatePool('review', input, mastery, asked),
+  };
+
+  const preferred = selectQuestionBucket(input, mastery);
+  const random = input.seed ? createSeededRandom(input.seed) : undefined;
+
+  const scope: DiversityScope = {
+    version: input.version,
+    history: input.askedItemIds.map(id => allItems(input.version).find(item => item.id === id)!).filter(Boolean),
+    scopeSize: MAX_EXAM_QUESTIONS[input.version],
+  };
+
+  const bucketOrder: MockExamQuestionBucket[] = [preferred, ...TIE_ORDER.filter(b => b !== preferred)];
+
+  // Pass 1: try every bucket with strict (unrelaxed) diversity constraints.
+  // Cross-bucket takes priority over relaxing constraints — a different
+  // category is always better than weakening the rule.
+  for (const bucket of bucketOrder) {
+    const pool = pools[bucket];
+    if (pool.length === 0) continue;
+    const ordered = random ? shuffleWithSeed(pool, input.seed!) : pool;
+    const choice = chooseDiverseCandidate(ordered, { ...scope, activeConstraints: RELAXATION_LADDER[0].active });
+    if (choice) {
+      return {
+        item: choice.item,
+        preferredBucket: preferred,
+        bucket,
+        crossBucket: bucket !== preferred,
+        relaxations: [],
+      };
+    }
+  }
+
+  // Pass 2: no bucket had a strictly-compliant candidate. Relax constraints in
+  // the fixed ladder order, trying all buckets at each level, and log what was
+  // relaxed so the constraint weakening is observable and auditable.
+  for (const level of RELAXATION_LADDER.slice(1)) {
+    for (const bucket of bucketOrder) {
+      const pool = pools[bucket];
+      if (pool.length === 0) continue;
+      const ordered = random ? shuffleWithSeed(pool, input.seed!) : pool;
+      const choice = chooseDiverseCandidate(ordered, { ...scope, activeConstraints: level.active });
+      if (choice) {
+        return {
+          item: choice.item,
+          preferredBucket: preferred,
+          bucket,
+          crossBucket: bucket !== preferred,
+          relaxations: level.relaxed,
+        };
+      }
+    }
+  }
+
+  // Fully unreachable: the last ladder level activates no constraints.
+  return null;
 }
 
 /**

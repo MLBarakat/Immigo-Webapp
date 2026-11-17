@@ -8,6 +8,8 @@
 // focus selector; those are normalised here as well.
 
 import { allItems, getStudyCategories } from './bank';
+import { chooseDiverseCandidate, PRACTICE_DIVERSITY_WINDOW, STRICT_DIVERSITY, type DiversityScope } from './topic-diversity';
+import { shuffleWithSeed } from './seeded-random';
 import type { CivicsItem, TestVersion } from './types';
 
 export const ALL_FOCUS_AREAS = 'All focus areas';
@@ -169,12 +171,18 @@ export interface FocusedQuestionSelection {
  * Practice picks a random item from the current focus pass. A full pass is
  * required before any item can repeat, and the caller gets the notice flag on
  * the pick that starts the next pass.
+ *
+ * When `options.seed` is provided (a session id), selection is seeded and
+ * reproducible: the same session always yields the same sequence, while
+ * different sessions yield different sequences. The seed also drives topic
+ * diversity, so a session never drills one category by accident.
  */
 export function selectFocusedPracticeQuestion(
   version: TestVersion,
   categoryIds: string[],
   orderedAskedIds: string[],
   currentItemId: string | null = null,
+  options: { seed?: string } = {},
 ): FocusedQuestionSelection {
   const pool = focusedItems(version, categoryIds);
   const state = focusCycleState(pool.map(item => item.id), orderedAskedIds);
@@ -188,12 +196,32 @@ export function selectFocusedPracticeQuestion(
     const fallback = pool.filter(item => item.id !== currentItemId);
     const items = fallback.length > 0 ? fallback : pool;
     return {
-      item: items[Math.floor(Math.random() * items.length)],
+      item: options.seed
+        ? shuffleWithSeed(items, options.seed)[0]
+        : items[Math.floor(Math.random() * items.length)],
       cycleRestarted: true,
     };
   }
+
+  // Topic diversity for Practice: apply the same category/cluster constraints
+  // over a rolling test-sized block so a session never drills one topic.
+  // The history window is one item smaller than the block size so that adding
+  // the current pick yields a full block; this matches the test's sliding
+  // window which includes the current question.
+  const window = orderedAskedIds.slice(-(PRACTICE_DIVERSITY_WINDOW[version] - 1));
+  const historyItems = window.map(id => pool.find(item => item.id === id)!).filter(Boolean);
+  const scope: DiversityScope = {
+    version,
+    history: historyItems,
+    scopeSize: PRACTICE_DIVERSITY_WINDOW[version],
+    activeConstraints: STRICT_DIVERSITY,
+  };
+  const ordered = options.seed ? shuffleWithSeed(candidates, options.seed) : candidates;
+  const choice = chooseDiverseCandidate(ordered, scope);
+  const picked = choice ? choice.item : ordered[0];
+
   return {
-    item: candidates[Math.floor(Math.random() * candidates.length)],
+    item: picked,
     cycleRestarted: state.cycleRestarted,
   };
 }

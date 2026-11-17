@@ -293,6 +293,98 @@ describe('TurnPolicy.resolveTurn — grading guarantees', () => {
     expect(a).toEqual(b);
   });
 
+  describe('hybrid paraphrase grading', () => {
+    const congress: CivicsItem = {
+      id: 'q-020',
+      question: 'Name one power of the U.S. Congress.',
+      kind: 'static',
+      acceptableAnswers: ['Writes laws', 'Declares war', 'Makes the federal budget', 'Approves the federal budget'],
+    };
+
+    it('accepts a verified paraphrase and records its audit trail', () => {
+      const out = resolveTurn(
+        interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+        {
+          askedItem: congress,
+          rawTranscript: 'Congress passes the federal budget',
+          semanticMatch: { canonicalAnswer: 'Makes the federal budget', confidence: 4 },
+        },
+      );
+
+      expect(out.committedVerdict).toBe('correct');
+      expect(out.scoreChanged).toBe(true);
+      expect(out.advanceQuestion).toBe(true);
+      expect(out.matchedBy).toBe('llm_semantic');
+      expect(out.matchedAnswer).toBe('Makes the federal budget');
+      expect(out.matchConfidence).toBe(4);
+      expect(out.flags).toContain('semantic_paraphrase');
+    });
+
+    it('upgrades an off-bank model "correct" when the paraphrase was verified', () => {
+      const out = resolveTurn(
+        interp({ grade: { verdict: 'correct', matchedAnswer: 'Congress passes the budget' } }),
+        {
+          askedItem: congress,
+          rawTranscript: 'Congress passes the budget',
+          semanticMatch: { canonicalAnswer: 'Approves the federal budget', confidence: 5 },
+        },
+      );
+
+      expect(out.committedVerdict).toBe('correct');
+      expect(out.matchedBy).toBe('llm_semantic');
+      expect(out.matchedAnswer).toBe('Approves the federal budget');
+    });
+
+    it('ignores a semantic match whose canonical answer is not in the bank', () => {
+      const out = resolveTurn(
+        interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+        {
+          askedItem: congress,
+          rawTranscript: 'Congress controls the army',
+          semanticMatch: { canonicalAnswer: 'Controls the military', confidence: 5 },
+        },
+      );
+
+      expect(out.committedVerdict).not.toBe('correct');
+      expect(out.matchedBy).toBeNull();
+    });
+
+    it('never lets semantic acceptance override the strict numeric guard', () => {
+      const out = resolveTurn(
+        interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+        {
+          askedItem: q21,
+          rawTranscript: 'about one hundred',
+          semanticMatch: { canonicalAnswer: 'One hundred (100)', confidence: 5 },
+        },
+      );
+
+      expect(out.committedVerdict).not.toBe('correct');
+    });
+
+    it('keeps deterministic matches attributed to the bank, not the model', () => {
+      const out = resolveTurn(
+        interp({ grade: { verdict: 'correct', matchedAnswer: 'Declares war' } }),
+        { askedItem: congress, rawTranscript: 'declares war' },
+      );
+
+      expect(out.matchedBy).toBe('bank');
+      expect(out.matchedAnswer).toBe('Declares war');
+      expect(out.matchConfidence).toBeNull();
+    });
+
+    it('attributes a raw-transcript rescue to the deterministic second pass', () => {
+      const out = resolveTurn(
+        interp({ grade: { verdict: 'incorrect', matchedAnswer: null } }),
+        { askedItem: congress, rawTranscript: 'Congress writes laws' },
+      );
+
+      expect(out.committedVerdict).toBe('correct');
+      expect(out.matchedBy).toBe('raw_transcript');
+      expect(out.matchedAnswer).toBe('Writes laws');
+    });
+  });
+
   describe('LEG-01: Legal Advice & UPL Interception', () => {
     it('handles legal_advice intent: suppresses model reply, enforces canned referral, preserves question', () => {
       const out = resolveTurn(

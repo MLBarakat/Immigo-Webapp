@@ -118,3 +118,56 @@ describe('Practice/Study focus areas', () => {
     expect(completePass.cycleRestarted).toBe(true);
   });
 });
+
+function categoryOf(id: string): string {
+  const item = allItems('2020').find(entry => entry.id === id)!;
+  return normalizeFocusCategoryId(item.studyCategoryId) ?? '';
+}
+
+function clusterOf(id: string): string {
+  return allItems('2020').find(entry => entry.id === id)!.topicCluster!;
+}
+
+function practiceSequence(seed: string, count: number): string[] {
+  const asked: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const selected = selectFocusedPracticeQuestion('2020', [], asked, asked[asked.length - 1] ?? null, { seed });
+    asked.push(selected.item.id);
+  }
+  return asked;
+}
+
+describe('Practice topic diversity', () => {
+  it('keeps every nine-question practice block at seven categories and three per category', () => {
+    const asked = practiceSequence('practice-diversity', 36);
+
+    for (let start = 0; start + 9 <= asked.length; start += 1) {
+      const window = asked.slice(start, start + 9);
+      const categories = window.map(categoryOf);
+      expect(new Set(categories).size).toBeGreaterThanOrEqual(7);
+      const counts = new Map<string, number>();
+      for (const category of categories) counts.set(category, (counts.get(category) ?? 0) + 1);
+      expect(Math.max(...counts.values())).toBeLessThanOrEqual(3);
+      expect(categories.some((category, index) =>
+        index >= 2 && categories[index - 1] === category && categories[index - 2] === category)).toBe(false);
+
+      const clusters = window.map(clusterOf);
+      for (let index = 3; index < clusters.length; index += 1) {
+        expect(clusters.slice(index - 3, index)).not.toContain(clusters[index]);
+      }
+    }
+  });
+
+  it('is reproducible from the session id and varies across sessions', () => {
+    expect(practiceSequence('session-a', 10)).toEqual(practiceSequence('session-a', 10));
+    expect(practiceSequence('session-a', 10)).not.toEqual(practiceSequence('session-b', 10));
+  });
+
+  it('keeps the full-pass rule when a seeded pick is used', () => {
+    const pool = focusedItems('2020', []);
+    const historic = pool.slice(0, 60).map(item => item.id);
+    const selected = selectFocusedPracticeQuestion('2020', [], historic, null, { seed: 'pass' });
+
+    expect(historic.slice(-pool.length)).not.toContain(selected.item.id);
+  });
+});

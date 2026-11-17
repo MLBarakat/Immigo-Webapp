@@ -30,7 +30,7 @@ import {
 } from './turn/mode-onboarding';
 import {
   MAX_EXAM_QUESTIONS,
-  selectNextMockExamItem,
+  selectNextMockExamSelection,
   summarizePreviousExam,
   type MockExamMasterySnapshot,
   type PreviousExamSummary,
@@ -930,7 +930,7 @@ async function buildModeOnboardingGate(params: {
 async function selectPracticeQuestion(
   token: string,
   userId: string,
-  _sessionId: string | null | undefined,
+  sessionId: string | null | undefined,
   testVersion: TestVersion,
   focus: ParsedFocusGoal,
   currentItemId: string | null,
@@ -939,7 +939,9 @@ async function selectPracticeQuestion(
   const ordered = await getLifetimeOrderedModeItemIds(
     token, userId, 'practice', testVersion, traceId,
   );
-  return selectFocusedPracticeQuestion(testVersion, focus.categoryIds, ordered, currentItemId);
+  return selectFocusedPracticeQuestion(
+    testVersion, focus.categoryIds, ordered, currentItemId, { seed: sessionId ?? undefined },
+  );
 }
 
 /** Study selection continues the lifetime bank-order pass, not the session. */
@@ -1458,19 +1460,20 @@ async function startOrResumeMockExam(
     const existing = inProgress.data as MockExamRow;
     const history = await loadMockExamHistory(token, userId, testVersion, traceId);
     if (existing.question_ids.length === 0) {
-      const first = selectNextMockExamItem({
+      const first = selectNextMockExamSelection({
         version: testVersion,
         askedItemIds: [],
         mastery: history.mastery,
         previousMissItemIds: history.previous?.misses ?? [],
+        seed: existing.id,
       });
       if (!first) throw new Error('The question bank has no available questions.');
       const updated = await db.from('mock_exams').update({
-        question_ids: [first.id], current_index: 0, updated_at: new Date().toISOString(),
+        question_ids: [first.item.id], current_index: 0, updated_at: new Date().toISOString(),
       }).eq('id', existing.id).eq('user_id', userId);
       if (updated.error) throw new Error(`Could not restore the mock exam question: ${updated.error.message}`);
       return {
-        exam: { ...existing, question_ids: [first.id], current_index: 0 },
+        exam: { ...existing, question_ids: [first.item.id], current_index: 0 },
         resumed: true,
         answeredCount: existing.correct_count + existing.incorrect_count,
         previous: history.previous,
@@ -1497,7 +1500,7 @@ async function startOrResumeMockExam(
   }
 
   const history = await loadMockExamHistory(token, userId, testVersion, traceId);
-  const first = selectNextMockExamItem({
+  const first = selectNextMockExamSelection({
     version: testVersion,
     askedItemIds: [],
     mastery: history.mastery,
@@ -1514,7 +1517,7 @@ async function startOrResumeMockExam(
     reading_prompt_ids: includeEnglishSimulation ? pickEnglishExercisePrompts('reading') : [],
     writing_prompt_ids: includeEnglishSimulation ? pickEnglishExercisePrompts('writing') : [],
     status: 'in_progress',
-    question_ids: [first.id],
+    question_ids: [first.item.id],
     current_index: 0,
     correct_count: 0,
     incorrect_count: 0,
@@ -1613,11 +1616,12 @@ async function advanceMockExam(
   }
 
   const history = await loadMockExamHistory(token, userId, exam.test_version, traceId);
-  const next = selectNextMockExamItem({
+  const next = selectNextMockExamSelection({
     version: exam.test_version,
     askedItemIds: askedQuestionIds,
     mastery: history.mastery,
     previousMissItemIds: history.previous?.misses ?? [],
+    seed: exam.id,
   });
   if (!next) {
     // The bank should always have another unseen item before the cap. If it
@@ -1641,7 +1645,7 @@ async function advanceMockExam(
     return { nextItem: null, completed: true, report, exam: updatedExam, englishStage: 'complete', englishPrompt: null };
   }
 
-  const nextQuestionIds = [...askedQuestionIds, next.id];
+  const nextQuestionIds = [...askedQuestionIds, next.item.id];
   const update = await db.from('mock_exams').update({
     question_ids: nextQuestionIds,
     current_index: nextIndex,
@@ -1651,7 +1655,7 @@ async function advanceMockExam(
   }).eq('id', exam.id).eq('user_id', userId);
   if (update.error) throw new Error(`Could not advance mock exam: ${update.error.message}`);
   return {
-    nextItem: next,
+    nextItem: next.item,
     completed: false,
     report: null,
     exam: { ...updatedExam, question_ids: nextQuestionIds },

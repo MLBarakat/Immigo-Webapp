@@ -15,9 +15,11 @@
  *     feel like a conversation instead of a quiz that bulldozes forward.
  */
 import type { CivicsItem } from './types';
-import { answerInBank, isNearMiss, isLegalAdviceQuery } from './matching';
+import { answerInBank, findBankMatch, isNearMiss, isLegalAdviceQuery, isNumericLike, normalize } from './matching';
 import type { Intent, SimulationMode, TurnInterpretation } from './types';
 import type { ServerCopyKey } from './server-copy';
+import type { SemanticMatch } from './paraphrase-grader';
+import { SEMANTIC_ACCEPTANCE_CONFIDENCE_FLOOR } from './paraphrase-grader';
 
 export type ReplyKind =
   | 'grade_feedback' | 'teach' | 'assist' | 'affirm' | 'redirect' | 'clarify' | 'safe_fail'
@@ -27,6 +29,12 @@ export interface TurnOutcome {
   effectiveIntent: Intent | 'safe_fail';
   committedVerdict: 'correct' | 'incorrect' | 'partial' | null; // null => no grade committed
   scoreChanged: boolean;
+  /** Which verification path established the matched answer. */
+  matchedBy: 'bank' | 'raw_transcript' | 'llm_semantic' | null;
+  /** The verified acceptable answer, null when no verdict was committed. */
+  matchedAnswer: string | null;
+  /** Confidence for llm_semantic matches; null otherwise. */
+  matchConfidence: number | null;
   /**
    * Whether the handler should move to a NEW question after this turn. False
    * for every non-final outcome (clarify/teach/assist/affirm/redirect/repeat/
@@ -197,6 +205,11 @@ export interface ResolveOptions {
    * model's self-reported matchedAnswer.
    */
   rawTranscript?: string | null;
+  /**
+   * LLM semantic-review result for paraphrase acceptance; verified against the
+   * bank before it can commit a grade.
+   */
+  semanticMatch?: SemanticMatch | null;
   simulationMode?: SimulationMode;
 }
 
@@ -282,15 +295,37 @@ function resolveAnswer(interp: TurnInterpretation, opts: ResolveOptions): TurnOu
   // This takes priority — a raw-transcript mismatch does not second-guess an
   // already-verified claim (that trust boundary is unchanged by this pass).
   if (g.verdict === 'correct' && answerInBank(g.matchedAnswer, item.acceptableAnswers)) {
-    return outcome('answer', 'correct', true, true, 'grade_feedback', interp.reply, true, []);
+    return outcome(
+      'answer', 'correct', true, true, 'grade_feedback', interp.reply, true, [],
+      null, 'bank', g.matchedAnswer, null,
+    );
   }
 
   // (2) RESCUE: for any verdict that is NOT already a verified correct (i.e.
   // "incorrect", or "correct" with an unverifiable matchedAnswer), check the
   // user's actual RAW transcript against the bank directly. Fixes model
   // OVER-conservatism and gives a second, independent path to a correct grade.
-  if (answerInBank(opts.rawTranscript ?? null, item.acceptableAnswers)) {
-    return outcome('answer', 'correct', true, true, 'grade_feedback', interp.reply, true, ['model_undercredited']);
+  const rawMatch = findBankMatch(opts.rawTranscript ?? null, item.acceptableAnswers);
+  if (rawMatch) {
+    return outcome(
+      'answer', 'correct', true, true, 'grade_feedback', interp.reply, true, ['model_undercredited'],
+      null, 'raw_transcript', rawMatch, null,
+    );
+  }
+
+  // (3) SEMANTIC paraphrase acceptance — the LLM second opinion. Verified in
+  // code: the canonical answer must be in the bank, non-numeric, and confident.
+  const semantic = opts.semanticMatch;
+  if (
+    semantic &&
+    semantic.confidence >= SEMANTIC_ACCEPTANCE_CONFIDENCE_FLOOR &&
+    answerInBank(semantic.canonicalAnswer, item.acceptableAnswers) &&
+    !isNumericLike(normalize(semantic.canonicalAnswer))
+  ) {
+    return outcome(
+      'answer', 'correct', true, true, 'grade_feedback', interp.reply, true, ['semantic_paraphrase'],
+      null, 'llm_semantic', semantic.canonicalAnswer, semantic.confidence,
+    );
   }
 
   // THE GUARANTEE: a correct verdict survives only if backed by the bank.
@@ -372,6 +407,9 @@ function outcome(
   useModelReply: boolean,
   flags: string[],
   safeReplyKey: ServerCopyKey | null = null,
+  matchedBy: TurnOutcome['matchedBy'] = null,
+  matchedAnswer: TurnOutcome['matchedAnswer'] = null,
+  matchConfidence: TurnOutcome['matchConfidence'] = null,
 ): TurnOutcome {
-  return { effectiveIntent, committedVerdict, scoreChanged, advanceQuestion, replyKind, safeReply, safeReplyKey, useModelReply, flags };
+  return { effectiveIntent, committedVerdict, scoreChanged, advanceQuestion, replyKind, safeReply, safeReplyKey, useModelReply, flags, matchedBy, matchedAnswer, matchConfidence };
 }

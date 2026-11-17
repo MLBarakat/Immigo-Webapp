@@ -40,7 +40,7 @@ const NUMBER_WORDS = new Set([
 ]);
 
 /** True if the (already normalized) text contains a digit OR a spelled-out number word. */
-function isNumericLike(normalizedText: string): boolean {
+export function isNumericLike(normalizedText: string): boolean {
   if (containsDigit(normalizedText)) return true;
   return normalizedText.split(' ').some((w) => NUMBER_WORDS.has(w));
 }
@@ -113,10 +113,17 @@ function anchoredMatch(
  * Backward compatible: exact/substring behavior is checked first and unchanged.
  */
 export function answerInBank(candidate: string | null, acceptable: string[]): boolean {
-  if (!candidate) return false;
-  const c = normalize(candidate);
-  if (!c) return false;
+  return findBankMatch(candidate, acceptable) !== null;
+}
 
+/**
+ * Returns the acceptable answer that `candidate` matches, or null. Used to
+ * attribute a verified match to the specific bank answer for the audit trail.
+ */
+export function findBankMatch(candidate: string | null, acceptable: string[]): string | null {
+  if (!candidate) return null;
+  const c = normalize(candidate);
+  if (!c) return null;
   const cWords = c.split(' ').filter(Boolean);
 
   for (const rawAnswer of acceptable) {
@@ -124,34 +131,31 @@ export function answerInBank(candidate: string | null, acceptable: string[]): bo
     if (!a) continue;
 
     // 1) Exact / substring (original behavior, always allowed).
-    if (c === a || c.includes(a) || a.includes(c)) return true;
+    if (c === a || c.includes(a) || a.includes(c)) return rawAnswer;
 
-    // STRICT GUARD: numeric / date / year answers (digits OR spelled-out
-    // number words) are exact-only. Do NOT fuzzy.
+    // STRICT GUARD: numeric / date / year answers are exact-only.
     if (isNumericLike(a) || isNumericLike(c)) continue;
 
     const aWords = a.split(' ').filter(Boolean);
 
-    // 2) Phonetic anchored match (recovers accent-driven spelling).
+    // 2) Phonetic anchored match.
     const phoneticWordMatch = (cw: string, aw: string) => {
       const pk = phoneticKey(cw);
       const pa = phoneticKey(aw);
       return pk.length > 0 && pk === pa;
     };
-    if (anchoredMatch(cWords, aWords, phoneticWordMatch)) return true;
+    if (anchoredMatch(cWords, aWords, phoneticWordMatch)) return rawAnswer;
 
-    // 3) Bounded edit-distance anchored match (recovers small slips).
-    //    Threshold scales with word length but stays tight (<=25%, min 1, cap 2)
-    //    and skips very short words where a 1-char edit changes meaning.
+    // 3) Bounded edit-distance anchored match.
     const editWordMatch = (cw: string, aw: string) => {
-      if (aw.length < 4) return cw === aw;               // short words: exact only
+      if (aw.length < 4) return cw === aw;
       const maxEdits = Math.min(2, Math.max(1, Math.floor(aw.length * 0.25)));
       return editDistance(cw, aw) <= maxEdits;
     };
-    if (anchoredMatch(cWords, aWords, editWordMatch)) return true;
+    if (anchoredMatch(cWords, aWords, editWordMatch)) return rawAnswer;
   }
 
-  return false;
+  return null;
 }
 
 /** Per-word similarity ratio in [0,1]; 1 = identical, 0 = completely different. */

@@ -10,6 +10,8 @@ export interface CivicsItem {
   acceptableAnswers: string[];
   asterisk?: boolean;
   studyCategoryId?: string;
+  /** Fine-grained topic cluster for diversity suppression. Populated in the bank JSON. */
+  topicCluster?: string;
 }
 
 export type Intent =

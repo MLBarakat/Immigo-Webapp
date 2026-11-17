@@ -4,11 +4,14 @@ import { allItems } from '../bank';
 import {
   MAX_EXAM_QUESTIONS,
   selectNextMockExamItem,
+  selectNextMockExamSelection,
   selectQuestionBucket,
   summarizePreviousExam,
   type MockExamMasterySnapshot,
   type MockExamSelectionInput,
+  type MockExamSelectionInputWithSeed,
 } from '../mock-exam-selector';
+import { topicCategory, topicCluster } from '../topic-diversity';
 
 const ITEMS = allItems('2020');
 const FIRST = ITEMS[0];
@@ -28,7 +31,7 @@ function mastery(
   };
 }
 
-function selection(overrides: Partial<MockExamSelectionInput> = {}): MockExamSelectionInput {
+function selection(overrides: Partial<MockExamSelectionInputWithSeed> = {}): MockExamSelectionInputWithSeed {
   return {
     version: '2020',
     askedItemIds: [],
@@ -132,3 +135,86 @@ describe('Standard Interview dynamic selector', () => {
     });
   });
 });
+
+function askSequenceDiverse(
+  count: number,
+  input: MockExamSelectionInputWithSeed,
+): string[] {
+  const asked = [...input.askedItemIds];
+  for (let index = asked.length; index < count; index += 1) {
+    const result = selectNextMockExamSelection({ ...input, askedItemIds: asked });
+    if (!result) break;
+    asked.push(result.item.id);
+  }
+  return asked;
+}
+
+describe('Standard Interview topic diversity', () => {
+  it('keeps a full 2020 interview at seven categories, three per category, and two in a row', () => {
+    const asked = askSequenceDiverse(20, selection());
+    const items = asked.map(id => ITEMS.find(item => item.id === id)!);
+    const categories = items.map(topicCategory);
+
+    expect(new Set(categories).size).toBeGreaterThanOrEqual(7);
+    const counts = new Map<string, number>();
+    for (const category of categories) counts.set(category, (counts.get(category) ?? 0) + 1);
+    expect(Math.max(...counts.values())).toBeLessThanOrEqual(3);
+    expect(categories.some((category, index) =>
+      index >= 2 && categories[index - 1] === category && categories[index - 2] === category)).toBe(false);
+
+    const clusters = items.map(topicCluster);
+    for (let index = 3; index < clusters.length; index += 1) {
+      expect(clusters.slice(index - 3, index)).not.toContain(clusters[index]);
+    }
+  });
+
+  it('keeps a full 2008 interview at five categories', () => {
+    const asked = askSequenceDiverse(10, selection({ version: '2008' }));
+    const categories = asked.map(id => topicCategory(allItems('2008').find(item => item.id === id)!));
+    expect(new Set(categories).size).toBeGreaterThanOrEqual(5);
+  });
+
+  it('is reproducible from the exam id and varies across exams', () => {
+    const a = askSequenceDiverse(20, selection({ seed: 'exam-a' }));
+    const again = askSequenceDiverse(20, selection({ seed: 'exam-a' }));
+    const b = askSequenceDiverse(20, selection({ seed: 'exam-b' }));
+
+    expect(again).toEqual(a);
+    expect(b).not.toEqual(a);
+  });
+
+  it('reports a cross-bucket pick instead of violating a diversity rule', () => {
+    const congress = ITEMS.filter(item => topicCluster(item) === 'congress');
+    const [first, second, newA, newB] = congress;
+    const history = [first.id, second.id];
+    const mastery = ITEMS
+      .filter(item => item.id !== newA.id && item.id !== newB.id)
+      .map(item => item.id === first.id || item.id === second.id
+        ? masterySnapshot(item.id, 4, 4, 100)
+        : masterySnapshot(item.id, 3, 1, 200));
+
+    const result = selectNextMockExamSelection(selection({ askedItemIds: history, mastery }));
+
+    expect(result).not.toBeNull();
+    expect(result!.preferredBucket).toBe('new');
+    expect(result!.crossBucket).toBe(true);
+    expect(result!.bucket).not.toBe('new');
+    expect(result!.relaxations).toEqual([]);
+    expect(topicCluster(result!.item)).not.toBe(topicCluster(first));
+  });
+});
+
+function masterySnapshot(
+  itemId: string,
+  attempts: number,
+  correctCount: number,
+  lastSeenAt: number,
+): MockExamMasterySnapshot {
+  return {
+    itemId,
+    attempts,
+    correctCount,
+    lastSeenAt,
+    mastered: attempts >= 3 && correctCount / attempts > 0.85,
+  };
+}
