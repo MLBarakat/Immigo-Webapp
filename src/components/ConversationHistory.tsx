@@ -214,24 +214,9 @@ export function ConversationHistory({
                     </button>
                   </div>
                 ) : msg.role === 'assistant' ? (
-                  <>
+                  <div className="flex flex-col gap-1 flex-shrink-0">
                     <ChatMessageContent content={msg.content} />
-                    {msg.verdict && (
-                      <span
-                        data-testid="message-verdict-badge"
-                        data-verdict={msg.verdict}
-                        className={`mt-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                          msg.verdict === 'correct'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-                            : msg.verdict === 'partial'
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                              : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
-                        }`}
-                      >
-                        {t(`workspace.examReview.verdicts.${msg.verdict}`)}
-                      </span>
-                    )}
-                  </>
+                  </div>
                 ) : <p className="whitespace-pre-wrap">{msg.content}</p>}
                 {msg.actions && msg.actions.length > 0 && (
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-testid="message-actions">

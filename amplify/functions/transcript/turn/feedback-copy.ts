@@ -68,15 +68,26 @@ function practiceVariant(id: string): 'practiceNextOne' | 'practiceNextHere' {
 
 /**
  * Lead-in for the next official question.
- *   - Standard: one fixed, localized transition.
- *   - Practice: two stable variants rotated by question id.
- *   - Study: no transition; Study formats its own question block.
+ *   - Standard: "Question no. {number}:" (localized).
+ *   - Practice: "Question no. {number}:" (localized).
+ *   - Study: "Question {number}:" where number is the bank question number.
+ *
+ * When `questionNumber` is omitted the previous behavior is preserved for
+ * backward compatibility with existing callers and tests.
  */
 export function questionTransition(
   mode: SimulationMode | undefined,
   question: TransitionQuestion,
   language: OnboardingLanguage,
+  questionNumber?: number,
 ): string {
+  if (questionNumber !== undefined) {
+    const prefix = mode === 'study'
+      ? `Question ${questionNumber}: `
+      : `Question no. ${questionNumber}: `;
+    return `${prefix}${question.question}`;
+  }
+
   if (mode === 'practice') {
     return `${serverCopy(practiceVariant(question.id), language)} ${question.question}`;
   }
@@ -130,8 +141,12 @@ function capitalizeFirstLetter(text: string, language: OnboardingLanguage): stri
 
 /**
  * Prefix committed civics feedback with the deterministic, mode-specific
- * verdict so the chat text always agrees with the UI badge. Non-committed
- * feedback (retry, hint, clarification) passes through untouched.
+ * verdict so the chat text always agrees with the UI badge.
+ *
+ * Only a "correct" verdict gets a leading verdict word ("Correct.").
+ * Incorrect and partial verdicts never start with a verdict label — the
+ * feedback body stands alone so learners are not bluntly told "Incorrect."
+ * Non-committed feedback (retry, hint, clarification) passes through untouched.
  */
 export function applyVerdictPrefix(
   feedback: string,
@@ -141,6 +156,9 @@ export function applyVerdictPrefix(
 ): string {
   const body = feedback.trim();
   if (!verdict) return body;
+
+  // Only "correct" carries a leading verdict word. Incorrect/partial stand alone.
+  if (verdict !== 'correct') return body;
 
   const effectiveMode: SimulationMode = mode ?? 'standard';
   const prefix = serverCopy(VERDICT_COPY_KEYS[effectiveMode][verdict], language);

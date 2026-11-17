@@ -2708,6 +2708,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         // persist above already wrote askedItem.id, so it's included here too.
         let next: CivicsItem | null = null;
         let cycleRestarted = false;
+        let questionNumber: number | undefined;
         if (simulationMode === 'standard' && examRunId) {
           const examProgress = await advanceMockExam(
             token, userId, examRunId, askedItem, outcome.committedVerdict, traceId
@@ -2742,6 +2743,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             generatedAssistantText = assistantSegments.join('\n');
           } else {
             next = examProgress.nextItem;
+            if (examProgress.exam) {
+              questionNumber = examProgress.exam.current_index + 1;
+            }
             examRunId = examProgress.exam?.id ?? examRunId;
             if (examProgress.englishStage === 'reading' || examProgress.englishStage === 'writing') {
               examStage = examProgress.englishStage;
@@ -2810,9 +2814,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           const explanation = simulationMode === 'study'
             ? await turnInterpreter.explainStudyQuestion(next, preferredLanguage)
             : '';
+          const qNum = simulationMode === 'study' ? next.number : questionNumber;
           const questionSegments = simulationMode === 'study'
             ? [formatStudyFeedback(askedItem, feedback, preferredLanguage), formatStudyQuestion(next, explanation, preferredLanguage)]
-            : [feedback, questionTransition(simulationMode, next, language)];
+            : [feedback, questionTransition(simulationMode, next, language, qNum)];
           assistantSegments = cycleRestarted
             ? [buildCycleNotice(preferredLanguageCode as OnboardingLanguage), ...questionSegments]
             : questionSegments;

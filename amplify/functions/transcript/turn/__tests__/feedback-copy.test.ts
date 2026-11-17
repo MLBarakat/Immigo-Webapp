@@ -105,7 +105,7 @@ describe('applyVerdictPrefix (F19 verdict consistency)', () => {
     expect(applyVerdictPrefix('Take your time.', null, 'practice', 'en-US'))
       .toBe('Take your time.');
     expect(applyVerdictPrefix('', 'partial', 'study', 'en-US'))
-      .toBe('You’re partly there.');
+      .toBe('');
   });
 });
 

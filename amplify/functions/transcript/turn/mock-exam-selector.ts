@@ -252,6 +252,23 @@ export function selectNextMockExamSelection(
   }
 
   // Fully unreachable: the last ladder level activates no constraints.
+  // As a final safety net, scan every bucket for any unasked item. This
+  // guarantees we never return an already-asked question or null when the
+  // bank still has unasked items.
+  for (const bucket of TIE_ORDER) {
+    const pool = pools[bucket];
+    if (pool.length === 0) continue;
+    const item = random ? shuffleWithSeed(pool, input.seed!)[0] : pool[0];
+    if (!asked.has(item.id)) {
+      return {
+        item,
+        preferredBucket: preferred,
+        bucket,
+        crossBucket: bucket !== preferred,
+        relaxations: ['cluster-quiet', 'max-consecutive', 'category-cap', 'category-coverage'],
+      };
+    }
+  }
   return null;
 }
 

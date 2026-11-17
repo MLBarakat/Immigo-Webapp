@@ -93,7 +93,7 @@ describe('ConversationHistory', () => {
     );
   });
 
-  it('renders the committed verdict badge next to assistant feedback only', () => {
+  it('renders assistant feedback without verdict badges', () => {
     render(
       <ConversationHistory
         messages={[
@@ -126,16 +126,12 @@ describe('ConversationHistory', () => {
       />
     );
 
-    const badges = screen.getAllByTestId('message-verdict-badge');
-    expect(badges).toHaveLength(3);
-    expect(badges[0].textContent).toBe('Correct');
-    expect(badges[0].getAttribute('data-verdict')).toBe('correct');
-    expect(badges[1].textContent).toBe('Needs review');
-    expect(badges[1].getAttribute('data-verdict')).toBe('incorrect');
-    expect(badges[2].textContent).toBe('Partially correct');
-    expect(badges[2].getAttribute('data-verdict')).toBe('partial');
-    // User bubbles never carry a verdict badge, even if the field is present.
-    expect(screen.getByText('It is the supreme law of the land.').closest('[data-testid="message-verdict-badge"]')).toBeNull();
+    // No verdict badges should be rendered for any message
+    expect(screen.queryAllByTestId('message-verdict-badge')).toHaveLength(0);
+    // All assistant feedback text is shown as-is
+    expect(screen.getByText('Correct. The Constitution is the supreme law.')).toBeTruthy();
+    expect(screen.getByText('Incorrect. One correct answer is Freedom of speech.')).toBeTruthy();
+    expect(screen.getByText("You're partly there.")).toBeTruthy();
   });
 
   it('renders the ephemeral activity card full width with a progress bar', () => {
