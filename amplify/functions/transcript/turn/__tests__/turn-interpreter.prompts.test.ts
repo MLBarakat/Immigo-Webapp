@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest';
-import { buildTurnPrompt, buildGreetingPrompt, parseInterpretation, TurnInterpreterAdapter, type ModelComplete } from '../turn-interpreter';
+import {
+  buildCompletionSummaryPrompt,
+  buildTurnPrompt,
+  buildGreetingPrompt,
+  parseInterpretation,
+  TurnInterpreterAdapter,
+  type CompletionSummaryFacts,
+  type ModelComplete,
+} from '../turn-interpreter';
 import type { CivicsItem, SessionStartContext } from '../types';
 
 const cabinet: CivicsItem = {
@@ -48,6 +56,30 @@ describe('buildTurnPrompt — content gap fixes are actually present', () => {
     expect(system.toLowerCase()).toContain('english');
   });
 
+  it('clarifies the representative question with the approved state-level wording', () => {
+    const representative: CivicsItem = {
+      id: 'q-029',
+      question: 'Name your U.S. representative.',
+      kind: 'dynamic',
+      acceptableAnswers: ['Barry Moore', 'Shomari Figures'],
+    };
+    const { system } = buildTurnPrompt({ askedItem: representative }, 'which representative do you mean?');
+    expect(system).toContain('a U.S. representative from your state');
+    expect(system).toContain('Any current House member from the learner’s state is accepted');
+    expect(system).not.toContain('from your district');
+  });
+
+  it('does not add the representative clarification to unrelated questions', () => {
+    const { system } = buildTurnPrompt({ askedItem: cabinet }, 'vice president');
+    expect(system).not.toContain('a U.S. representative from your state');
+  });
+
+  it('requires acknowledging every matched idea in multi-idea answers', () => {
+    const { system } = buildTurnPrompt({ askedItem: cabinet }, 'secretary of state and secretary of defense');
+    expect(system.toLowerCase()).toContain('acknowledge every matched idea');
+    expect(system.toLowerCase()).toContain('do not single out only the first');
+  });
+
   it('includes TTS/Polly hygiene rules (speakable text, natural dates and symbols, sentence cap)', () => {
     const { system } = buildTurnPrompt({ askedItem: cabinet }, 'x');
     expect(system.toLowerCase()).toContain('markdown');
@@ -62,6 +94,45 @@ describe('buildTurnPrompt — content gap fixes are actually present', () => {
     expect(system.toLowerCase()).toContain('bullet');
     expect(system.toLowerCase()).toContain('sanitized');
     expect(system.toLowerCase()).toContain('sounds natural when markdown punctuation is removed');
+  });
+});
+
+describe('buildCompletionSummaryPrompt — deterministic scores, qualitative coaching', () => {
+  const facts: CompletionSummaryFacts = {
+    correct: 12,
+    incorrect: 3,
+    total: 15,
+    accuracyPercent: 80,
+    passAt: 12,
+    passedAtQuestion: 15,
+    thresholdReached: true,
+    recommendedMode: 'Practice Mode',
+  };
+
+  it('asks for exactly one formal-but-warm sentence and never repeats the numbers', () => {
+    const { system, user } = buildCompletionSummaryPrompt(facts, 'English');
+    expect(system).toContain('exactly one');
+    expect(system.toLowerCase()).toContain('formal');
+    expect(system.toLowerCase()).toContain('warm');
+    expect(system.toLowerCase()).toContain('do not include any numbers');
+    expect(system.toLowerCase()).toContain('do not state whether the learner passed or failed');
+    expect(system.toLowerCase()).toContain('do not recommend');
+    expect(user).toContain('Incorrect answers: 3');
+    expect(user).toContain('Passed at question: 15');
+  });
+
+  it('omits the pass point when the threshold was not reached', () => {
+    const { user } = buildCompletionSummaryPrompt({
+      ...facts,
+      correct: 8,
+      incorrect: 4,
+      total: 12,
+      passedAtQuestion: null,
+      thresholdReached: false,
+    }, 'English');
+    expect(user).toContain('Incorrect answers: 4');
+    expect(user).toContain('Threshold reached: no');
+    expect(user).not.toContain('Passed at question');
   });
 });
 

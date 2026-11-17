@@ -93,6 +93,51 @@ describe('ConversationHistory', () => {
     );
   });
 
+  it('renders the committed verdict badge next to assistant feedback only', () => {
+    render(
+      <ConversationHistory
+        messages={[
+          {
+            ...message('correct-turn', '2025-01-01T12:00:00.000Z'),
+            content: 'Correct. The Constitution is the supreme law.',
+            verdict: 'correct',
+          },
+          {
+            ...message('incorrect-turn', '2025-01-01T12:01:00.000Z'),
+            content: 'Incorrect. One correct answer is Freedom of speech.',
+            verdict: 'incorrect',
+          },
+          {
+            ...message('partial-turn', '2025-01-01T12:02:00.000Z'),
+            content: "You're partly there.",
+            verdict: 'partial',
+          },
+          {
+            id: 'user-turn',
+            role: 'user',
+            content: 'It is the supreme law of the land.',
+            timestamp: '2025-01-01T12:03:00.000Z',
+            verdict: 'correct',
+          },
+          message('plain-assistant', '2025-01-01T12:04:00.000Z'),
+        ]}
+        displayUser={displayUser}
+        interimTranscript=""
+      />
+    );
+
+    const badges = screen.getAllByTestId('message-verdict-badge');
+    expect(badges).toHaveLength(3);
+    expect(badges[0].textContent).toBe('Correct');
+    expect(badges[0].getAttribute('data-verdict')).toBe('correct');
+    expect(badges[1].textContent).toBe('Needs review');
+    expect(badges[1].getAttribute('data-verdict')).toBe('incorrect');
+    expect(badges[2].textContent).toBe('Partially correct');
+    expect(badges[2].getAttribute('data-verdict')).toBe('partial');
+    // User bubbles never carry a verdict badge, even if the field is present.
+    expect(screen.getByText('It is the supreme law of the land.').closest('[data-testid="message-verdict-badge"]')).toBeNull();
+  });
+
   it('renders the ephemeral activity card full width with a progress bar', () => {
     render(
       <ConversationHistory

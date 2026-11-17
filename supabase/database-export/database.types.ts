@@ -87,14 +87,14 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
-                    "actions": Json | null,"content": string,"created_at": string,"id": string,"role": string,"session_id": string,"speaker": string | null,"updated_at": string,"user_id": string
+                    "actions": Json | null,"client_message_id": string | null,"content": string,"created_at": string,"id": string,"role": string,"session_id": string,"speaker": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "actions"?: Json | null,"content": string,"created_at"?: string,"id"?: string,"role": string,"session_id": string,"speaker"?: string | null,"updated_at"?: string,"user_id": string
+                    "actions"?: Json | null,"client_message_id"?: string | null,"content": string,"created_at"?: string,"id"?: string,"role": string,"session_id": string,"speaker"?: string | null,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "actions"?: Json | null,"content"?: string,"created_at"?: string,"id"?: string,"role"?: string,"session_id"?: string,"speaker"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "actions"?: Json | null,"client_message_id"?: string | null,"content"?: string,"created_at"?: string,"id"?: string,"role"?: string,"session_id"?: string,"speaker"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -195,14 +195,14 @@ isOneToOne: false
                   ]
                 },"sessions": {
                   Row: {
-                    "current_goal": string | null,"current_item_id": string | null,"current_mode": string,"ended_at": string | null,"id": string,"include_english_simulation": boolean,"local_date": string | null,"local_timezone": string | null,"mode_goal_pending": boolean,"started_at": string,"status": string,"test_version": string,"user_id": string
+                    "current_goal": string | null,"current_item_id": string | null,"current_mode": string,"ended_at": string | null,"id": string,"include_english_simulation": boolean,"local_date": string | null,"local_timezone": string | null,"mode_goal_pending": boolean,"mode_ready_pending": boolean,"started_at": string,"status": string,"test_version": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "current_goal"?: string | null,"current_item_id"?: string | null,"current_mode"?: string,"ended_at"?: string | null,"id"?: string,"include_english_simulation"?: boolean,"local_date"?: string | null,"local_timezone"?: string | null,"mode_goal_pending"?: boolean,"started_at"?: string,"status"?: string,"test_version"?: string,"user_id": string
+                    "current_goal"?: string | null,"current_item_id"?: string | null,"current_mode"?: string,"ended_at"?: string | null,"id"?: string,"include_english_simulation"?: boolean,"local_date"?: string | null,"local_timezone"?: string | null,"mode_goal_pending"?: boolean,"mode_ready_pending"?: boolean,"started_at"?: string,"status"?: string,"test_version"?: string,"user_id": string
                   }
                   Update: {
-                    "current_goal"?: string | null,"current_item_id"?: string | null,"current_mode"?: string,"ended_at"?: string | null,"id"?: string,"include_english_simulation"?: boolean,"local_date"?: string | null,"local_timezone"?: string | null,"mode_goal_pending"?: boolean,"started_at"?: string,"status"?: string,"test_version"?: string,"user_id"?: string
+                    "current_goal"?: string | null,"current_item_id"?: string | null,"current_mode"?: string,"ended_at"?: string | null,"id"?: string,"include_english_simulation"?: boolean,"local_date"?: string | null,"local_timezone"?: string | null,"mode_goal_pending"?: boolean,"mode_ready_pending"?: boolean,"started_at"?: string,"status"?: string,"test_version"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
@@ -246,6 +246,7 @@ isOneToOne: false
 "local_date": string | null,
 "local_timezone": string | null,
 "mode_goal_pending": boolean,
+"mode_ready_pending": boolean,
 "started_at": string,
 "status": string,
 "test_version": string,

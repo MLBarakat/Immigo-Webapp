@@ -406,12 +406,10 @@ function ConversationWorkspace({ apiClientInstance }: ConversationWorkspaceProps
       return;
     }
     if (action.kind === 'ready') {
-      // The Standard intro waits here. The request is an opening response, so
-      // the server ignores the label and asks the current first question.
-      await manager.sendTextMessage(
-        action.label,
-        manager.isVoiceSessionActive ? 'voice' : 'text',
-      );
+      // Standard and Practice/Study both gate the first question behind Ready.
+      // The hook sends the dedicated modeReady flag when a Learning Mode gate
+      // is pending, so the server can use its latest persisted focus.
+      await manager.confirmReady(action.label);
       return;
     }
     if (action.kind !== 'exam') return;

@@ -18,6 +18,7 @@ import {
   buildCycleNotice,
   buildFirstTimeOnboarding,
   buildFocusConfirmation,
+  buildModeReadyPrompt,
   buildReturningOnboarding,
   buildStandardModeSwitchCopy,
   LANGUAGE_PROMPT_NAMES,
@@ -37,7 +38,7 @@ import {
 import { dynamicAnswersRequireLocation, withDynamicAnswers } from './turn/dynamic-answers';
 import { formatStudyFeedback, formatStudyQuestion, TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn, sanitizeFinalAnswerFeedback } from './turn/turn-policy';
-import { feedbackFallback, practiceFirstQuestion, questionTransition } from './turn/feedback-copy';
+import { applyVerdictPrefix, feedbackFallback, practiceFirstQuestion, questionTransition } from './turn/feedback-copy';
 import { serverCopy } from './turn/server-copy';
 import type { CivicsItem, ConversationTurn, SimulationMode, TestVersion } from './turn/types';
 import { getEnglishExercise, gradeEnglishReading, parseEnglishWritingGrade, pickEnglishExercisePrompts, resolveEnglishSectionProgress, type EnglishExerciseSection } from './english-exercises';
@@ -110,6 +111,8 @@ interface RequestBody {
   requestId?: string;
   modeTransition?: boolean;
   modeGoalResponse?: boolean;
+  /** The learner pressed Ready at the Practice/Study gate. */
+  modeReady?: boolean;
   /** Practice/Study focus card submission; replaces free-text goal parsing. */
   focusAreaIds?: string[];
   allFocusAreas?: boolean;
@@ -144,6 +147,8 @@ interface RequestBody {
    * language's default voice.
    */
   voiceId?: string;
+  /** Client-generated message ID for idempotent dedupe on hydration (F-07). */
+  client_message_id?: string;
 }
 
 function getRecentTurns(value: unknown): ConversationTurn[] {
@@ -866,6 +871,61 @@ async function loadModeProgressStats(
   };
 }
 
+/**
+ * Prepares the Practice/Study entry gate. A stored focus goes straight to the
+ * Ready gate; a learner without one gets the mode explanation plus the focus
+ * card. Nothing is selected until the learner chooses Ready.
+ */
+async function buildModeOnboardingGate(params: {
+  token: string;
+  userId: string;
+  sessionId: string;
+  mode: 'practice' | 'study';
+  testVersion: TestVersion;
+  language: OnboardingLanguage;
+  traceId: string;
+}): Promise<{ segments: string[]; modeGoalPending: boolean; modeReadyPending: boolean }> {
+  const { token, userId, sessionId, mode, testVersion, language, traceId } = params;
+  const db = getUserScopedSupabase(token);
+  const [sessionResult, settingsResult, priorGradeResult] = await Promise.all([
+    db.from('sessions').select('current_goal').eq('id', sessionId).eq('user_id', userId).maybeSingle(),
+    db.from('user_settings').select('learning_goal').eq('user_id', userId).maybeSingle(),
+    db.from('graded_answers').select('id')
+      .eq('user_id', userId).eq('test_version', testVersion).eq('simulation_mode', mode)
+      .limit(1).maybeSingle(),
+  ]);
+  const priorGrade = priorGradeResult.data;
+  const sessionGoal = typeof sessionResult.data?.current_goal === 'string'
+    ? sessionResult.data.current_goal.trim()
+    : '';
+  const accountGoal = typeof settingsResult.data?.learning_goal === 'string'
+    ? settingsResult.data.learning_goal.trim()
+    : '';
+  const storedGoal = sessionGoal || accountGoal;
+  const hasFocus = storedGoal.length > 0;
+  const focus = parseFocusGoal(storedGoal || ALL_FOCUS_AREAS, testVersion);
+  const serializedGoal = serializeFocusGoal(focus.categoryIds, focus.all, testVersion);
+  const intro = priorGrade
+    ? buildReturningOnboarding(
+      mode,
+      testVersion,
+      await loadModeProgressStats(token, userId, testVersion, focus, traceId),
+      language,
+      { readyGate: hasFocus },
+    )
+    : buildFirstTimeOnboarding(mode, language);
+  const segments = hasFocus ? [intro, buildModeReadyPrompt(mode, language)] : [intro];
+
+  await db.from('sessions').update({
+    current_mode: mode,
+    mode_goal_pending: !hasFocus,
+    mode_ready_pending: hasFocus,
+    current_goal: serializedGoal,
+  }).eq('id', sessionId).eq('user_id', userId);
+
+  return { segments, modeGoalPending: !hasFocus, modeReadyPending: hasFocus };
+}
+
 /** Practice selection constrained by the current focus and lifetime pass. */
 async function selectPracticeQuestion(
   token: string,
@@ -1190,14 +1250,25 @@ const EXAM_INTRO_COPY: Record<'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA', ExamIntroCo
 };
 
 /**
- * Deterministic, neutral threshold result. Shared by both completion paths so
- * the score line can never drift from the report or the scorecard.
+ * Deterministic score line shared by both completion paths. It owns every
+ * number in the closing summary — correct, incorrect, total, and the question
+ * at which the learner passed — so those facts can never drift from the report
+ * or the scorecard, and the model only adds one qualitative sentence.
  */
-function passingThresholdResult(correct: number, passAt: number, language: OnboardingLanguage): string {
-  const key = correct >= passAt ? 'completionThresholdReached' : 'completionThresholdMissed';
+function completionScoreLine(
+  correct: number,
+  incorrect: number,
+  passAt: number,
+  language: OnboardingLanguage,
+): string {
+  const total = correct + incorrect;
+  const key = correct >= passAt ? 'completionScoreLinePassed' : 'completionScoreLineMissed';
   return serverCopy(key, language)
+    .replace('{total}', String(total))
     .replace('{correct}', String(correct))
-    .replace('{passAt}', String(passAt));
+    .replace('{incorrect}', String(incorrect))
+    .replace('{passAt}', String(passAt))
+    .replace('{passedAt}', String(total));
 }
 
 async function buildStandardInterviewIntro(
@@ -1891,6 +1962,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (parsedBody.confirmFocus !== undefined && typeof parsedBody.confirmFocus !== 'boolean') {
       return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid focus confirmation.' }) };
     }
+    if (parsedBody.modeReady !== undefined && typeof parsedBody.modeReady !== 'boolean') {
+      return { statusCode: 400, headers: responseHeaders, body: JSON.stringify({ error: 'Payload Exception: Invalid Ready confirmation.' }) };
+    }
     if (parsedBody.preferredLanguage !== undefined
       && !['en-US', 'es-ES', 'fr-FR', 'ar-SA'].includes(parsedBody.preferredLanguage)) {
       return {
@@ -1995,7 +2069,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // A proactive session-start call (item 6) legitimately has no transcript —
     // only the empty-guard for a REAL turn with nothing to process should fire.
     if (!cleanedTranscript && parsedBody.sessionStart !== true && parsedBody.silenceNudge !== true
-      && parsedBody.modeTransition !== true && parsedBody.modeGoalResponse !== true
+      && parsedBody.modeTransition !== true && parsedBody.modeGoalResponse !== true && parsedBody.modeReady !== true
       && !speechSynthesisOnly) {
       console.log(`[Lambda-Execution] [${traceId}] Empty transcript received. Returning 200 empty payload.`);
       return {
@@ -2021,6 +2095,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let examStage: MockExamStage | null = null;
     let examIntro: MockExamIntro | null = null;
     let modeGoalPending = false;
+    let modeReadyPending = false;
+    /** Index in assistantSegments that carries the committed-answer feedback. */
+    let verdictSegmentIndex: number | null = null;
 
     if (speechSynthesisOnly) {
       generatedAssistantText = speechText;
@@ -2053,7 +2130,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       if (simulationMode === 'standard') {
         // Standard has no focus onboarding. Its first-question sequence is
         // owned by the sessionStart Ready gate, not by a goal prompt.
-        await db.from('sessions').update({ current_mode: 'standard', mode_goal_pending: false })
+        await db.from('sessions').update({
+          current_mode: 'standard',
+          mode_goal_pending: false,
+          mode_ready_pending: false,
+        })
           .eq('id', sessionId).eq('user_id', userId);
         const copy = buildStandardModeSwitchCopy(language);
         generatedAssistantText = copy;
@@ -2061,33 +2142,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         nextItemId = parsedBody.currentItemId ?? null;
         nextQuestionText = getItem(parsedBody.currentItemId, testVersion)?.question ?? '';
       } else {
-        modeGoalPending = true;
-        const focus = await loadSessionFocus(token, userId, sessionId, testVersion);
-        const serializedGoal = serializeFocusGoal(focus.categoryIds, focus.all, testVersion);
-        const { data: priorGrade } = await db.from('graded_answers')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('test_version', testVersion)
-          .eq('simulation_mode', simulationMode)
-          .limit(1)
-          .maybeSingle();
-        const copy = priorGrade
-          ? buildReturningOnboarding(
-            simulationMode,
-            testVersion,
-            await loadModeProgressStats(token, userId, testVersion, focus, traceId),
-            language,
-          )
-          : buildFirstTimeOnboarding(simulationMode, language);
-        await db.from('sessions').update({
-          current_mode: simulationMode,
-          mode_goal_pending: true,
-          current_goal: serializedGoal,
-        }).eq('id', sessionId).eq('user_id', userId);
-        generatedAssistantText = copy;
-        assistantSegments = [copy];
+        const gate = await buildModeOnboardingGate({
+          token, userId, sessionId, mode: simulationMode, testVersion, language, traceId,
+        });
+        modeGoalPending = gate.modeGoalPending;
+        modeReadyPending = gate.modeReadyPending;
+        generatedAssistantText = gate.segments.join('\n');
+        assistantSegments = gate.segments;
         // The first question is selected only after the learner confirms the
-        // focus card; no skip path exists.
+        // focus card and then chooses Ready; no skip path exists.
         nextItemId = null;
         nextQuestionText = '';
       }
@@ -2120,34 +2183,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             : allFocusAreas ? [] : uniqueIds;
           const goal = serializeFocusGoal(categoryIds, allFocusAreas, testVersion);
           const labels = parseFocusGoal(goal, testVersion).labels;
-          await db.from('sessions').update({ current_goal: goal, mode_goal_pending: false })
+          await db.from('sessions').update({
+            current_goal: goal,
+            mode_goal_pending: false,
+            mode_ready_pending: true,
+          })
             .eq('id', sessionId).eq('user_id', userId);
           modeGoalPending = false;
+          modeReadyPending = true;
 
-          const selected = simulationMode === 'study'
-            ? await selectStudyQuestion(
-              token, userId, testVersion,
-              { all: allFocusAreas, categoryIds, labels }, null, traceId,
-            )
-            : await selectPracticeQuestion(
-              token, userId, sessionId, testVersion,
-              { all: allFocusAreas, categoryIds, labels }, null, traceId,
-            );
+          // The focus is stored, but the first question waits for Ready. This
+          // keeps the same explicit start contract as the Standard Interview.
           const segments: string[] = [
             buildFocusConfirmation(simulationMode, allFocusAreas, labels, language),
+            buildModeReadyPrompt(simulationMode, language),
           ];
-          if (selected.cycleRestarted) segments.push(buildCycleNotice(language));
-          segments.push(simulationMode === 'study'
-            ? formatStudyQuestion(
-              selected.item,
-              await turnInterpreter.explainStudyQuestion(selected.item, preferredLanguage),
-              preferredLanguage,
-            )
-            : `Let's begin with this question: ${selected.item.question}`);
           assistantSegments = segments;
           generatedAssistantText = segments.join('\n');
-          nextItemId = selected.item.id;
-          nextQuestionText = selected.item.question;
+          nextItemId = null;
+          nextQuestionText = '';
         } else {
           // Legacy clients still send free text for the goal. Keep the old
           // interpreter path so an in-flight session never gets stuck.
@@ -2192,6 +2246,50 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           nextItemId = active?.id ?? null;
           if (!examStage) nextQuestionText = active?.question ?? '';
         }
+      }
+    } else if (parsedBody.modeReady === true) {
+      const sessionId = parsedBody.sessionId;
+      if (!sessionId) throw new Error('Ready confirmation requires an active daily session.');
+      if (simulationMode !== 'standard') {
+        const db = getUserScopedSupabase(token);
+        const { data: sessionRow } = await db.from('sessions')
+          .select('current_goal,mode_goal_pending,mode_ready_pending,current_item_id')
+          .eq('id', sessionId).eq('user_id', userId).maybeSingle();
+        if (!sessionRow) throw new Error('That learning session is no longer available.');
+
+        const language = preferredLanguageCode as OnboardingLanguage;
+        // Ready always uses the latest persisted focus, never a client copy.
+        const focus = parseFocusGoal(sessionRow.current_goal ?? ALL_FOCUS_AREAS, testVersion);
+        const active = sessionRow.mode_ready_pending === true
+          ? null
+          : getItem(sessionRow.current_item_id ?? parsedBody.currentItemId, testVersion);
+        const selected = active
+          ? { item: active, cycleRestarted: false }
+          : simulationMode === 'study'
+            ? await selectStudyQuestion(token, userId, testVersion, focus, null, traceId)
+            : await selectPracticeQuestion(token, userId, sessionId, testVersion, focus, null, traceId);
+
+        const segments: string[] = [];
+        if (selected.cycleRestarted) segments.push(buildCycleNotice(language));
+        segments.push(simulationMode === 'study'
+          ? formatStudyQuestion(
+            selected.item,
+            await turnInterpreter.explainStudyQuestion(selected.item, preferredLanguage),
+            preferredLanguage,
+          )
+          : `Let's begin with this question: ${selected.item.question}`);
+
+        await db.from('sessions').update({
+          mode_goal_pending: false,
+          mode_ready_pending: false,
+          current_item_id: selected.item.id,
+        }).eq('id', sessionId).eq('user_id', userId);
+
+        modeReadyPending = false;
+        assistantSegments = segments;
+        generatedAssistantText = segments.join('\n');
+        nextItemId = selected.item.id;
+        nextQuestionText = selected.item.question;
       }
     }
 
@@ -2238,12 +2336,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           total,
           accuracyPercent: total ? Math.round((correct / total) * 100) : 0,
           passAt,
+          passedAtQuestion: correct >= passAt ? total : null,
           thresholdReached: correct >= passAt,
           recommendedMode: modeLabel('practice', language),
         }, preferredLanguage);
         const finalFeedback = englishResult.segments[0] ?? serverCopy('englishCompletionFallback', language);
         assistantSegments = [
-          `${finalFeedback}\n\n${serverCopy('completionAnnouncement', language)} ${passingThresholdResult(correct, passAt, language)}`,
+          `${finalFeedback}\n\n${serverCopy('completionAnnouncement', language)} ${completionScoreLine(correct, incorrect, passAt, language)}`,
           summary,
         ];
         generatedAssistantText = assistantSegments.join('\n');
@@ -2315,24 +2414,37 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             examStage,
             examIntro,
             modeGoalPending: false,
+            modeReadyPending: false,
           }),
         };
       } else {
-        const focus = await loadSessionFocus(token, userId, parsedBody.sessionId, testVersion);
-        const first = simulationMode === 'study'
-          ? (await selectStudyQuestion(
-            token, userId, testVersion, focus, null, traceId,
-          )).item
-          : (await selectPracticeQuestion(
-            token, userId, parsedBody.sessionId, testVersion, focus, null, traceId,
-          )).item;
+        const sessionId = parsedBody.sessionId;
+        if (!sessionId) throw new Error('A learning session is required to start Practice or Study Mode.');
+        const gate = await buildModeOnboardingGate({
+          token,
+          userId,
+          sessionId,
+          mode: simulationMode,
+          testVersion,
+          language: preferredLanguageCode as OnboardingLanguage,
+          traceId,
+        });
         return {
           statusCode: 200,
           headers: responseHeaders,
           body: JSON.stringify({
-            responseText: '', audioData: '', verdict: null, needsConfirmation: false,
-            nextItemId: first.id, nextQuestion: first.question, examRunId: null,
-            examCompleted: false, examReport: null,
+            responseText: gate.segments.join('\n'),
+            audioData: '',
+            verdict: null,
+            needsConfirmation: false,
+            nextItemId: null,
+            nextQuestion: '',
+            assistantSegments: gate.segments,
+            examRunId: null,
+            examCompleted: false,
+            examReport: null,
+            modeGoalPending: gate.modeGoalPending,
+            modeReadyPending: gate.modeReadyPending,
           }),
         };
       }
@@ -2423,6 +2535,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
       nextItemId = resumedEnglish ? null : first.id;
       nextQuestionText = resumedEnglish ? resumedEnglish.prompt : first.question;
+      // Typing/spoken input at the gate starts the mode just like Ready; keep
+      // the persisted gate flags from surviving into the next refresh.
+      if (simulationMode !== 'standard' && parsedBody.sessionId) {
+        await getUserScopedSupabase(token).from('sessions').update({
+          mode_goal_pending: false,
+          mode_ready_pending: false,
+          current_item_id: resumedEnglish ? null : first.id,
+        }).eq('id', parsedBody.sessionId).eq('user_id', userId);
+      }
     } else if (cleanedTranscript && isRagQuery(cleanedTranscript)) {
       // ---- ASSIST / progress path (grounded in the user's own reports) ----
       console.log(`[Lambda-RAG] [${traceId}] Progress intent detected.`);
@@ -2572,6 +2693,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         const rawFeedback = outcome.useModelReply
           ? (interp?.reply || safeReply)
           : safeReply;
+        // The deterministic prefix keeps the chat text aligned with the UI
+        // badge and is applied only to a committed grade.
+        const committedFeedback = outcome.committedVerdict
+          ? applyVerdictPrefix(rawFeedback, outcome.committedVerdict, simulationMode, language)
+          : rawFeedback;
 
         // Advance to the next question, avoiding not just the one just asked
         // but everything asked so far this session (up to a bound) — the
@@ -2600,13 +2726,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
               total: scored,
               accuracyPercent: accuracy,
               passAt,
+              passedAtQuestion: correct >= passAt ? scored : null,
               thresholdReached: correct >= passAt,
               recommendedMode: modeLabel('practice', language),
             }, preferredLanguage);
             assistantSegments = [
-              `${rawFeedback}\n\n${serverCopy('completionAnnouncement', language)} ${passingThresholdResult(correct, passAt, language)}`,
+              `${committedFeedback}\n\n${serverCopy('completionAnnouncement', language)} ${completionScoreLine(correct, incorrect, passAt, language)}`,
               summary,
             ];
+            verdictSegmentIndex = 0;
             generatedAssistantText = assistantSegments.join('\n');
           } else {
             next = examProgress.nextItem;
@@ -2619,7 +2747,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
               const intro = examProgress.englishStage === 'reading'
                 ? serverCopy('englishReadingTransition', language)
                 : serverCopy('englishWritingTransition', language);
-              assistantSegments = [rawFeedback, intro, ...(prompt ? [englishTaskMessage(examProgress.englishStage, prompt, 0)] : [])];
+              assistantSegments = [committedFeedback, intro, ...(prompt ? [englishTaskMessage(examProgress.englishStage, prompt, 0)] : [])];
+              verdictSegmentIndex = 0;
               generatedAssistantText = assistantSegments.join('\n');
             }
           }
@@ -2665,7 +2794,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             language,
             answer: askedItem.acceptableAnswers[0] ?? null,
           });
-          const feedback = sanitizeFinalAnswerFeedback(rawFeedback, next.question, fallbackCopy);
+          // Sanitize the model's raw reply first. Prefixing before sanitizing
+          // would leave "Correct." behind when the model wrote only a question,
+          // which would suppress the verdict-aware fallback.
+          const sanitizedFeedback = sanitizeFinalAnswerFeedback(rawFeedback, next.question, fallbackCopy);
+          const feedback = outcome.committedVerdict
+            ? applyVerdictPrefix(sanitizedFeedback, outcome.committedVerdict, simulationMode, language)
+            : sanitizedFeedback;
 
           // A completed answer and its new prompt are separate chat bubbles.
           const explanation = simulationMode === 'study'
@@ -2677,6 +2812,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           assistantSegments = cycleRestarted
             ? [buildCycleNotice(preferredLanguageCode as OnboardingLanguage), ...questionSegments]
             : questionSegments;
+          verdictSegmentIndex = outcome.committedVerdict
+            ? (cycleRestarted ? 1 : 0)
+            : null;
           generatedAssistantText = assistantSegments.join('\n');
         }
       }
@@ -2718,6 +2856,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           examStage,
           examIntro,
           modeGoalPending,
+          modeReadyPending,
+          verdictSegmentIndex,
         }),
       };
     }
@@ -2807,6 +2947,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         examStage,
         examIntro,
         modeGoalPending,
+        modeReadyPending,
+        verdictSegmentIndex,
       })
     };
 

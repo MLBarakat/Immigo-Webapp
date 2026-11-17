@@ -67,6 +67,12 @@ const TTS_HYGIENE = [
 ].join('\n');
 
 export function buildTurnPrompt(ctx: TurnContext, utterance: string): { system: string; user: string } {
+  // The representative question is location-dependent: registration records a
+  // state, never a congressional district, so any current House member from
+  // that state counts. Keep the approved clarification exact.
+  const representativeClarification = ctx.askedItem.id === 'q-029' || ctx.askedItem.id === '2008-023'
+    ? '- REPRESENTATIVE QUESTION: if the learner asks which representative to name, clarify with exactly this fact: "a U.S. representative from your state." Any current House member from the learner’s state is accepted because the app does not know their congressional district. Never frame the answer as coming from a specific district.'
+    : null;
   const modeInstruction = ctx.simulationMode === 'practice'
     ? [
         'SIMULATION MODE: PRACTICE.',
@@ -176,8 +182,13 @@ export function buildTurnPrompt(ctx: TurnContext, utterance: string): { system: 
     '- BILINGUAL / CODE-SWITCHING: if the user answers with the correct concept in another language (e.g.',
     '  "La Constitución"), set matchedAnswer to the correct ENGLISH acceptable answer, and make "reply"',
     '  acknowledge they have the right idea while gently noting the USCIS interview is conducted in English',
-    '  and giving the English phrase.',
+    '  and giving the English phrase. Make sure the English phrase you supply is actually one of the listed',
+    '  acceptable answers.',
+    '- ACKNOWLEDGE EVERY MATCHED IDEA: when the learner offers several ideas and more than one is acceptable,',
+    '  acknowledge every one of them in "reply" — do not single out only the first. If one of the offered ideas',
+    '  is not accepted, name that part briefly without discarding the ideas that were correct.',
     '',
+    ...(representativeClarification ? [representativeClarification] : []),
     'Always include a short, friendly "reply" appropriate to the intent.',
     modeInstruction,
     ...studyContext,
@@ -399,6 +410,8 @@ export interface CompletionSummaryFacts {
   accuracyPercent: number;
   /** Correct answers required by this question bank's passing threshold. */
   passAt: number;
+  /** Question number at which the learner passed, or null when they did not. */
+  passedAtQuestion: number | null;
   /** Whether this attempt reached the passing threshold. */
   thresholdReached: boolean;
   recommendedMode: string;
@@ -411,12 +424,13 @@ export function buildCompletionSummaryPrompt(
   const languageInstruction = preferredLanguage ? ` Write in ${preferredLanguage}.` : '';
   return {
     system: [
-      'You are a warm, very encouraging, friendly civics tutor celebrating the end of a Standard Interview.',
-      'Write 3 to 4 short conversational sentences as one spoken bubble. No markdown, no bullet points, no lists.',
-      'Name the recorded threshold result neutrally using the supplied numbers. Say the learner reached or did not reach the passing threshold this time. Never predict, and never say the learner failed or use the word failure.',
-      `Recommend ${facts.recommendedMode} as the next step in the same bubble.`,
-      'Invite the learner to open the Interview Report scorecard for details, then capture their decision and goals next.',
-      'Never mention questions to review.',
+      'You are a formal but warm civics tutor closing a Standard Interview.',
+      'Write exactly one short sentence of qualitative encouragement as one spoken bubble.',
+      'No markdown, no bullet points, no lists, no second sentence.',
+      'Do not include any numbers, scores, percentages, counts, thresholds, or question numbers — the application states those separately in a deterministic line.',
+      'Do not state whether the learner passed or failed, and do not predict a future result.',
+      'Do not recommend a mode, report, next step, decision, or goal.',
+      'Acknowledge the learner’s effort with measured, sincere warmth rather than hype.',
       languageInstruction,
       '',
       TTS_HYGIENE,
@@ -428,6 +442,7 @@ export function buildCompletionSummaryPrompt(
       `Accuracy: ${facts.accuracyPercent}%`,
       `Passing threshold: ${facts.passAt} correct answers`,
       `Threshold reached: ${facts.thresholdReached ? 'yes' : 'no'}`,
+      ...(facts.passedAtQuestion !== null ? [`Passed at question: ${facts.passedAtQuestion}`] : []),
       `Recommended next step: ${facts.recommendedMode}`,
     ].join('\n'),
   };
@@ -635,11 +650,11 @@ export class TurnInterpreterAdapter {
     }
 
     const localizedFallbacks: Record<string, string> = {
-      Spanish: `¡Lo lograste! Estoy muy orgulloso del esfuerzo que pusiste. Respondiste ${facts.total} preguntas, con ${facts.correct} correctas y ${facts.incorrect} por reforzar. Según este resultado, te recomiendo el ${facts.recommendedMode} para tu próxima revisión. Abre tu Interview Report para ver todos los detalles y luego registra tu decisión y tus metas; cuando quieras, seguimos avanzando juntos.`,
-      French: `Vous l’avez fait — je suis vraiment fier de l’effort que vous avez fourni. Vous avez répondu à ${facts.total} questions, avec ${facts.correct} bonnes réponses et ${facts.incorrect} à renforcer. D’après ce résultat, je recommande ${facts.recommendedMode} pour votre prochaine révision. Ouvrez votre Interview Report pour voir tous les détails, puis notez votre décision et vos objectifs — nous pouvons continuer ensemble quand vous le souhaitez.`,
-      Arabic: `لقد فعلتها — أنا فخور جدًا بالجهد الذي بذلته. أجبت عن ${facts.total} سؤالًا، منها ${facts.correct} إجابة صحيحة و${facts.incorrect} تحتاج إلى تعزيز. بناءً على هذه النتيجة، أوصي بـ ${facts.recommendedMode} لمراجعتك القادمة. افتح Interview Report لرؤية كل التفاصيل، ثم سجّل قرارك وأهدافك — ويمكننا المتابعة معًا متى كنت مستعدًا.`,
+      Spanish: 'Su esfuerzo constante durante esta entrevista es una base sólida para seguir practicando con confianza.',
+      French: 'Votre effort constant tout au long de cet entretien constitue une base solide pour continuer à progresser avec confiance.',
+      Arabic: 'إن جهدك المتفاني طوال هذا اللقاء يشكل أساسًا متينًا لمواصلة التدريب بثقة.',
     };
-    return localizedFallbacks[preferredLanguage ?? ''] ?? `You did it — I'm genuinely proud of the effort you put in. You answered ${facts.total} questions, with ${facts.correct} correct and ${facts.incorrect} to strengthen. Based on this result, I recommend ${facts.recommendedMode} for your next review. Open your Interview Report for the full picture, then capture your decision and goals — and whenever you're ready, we can keep going together.`;
+    return localizedFallbacks[preferredLanguage ?? ''] ?? 'Your steady effort throughout this interview is a solid foundation for continued practice with confidence.';
   }
 
   async generateModeTransition(

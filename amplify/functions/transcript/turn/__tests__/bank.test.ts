@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { allItems, getItem, getStudyCategoryTitle, selectNextQuestion } from '../bank';
+import { answerInBank } from '../matching';
 
 describe('civics bank — coverage & integrity', () => {
   const items = allItems();
@@ -39,6 +40,10 @@ describe('civics bank — coverage & integrity', () => {
     expect(missing).toEqual([]);
     expect(getStudyCategoryTitle(getItem('q-001')!)).toBe('Principles of American Democracy');
     expect(getStudyCategoryTitle(getItem('q-128')!)).toBe('Holidays');
+  });
+  it('accepts the official federal-budget answer variant on the Congress-power question', () => {
+    const power = getItem('q-020')!;
+    expect(answerInBank('Congress approves the federal budget', power.acceptableAnswers)).toBe(true);
   });
 });
 

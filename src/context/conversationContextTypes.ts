@@ -10,6 +10,8 @@ import type { MessageSpeaker } from '../types/persistence';
 export type AppStatus = 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error' | 'preparing';
 export type SimulationMode = 'standard' | 'practice' | 'study';
 export type TestVersion = '2008' | '2020';
+/** Committed civics verdict rendered as a badge next to the feedback bubble. */
+export type MessageVerdict = 'correct' | 'incorrect' | 'partial';
 
 export type MessageAction =
   | {
@@ -48,6 +50,10 @@ export interface Message {
   presentation?: 'progress';
   /** Recorded daily facts that back a progress card. Never persisted. */
   progress?: MessageProgress;
+  /** Committed verdict for the feedback bubble (F19). Never persisted. */
+  verdict?: MessageVerdict;
+  /** Client-generated message ID for idempotent dedupe on hydration (F-07). */
+  client_message_id?: string;
 }
 
 export interface MessageProgress {
@@ -103,7 +109,7 @@ export type ConversationAction =
   | { type: 'SET_SESSION_ID'; payload: string | null }
   | { type: 'LOAD_HISTORICAL_MESSAGES'; payload: { messages: Message[]; hasMore: boolean; oldestCursor: string | null; replace?: boolean } }
   | { type: 'SET_LIVE_STATS'; payload: LiveSessionStats | null }
-  | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[]; speaker?: MessageSpeaker } }
+  | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { assistantMessageId: string; content: string; actions?: readonly MessageAction[]; verdict?: MessageVerdict; speaker?: MessageSpeaker } }
   | {
     type: 'ADD_STANDALONE_ASSISTANT_MESSAGE';
     payload: {
@@ -112,10 +118,12 @@ export type ConversationAction =
       actions?: readonly MessageAction[];
       presentation?: 'progress';
       progress?: MessageProgress;
+      verdict?: MessageVerdict;
       speaker?: MessageSpeaker;
     };
   }
   | { type: 'UPDATE_ASSISTANT_MESSAGE'; payload: { messageId: string; content: string; actions?: readonly MessageAction[] } }
+  | { type: 'SET_MESSAGE_VERDICT'; payload: { messageId: string; verdict: MessageVerdict } }
   | { type: 'RESOLVE_MESSAGE_ACTIONS'; payload: { messageId?: string } }
   | { type: 'SET_TRANSITION_ERROR'; payload: string }
   | { type: 'CLEAR_TRANSITION_ERROR' };
@@ -175,6 +183,7 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         content: action.payload.content,
         timestamp: new Date().toISOString(),
         ...(action.payload.actions?.length ? { actions: action.payload.actions } : {}),
+        ...(action.payload.verdict ? { verdict: action.payload.verdict } : {}),
         ...(action.payload.speaker ? { speaker: action.payload.speaker } : {}),
       };
       return {
@@ -193,6 +202,7 @@ export const conversationReducer = (state: ConversationState, action: Conversati
         ...(action.payload.actions?.length ? { actions: action.payload.actions } : {}),
         ...(action.payload.presentation ? { presentation: action.payload.presentation } : {}),
         ...(action.payload.progress ? { progress: action.payload.progress } : {}),
+        ...(action.payload.verdict ? { verdict: action.payload.verdict } : {}),
         ...(action.payload.speaker ? { speaker: action.payload.speaker } : {}),
       };
       return { ...state, conversationHistory: [...state.conversationHistory, message] };
@@ -268,6 +278,14 @@ export const conversationReducer = (state: ConversationState, action: Conversati
                 ...(action.payload.actions ? { actions: action.payload.actions } : { actions: undefined }),
               }
             : msg
+        ),
+      };
+
+    case 'SET_MESSAGE_VERDICT':
+      return {
+        ...state,
+        conversationHistory: state.conversationHistory.map(msg =>
+          msg.id === action.payload.messageId ? { ...msg, verdict: action.payload.verdict } : msg
         ),
       };
 

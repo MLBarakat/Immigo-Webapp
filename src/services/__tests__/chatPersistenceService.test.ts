@@ -58,6 +58,37 @@ describe('ChatPersistenceService account-day sessions', () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ speaker: 'practice_coach' }));
   });
 
+  it('persists a client message ID and maps it back for refresh dedupe', async () => {
+    const row = {
+      id: 'message-3',
+      session_id: 'session-1',
+      user_id: 'user-1',
+      role: 'user',
+      content: 'The Constitution was signed in 1787.',
+      client_message_id: 'client-msg-123',
+      created_at: '2026-11-16T05:30:00.000Z',
+      updated_at: '2026-11-16T05:30:00.000Z',
+    };
+    const single = vi.fn().mockResolvedValue({ data: row, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+    vi.mocked(getSupabaseClient).mockReturnValue({ from } as never);
+
+    await expect(
+      ChatPersistenceService.persistMessage(
+        'session-1',
+        'user-1',
+        'user',
+        'The Constitution was signed in 1787.',
+        undefined,
+        undefined,
+        'client-msg-123'
+      )
+    ).resolves.toEqual(expect.objectContaining({ client_message_id: 'client-msg-123' }));
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ client_message_id: 'client-msg-123' }));
+  });
+
   it('uses the database-resolved session day and account time zone', async () => {
     const row = {
       id: 'shared-session',

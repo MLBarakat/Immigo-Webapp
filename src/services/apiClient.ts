@@ -225,6 +225,8 @@ export class ApiClient {
     responseText: string;
     audioData: ArrayBuffer;
     verdict: 'correct' | 'incorrect' | 'partial' | null;
+    /** Index in assistantSegments carrying the committed-answer feedback. */
+    verdictSegmentIndex: number | null;
     needsConfirmation: boolean;
     nextItemId: string | null;
     nextQuestion: string | null;
@@ -235,6 +237,7 @@ export class ApiClient {
     examReviewId: string | null;
     examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
     modeGoalPending: boolean;
+    modeReadyPending: boolean;
     examIntro: ExamIntro | null;
   }> {
     let response: Response;
@@ -271,6 +274,7 @@ export class ApiClient {
       responseText?: unknown;
       audioData?: unknown;
       verdict?: unknown;
+      verdictSegmentIndex?: unknown;
       needsConfirmation?: unknown;
       nextItemId?: unknown;
       nextQuestion?: unknown;
@@ -281,6 +285,7 @@ export class ApiClient {
       examReviewId?: unknown;
       examStage?: unknown;
       modeGoalPending?: unknown;
+      modeReadyPending?: unknown;
       examIntro?: unknown;
       error?: string;
     }
@@ -327,6 +332,9 @@ export class ApiClient {
         responseText: parsedPayload.responseText,
         audioData: audioBuffer,
         verdict,
+        verdictSegmentIndex: typeof parsedPayload.verdictSegmentIndex === 'number'
+          ? parsedPayload.verdictSegmentIndex
+          : null,
         needsConfirmation,
         nextItemId,
         nextQuestion,
@@ -337,6 +345,7 @@ export class ApiClient {
         examReviewId: typeof parsedPayload.examReviewId === 'string' ? parsedPayload.examReviewId : null,
         examStage: parsedPayload.examStage === 'reading' || parsedPayload.examStage === 'writing' || parsedPayload.examStage === 'complete' || parsedPayload.examStage === 'none' ? parsedPayload.examStage : null,
         modeGoalPending: parsedPayload.modeGoalPending === true,
+        modeReadyPending: parsedPayload.modeReadyPending === true,
         examIntro: parseExamIntro(parsedPayload.examIntro),
       };
     } catch (error) {
@@ -350,12 +359,13 @@ export class ApiClient {
     conversationWindow: Array<{ role: string; content: string }> = [],
     sessionId?: string | null,
     currentItemId?: string | null,
-    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; confirmFocus?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean },
-    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; confirmFocus?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean } = {}
+    confirmationRetryOrOptions?: boolean | { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; modeReady?: boolean; confirmFocus?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean; clientMessageId?: string },
+    options: { headers?: Record<string, string>; signal?: AbortSignal; voiceId?: string; simulationMode?: SimulationMode; preferredLanguage?: string; openingResponse?: boolean; testVersion?: TestVersion; includeEnglishSimulation?: boolean; examRunId?: string | null; modeGoalResponse?: boolean; modeReady?: boolean; confirmFocus?: boolean; examAction?: MockExamAction; inputMethod?: 'text' | 'voice'; requestId?: string; postExamId?: string | null; focusAreaIds?: string[]; allFocusAreas?: boolean; clientMessageId?: string } = {}
   ): Promise<{
     responseText: string;
     audioData: ArrayBuffer;
     verdict: 'correct' | 'incorrect' | 'partial' | null;
+    verdictSegmentIndex: number | null;
     needsConfirmation: boolean;
     nextItemId: string | null;
     nextQuestion: string | null;
@@ -366,6 +376,7 @@ export class ApiClient {
     examReviewId: string | null;
     examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
     modeGoalPending: boolean;
+    modeReadyPending: boolean;
     examIntro: ExamIntro | null;
   }> {
     let confirmationRetry: boolean | undefined;
@@ -376,11 +387,14 @@ export class ApiClient {
       effectiveOptions = confirmationRetryOrOptions;
     }
 
+    const clientMessageId = effectiveOptions.clientMessageId;
+
     logger.info('[ApiClient] Dispatching postTranscript request:', {
       transcriptLength: transcript.length,
       windowTurns: conversationWindow.length,
       sessionId,
-      voiceId: effectiveOptions.voiceId
+      voiceId: effectiveOptions.voiceId,
+      clientMessageId
     });
     // Kill-forensics marks (sessionStorage survives an iOS process kill): the
     // next boot's previous-document-fate line reports whether the fatal
@@ -407,6 +421,7 @@ export class ApiClient {
           includeEnglishSimulation: effectiveOptions.includeEnglishSimulation ?? false,
           ...(effectiveOptions.examRunId ? { examRunId: effectiveOptions.examRunId } : {}),
           ...(effectiveOptions.modeGoalResponse ? { modeGoalResponse: true } : {}),
+          ...(effectiveOptions.modeReady ? { modeReady: true } : {}),
           ...(effectiveOptions.confirmFocus ? { confirmFocus: true } : {}),
           ...(effectiveOptions.examAction ? { examAction: effectiveOptions.examAction } : {}),
           ...(effectiveOptions.inputMethod ? { inputMethod: effectiveOptions.inputMethod } : {}),
@@ -415,7 +430,8 @@ export class ApiClient {
           ...(effectiveOptions.allFocusAreas ? { allFocusAreas: true } : {}),
           ...(effectiveOptions.postExamId ? { postExamConversation: true, postExamId: effectiveOptions.postExamId } : {}),
           ...(effectiveOptions.openingResponse ? { openingResponse: true } : {}),
-          ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {})
+          ...(effectiveOptions.voiceId ? { voiceId: effectiveOptions.voiceId } : {}),
+          ...(clientMessageId ? { client_message_id: clientMessageId } : {})
         },
         effectiveOptions
       );
@@ -503,6 +519,7 @@ export class ApiClient {
     responseText: string;
     audioData: ArrayBuffer;
     verdict: 'correct' | 'incorrect' | 'partial' | null;
+    verdictSegmentIndex: number | null;
     needsConfirmation: boolean;
     nextItemId: string | null;
     nextQuestion: string | null;
@@ -513,6 +530,8 @@ export class ApiClient {
     examReviewId: string | null;
     examStage: 'none' | 'reading' | 'writing' | 'complete' | null;
     examIntro: ExamIntro | null;
+    modeGoalPending: boolean;
+    modeReadyPending: boolean;
   }> {
     logger.info('[ApiClient] Dispatching postSessionStart request:', { sessionId, voiceId: options.voiceId });
     return this.sendTranscriptRequest({

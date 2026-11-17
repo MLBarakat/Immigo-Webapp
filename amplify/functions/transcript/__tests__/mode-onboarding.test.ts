@@ -4,6 +4,7 @@ import {
   buildCycleNotice,
   buildFirstTimeOnboarding,
   buildFocusConfirmation,
+  buildModeReadyPrompt,
   buildReturningOnboarding,
   buildStandardModeSwitchCopy,
   localizedAllFocusLabel,
@@ -33,6 +34,27 @@ describe('Practice/Study onboarding copy', () => {
     }
   });
 
+  it('explains why the mode matters before inviting the learner to get ready', () => {
+    expect(buildFirstTimeOnboarding('practice', 'en-US'))
+      .toContain('Practicing recall under interview conditions');
+    expect(buildFirstTimeOnboarding('study', 'en-US'))
+      .toContain('Understanding why an answer is right');
+    expect(buildFirstTimeOnboarding('practice', 'en-US'))
+      .toContain('Choose one focus area');
+  });
+
+  it('provides a mode-specific Ready prompt in every locale', () => {
+    for (const language of languages) {
+      for (const mode of ['practice', 'study'] as const) {
+        const prompt = buildModeReadyPrompt(mode, language);
+        expect(prompt.length).toBeGreaterThan(30);
+        expect(prompt).toMatch(language === 'ar-SA' ? /[\u0600-\u06FF]/ : /[A-Za-zÀ-ÿ]/);
+      }
+    }
+    expect(buildModeReadyPrompt('practice', 'en-US')).toContain('first practice question');
+    expect(buildModeReadyPrompt('study', 'en-US')).toContain('first study question');
+  });
+
   it('reports overall and focus-subset counts for returning learners', () => {
     const english = buildReturningOnboarding('practice', '2020', stats, 'en-US');
 
@@ -43,6 +65,37 @@ describe('Practice/Study onboarding copy', () => {
     expect(english).toContain('3 are mastered');
     expect(english).toContain('5 are practiced but not mastered');
     expect(english).toContain('9 have not been practiced');
+  });
+
+  it('keeps the resume boundary distinct from the first-time explanation', () => {
+    const firstTime = buildFirstTimeOnboarding('practice', 'en-US');
+    const returning = buildReturningOnboarding('practice', '2020', stats, 'en-US', { readyGate: true });
+
+    expect(firstTime).toContain('mirrors the civics interview');
+    expect(firstTime).not.toContain('questions are mastered');
+    expect(returning).not.toContain('mirrors the civics interview');
+    expect(returning).toContain('Your saved focus stays Geography, Symbols.');
+    expect(returning).toContain('Choose Ready when you are ready to begin.');
+  });
+
+  it('keeps the saved All-focus resume boundary in every locale', () => {
+    const allStats: ModeOnboardingStats = {
+      ...stats,
+      focus: stats.overall,
+      focusLabels: [],
+      allFocusAreas: true,
+    };
+    const expected: Record<OnboardingLanguage, string> = {
+      'en-US': 'Your saved focus stays All focus areas.',
+      'es-ES': 'Tu enfoque guardado se mantiene en Todas las áreas de enfoque.',
+      'fr-FR': 'Votre axe enregistré reste Tous les axes de travail.',
+      'ar-SA': 'يبقى تركيزك المحفوظ على جميع مجالات التركيز.',
+    };
+    for (const language of languages) {
+      const copy = buildReturningOnboarding('study', '2020', allStats, language, { readyGate: true });
+      expect(copy).toContain(expected[language]);
+      expect(copy).toMatch(language === 'ar-SA' ? /جاهز/ : /Ready|Listo|Prêt/);
+    }
   });
 
   it('describes the All focus area state without a subset list', () => {

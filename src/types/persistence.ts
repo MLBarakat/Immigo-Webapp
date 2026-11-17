@@ -31,6 +31,8 @@ export interface PersistedMessage {
   speaker?: MessageSpeaker;
   /** In-chat actions persisted with the message (F3, narrowed by F8). */
   actions?: readonly MessageAction[];
+  /** Client-generated message ID for idempotent dedupe on hydration (F-07). */
+  client_message_id?: string;
 }
 
 export interface DailyProgressReport {

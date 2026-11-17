@@ -87,6 +87,47 @@ describe('sanitizeFinalAnswerFeedback', () => {
       'What is the capital?',
     )).toBe('Correct. It was adopted in 1776.');
   });
+
+  it('strips dangling next-question lead-ins left behind by question removal', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Correct. Here is the next question: When was it adopted?',
+      'What is the capital?',
+    )).toBe('Correct.');
+    expect(sanitizeFinalAnswerFeedback(
+      "Correct. Here's your next question.",
+      'What is the capital?',
+    )).toBe('Correct.');
+    expect(sanitizeFinalAnswerFeedback(
+      'Correct. The next question is:',
+      'What is the capital?',
+    )).toBe('Correct.');
+    expect(sanitizeFinalAnswerFeedback(
+      "Correct. Let's move on to the next question.",
+      'What is the capital?',
+    )).toBe('Correct.');
+  });
+
+  it('strips a mid-reply lead-in but keeps the statement after it', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Correct. Now the next question: When was it adopted? It was adopted in 1776.',
+      'What is the capital?',
+    )).toBe('Correct. It was adopted in 1776.');
+  });
+
+  it('falls back when the reply is only a next-question lead-in', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'Here is the next question: When was it adopted?',
+      'What is the capital?',
+      "That's correct. Let's continue.",
+    )).toBe("That's correct. Let's continue.");
+  });
+
+  it('keeps ordinary statements that merely mention a question', () => {
+    expect(sanitizeFinalAnswerFeedback(
+      'The first question is hard for many people.',
+      'What is the capital?',
+    )).toBe('The first question is hard for many people.');
+  });
 });
 
 describe('TurnPolicy safeReplyKey (F5 catalog wiring)', () => {

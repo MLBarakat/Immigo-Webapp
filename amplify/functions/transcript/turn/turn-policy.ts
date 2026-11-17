@@ -131,6 +131,26 @@ function normalizeSentence(value: string): string {
 }
 
 /**
+ * Model lead-ins that only ever introduce the question the handler appends.
+ * Removing the question sentence alone leaves these dangling ("Correct. Here's
+ * your ."), so they are stripped before sentence filtering. Move-on phrasing
+ * goes first so it swallows its own "next question" reference whole.
+ */
+const MOVE_ON_LEAD_IN =
+  /\b(?:let(?:['’]s|\s+us)\s+)?(?:move|moving|go|going|continue|proceed)\s+(?:on\s+to|to|with)\s+(?:the\s+)?next\s+question\s*[.!]?/gi;
+const NEXT_QUESTION_LEAD_IN =
+  /\b(?:now,?\s+)?(?:here(?:['’]s|\s+is)\s+)?(?:the|your|our)?\s*next\s+question(?:\s+is)?\s*[:：—–-]?\s*[.!]?/gi;
+
+function stripNextQuestionLeadIns(text: string): string {
+  return text
+    .replace(MOVE_ON_LEAD_IN, ' ')
+    .replace(NEXT_QUESTION_LEAD_IN, ' ')
+    .replace(/\s+([.,!?؟])/gu, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Remove model-authored question sentences and next-question announcements
  * while preserving every complete statement before and after them. The handler
  * appends exactly one official question; feedback must never smuggle in a
@@ -141,9 +161,7 @@ export function sanitizeFinalAnswerFeedback(
   nextQuestion: string,
   fallback = "Let's keep going.",
 ): string {
-  const withoutMarkers = reply
-    .replace(/\bnext\s+question\s*:?\s*/gi, ' ')
-    .trim();
+  const withoutMarkers = stripNextQuestionLeadIns(reply.trim());
 
   const canonical = normalizeSentence(nextQuestion);
   const kept = splitIntoSentences(withoutMarkers).filter((sentence) => {
@@ -158,7 +176,7 @@ export function sanitizeFinalAnswerFeedback(
     .replace(/[\s,:;—-]+$/u, '')
     .trim();
 
-  return feedback || fallback;
+  return feedback && !/^[.,!?؟:;—–\-\s]+$/u.test(feedback) ? feedback : fallback;
 }
 
 export interface ResolveOptions {

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ConversationContext } from '../context/conversationContextTypes';
 import { ApiClient, ApiError } from '../services/apiClient';
 import type { MockExamAction } from '../services/apiClient';
-import { Message, MessageAction, SimulationMode, TestVersion } from '../context/conversationContextTypes';
+import { Message, MessageAction, MessageVerdict, SimulationMode, TestVersion } from '../context/conversationContextTypes';
 import { ChatPersistenceService, buildTranscriptText } from '../services/chatPersistenceService';
 import type { MessageSpeaker } from '../types/persistence';
 import { fetchDailyProgressStats, type LiveSessionStats } from '../services/liveProgressService';
@@ -47,7 +47,7 @@ interface AssistantReveal {
   // message; later segments are standalone bubbles). Revealing proceeds across
   // bubbles in order, so the "next question" bubble appears only once the
   // previous bubble's words are all spoken.
-  bubbles: Array<{ messageId: string; tokens: string[]; created: boolean; speaker?: MessageSpeaker }>;
+  bubbles: Array<{ messageId: string; tokens: string[]; created: boolean; verdict?: MessageVerdict; speaker?: MessageSpeaker }>;
   /** Cumulative token count at the end of each bubble (index == bubble index). */
   wordCounts: number[];
   totalWords: number;
@@ -62,7 +62,14 @@ interface AssistantReveal {
 interface TextModeSegment {
   assistantMessageId: string;
   content: string;
+  verdict?: MessageVerdict;
   speaker?: MessageSpeaker;
+}
+
+/** Which assistant segment owns the committed verdict badge. */
+interface VerdictPlacement {
+  index: number;
+  verdict: MessageVerdict;
 }
 
 interface TextModeSegmentQueue {
@@ -114,6 +121,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     introMessageId: string;
     segments: readonly string[];
     speaker?: MessageSpeaker;
+    actions?: readonly MessageAction[];
   } | null>(null);
   const [isGeneratingProgressReport, setIsGeneratingProgressReport] = useState(false);
   const [dailySessionSettings, setDailySessionSettings] = useState<{ mode: SimulationMode; testVersion: TestVersion; includeEnglishSimulation: boolean } | null>(null);
@@ -306,6 +314,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [persistStandardInterviewElapsed, standardInterviewTimerStorageKey]);
   const nextExamActionRef = useRef<MockExamAction | undefined>(undefined);
   const modeGoalPendingRef = useRef(false);
+  const modeReadyPendingRef = useRef(false);
   const modeIntroMessageIdRef = useRef<string | null>(null);
   const [focusOnboarding, setFocusOnboarding] = useState<FocusOnboardingState | null>(null);
   const focusOnboardingRef = useRef<FocusOnboardingState | null>(null);
@@ -418,6 +427,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     segments: readonly string[],
     actions?: readonly MessageAction[],
     speaker?: MessageSpeaker,
+    verdictPlacement?: VerdictPlacement,
   ) => {
     cancelTextModeSegments();
     const [first, ...rest] = segments;
@@ -432,6 +442,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         assistantMessageId,
         content: first,
         ...(rest.length === 0 && actions?.length ? { actions } : {}),
+        ...(verdictPlacement?.index === 0 ? { verdict: verdictPlacement.verdict } : {}),
         ...(speaker ? { speaker } : {}),
       },
     });
@@ -442,9 +453,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     const queue: TextModeSegmentQueue = {
       timerId: null,
-      pending: rest.map(content => ({
+      pending: rest.map((content, index) => ({
         assistantMessageId: `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         content,
+        ...(verdictPlacement?.index === index + 1 ? { verdict: verdictPlacement.verdict } : {}),
         ...(speaker ? { speaker } : {}),
       })),
       actions,
@@ -480,6 +492,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     introMessageId: string,
     segments: readonly string[],
     speaker?: MessageSpeaker,
+    actions?: readonly MessageAction[],
   ) => {
     cancelTextModeSegments();
     const [first, ...rest] = segments;
@@ -490,7 +503,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
     dispatch({
       type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
-      payload: { assistantMessageId: introMessageId, content: first, ...(speaker ? { speaker } : {}) },
+      payload: {
+        assistantMessageId: introMessageId,
+        content: first,
+        ...(speaker ? { speaker } : {}),
+        ...(rest.length === 0 && actions?.length ? { actions } : {}),
+      },
     });
     if (rest.length === 0) {
       finishAssistantTurn();
@@ -504,6 +522,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         content,
         ...(speaker ? { speaker } : {}),
       })),
+      actions,
     };
     textModeSegmentQueueRef.current = queue;
 
@@ -536,7 +555,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     const pending = pendingTransitionRef.current;
     if (!pending) return;
     pendingTransitionRef.current = null;
-    presentModeTransitionSegments(pending.introMessageId, pending.segments, pending.speaker);
+    presentModeTransitionSegments(pending.introMessageId, pending.segments, pending.speaker, pending.actions);
   }, [presentModeTransitionSegments]);
 
   useEffect(() => {
@@ -574,13 +593,14 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     assistantRevealRef.current = null;
   }, [dispatch]);
 
-  const startAssistantReveal = useCallback((messageId: string, segments: readonly string[], audioNode: HTMLAudioElement | null = null, speaker?: MessageSpeaker) => {
+  const startAssistantReveal = useCallback((messageId: string, segments: readonly string[], audioNode: HTMLAudioElement | null = null, speaker?: MessageSpeaker, verdictPlacement?: VerdictPlacement) => {
     stopAssistantReveal();
-    const bubbles: Array<{ messageId: string; tokens: string[]; created: boolean; speaker?: MessageSpeaker }> = segments
+    const bubbles: Array<{ messageId: string; tokens: string[]; created: boolean; verdict?: MessageVerdict; speaker?: MessageSpeaker }> = segments
       .map((segment, index) => ({
         messageId: index === 0 ? messageId : `asst-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         tokens: tokenizeAssistantReveal(segment),
         created: false,
+        ...(verdictPlacement?.index === index ? { verdict: verdictPlacement.verdict } : {}),
         ...(speaker ? { speaker } : {}),
       }))
       .filter(bubble => bubble.tokens.length > 0);
@@ -610,9 +630,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       if (!bubble.created) {
         bubble.created = true;
         if (bubbleIndex === 0) {
-          dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: token, ...(bubble.speaker ? { speaker: bubble.speaker } : {}) } });
+          dispatch({ type: 'ADD_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: token, ...(bubble.verdict ? { verdict: bubble.verdict } : {}), ...(bubble.speaker ? { speaker: bubble.speaker } : {}) } });
         } else {
-          dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: token, ...(bubble.speaker ? { speaker: bubble.speaker } : {}) } });
+          dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: { assistantMessageId: bubble.messageId, content: token, ...(bubble.verdict ? { verdict: bubble.verdict } : {}), ...(bubble.speaker ? { speaker: bubble.speaker } : {}) } });
         }
       } else {
         dispatch({ type: 'RECEIVE_ASSISTANT_CHUNK', payload: { assistantMessageId: bubble.messageId, content: token } });
@@ -1070,6 +1090,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         });
       }
       if (cachedMessages !== null) {
+        const readyPendingForCache = dailySession.mode_ready_pending === true;
+        cachedMessages = cachedMessages.map(m => {
+          if (!m.actions?.length) return m;
+          const actions = m.actions.filter(action => action.kind !== 'ready' || readyPendingForCache);
+          return { ...m, actions: actions.length ? actions : undefined };
+        });
         const cachedReviewId = findLatestMockExamReviewId(cachedMessages);
         if (cachedReviewId) {
           completedExamIdRef.current = cachedReviewId;
@@ -1085,6 +1111,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       sessionIdRef.current = dailySession.id;
       updateCurrentItemId(dailySession.current_item_id);
       modeGoalPendingRef.current = dailySession.mode_goal_pending;
+      modeReadyPendingRef.current = dailySession.mode_ready_pending === true;
       if (dailySession.mode_goal_pending
         && (dailySession.current_mode === 'practice' || dailySession.current_mode === 'study')) {
         updateFocusOnboarding({ mode: dailySession.current_mode, submitting: false, error: null });
@@ -1098,43 +1125,52 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ type: 'SET_SESSION_ID', payload: dailySession.id });
       const payload = await ChatPersistenceService.loadRecentMessages(userId, 50);
       if (!isMounted) return;
+      const readyPendingForHistory = dailySession.mode_ready_pending === true;
       const formattedMessages: Message[] = payload.messages.map(m => ({
         id: m.id,
         role: m.role,
         content: m.content,
         timestamp: m.created_at,
         ...(m.speaker ? { speaker: m.speaker } : {}),
-        ...(m.actions?.length ? { actions: m.actions } : {}),
+        ...(() => {
+          const actions = (m.actions ?? []).filter(action => action.kind !== 'ready' || readyPendingForHistory);
+          return actions.length ? { actions } : {};
+        })(),
+        ...(m.client_message_id ? { client_message_id: m.client_message_id } : {}),
       }));
       const persistedReviewId = findLatestMockExamReviewId(formattedMessages);
       if (persistedReviewId) {
         completedExamIdRef.current = persistedReviewId;
         setPostExamId(persistedReviewId);
       }
-      // Merge DB results with the instant cache snapshot instead of
-      // discarding either side: an empty/stale per-tab cache must never
-      // poison hydration, and DB rows must not wipe just-received live turns.
+      // The database page is authoritative for the window it covers. When a
+      // cache painted first, replace it instead of appending the same rows
+      // under freshly generated local IDs (the refresh-duplication defect).
+      // Keep only locally displayed turns that the page cannot contain yet:
+      // strictly newer than its newest row and not already present.
+      const dedupeKey = (m: Message) => m.client_message_id ?? m.id;
       if (cachedMessages === null && !historyChangedBeforeHydrationRef.current && !historyClearedBeforeHydrationRef.current) {
-        const seen = new Set<string>();
-        const merged: Message[] = [];
-        for (const m of [...(cachedMessages ?? []), ...formattedMessages]) {
-          if (seen.has(m.id)) continue;
-          seen.add(m.id);
-          merged.push(m);
-        }
-        merged.sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp));
         dispatch({
           type: 'LOAD_HISTORICAL_MESSAGES',
-          payload: { messages: merged, hasMore: payload.hasMore, oldestCursor: payload.oldestCursor, replace: true },
+          payload: { messages: formattedMessages, hasMore: payload.hasMore, oldestCursor: payload.oldestCursor, replace: true },
         });
       } else {
-        // Cache already painted instantly (or live turns arrived first):
-        // prepend only genuinely new DB rows, never replace.
-        const existingIds = new Set(latestConversationHistoryRef.current.map(m => m.id));
-        const fresh = formattedMessages.filter(m => !existingIds.has(m.id));
+        const newestDbTime = formattedMessages.reduce(
+          (newest, message) => Math.max(newest, +new Date(message.timestamp)),
+          Number.NEGATIVE_INFINITY
+        );
+        const dbKeys = new Set(formattedMessages.map(dedupeKey));
+        const pendingTail = latestConversationHistoryRef.current
+          .filter(m => !dbKeys.has(dedupeKey(m)) && +new Date(m.timestamp) > newestDbTime)
+          .sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp));
         dispatch({
           type: 'LOAD_HISTORICAL_MESSAGES',
-          payload: { messages: fresh, hasMore: payload.hasMore, oldestCursor: payload.oldestCursor, replace: false },
+          payload: {
+            messages: [...formattedMessages, ...pendingTail],
+            hasMore: payload.hasMore,
+            oldestCursor: payload.oldestCursor,
+            replace: true,
+          },
         });
       }
     }).catch(err => {
@@ -1186,10 +1222,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         timestamp: m.created_at,
         ...(m.speaker ? { speaker: m.speaker } : {}),
         ...(m.actions?.length ? { actions: m.actions } : {}),
+        ...(m.client_message_id ? { client_message_id: m.client_message_id } : {}),
       }));
       // Guard against duplicate rows at the cursor boundary.
-      const existingIds = new Set(latestConversationHistoryRef.current.map(m => m.id));
-      const freshMessages = formattedMessages.filter(m => !existingIds.has(m.id));
+      const dedupeKey = (m: Message) => m.client_message_id ?? m.id;
+      const existingKeys = new Set(latestConversationHistoryRef.current.map(dedupeKey));
+      const freshMessages = formattedMessages.filter(m => !existingKeys.has(dedupeKey(m)));
 
       dispatch({
         type: 'LOAD_HISTORICAL_MESSAGES',
@@ -1274,7 +1312,11 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [resumeVAD]);
 
-  const sendTextMessage = useCallback(async (text: string, inputMethod: 'text' | 'voice' = 'text') => {
+  const sendTextMessage = useCallback(async (
+    text: string,
+    inputMethod: 'text' | 'voice' = 'text',
+    options: { modeReady?: boolean } = {},
+  ) => {
     // The focus card is a blocking onboarding step. Keyboard, voice, and
     // programmatic sends stay closed until the learner presses Continue.
     if (focusOnboardingRef.current || modeGoalPendingRef.current) return;
@@ -1293,7 +1335,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     const submittedMode = simulationModeRef.current;
     const submittedExamRunId = examRunIdRef.current;
     pendingTranscriptClearRef.current = true;
-    const isOpeningResponse = openingResponseRef.current || !currentItemIdRef.current;
+    const isModeReadyRequest = options.modeReady === true;
+    const isOpeningResponse = !isModeReadyRequest
+      && (openingResponseRef.current || !currentItemIdRef.current);
     openingResponseRef.current = false;
     silenceNudgeControllerRef.current?.abort();
     silenceNudgeControllerRef.current = null;
@@ -1319,6 +1363,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     const traceId = `trace-id-${performance.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const secureUserMessageId = `user-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const secureAssistantMessageId = `asst-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const userClientMessageId = `client-msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     if (!apiClient) {
       releaseAssistantRequestHold();
@@ -1352,7 +1397,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       id: secureUserMessageId, 
       role: 'user', 
       content: validatedText, 
-      timestamp: new Date().toISOString() 
+      timestamp: new Date().toISOString(),
+      client_message_id: userClientMessageId
     };
     let activeSessionId = sessionIdRef.current || conversationState.sessionId;
     const requestedSessionDate = getCurrentSessionDate();
@@ -1393,6 +1439,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           sessionIdRef.current = activeSessionId;
           updateCurrentItemId(dailySession?.current_item_id ?? null);
           modeGoalPendingRef.current = dailySession?.mode_goal_pending ?? false;
+          modeReadyPendingRef.current = dailySession?.mode_ready_pending === true;
           if (dailySession?.mode_goal_pending
             && (dailySession.current_mode === 'practice' || dailySession.current_mode === 'study')) {
             updateFocusOnboarding({ mode: dailySession.current_mode, submitting: false, error: null });
@@ -1418,7 +1465,10 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         activeSessionId,
         userId,
         'user',
-        validatedText
+        validatedText,
+        undefined,
+        undefined,
+        userClientMessageId
       );
     }
 
@@ -1441,6 +1491,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       let nextItemId: string | null = null;
       let needsConfirmation = false;
       let verdict: 'correct' | 'incorrect' | 'partial' | null = null;
+      let verdictSegmentIndex: number | null = null;
       let examCompleted = false;
       let assistantSegments: string[] = [];
 
@@ -1458,7 +1509,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
             activeSessionId,
             currentItemIdRef.current,
             isConfirmationRetry,
-              { headers: { 'x-correlation-trace-id': traceId }, signal: turnController.signal, voiceId: voiceIdRef.current ?? undefined, simulationMode: simulationModeRef.current, preferredLanguage: preferredLanguageRef.current, openingResponse: isOpeningResponse, testVersion: testVersionRef.current, includeEnglishSimulation: includeEnglishSimulationRef.current, examRunId: examRunIdRef.current, modeGoalResponse: modeGoalPendingRef.current, examAction: nextExamActionRef.current, inputMethod, requestId: traceId, postExamId: simulationModeRef.current === 'standard' && !examRunIdRef.current ? completedExamIdRef.current : null }
+              { headers: { 'x-correlation-trace-id': traceId }, signal: turnController.signal, voiceId: voiceIdRef.current ?? undefined, simulationMode: simulationModeRef.current, preferredLanguage: preferredLanguageRef.current, openingResponse: isOpeningResponse, testVersion: testVersionRef.current, includeEnglishSimulation: includeEnglishSimulationRef.current, examRunId: examRunIdRef.current, modeGoalResponse: modeGoalPendingRef.current, modeReady: isModeReadyRequest, examAction: nextExamActionRef.current, inputMethod, requestId: traceId, postExamId: simulationModeRef.current === 'standard' && !examRunIdRef.current ? completedExamIdRef.current : null, clientMessageId: userClientMessageId }
           );
           responseText = res.responseText;
           assistantSegments = Array.isArray(res.assistantSegments) ? res.assistantSegments : [];
@@ -1466,6 +1517,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
           nextItemId = res.nextItemId;
           needsConfirmation = res.needsConfirmation;
           verdict = res.verdict;
+          verdictSegmentIndex = res.verdictSegmentIndex;
           examCompleted = res.examCompleted;
           if (res.examRunId !== null) {
             if (submittedMode === 'standard' && standardExamRunIdRef.current !== res.examRunId) {
@@ -1482,6 +1534,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
             assistantSegments.push(`[[MOCK_EXAM_REVIEW:${res.examReviewId}]]`);
           }
           modeGoalPendingRef.current = res.modeGoalPending;
+          modeReadyPendingRef.current = res.modeReadyPending;
           if (isOpeningResponse) nextExamActionRef.current = undefined;
           break;
         } catch (err: unknown) {
@@ -1575,6 +1628,9 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
 
       // Persist Assistant Message to Supabase
       const displaySegments = assistantSegments.length > 0 ? assistantSegments : [responseText];
+      const verdictPlacement: VerdictPlacement | undefined = verdict && verdictSegmentIndex !== null
+        ? { index: verdictSegmentIndex, verdict }
+        : undefined;
       const turnSpeaker = speakerForMode(submittedMode);
       const speakerForSegment = (segment: string): MessageSpeaker =>
         /^\[\[MOCK_EXAM_REVIEW:[0-9a-f-]+\]\]$/i.test(segment.trim()) ? 'report' : turnSpeaker;
@@ -1591,7 +1647,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         // out so they read as separate AI responses. The word-by-word
         // typewriter remains reserved for voice mode where it tracks Polly.
         assistantReplyPendingRef.current = true;
-        presentTextModeSegments(secureAssistantMessageId, displaySegments, undefined, turnSpeaker);
+        presentTextModeSegments(secureAssistantMessageId, displaySegments, undefined, turnSpeaker, verdictPlacement);
         if (examCompleted) {
           pauseStandardInterviewTimer(true);
         } else if (submittedMode === 'standard' && nextItemId && examRunIdRef.current) {
@@ -1619,7 +1675,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // One shared Polly track covers every segment; the reveal walks bubbles
       // in order so the next-question bubble only appears once the previous
       // bubble's words have been spoken.
-      startAssistantReveal(secureAssistantMessageId, displaySegments, audioPlaybackNode, turnSpeaker);
+      startAssistantReveal(secureAssistantMessageId, displaySegments, audioPlaybackNode, turnSpeaker, verdictPlacement);
       if (examCompleted) {
         pauseStandardInterviewTimer(true);
       } else if (submittedMode === 'standard' && nextItemId && examRunIdRef.current) {
@@ -2015,6 +2071,15 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         || (activateVoice && !voiceSessionRef.current)) return false;
 
       updateCurrentItemId(res.nextItemId);
+      modeGoalPendingRef.current = res.modeGoalPending === true;
+      modeReadyPendingRef.current = res.modeReadyPending === true;
+      if (simulationModeRef.current !== 'standard') {
+        if (res.modeGoalPending) {
+          updateFocusOnboarding({ mode: simulationModeRef.current, submitting: false, error: null });
+        } else {
+          updateFocusOnboarding(null);
+        }
+      }
       examRunIdRef.current = res.examRunId;
       if (simulationModeRef.current === 'standard') {
         if (standardExamRunIdRef.current !== res.examRunId) {
@@ -2048,20 +2113,25 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         const displaySegments = res.assistantSegments.length > 0
           ? res.assistantSegments
           : [res.responseText];
+        // Standard and Practice/Study both wait for an explicit Ready. The
+        // first question is requested only after the learner confirms.
+        const readyGate = (res.examIntro !== null && res.nextItemId === null)
+          || res.modeReadyPending === true;
+        const readyActions = readyGate
+          ? [{ kind: 'ready' as const, label: t('workspace.center.ready') }]
+          : undefined;
         if (userId && newSessionId) {
           void (async () => {
-            for (const segment of displaySegments) {
-              await ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', segment, undefined, startedSpeaker);
+            for (const [index, segment] of displaySegments.entries()) {
+              const actions = readyActions && index === displaySegments.length - 1 ? readyActions : undefined;
+              await ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', segment, actions, startedSpeaker);
             }
           })();
         }
-        // The Standard intro ends with a Ready action. The first question is
-        // requested only after the learner confirms, never on load.
-        const readyGate = res.examIntro !== null && res.nextItemId === null;
         presentTextModeSegments(
           secureAssistantMessageId,
           displaySegments,
-          readyGate ? [{ kind: 'ready', label: t('workspace.center.ready') }] : undefined,
+          readyActions,
           startedSpeaker,
         );
         if (simulationModeRef.current === 'standard' && res.nextItemId && res.examRunId) {
@@ -2082,16 +2152,21 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         return true;
       }
 
-      if (res.examIntro !== null && res.nextItemId === null) {
-        // Standard Interview rules are text-first. Keep the microphone closed
-        // until the learner chooses Ready, then ask for the first question.
+      if ((res.examIntro !== null && res.nextItemId === null) || res.modeReadyPending === true) {
+        // Standard and Practice/Study rules are text-first. Keep the microphone
+        // closed until the learner chooses Ready, then ask for the first question.
         const displaySegments = res.assistantSegments.length > 0
           ? res.assistantSegments
           : [res.responseText];
+        const readyActions = [{ kind: 'ready' as const, label: t('workspace.center.ready') }];
         if (userId && newSessionId) {
           void (async () => {
-            for (const segment of displaySegments) {
-              await ChatPersistenceService.persistMessage(newSessionId, userId, 'assistant', segment, undefined, startedSpeaker);
+            for (const [index, segment] of displaySegments.entries()) {
+              await ChatPersistenceService.persistMessage(
+                newSessionId, userId, 'assistant', segment,
+                index === displaySegments.length - 1 ? readyActions : undefined,
+                startedSpeaker,
+              );
             }
           })();
         }
@@ -2105,7 +2180,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
               content,
               speaker: startedSpeaker,
               ...(index === displaySegments.length - 1
-                ? { actions: [{ kind: 'ready' as const, label: t('workspace.center.ready') }] }
+                ? { actions: readyActions }
                 : {}),
             },
           });
@@ -2236,7 +2311,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       await startListeningWithMicGate();
       return false;
     }
-  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, stopRecording, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId, presentTextModeSegments, startStandardInterviewTimer, t]);
+  }, [userId, conversationState.sessionId, conversationState.isSessionActive, dispatch, startRecording, startListeningWithMicGate, apiClient, clearAudioPlayback, stopRecording, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeVAD, updateCurrentItemId, updateFocusOnboarding, presentTextModeSegments, startStandardInterviewTimer, t]);
 
   const terminateSession = useCallback(async () => {
     pauseStandardInterviewTimer();
@@ -2726,8 +2801,8 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
   }, [conversationState.conversationHistory, conversationState.hasMoreHistory, i18n.language]);
 
   /**
-   * Presents the first focused question after the learner confirms a focus,
-   * either from the intro bubble or from the focus card.
+   * Presents the focus confirmation and, when required, the Ready gate. The
+   * first question is only requested after the learner chooses Ready.
    */
   const presentModeGoalResponse = useCallback((
     response: Awaited<ReturnType<ApiClient['postTranscript']>>,
@@ -2735,6 +2810,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     activeSessionId: string,
   ) => {
     modeGoalPendingRef.current = response.modeGoalPending;
+    modeReadyPendingRef.current = response.modeReadyPending;
     updateCurrentItemId(response.nextItemId);
     updateFocusOnboarding(null);
     if (modeIntroMessageIdRef.current) {
@@ -2754,21 +2830,31 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       ? response.assistantSegments
       : [response.responseText];
     const focusSpeaker = speakerForMode(activeMode);
-    for (const content of segments) {
+    const readyActions = response.modeReadyPending
+      ? [{ kind: 'ready' as const, label: t('workspace.center.ready') }]
+      : undefined;
+    segments.forEach((content, index) => {
+      const isLast = index === segments.length - 1;
       dispatch({ type: 'ADD_STANDALONE_ASSISTANT_MESSAGE', payload: {
         assistantMessageId: `focus-onboarding-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         content,
         speaker: focusSpeaker,
+        ...(isLast && readyActions ? { actions: readyActions } : {}),
       } });
-      if (content.trim()) void ChatPersistenceService.persistMessage(activeSessionId, userId ?? '', 'assistant', content, undefined, focusSpeaker);
-    }
+      if (content.trim()) {
+        void ChatPersistenceService.persistMessage(
+          activeSessionId, userId ?? '', 'assistant', content,
+          isLast ? readyActions : undefined, focusSpeaker,
+        );
+      }
+    });
     if (voiceSessionRef.current && response.audioData.byteLength > 0) {
       const url = URL.createObjectURL(new Blob([response.audioData], { type: 'audio/mpeg' }));
       const player = acquirePollyPlaybackElement(url);
       player.onended = () => URL.revokeObjectURL(url);
       void player.play().catch(() => URL.revokeObjectURL(url));
     }
-  }, [dispatch, updateCurrentItemId, updateFocusOnboarding, userId]);
+  }, [dispatch, t, updateCurrentItemId, updateFocusOnboarding, userId]);
 
   const playTransitionAudio = useCallback((
     messageId: string,
@@ -2905,9 +2991,16 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
 
       modeGoalPendingRef.current = response.modeGoalPending;
-      if (!response.modeGoalPending) updateFocusOnboarding(null);
+      modeReadyPendingRef.current = response.modeReadyPending;
+      if (response.modeGoalPending && mode !== 'standard') {
+        updateFocusOnboarding({ mode, submitting: false, error: null });
+      } else {
+        updateFocusOnboarding(null);
+      }
       updateCurrentItemId(
-        response.modeGoalPending ? null : response.nextItemId ?? currentItemIdRef.current,
+        response.modeGoalPending || response.modeReadyPending
+          ? null
+          : response.nextItemId ?? currentItemIdRef.current,
       );
 
       const segments = Array.isArray(response.assistantSegments) && response.assistantSegments.length
@@ -2920,24 +3013,32 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       // F8: the card is the only action surface — no intro Continue/Edit
       // focus actions. Practice/Study onboarding actions live on the
       // post-report card instead, not on the intro bubble.
+      const readyActions = response.modeReadyPending
+        ? [{ kind: 'ready' as const, label: t('workspace.center.ready') }]
+        : undefined;
 
       const modeSpeaker = speakerForMode(mode);
-      for (const content of segments) {
+      segments.forEach((content, index) => {
         if (content.trim()) {
-          void ChatPersistenceService.persistMessage(activeSessionId, userId, 'assistant', content, undefined, modeSpeaker);
+          const isLast = index === segments.length - 1;
+          void ChatPersistenceService.persistMessage(
+            activeSessionId, userId, 'assistant', content,
+            isLast ? readyActions : undefined, modeSpeaker,
+          );
         }
-      }
+      });
 
       const shouldRevealNow = isChatVisibleRef.current;
       if (wasVoiceActive && response.audioData.byteLength > 0) {
-        playTransitionAudio(introMessageId, segments, response.audioData, undefined, modeSpeaker);
+        playTransitionAudio(introMessageId, segments, response.audioData, readyActions, modeSpeaker);
       } else if (shouldRevealNow) {
-        presentModeTransitionSegments(introMessageId, segments, modeSpeaker);
+        presentModeTransitionSegments(introMessageId, segments, modeSpeaker, readyActions);
       } else {
         pendingTransitionRef.current = {
           introMessageId,
           segments,
           speaker: modeSpeaker,
+          actions: readyActions,
         };
         dispatch({ type: 'SET_STATUS', payload: wasVoiceActive ? 'listening' : 'idle' });
         if (wasVoiceActive) void startListeningWithMicGate();
@@ -3026,6 +3127,12 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     }
   }, [apiClient, userId, conversationState.sessionId, presentModeGoalResponse, updateFocusOnboarding, t]);
 
+  /** The Ready action shared by the Standard intro and the Practice/Study gate. */
+  const confirmReady = useCallback(async (label: string): Promise<void> => {
+    const inputMethod = voiceSessionRef.current ? 'voice' : 'text';
+    await sendTextMessage(label, inputMethod, { modeReady: modeReadyPendingRef.current });
+  }, [sendTextMessage]);
+
   /**
    * Starts a fresh session in the recommended Learning Mode and applies the
    * suggested focus so the first question uses it. Used by the welcome-card
@@ -3083,6 +3190,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
     focusOnboarding,
     openFocusEditor,
     confirmModeFocus,
+    confirmReady,
     submitFocusOnboarding,
     isAudioRetryPending,
     currentState,

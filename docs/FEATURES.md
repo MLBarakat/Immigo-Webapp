@@ -120,7 +120,7 @@ This registry is the contract between the product, the tests, and every AI codin
 - Detailed progress reports refresh silently after every ten scored civics answers in the active Standard Interview.
 - Reading/writing stages and stable prompt selections are preserved.
 - An interview review is server-generated; the client renders it without inventing scores.
-- The final graded answer of a Standard Interview explicitly states that the interview is complete and names the deterministic threshold result, and the next assistant bubble is a warm summary with the recommended mode, an invitation to open the Interview Report, and a prompt to capture the decision and goals.
+- The final graded answer of a Standard Interview explicitly states that the interview is complete and includes a deterministic score line with the total answered, correct, and incorrect counts plus the question at which the learner passed, when applicable; the next assistant bubble is one formal-but-warm qualitative sentence with no numbers, scores, or recommendations.
 - The completion summary never mentions questions to review.
 - Completion, returning intro, report, and scorecard describe the civics result as reaching or not reaching the passing threshold; the word failed is never used.
 - The scorecard exposes `passAt` and `thresholdReached` so the client renders the recorded result without recalculating it.
@@ -140,14 +140,14 @@ This registry is the contract between the product, the tests, and every AI codin
 - The scheduler always serves the bucket furthest below its target share; ties break new, then weak, then review, then item ID.
 - English reading and writing run only after a civics pass when English is enabled, then the report; a civics fail goes straight to the report, and disabled English goes to the report after civics. English never changes civics pass/fail, and a post-fail report says English was not administered.
 - The English preference defaults on only for new accounts; an existing saved value, including off, is always respected in both test versions.
-- Practice and Study first-time onboarding shows a deterministic explanation in one assistant bubble; returning onboarding shows per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts plus the same counts for the focus subset, in one assistant bubble, and lets the learner keep or change focus.
-- Practice and Study intro bubbles carry no Continue or Edit actions; the focus card opens automatically and is the only action surface. The card states the limit of three focus areas, starts the first question through the focus submission flow, and stays actionable when submission fails.
+- Practice and Study entry always ends at a chat Ready gate before the first question. A first-time entry explains the mode, why it matters, and what to expect, then opens the focus card; choosing or confirming a focus produces the Ready prompt. A returning entry shows per-version mastered, practiced-but-not-mastered, and not-yet-practiced counts for the overall bank and the saved focus, then the Ready prompt. The gate reads the latest server-side focus (session goal first, then account goal), and no path skips it.
+- Practice and Study intro bubbles carry no Continue or Edit actions; the focus card opens automatically and is the only action surface. The card states the limit of three focus areas, submits the focus, and stays actionable when submission fails. Confirming a focus produces the Ready prompt; only Ready selects and presents the first question.
 - A first Learning Mode introduction is one assistant bubble only. For Standard, that bubble contains the icebreaker, version facts, and rules, and the separate Ready question is the next bubble.
 - A mode change commits the selection in the UI immediately and enters 'preparing' state, which locks text input and voice capture. The backend response is revealed when the transition completes: immediately on desktop, and when the learner returns to the chat tab on mobile. If voice was active when the switch was accepted, Polly speaks the transition response (with typewriter reveal and barge-in support) before resuming listening; text-mode transitions render without Polly.
 - The first-run welcome introduces Learning Modes and offers Standard Interview, Practice, and Study as the first mode; choosing one closes the welcome and activates that mode.
 - Practice and Study advance through every bank item for the selected test version over the learner's lifetime in that mode, continuing an unfinished pass across sessions; a pass restarts only after every item has been seen.
 - Practice and Study focus constrains question selection; a category cycle restarts only after a full pass and shows a deterministic notice.
-- The Standard Ready gate reuses the existing opening-response path, returning `nextItemId: null` until the learner confirms; no database flag is added.
+- The Standard Ready gate reuses the existing opening-response path, returning `nextItemId: null` until the learner confirms. Practice and Study persist their gate in `sessions.mode_ready_pending`, which is cleared when Ready is confirmed; the focus card and Ready gate flags are mutually exclusive.
 - The Standard Interview timer starts when the first question is presented, pauses and hides when the interview is interrupted, resumes the same unfinished exam's elapsed time in the same browser, and clears on completion.
 - The Interview Report suggests two or three weakest categories from structured grading signals, never by reading qualitative report prose. The suggestion pre-fills the decision form only when the learner chooses Use this focus, and nothing persists until Save.
 - The decision form replaces Cancel with Back, which returns to the choice cards and discards unsaved edits, and Save my choice with Save. The focus combobox appears in the report only for Practice and Study decisions and offers only official USCIS categories.
@@ -167,15 +167,18 @@ This registry is the contract between the product, the tests, and every AI codin
 - Civics answers are graded server-side. The client never decides correctness.
 - Partial answers, confirmations, hints, repeats, progress questions, and dynamic questions without verifiable current answers remain distinct.
 - Dynamic answers are checked against the maintained dynamic-answer JSON; state-specific entries use the authenticated user's persisted registration/account state.
-- For the representative question, any current U.S. House member listed for the selected state is accepted because registration does not collect a congressional district.
+- For the representative question, any current U.S. House member listed for the selected state is accepted because registration does not collect a congressional district; clarifications use the approved wording "a U.S. representative from your state" and never a district-specific answer.
+- The 2020 Congress-powers question accepts the official answer variants "Makes the federal budget" and "Approves the federal budget".
 - `graded_answers` is the authoritative record for progress reports.
 - A grading change requires an eval run and a reviewed prompt change.
 - Server copy (`safeReplyKey`) is typed and localized for all four supported locales; exam content remains in English.
-- The Standard completion announcement, its deterministic threshold result, and the recommended-mode label are localized; English exercise sentences and official civics questions stay English.
+- The Standard completion announcement and deterministic score line are localized; the closing numeric facts (total, correct, incorrect, and pass point) are code-generated, while the model contributes exactly one qualitative sentence with no numbers, scores, or recommendations.
 - The civics-to-English reading and writing transition lines, and the English-completion fallback, are localized; only the exercise prompt and task content remain English.
 - The Standard Ready gate opening acknowledgement is localized when Study requests it; Practice keeps the English-immersion path.
-- Final-answer feedback removes model-authored question sentences and next-question announcements without truncating complete statements before or after them.
+- Final-answer feedback removes model-authored question sentences, next-question announcements, and the dangling lead-ins they leave behind without truncating complete statements before or after them.
 - When feedback sanitizes to nothing, the fallback is verdict-aware and localized; it is never an empty non-answer.
+- Committed civics feedback begins with a deterministic, mode-specific verdict prefix in the learner's locale, and the same verdict renders as a chat badge, so text and UI can never disagree. The prefix is applied after sanitization so a question-only model reply still falls back to verdict-aware copy.
+- When a learner offers several ideas and more than one matches the acceptable answers, feedback acknowledges every matched idea rather than only the first.
 - Practice near-miss retry copy is distinct from the generic retry; grading, scoring, and advancement are unchanged by that copy choice.
 - Question-bank IDs and test-version routing remain stable.
 
@@ -225,13 +228,15 @@ This registry is the contract between the product, the tests, and every AI codin
 
 **Invariants**
 
-- Messages remain ordered and are never dropped or duplicated by pagination.
+- Messages remain ordered and are never dropped or duplicated by pagination or refresh.
+- Every client-created message carries a stable `client_message_id`; hydration replaces the warmed cache with the database page plus only locally displayed turns newer than the newest database row, deduped by `client_message_id` or `id`.
 - History is user-scoped and RLS-protected.
 - Loading older messages preserves scroll position and the active session.
 - Transcript download reflects the persisted conversation.
 - Transcript export labels each message by its durable speaker — USCIS Officer, Practice Coach, Study Coach, ImmiGO, Interview Report, or User — using the persisted speaker and falling back to persisted actions.
 - Transcript export omits ephemeral banner, progress-card, and error bubbles, renders the exam-review marker as a localized report line, shows elapsed duration for same-day history or a date range across days, notes partial history when older pages are not loaded, and never includes a session id.
 - Assistant messages render safe rich text — headings, paragraphs, lists, quotes, emphasis, code, and http(s) links — without injecting raw HTML; user-authored messages remain literal.
+- Assistant feedback may render a localized verdict badge (Correct, Needs review, or Partially correct); user-authored messages never render one.
 - The assistant reveal keeps paragraph breaks and list indentation so Markdown structure survives the typewriter and reconstructs the stored message exactly.
 
 **Tests:** `src/services/__tests__/chatPersistenceService.test.ts`, `src/components/__tests__/ConversationHistory.test.tsx`, `src/components/__tests__/ChatMessageContent.test.tsx`, `src/utils/__tests__/revealTokens.test.ts`, `tests/e2e/infinite-scroll.spec.ts`, `tests/e2e/text-roundtrip.spec.ts`
@@ -358,6 +363,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - Only the two canonical voices for the requested language are synthesized; legacy IDs are mapped and cross-language or unknown voices fall back to that language's default.
 - The completed-exam review response includes server-generated scorecard and question-outcome data; the client validates and presents those facts without calculating scores.
 - Completed-exam scorecards carry additive civics fields `passAt` and `thresholdReached`; the client rejects a scorecard that omits them or whose `thresholdReached` contradicts the recorded correct count.
+- `POST /transcript` accepts an optional `clientMessageId` for idempotent message persistence and returns the additive `verdictSegmentIndex`, which identifies the assistant segment carrying committed-answer feedback and is null when nothing was graded.
+- Practice/Study entry and confirmation requests use `focusAreaIds`, `allFocusAreas`, `confirmFocus`, and `modeReady` without changing the existing transcript message contract.
 
 **Tests:** `src/services/__tests__/apiClient.test.ts`, `amplify/functions/transcript/__tests__/mock-exam-routing.test.ts`, `amplify/functions/transcript/__tests__/ssml.test.ts`, `amplify/functions/aggregateSession/__tests__/handler.test.ts`, `amplify/functions/deleteAccount/__tests__/handler.test.ts`, `tests/integration/websocket_api.test.ts`
 
@@ -377,6 +384,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - Foreign keys to `auth.users` cascade on delete.
 - Every public table except `sessions` keeps NOT NULL `created_at`/`updated_at` with an on-update trigger.
 - Generated TypeScript types and `docs/DATABASE.md` stay in sync with migrations.
+- `messages.client_message_id` is nullable and unique per session through a partial index; the client sends it on every user and assistant message.
+- `sessions.mode_ready_pending` is a non-null boolean defaulting to false, and it can never be true at the same time as `sessions.mode_goal_pending`.
 - `user_settings.learning_goal` is nullable and limited to 300 non-whitespace characters; `weekly_graded_answer_target` is nullable and positive when set.
 - Completed interview decisions are constrained to supported choices, saved once through an authenticated owner-scoped transaction, and immutable thereafter; Practice/Study decisions atomically synchronize the account learning goal.
 - The live round-trip test remains available behind `RUN_DB_ROUNDTRIP=1`.

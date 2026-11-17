@@ -253,6 +253,23 @@ function modeGoalResponseEvent(overrides: Record<string, unknown> = {}): Paramet
   } as unknown as Parameters<typeof handler>[0];
 }
 
+function modeReadyEvent(overrides: Record<string, unknown> = {}): Parameters<typeof handler>[0] {
+  const event = transcribeEvent();
+  return {
+    ...event,
+    body: JSON.stringify({
+      transcript: 'Ready',
+      sessionId: 'session-1',
+      currentItemId: null,
+      simulationMode: 'practice',
+      testVersion: '2020',
+      preferredLanguage: 'en-US',
+      modeReady: true,
+      ...overrides,
+    }),
+  } as unknown as Parameters<typeof handler>[0];
+}
+
 function bedrockText(text: string) {
   return {
     body: new TextEncoder().encode(JSON.stringify({
@@ -845,13 +862,14 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(body.assistantSegments).toHaveLength(2);
     expect(body.assistantSegments[0]).toMatch(/completes your Standard Interview/i);
     expect(body.assistantSegments[0]).toContain(
-      'You did not reach the passing threshold this time: 3 correct answers (12 needed).',
+      'You answered 12 questions: 3 correct and 9 incorrect. You did not reach the passing threshold of 12 correct answers this time.',
     );
     expect(body.assistantSegments[0]).not.toMatch(/failed/i);
-    expect(body.assistantSegments[1]).toContain('Practice Mode');
-    expect(body.assistantSegments[1]).toContain('Interview Report');
-    expect(body.assistantSegments[1]).toMatch(/decision/i);
-    expect(body.assistantSegments[1]).toMatch(/goals/i);
+    // The model is unavailable, so the qualitative fallback must stand alone:
+    // one formal-but-warm sentence with no numbers or recommendations.
+    expect(body.assistantSegments[1]).toContain('steady effort');
+    expect(body.assistantSegments[1]).not.toMatch(/\d/);
+    expect(body.assistantSegments[1]).not.toMatch(/Practice Mode|Interview Report|decision|goals/i);
     expect(body.responseText).not.toMatch(/questions to review/i);
     expect(body.examReport).toContain('Practice result: passing threshold not reached this time.');
     expect(body.examReport).toContain('Passing threshold: 12 correct answers.');
@@ -899,11 +917,11 @@ describe('transcript handler — mock exam civics phase routing', () => {
     const body = JSON.parse(response.body) as { assistantSegments: string[] };
     expect(body.assistantSegments[0]).toContain('Eso completa tu Entrevista estándar.');
     expect(body.assistantSegments[0]).toContain(
-      'Esta vez no has alcanzado el umbral de aprobación: 3 respuestas correctas (se necesitaban 12).',
+      'Has respondido 12 preguntas: 3 correctas y 9 incorrectas. Esta vez no has alcanzado el umbral de aprobación de 12 respuestas correctas.',
     );
     expect(body.assistantSegments[0]).not.toContain('That completes your Standard Interview');
-    expect(body.assistantSegments[1]).toContain('Modo práctica');
-    expect(body.assistantSegments[1]).not.toContain('Practice Mode');
+    expect(body.assistantSegments[1]).toContain('Su esfuerzo constante');
+    expect(body.assistantSegments[1]).not.toMatch(/Modo práctica|Practice Mode/);
   });
 
   it('localizes the English-section completion path too', async () => {
@@ -943,10 +961,10 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(body.examCompleted).toBe(true);
     expect(body.assistantSegments[0]).toContain('Eso completa tu Entrevista estándar.');
     expect(body.assistantSegments[0]).toContain(
-      'Has alcanzado el umbral de aprobación: 12 respuestas correctas.',
+      'Has respondido 12 preguntas: 12 correctas y 0 incorrectas. Aprobaste en la pregunta 12.',
     );
     expect(body.assistantSegments[0]).not.toContain('That completes your Standard Interview');
-    expect(body.assistantSegments[1]).toContain('Modo práctica');
+    expect(body.assistantSegments[1]).toContain('Su esfuerzo constante');
   });
 
   it('reports Standard Interview progress as answered and remaining questions', async () => {
@@ -1234,11 +1252,12 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(mocks.bedrockSend).not.toHaveBeenCalled();
   });
 
-  it('starts first-time Practice onboarding with the account goal and no first question', async () => {
+  it('starts first-time Practice onboarding with the account goal and the Ready gate', async () => {
     mocks.state.sessionRow = {
       id: 'session-1',
       current_goal: null,
       mode_goal_pending: false,
+      mode_ready_pending: false,
       current_item_id: null,
     };
     mocks.state.settings = { learning_goal: 'Symbols' };
@@ -1251,28 +1270,35 @@ describe('transcript handler — mock exam civics phase routing', () => {
       audioData: string;
       nextItemId: string | null;
       modeGoalPending: boolean;
+      modeReadyPending: boolean;
     };
     expect(body.responseText).toContain('Practice Mode is ready');
-    expect(body.responseText).toContain('Choose one focus area');
+    // First-time entry explains the mode, why it matters, and what to expect.
+    expect(body.responseText).toContain('mirrors the civics interview');
+    expect(body.responseText).toContain('builds the confidence');
+    expect(body.responseText).toContain('choose Ready');
     expect(body.audioData).toBe('');
     expect(body.nextItemId).toBeNull();
-    expect(body.modeGoalPending).toBe(true);
+    expect(body.modeGoalPending).toBe(false);
+    expect(body.modeReadyPending).toBe(true);
     expect(mocks.pollySend).not.toHaveBeenCalled();
     expect(mocks.state.updates).toContainEqual(expect.objectContaining({
       table: 'sessions',
       payload: expect.objectContaining({
-        mode_goal_pending: true,
+        mode_goal_pending: false,
+        mode_ready_pending: true,
         current_goal: 'Symbols',
       }),
     }));
   });
 
-  it('shows returning Practice counts from prior graded answers before the focus card', async () => {
+  it('shows returning Practice counts and the stored focus before Ready', async () => {
     const item = allItems('2020')[0];
     mocks.state.sessionRow = {
       id: 'session-1',
       current_goal: 'All focus areas',
       mode_goal_pending: false,
+      mode_ready_pending: false,
       current_item_id: null,
     };
     mocks.state.gradedAnswers = [
@@ -1288,20 +1314,24 @@ describe('transcript handler — mock exam civics phase routing', () => {
       responseText: string;
       nextItemId: string | null;
       modeGoalPending: boolean;
+      modeReadyPending: boolean;
     };
     expect(body.responseText).toContain('Practice Mode is ready');
     expect(body.responseText).toContain('Across the 2020 question bank');
     expect(body.responseText).toContain('questions are mastered');
     expect(body.responseText).toContain('You are currently covering All focus areas');
+    expect(body.responseText).toContain('Your saved focus stays All focus areas');
     expect(body.nextItemId).toBeNull();
-    expect(body.modeGoalPending).toBe(true);
+    expect(body.modeGoalPending).toBe(false);
+    expect(body.modeReadyPending).toBe(true);
   });
 
-  it('continues with the stored focus when the intro bubble confirms it without text', async () => {
+  it('confirms the stored focus and then waits for Ready instead of asking a question', async () => {
     mocks.state.sessionRow = {
       id: 'session-1',
       current_goal: 'Geography',
       mode_goal_pending: true,
+      mode_ready_pending: false,
       current_item_id: null,
     };
 
@@ -1315,25 +1345,29 @@ describe('transcript handler — mock exam civics phase routing', () => {
       responseText: string;
       nextItemId: string | null;
       modeGoalPending: boolean;
+      modeReadyPending: boolean;
     };
-    const geography = focusedItems('2020', ['geography']).map(entry => entry.id);
     expect(body.responseText).toContain('Great. We will use Geography in Practice Mode.');
-    expect(geography).toContain(body.nextItemId);
+    expect(body.responseText).toContain('choose Ready');
+    expect(body.nextItemId).toBeNull();
     expect(body.modeGoalPending).toBe(false);
+    expect(body.modeReadyPending).toBe(true);
     expect(mocks.state.updates).toContainEqual(expect.objectContaining({
       table: 'sessions',
       payload: expect.objectContaining({
         current_goal: 'Geography',
         mode_goal_pending: false,
+        mode_ready_pending: true,
       }),
     }));
   });
 
-  it('starts the first focused Practice question only after the focus submission', async () => {
+  it('stores a new focus and waits for Ready before the first Practice question', async () => {
     mocks.state.sessionRow = {
       id: 'session-1',
       current_goal: 'All focus areas',
       mode_goal_pending: true,
+      mode_ready_pending: false,
       current_item_id: null,
     };
 
@@ -1347,35 +1381,70 @@ describe('transcript handler — mock exam civics phase routing', () => {
       responseText: string;
       nextItemId: string | null;
       modeGoalPending: boolean;
+      modeReadyPending: boolean;
     };
-    const geography = focusedItems('2020', ['geography']).map(entry => entry.id);
     expect(body.responseText).toContain('Great. We will use Geography in Practice Mode.');
-    expect(body.nextItemId).not.toBeNull();
-    expect(geography).toContain(body.nextItemId);
+    expect(body.responseText).toContain('choose Ready');
+    expect(body.nextItemId).toBeNull();
     expect(body.modeGoalPending).toBe(false);
+    expect(body.modeReadyPending).toBe(true);
     expect(mocks.state.updates).toContainEqual(expect.objectContaining({
       table: 'sessions',
       payload: expect.objectContaining({
         current_goal: 'Geography',
         mode_goal_pending: false,
+        mode_ready_pending: true,
       }),
     }));
   });
 
-  it('announces a new focus pass after every item was asked once', async () => {
+  it('selects the first question from the persisted focus when the learner chooses Ready', async () => {
+    mocks.state.sessionRow = {
+      id: 'session-1',
+      current_goal: 'Geography',
+      mode_goal_pending: false,
+      mode_ready_pending: true,
+      current_item_id: null,
+    };
+
+    // A stale client focus must not override the server-side focus.
+    const response = await handler(modeReadyEvent({
+      focusAreaIds: ['symbols'],
+      allFocusAreas: false,
+    }));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      responseText: string;
+      nextItemId: string | null;
+      modeReadyPending: boolean;
+    };
+    const geography = focusedItems('2020', ['geography']).map(entry => entry.id);
+    expect(body.responseText).toContain("Let's begin with this question:");
+    expect(geography).toContain(body.nextItemId);
+    expect(body.modeReadyPending).toBe(false);
+    expect(mocks.state.updates).toContainEqual(expect.objectContaining({
+      table: 'sessions',
+      payload: expect.objectContaining({
+        mode_goal_pending: false,
+        mode_ready_pending: false,
+        current_item_id: body.nextItemId,
+      }),
+    }));
+  });
+
+  it('announces a new focus pass after every item was asked once when the learner chooses Ready', async () => {
     const pool = focusedItems('2020', ['geography']);
     mocks.state.sessionRow = {
       id: 'session-1',
       current_goal: 'Geography',
-      mode_goal_pending: true,
+      mode_goal_pending: false,
+      mode_ready_pending: true,
       current_item_id: null,
     };
     mocks.state.gradedAnswers = pool.map(item => ({ item_id: item.id, verdict: 'correct' }));
 
-    const response = await handler(modeGoalResponseEvent({
-      focusAreaIds: ['geography'],
-      allFocusAreas: false,
-    }));
+    const response = await handler(modeReadyEvent());
 
     const body = JSON.parse(response.body) as { responseText: string; nextItemId: string | null };
     expect(body.responseText).toContain('You have completed a full pass through this focus');
@@ -1387,6 +1456,7 @@ describe('transcript handler — mock exam civics phase routing', () => {
       id: 'session-1',
       current_goal: 'All focus areas',
       mode_goal_pending: true,
+      mode_ready_pending: false,
       current_item_id: null,
     };
 
@@ -1397,16 +1467,19 @@ describe('transcript handler — mock exam civics phase routing', () => {
       allFocusAreas: false,
     }));
 
-    const body = JSON.parse(response.body) as { nextItemId: string | null };
-    const selected = allItems('2008').find(item => item.id === body.nextItemId);
-    expect(normalizeFocusCategoryId(selected?.studyCategoryId)).toBe('1800s');
+    const body = JSON.parse(response.body) as { nextItemId: string | null; modeReadyPending: boolean };
+    expect(body.nextItemId).toBeNull();
+    expect(body.modeReadyPending).toBe(true);
     expect(mocks.state.updates).toContainEqual(expect.objectContaining({
       table: 'sessions',
       payload: expect.objectContaining({
         current_goal: 'The 1800s',
         mode_goal_pending: false,
+        mode_ready_pending: true,
       }),
     }));
+    // The stored human-readable label still resolves to the canonical category.
+    expect(normalizeFocusCategoryId('The 1800s')).toBe('1800s');
   });
 
   it('rejects more than three focus categories', async () => {

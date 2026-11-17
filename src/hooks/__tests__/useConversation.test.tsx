@@ -25,6 +25,7 @@ const transcriptResponse = (overrides: Partial<TranscriptResponse> = {}): Transc
   responseText: '',
   audioData: new ArrayBuffer(0),
   verdict: null,
+  verdictSegmentIndex: null,
   needsConfirmation: false,
   nextItemId: null,
   nextQuestion: null,
@@ -35,6 +36,7 @@ const transcriptResponse = (overrides: Partial<TranscriptResponse> = {}): Transc
   examReviewId: null,
   examStage: null,
   modeGoalPending: false,
+  modeReadyPending: false,
   examIntro: null,
   ...overrides,
 });
@@ -156,6 +158,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       id: 'daily-session',
       current_item_id: null,
       mode_goal_pending: false,
+      mode_ready_pending: false,
       current_mode: 'standard',
       test_version: '2020',
       include_english_simulation: false,
@@ -685,6 +688,7 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       id: 'daily-session',
       current_item_id: 'q-next',
       mode_goal_pending: false,
+      mode_ready_pending: false,
       current_mode: 'practice',
       test_version: '2020',
       include_english_simulation: false,
@@ -1120,6 +1124,47 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
       });
     });
     expect(sessionStorage.getItem('immigo_conversation_user-cache_2026-10-26')).toBe(JSON.stringify([cachedMessage]));
+  });
+
+  it('replaces a warmed cache with the database page instead of duplicating it after refresh', async () => {
+    const cachedUser = {
+      id: 'local-user-1',
+      role: 'user' as const,
+      content: 'Cached answer',
+      timestamp: '2026-10-26T18:00:00.000Z',
+      client_message_id: 'client-1',
+    };
+    const cachedAssistant = {
+      id: 'asst-local-1',
+      role: 'assistant' as const,
+      content: 'Cached reply',
+      timestamp: '2026-10-26T18:00:01.000Z',
+    };
+    sessionStorage.setItem(
+      'immigo_conversation_user-refresh_2026-10-26',
+      JSON.stringify([cachedUser, cachedAssistant])
+    );
+    vi.mocked(ChatPersistenceService.loadRecentMessages).mockResolvedValueOnce({
+      messages: [
+        { id: 'db-user-1', role: 'user', content: 'Cached answer', created_at: '2026-10-26T18:00:00.050Z', client_message_id: 'client-1' },
+        { id: 'db-assistant-1', role: 'assistant', content: 'Cached reply', created_at: '2026-10-26T18:00:01.050Z' },
+      ],
+      hasMore: false,
+      oldestCursor: null,
+    } as Awaited<ReturnType<typeof ChatPersistenceService.loadRecentMessages>>);
+
+    const { result } = renderHook(
+      () => useConversation({ apiClient: null, userId: 'user-refresh' }),
+      { wrapper: ConversationProvider }
+    );
+
+    await waitFor(() => {
+      expect(result.current.conversationHistory).toHaveLength(2);
+    });
+    expect(result.current.conversationHistory.map(message => message.id)).toEqual([
+      'db-user-1',
+      'db-assistant-1',
+    ]);
   });
 
   it('fetches the welcome banner only once when StrictMode double-mounts the effect', async () => {
@@ -2204,6 +2249,129 @@ describe('Orchestration Hook Runtime Validation: useConversation', () => {
         payload: 'idle',
       });
     }, { timeout: 3000 });
+  });
+
+  it('shows the Practice Ready gate after a mode switch and sends modeReady when confirmed', async () => {
+    mockApiClient.postModeTransition.mockResolvedValue(transcriptResponse({
+      responseText: 'Practice Mode is ready. It mirrors the civics interview.',
+      assistantSegments: ['Practice Mode is ready. It mirrors the civics interview.'],
+      modeReadyPending: true,
+    }));
+    mockApiClient.postTranscript.mockResolvedValue(transcriptResponse({
+      responseText: "Let's begin with this question: What is the supreme law of the land?",
+      assistantSegments: ["Let's begin with this question: What is the supreme law of the land?"],
+      nextItemId: 'q-first',
+      nextQuestion: 'What is the supreme law of the land?',
+    }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ConversationContext.Provider value={mockContextValue}>
+        {children}
+      </ConversationContext.Provider>
+    );
+    const { result } = renderHook(() => useConversation({
+      apiClient: mockApiClient,
+      userId: 'user-1',
+      simulationMode: 'standard',
+    }), { wrapper });
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'SET_SESSION_ID',
+      payload: 'daily-session',
+    }));
+
+    await act(async () => {
+      await result.current.changeMode('practice');
+    });
+
+    // The intro bubble carries the explicit Ready action; no question was asked.
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'ADD_STANDALONE_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({
+        content: expect.stringContaining('mirrors the civics interview'),
+        actions: [{ kind: 'ready', label: 'Ready' }],
+      }),
+    });
+    expect(mockContextValue.state.appStatus).not.toBe('speaking');
+
+    await act(async () => {
+      await result.current.confirmReady('Ready');
+    });
+
+    const readyCall = mockApiClient.postTranscript.mock.calls.at(-1);
+    expect(readyCall?.[0]).toBe('Ready');
+    expect(readyCall?.[5]).toEqual(expect.objectContaining({ modeReady: true }));
+    // A Ready confirmation is not a focus submission.
+    expect(readyCall?.[5]).not.toEqual(expect.objectContaining({ modeGoalResponse: true }));
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ADD_ASSISTANT_MESSAGE',
+      payload: expect.objectContaining({
+        content: expect.stringContaining('What is the supreme law of the land?'),
+      }),
+    })));
+  });
+
+  it('restores the Ready gate from persisted history and clears it when the flag is gone', async () => {
+    const readyRow = {
+      id: 'ready-message',
+      session_id: 'daily-session',
+      user_id: 'user-ready',
+      role: 'assistant' as const,
+      content: 'Choose Ready when you are ready to begin.',
+      audio_url: null,
+      created_at: '2026-10-26T18:00:00.000Z',
+      actions: [{ kind: 'ready' as const, label: 'Ready' }],
+    };
+    vi.mocked(ChatPersistenceService.getOrCreateDailySession).mockResolvedValue({
+      id: 'daily-session',
+      current_item_id: null,
+      mode_goal_pending: false,
+      mode_ready_pending: true,
+      current_mode: 'practice',
+      test_version: '2020',
+      include_english_simulation: false,
+      local_date: '2026-10-26',
+      local_timezone: 'UTC',
+    });
+    vi.mocked(ChatPersistenceService.loadRecentMessages).mockResolvedValue({
+      messages: [readyRow],
+      hasMore: false,
+      oldestCursor: null,
+    } as Awaited<ReturnType<typeof ChatPersistenceService.loadRecentMessages>>);
+
+    const first = renderHook(
+      () => useConversation({ apiClient: null, userId: 'user-ready' }),
+      { wrapper: ConversationProvider },
+    );
+
+    await waitFor(() => {
+      expect(first.result.current.conversationHistory[0]?.actions)
+        .toEqual([{ kind: 'ready', label: 'Ready' }]);
+    });
+    first.unmount();
+
+    // After Ready is confirmed the server clears the flag, so a stale chat
+    // history must not re-offer the button.
+    vi.mocked(ChatPersistenceService.getOrCreateDailySession).mockResolvedValue({
+      id: 'daily-session',
+      current_item_id: 'q-first',
+      mode_goal_pending: false,
+      mode_ready_pending: false,
+      current_mode: 'practice',
+      test_version: '2020',
+      include_english_simulation: false,
+      local_date: '2026-10-26',
+      local_timezone: 'UTC',
+    });
+
+    const second = renderHook(
+      () => useConversation({ apiClient: null, userId: 'user-ready' }),
+      { wrapper: ConversationProvider },
+    );
+
+    await waitFor(() => {
+      expect(second.result.current.conversationHistory[0]?.content)
+        .toBe('Choose Ready when you are ready to begin.');
+    });
+    expect(second.result.current.conversationHistory[0]?.actions).toBeUndefined();
   });
 
   it('voice mode switch goes preparing -> speaking with Polly -> listening', async () => {

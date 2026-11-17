@@ -13,6 +13,7 @@ function toPersistedMessage(row: MessageRow): PersistedMessage {
 
   const actions = (row as { actions?: unknown }).actions ?? undefined;
   const speaker = (row as { speaker?: unknown }).speaker;
+  const clientMessageId = (row as { client_message_id?: string }).client_message_id;
 
   return {
     id: row.id,
@@ -24,6 +25,7 @@ function toPersistedMessage(row: MessageRow): PersistedMessage {
     created_at: row.created_at,
     speaker: isMessageSpeaker(speaker) ? speaker : undefined,
     actions: Array.isArray(actions) ? actions : undefined,
+    client_message_id: clientMessageId,
   };
 }
 
@@ -44,6 +46,7 @@ interface DailySessionRecord {
   id: string;
   current_item_id: string | null;
   mode_goal_pending: boolean;
+  mode_ready_pending: boolean;
   current_mode: string;
   test_version: string;
   include_english_simulation: boolean;
@@ -172,7 +175,8 @@ export class ChatPersistenceService {
     role: 'user' | 'assistant',
     content: string,
     actions?: readonly MessageAction[],
-    speaker?: MessageSpeaker
+    speaker?: MessageSpeaker,
+    clientMessageId?: string
   ): Promise<PersistedMessage | null> {
     if (!sessionId || !userId || !content.trim()) return null;
 
@@ -186,6 +190,7 @@ export class ChatPersistenceService {
       };
       if (actions) insertPayload.actions = actions;
       if (speaker) insertPayload.speaker = speaker;
+      if (clientMessageId) insertPayload.client_message_id = clientMessageId;
       const { data, error } = await supabase
         .from('messages')
         .insert(insertPayload as never)

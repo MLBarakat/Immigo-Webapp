@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
+  applyVerdictPrefix,
   feedbackFallback,
   practiceFirstQuestion,
   questionTransition,
@@ -61,6 +62,50 @@ describe('feedbackFallback (F11 verdict-aware fallbacks)', () => {
       if (language !== 'en-US') expect(copy).not.toBe(english);
       if (language === 'ar-SA') expect(copy).toMatch(/[\u0600-\u06FF]/);
     }
+  });
+});
+
+describe('applyVerdictPrefix (F19 verdict consistency)', () => {
+  it('uses mode-specific prefixes and strips a duplicate model acknowledgment', () => {
+    expect(applyVerdictPrefix(
+      "That's correct. The Constitution is the supreme law.",
+      'correct',
+      'standard',
+      'en-US',
+    )).toBe('Correct. The Constitution is the supreme law.');
+    expect(applyVerdictPrefix(
+      "That's correct. The Constitution is the supreme law.",
+      'correct',
+      'practice',
+      'en-US',
+    )).toBe("That's correct. The Constitution is the supreme law.");
+    expect(applyVerdictPrefix(
+      'Not quite. The answer is the Constitution.',
+      'incorrect',
+      'practice',
+      'en-US',
+    )).toBe('Not quite. The answer is the Constitution.');
+    // A feedback string that is only an acknowledgment still gets exactly one prefix.
+    expect(applyVerdictPrefix('Correct.', 'correct', 'standard', 'en-US')).toBe('Correct.');
+    expect(applyVerdictPrefix('Incorrect.', 'incorrect', 'standard', 'en-US')).toBe('Incorrect.');
+  });
+
+  it('localizes the prefix and strips a localized duplicate acknowledgment', () => {
+    expect(applyVerdictPrefix('Es correcto. Continuemos.', 'correct', 'practice', 'es-ES'))
+      .toBe('Es correcto. Continuemos.');
+    expect(applyVerdictPrefix('Muy bien. Continuemos.', 'correct', 'standard', 'es-ES'))
+      .toBe('Correcto. Continuemos.');
+    expect(applyVerdictPrefix('Bonne réponse. Continuez.', 'correct', 'study', 'fr-FR'))
+      .toBe('C’est exact. Continuez.');
+    expect(applyVerdictPrefix('إجابة صحيحة. لنواصل.', 'correct', 'practice', 'ar-SA'))
+      .toBe('هذا صحيح. لنواصل.');
+  });
+
+  it('leaves non-committed feedback unchanged', () => {
+    expect(applyVerdictPrefix('Take your time.', null, 'practice', 'en-US'))
+      .toBe('Take your time.');
+    expect(applyVerdictPrefix('', 'partial', 'study', 'en-US'))
+      .toBe('You’re partly there.');
   });
 });
 

@@ -5,11 +5,13 @@
 // catalog. Exam content — the official USCIS question — is always passed
 // through untranslated so the learner sees the real English question.
 
-import { serverCopy } from './server-copy';
+import { serverCopy, type ServerCopyKey } from './server-copy';
 import type { OnboardingLanguage } from './mode-onboarding';
 import type { SimulationMode } from './types';
 
 export type FeedbackVerdict = 'correct' | 'incorrect' | 'partial' | null;
+/** A committed verdict (never null) used for the text prefix and UI badge. */
+export type CommittedVerdict = Exclude<FeedbackVerdict, null>;
 
 export interface FeedbackFallbackInput {
   /** The grade committed for the turn, or null when nothing was graded. */
@@ -87,4 +89,69 @@ export function questionTransition(
 /** Localized first-question framing for Practice. The question stays English. */
 export function practiceFirstQuestion(question: string, language: OnboardingLanguage): string {
   return `${serverCopy('practiceFirstQuestion', language)} ${question}`;
+}
+
+const VERDICT_COPY_KEYS: Readonly<Record<SimulationMode, Readonly<Record<CommittedVerdict, ServerCopyKey>>>> = {
+  standard: {
+    correct: 'verdictStandardCorrect',
+    incorrect: 'verdictStandardIncorrect',
+    partial: 'verdictStandardPartial',
+  },
+  practice: {
+    correct: 'verdictPracticeCorrect',
+    incorrect: 'verdictPracticeIncorrect',
+    partial: 'verdictPracticePartial',
+  },
+  study: {
+    correct: 'verdictStudyCorrect',
+    incorrect: 'verdictStudyIncorrect',
+    partial: 'verdictStudyPartial',
+  },
+};
+
+/**
+ * Leading model acknowledgments that duplicate the deterministic verdict
+ * prefix. They are stripped once, then the prefix is added, so a reply can
+ * never open with "That's correct. Correct. ...". The lists stay short and
+ * literal: they cover the openings the model actually produces, not every
+ * possible praise word.
+ */
+const LEADING_ACKNOWLEDGMENT: Readonly<Record<OnboardingLanguage, RegExp>> = {
+  'en-US': /^(?:that['’]s\s+(?:correct|right)|correct|incorrect|right|wrong|exactly|well\s+done|great\s+job|good\s+job|nice\s+work|not\s+quite(?:\s+right)?|not\s+exactly|almost(?:\s+there)?|good\s+start|good\s+effort|partially\s+correct|partly\s+correct)[\s!.,;:—–-]*/i,
+  'es-ES': /^(?:es\s+correct[oa]|correct[oa]|incorrect[oa]|exacto|muy\s+bien|buen\s+trabajo|bien\s+hecho|casi(?:\s+lo\s+tienes)?|no\s+es\s+del\s+todo\s+correcto|no\s+exactamente|buen\s+comienzo|parcialmente\s+correcto)[\s!.,;:—–-]*/i,
+  'fr-FR': /^(?:c['’]est\s+(?:correct|exact)|bonne\s+réponse|réponse\s+incorrecte|correct|incorrect|exactement|très\s+bien|bon\s+travail|bien\s+joué|presque|pas\s+tout\s+à\s+fait(?:\s+exact)?|bon\s+début|partiellement\s+correct)[\s!.,;:—–-]*/i,
+  'ar-SA': /^(?:هذا\s+صحيح|إجابة\s+صحيحة|صحيحة|صحيح|أحسنت|عمل\s+جيد|ممتاز|ليس\s+تمامًا|ليس\s+صحيحًا\s+تمامًا|تقريبًا|بداية\s+جيدة)[\s!.,;:،؛—–-]*/u,
+};
+
+function capitalizeFirstLetter(text: string, language: OnboardingLanguage): string {
+  if (!text || language === 'ar-SA') return text;
+  return text.charAt(0).toLocaleUpperCase(language) + text.slice(1);
+}
+
+/**
+ * Prefix committed civics feedback with the deterministic, mode-specific
+ * verdict so the chat text always agrees with the UI badge. Non-committed
+ * feedback (retry, hint, clarification) passes through untouched.
+ */
+export function applyVerdictPrefix(
+  feedback: string,
+  verdict: FeedbackVerdict,
+  mode: SimulationMode | undefined,
+  language: OnboardingLanguage,
+): string {
+  const body = feedback.trim();
+  if (!verdict) return body;
+
+  const effectiveMode: SimulationMode = mode ?? 'standard';
+  const prefix = serverCopy(VERDICT_COPY_KEYS[effectiveMode][verdict], language);
+  if (!body) return prefix;
+
+  const acknowledgment = LEADING_ACKNOWLEDGMENT[language];
+  let remainder = body;
+  while (acknowledgment.test(remainder)) {
+    remainder = remainder.replace(acknowledgment, '').trim();
+  }
+  return remainder
+    ? `${prefix} ${capitalizeFirstLetter(remainder, language)}`
+    : prefix;
 }

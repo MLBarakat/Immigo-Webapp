@@ -15,6 +15,8 @@
 | 20261112010000 | question_bank_preferences |
 | 20261114000000 | messages_actions |
 | 20261115000000 | messages_speaker |
+| 20261116000000 | messages_client_id |
+| 20261116010000 | sessions_mode_ready |
 
 ## Tables
 
@@ -163,6 +165,7 @@ Row level security: **enabled**
 | `updated_at` | `timestamp with time zone` | no | `now()` |
 | `actions` | `jsonb` | yes |  |
 | `speaker` | `text` | yes |  |
+| `client_message_id` | `text` | yes |  |
 
 Policies:
 
@@ -180,6 +183,7 @@ Indexes:
 - `CREATE INDEX idx_messages_actions ON public.messages USING gin (actions)`
 - `CREATE INDEX idx_messages_session ON public.messages USING btree (session_id, created_at DESC)`
 - `CREATE INDEX idx_messages_user ON public.messages USING btree (user_id, created_at DESC)`
+- `CREATE UNIQUE INDEX messages_client_id_unique ON public.messages USING btree (session_id, client_message_id) WHERE (client_message_id IS NOT NULL)`
 - `CREATE UNIQUE INDEX messages_pkey ON public.messages USING btree (id)`
 
 ### `public.mock_exam_answers`
@@ -371,6 +375,7 @@ Row level security: **enabled**
 | `current_mode` | `text` | no | `'standard'::text` |
 | `test_version` | `text` | no | `'2020'::text` |
 | `include_english_simulation` | `boolean` | no | `false` |
+| `mode_ready_pending` | `boolean` | no | `false` |
 
 Policies:
 

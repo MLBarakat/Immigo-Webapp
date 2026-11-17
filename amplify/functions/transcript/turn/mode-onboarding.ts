@@ -40,22 +40,42 @@ const MODE_LABELS: Record<OnboardingLanguage, Record<'practice' | 'study', strin
 
 const FIRST_TIME_COPY: Record<OnboardingLanguage, Record<'practice' | 'study', string>> = {
   'en-US': {
-    practice: 'Practice Mode is ready. It asks you one civics question at a time. Choose one focus area, or keep All focus areas, and we will begin with your first question.',
-    study: 'Study Mode is ready. It gives you each civics question with an explanation. Choose one focus area, or keep All focus areas, and we will begin with your first question.',
+    practice: 'Practice Mode is ready. It mirrors the civics interview: one question at a time, answered in your own words, with direct feedback after each answer. Practicing recall under interview conditions is what builds the confidence you need for the USCIS test. Choose one focus area, or keep All focus areas, below.',
+    study: 'Study Mode is ready. It walks through each civics question with a short explanation, at your own pace, so you learn the reasoning behind the answer. Understanding why an answer is right makes it stick when the officer asks the question in different words. Choose one focus area, or keep All focus areas, below.',
   },
   'es-ES': {
-    practice: 'El Modo práctica está listo. Te hace una pregunta de civismo a la vez. Elige un área de enfoque o mantén Todas las áreas de enfoque, y comenzaremos con tu primera pregunta.',
-    study: 'El Modo estudio está listo. Te presenta cada pregunta de civismo con una explicación. Elige un área de enfoque o mantén Todas las áreas de enfoque, y comenzaremos con tu primera pregunta.',
+    practice: 'El Modo práctica está listo. Reproduce la entrevista de civismo: una pregunta a la vez, respondida con tus propias palabras y con comentarios directos después de cada respuesta. Practicar el recuerdo en condiciones de entrevista es lo que construye la confianza que necesitas para el examen de USCIS. Elige un área de enfoque o mantén Todas las áreas de enfoque abajo.',
+    study: 'El Modo estudio está listo. Recorre cada pregunta de civismo con una explicación breve, a tu ritmo, para que aprendas el razonamiento detrás de la respuesta. Entender por qué una respuesta es correcta hace que se fije cuando el oficial formula la pregunta con otras palabras. Elige un área de enfoque o mantén Todas las áreas de enfoque abajo.',
   },
   'fr-FR': {
-    practice: 'Le mode Pratique est prêt. Il vous pose une question de civisme à la fois. Choisissez un axe de travail ou conservez Tous les axes de travail, et nous commencerons par votre première question.',
-    study: 'Le mode Étude est prêt. Il présente chaque question de civisme avec une explication. Choisissez un axe de travail ou conservez Tous les axes de travail, et nous commencerons par votre première question.',
+    practice: 'Le mode Pratique est prêt. Il reproduit l’entretien de civisme : une question à la fois, avec vos propres mots et un retour direct après chaque réponse. C’est en rappelant les réponses dans les conditions de l’entretien que se construit la confiance nécessaire pour le test USCIS. Choisissez un axe de travail ou conservez Tous les axes de travail ci-dessous.',
+    study: 'Le mode Étude est prêt. Il parcourt chaque question de civisme avec une courte explication, à votre rythme, pour comprendre le raisonnement derrière la réponse. Comprendre pourquoi une réponse est juste aide à la retenir lorsque l’officier pose la question autrement. Choisissez un axe de travail ou conservez Tous les axes de travail ci-dessous.',
   },
   'ar-SA': {
-    practice: 'وضع التدريب جاهز. يطرح عليك سؤالًا مدنيًا واحدًا في كل مرة. اختر مجال تركيز أو أبقِ جميع مجالات التركيز، وسنبدأ بسؤالك الأول.',
-    study: 'وضع الدراسة جاهز. يعرض كل سؤال مدني مع شرح. اختر مجال تركيز أو أبقِ جميع مجالات التركيز، وسنبدأ بسؤالك الأول.',
+    practice: 'وضع التدريب جاهز. يحاكي مقابلة التربية المدنية: سؤال واحد في كل مرة، تجيب بكلماتك الخاصة، مع تعليق مباشر بعد كل إجابة. التدرب على الاستدعاء في ظروف المقابلة هو ما يبني الثقة التي تحتاجها لاختبار USCIS. اختر مجال تركيز أو أبقِ جميع مجالات التركيز أدناه.',
+    study: 'وضع الدراسة جاهز. يعرض كل سؤال مدني مع شرح قصير، بالسرعة التي تناسبك، لتتعلم سبب الإجابة. فهم سبب صحة الإجابة يثبتها عندما يطرح الضابط السؤال بصيغة مختلفة. اختر مجال تركيز أو أبقِ جميع مجالات التركيز أدناه.',
   },
 };
+
+const READY_PROMPT_COPY: Record<OnboardingLanguage, Record<'practice' | 'study', string>> = {
+  'en-US': {
+    practice: 'When you are ready, choose Ready. I will ask your first practice question.',
+    study: 'When you are ready, choose Ready. I will show your first study question.',
+  },
+  'es-ES': {
+    practice: 'Cuando estés listo, elige Listo. Te haré tu primera pregunta de práctica.',
+    study: 'Cuando estés listo, elige Listo. Te mostraré tu primera pregunta de estudio.',
+  },
+  'fr-FR': {
+    practice: 'Quand vous êtes prêt, choisissez Prêt. Je poserai votre première question d’entraînement.',
+    study: 'Quand vous êtes prêt, choisissez Prêt. Je vous montrerai votre première question d’étude.',
+  },
+  'ar-SA': {
+    practice: 'عندما تكون مستعدًا، اختر "جاهز". سأطرح عليك أول سؤال تدريبي.',
+    study: 'عندما تكون مستعدًا، اختر "جاهز". سأعرض عليك أول سؤال دراسي.',
+  },
+};
+
 
 const ALL_FOCUS_LABELS: Record<OnboardingLanguage, string> = {
   'en-US': 'All focus areas',
@@ -76,14 +96,24 @@ export function buildFirstTimeOnboarding(
   return FIRST_TIME_COPY[language][mode];
 }
 
+/** The explicit confirmation step after the learner chooses Ready. */
+export function buildModeReadyPrompt(
+  mode: 'practice' | 'study',
+  language: OnboardingLanguage,
+): string {
+  return READY_PROMPT_COPY[language][mode];
+}
+
 /** The returning explanation with overall counts and the current focus subset. */
 export function buildReturningOnboarding(
   mode: 'practice' | 'study',
   testVersion: TestVersion,
   stats: ModeOnboardingStats,
   language: OnboardingLanguage,
+  options: { readyGate?: boolean } = {},
 ): string {
   const { overall, focus, focusLabels, allFocusAreas } = stats;
+  const readyGate = options.readyGate === true;
   switch (language) {
     case 'es-ES':
       return [
@@ -91,9 +121,11 @@ export function buildReturningOnboarding(
         allFocusAreas
           ? 'Ahora mismo abarcas Todas las áreas de enfoque.'
           : `En tu enfoque actual (${focusLabels.join(', ')}), ${focus.mastered} están dominadas, ${focus.practicedNotMastered} están practicadas pero no dominadas, y ${focus.notPracticed} no se han practicado.`,
-        allFocusAreas
-          ? 'Mantén Todas las áreas de enfoque o elige un enfoque más concreto abajo.'
-          : 'Mantén este enfoque o elige otro abajo.',
+        readyGate
+          ? `${allFocusAreas ? 'Tu enfoque guardado se mantiene en Todas las áreas de enfoque.' : `Tu enfoque guardado se mantiene en ${focusLabels.join(', ')}.`} Elige Listo cuando estés listo para comenzar.`
+          : (allFocusAreas
+            ? 'Mantén Todas las áreas de enfoque o elige un enfoque más concreto abajo.'
+            : 'Mantén este enfoque o elige otro abajo.'),
       ].join(' ');
     case 'fr-FR':
       return [
@@ -101,9 +133,11 @@ export function buildReturningOnboarding(
         allFocusAreas
           ? 'Vous couvrez actuellement Tous les axes de travail.'
           : `Dans votre axe actuel (${focusLabels.join(', ')}), ${focus.mastered} sont maîtrisées, ${focus.practicedNotMastered} sont travaillées mais pas maîtrisées, et ${focus.notPracticed} n’ont pas encore été travaillées.`,
-        allFocusAreas
-          ? 'Conservez Tous les axes de travail ou choisissez un axe plus précis ci-dessous.'
-          : 'Conservez cet axe ou choisissez-en un autre ci-dessous.',
+        readyGate
+          ? `${allFocusAreas ? 'Votre axe enregistré reste Tous les axes de travail.' : `Votre axe enregistré reste ${focusLabels.join(', ')}.`} Choisissez Prêt quand vous êtes prêt à commencer.`
+          : (allFocusAreas
+            ? 'Conservez Tous les axes de travail ou choisissez un axe plus précis ci-dessous.'
+            : 'Conservez cet axe ou choisissez-en un autre ci-dessous.'),
       ].join(' ');
     case 'ar-SA':
       return [
@@ -111,9 +145,11 @@ export function buildReturningOnboarding(
         allFocusAreas
           ? 'أنت تغطي الآن جميع مجالات التركيز.'
           : `في تركيزك الحالي (${focusLabels.join('، ')})، هناك ${focus.mastered} سؤالًا متقنًا، و${focus.practicedNotMastered} سؤالًا تم التدرب عليه دون إتقانه، و${focus.notPracticed} سؤالًا لم يتم التدرب عليه.`,
-        allFocusAreas
-          ? 'أبقِ جميع مجالات التركيز أو اختر تركيزًا أضيق أدناه.'
-          : 'أبقِ هذا التركيز أو اختر تركيزًا آخر أدناه.',
+        readyGate
+          ? `${allFocusAreas ? 'يبقى تركيزك المحفوظ على جميع مجالات التركيز.' : `يبقى تركيزك المحفوظ على ${focusLabels.join('، ')}.`} اختر "جاهز" عندما تكون مستعدًا للبدء.`
+          : (allFocusAreas
+            ? 'أبقِ جميع مجالات التركيز أو اختر تركيزًا أضيق أدناه.'
+            : 'أبقِ هذا التركيز أو اختر تركيزًا آخر أدناه.'),
       ].join(' ');
     default:
       return [
@@ -121,9 +157,11 @@ export function buildReturningOnboarding(
         allFocusAreas
           ? 'You are currently covering All focus areas.'
           : `In your current focus (${focusLabels.join(', ')}), ${focus.mastered} are mastered, ${focus.practicedNotMastered} are practiced but not mastered, and ${focus.notPracticed} have not been practiced.`,
-        allFocusAreas
-          ? 'Keep All focus areas or choose a narrower focus below.'
-          : 'Keep this focus or choose another one below.',
+        readyGate
+          ? `${allFocusAreas ? 'Your saved focus stays All focus areas.' : `Your saved focus stays ${focusLabels.join(', ')}.`} Choose Ready when you are ready to begin.`
+          : (allFocusAreas
+            ? 'Keep All focus areas or choose a narrower focus below.'
+            : 'Keep this focus or choose another one below.'),
       ].join(' ');
   }
 }
