@@ -130,6 +130,15 @@ describe('questionTransition (F11 mode-specific lead-ins)', () => {
     const copy = questionTransition('practice', { id: 'q-a', question: 'What is the capital?' }, 'fr-FR');
     expect(copy).toMatch(/^(La suivante|Voici la suivante) : What is the capital\?$/);
   });
+
+  it('numbers the next question in the learner locale', () => {
+    expect(questionTransition('standard', { id: 'q-001', question: 'What is the capital?' }, 'en-US', 2))
+      .toBe('Question no. 2: What is the capital?');
+    expect(questionTransition('practice', { id: 'q-001', question: 'What is the capital?' }, 'es-ES', 7))
+      .toBe('Pregunta n.º 7: What is the capital?');
+    expect(questionTransition('standard', { id: 'q-001', question: 'What is the capital?' }, 'fr-FR', 4))
+      .toBe('Question n° 4 : What is the capital?');
+  });
 });
 
 describe('practiceFirstQuestion (F5 localized Practice framing)', () => {

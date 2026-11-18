@@ -367,7 +367,7 @@ describe('transcript handler — mock exam civics phase routing', () => {
 
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body) as { responseText: string; nextQuestion: string | null };
-    expect(body.responseText).toContain('Question no. 2: ');
+    expect(body.responseText).toContain('Pregunta n.º 2: ');
     expect(body.nextQuestion).toBeTruthy();
     expect(body.responseText).toContain(body.nextQuestion as string);
     expect(body.responseText).not.toContain('Siguiente pregunta: ');
@@ -1491,5 +1491,79 @@ describe('transcript handler — mock exam civics phase routing', () => {
     expect(response.statusCode).toBe(400);
     const body = JSON.parse(response.body) as { error: string };
     expect(body.error).toContain('Invalid focus area selection');
+  });
+
+  it('never repeats a civics question across a full Standard Interview', async () => {
+    const asked: string[] = [FIRST_QUESTION.id];
+
+    for (let turn = 0; turn < 19; turn += 1) {
+      const currentId = asked[asked.length - 1];
+      mocks.bedrockSend.mockResolvedValue(bedrockText(JSON.stringify({
+        intent: 'answer',
+        targetItemId: currentId,
+        grade: { verdict: 'incorrect', matchedAnswer: null },
+        reply: 'Thanks for your answer.',
+      })));
+
+      const event = transcribeEvent();
+      const request = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+      request.transcript = 'I am still learning this one';
+      request.currentItemId = currentId;
+      const response = await handler({ ...event, body: JSON.stringify(request) });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body) as {
+        nextItemId: string | null;
+        examCompleted: boolean;
+      };
+      if (body.examCompleted || !body.nextItemId) break;
+      expect(asked).not.toContain(body.nextItemId);
+      asked.push(body.nextItemId);
+    }
+
+    expect(asked.length).toBeGreaterThan(3);
+    expect(new Set(asked).size).toBe(asked.length);
+  });
+
+  it('resumes the in-progress exam when a refresh drops the exam id instead of serving Practice questions', async () => {
+    const staticItems = allItems('2020').filter(item => item.kind === 'static');
+    const [first, second, current] = staticItems;
+    mocks.state.exam = examRow({
+      question_ids: [first.id, second.id, current.id],
+      current_index: 2,
+    });
+    mocks.bedrockSend.mockResolvedValue(bedrockText(JSON.stringify({
+      intent: 'answer',
+      targetItemId: current.id,
+      grade: { verdict: 'incorrect', matchedAnswer: null },
+      reply: 'Thanks for your answer.',
+    })));
+
+    // A refreshed client hydrates current_item_id from the daily session but
+    // has no exam id in memory, so the request omits examRunId entirely.
+    const event = transcribeEvent();
+    const request = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    delete request.examRunId;
+    request.transcript = 'I am still learning this one';
+    request.currentItemId = current.id;
+
+    const response = await handler({ ...event, body: JSON.stringify(request) });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      examRunId: string | null;
+      nextItemId: string | null;
+      examCompleted: boolean;
+      nextQuestion: string | null;
+    };
+    // The server re-attaches the exam, advances it, and never asks a Practice
+    // question that ignores the exam's asked list.
+    expect(body.examRunId).toBe(EXAM_ID);
+    expect(mocks.state.exam?.current_index).toBe(3);
+    const askedIds = [first.id, second.id, current.id];
+    if (!body.examCompleted && body.nextItemId) {
+      expect(askedIds).not.toContain(body.nextItemId);
+      expect(body.nextQuestion).not.toBe(current.question);
+    }
   });
 });

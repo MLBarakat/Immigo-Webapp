@@ -281,26 +281,30 @@ export function buildStudyQuestionPrompt(item: CivicsItem, preferredLanguage?: s
 
 export function formatStudyQuestion(item: CivicsItem, explanation: string, preferredLanguage?: string): string {
   const language = preferredLanguage ?? 'English';
-  const labels: Record<string, { question: string; answer: string; dynamic: string; invitation: string }> = {
+  const labels: Record<string, { number: string; question: string; answer: string; dynamic: string; invitation: string }> = {
     English: {
+      number: 'Question {n}:',
       question: 'In English, the USCIS question is:',
       answer: 'USCIS accepts these answers in English:',
       dynamic: 'This answer changes over time; check a current official USCIS source.',
       invitation: 'Now try answering in English.',
     },
     Spanish: {
+      number: 'Pregunta {n}:',
       question: 'La pregunta de USCIS en inglés es:',
       answer: 'USCIS acepta estas respuestas en inglés:',
       dynamic: 'Esta respuesta puede cambiar; consulta una fuente oficial y actualizada de USCIS.',
       invitation: 'Ahora intenta responder en inglés.',
     },
     French: {
+      number: 'Question {n} :',
       question: 'La question de l’USCIS en anglais est :',
       answer: 'L’USCIS accepte ces réponses en anglais :',
       dynamic: 'Cette réponse peut changer ; consultez une source officielle et à jour de l’USCIS.',
       invitation: 'Essayez maintenant de répondre en anglais.',
     },
     Arabic: {
+      number: 'السؤال {n}:',
       question: 'سؤال دائرة الهجرة باللغة الإنجليزية هو:',
       answer: 'تقبل دائرة الهجرة هذه الإجابات باللغة الإنجليزية:',
       dynamic: 'قد تتغير هذه الإجابة؛ تحقق منها في مصدر رسمي حديث لدائرة الهجرة.',
@@ -308,7 +312,12 @@ export function formatStudyQuestion(item: CivicsItem, explanation: string, prefe
     },
   };
   const copy = labels[language] ?? labels.English;
-  return `${explanation ? `${explanation}\n` : ''}${copy.question} ${item.question}\n${copy.invitation}`;
+  // Study reviews the bank in sequence, so the bank question number is the
+  // learner's position. Omit it only if the bank entry has no number.
+  const numberLabel = typeof item.number === 'number'
+    ? `${copy.number.replace('{n}', String(item.number))} `
+    : '';
+  return `${explanation ? `${explanation}\n` : ''}${numberLabel}${copy.question} ${item.question}\n${copy.invitation}`;
 }
 
 export function formatStudyFeedback(item: CivicsItem, feedback: string, preferredLanguage?: string): string {

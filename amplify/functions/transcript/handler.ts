@@ -2297,11 +2297,44 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    const bankAskedItem = getItem(parsedBody.currentItemId, testVersion);
-    const locationState = bankAskedItem?.kind === 'dynamic' && dynamicAnswersRequireLocation(bankAskedItem.id)
+    // Standard is exam-scoped. A page refresh (or an older client) can drop the
+    // client-held exam id while the interview is still in progress; without
+    // recovery that turn would fall through to Practice selection, which uses
+    // practice-only history and can re-ask questions the exam already asked.
+    // Resume the learner's in-progress exam server-side and grade against the
+    // exam's persisted current question, then return the exam id so the client
+    // re-attaches to it.
+    let resolvedItem = getItem(parsedBody.currentItemId, testVersion);
+    if (simulationMode === 'standard'
+      && !examRunId
+      && !generatedAssistantText
+      && resolvedItem
+      && parsedBody.sessionStart !== true
+      && parsedBody.openingResponse !== true) {
+      // Read before resuming so a stale client cannot open a phantom exam: a
+      // real refresh always has an in-progress row, and if one does not exist
+      // the pre-existing fallback behavior is preserved instead of silently
+      // starting a new interview against the wrong question.
+      const activeExam = await getUserScopedSupabase(token).from('mock_exams')
+        .select('id')
+        .eq('user_id', userId).eq('test_version', testVersion).eq('status', 'in_progress')
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (activeExam.error) throw new Error(`Could not read the current mock exam: ${activeExam.error.message}`);
+      if (activeExam.data) {
+        const resumed = await startOrResumeMockExam(
+          token, userId, parsedBody.sessionId, testVersion, includeEnglishSimulation, 'resume', traceId,
+        );
+        examRunId = resumed.exam.id;
+        const persisted = getItem(resumed.exam.question_ids[resumed.exam.current_index], testVersion);
+        if (persisted) resolvedItem = persisted;
+        console.log(`[Lambda-Exam] [${traceId}] Re-attached Standard turn to exam ${examRunId} at index ${resumed.exam.current_index}.`);
+      }
+    }
+
+    const locationState = resolvedItem?.kind === 'dynamic' && dynamicAnswersRequireLocation(resolvedItem.id)
       ? await getLocationStateForUser(token, userId, userData.user.user_metadata)
       : null;
-    const askedItem = bankAskedItem ? withDynamicAnswers(bankAskedItem, locationState) : null;
+    const askedItem = resolvedItem ? withDynamicAnswers(resolvedItem, locationState) : null;
 
     // In standard mode an active mock exam may be in its English reading/writing
     // phase, in which case this utterance is an exercise submission. The exam's

@@ -68,12 +68,9 @@ function practiceVariant(id: string): 'practiceNextOne' | 'practiceNextHere' {
 
 /**
  * Lead-in for the next official question.
- *   - Standard: "Question no. {number}:" (localized).
- *   - Practice: "Question no. {number}:" (localized).
- *   - Study: "Question {number}:" where number is the bank question number.
- *
- * When `questionNumber` is omitted the previous behavior is preserved for
- * backward compatibility with existing callers and tests.
+ *   - Standard/Practice with a number: localized "Question no. {number}:".
+ *   - Practice without a number: two stable variants rotated by question id.
+ *   - Study: no transition; Study formats its own numbered question block.
  */
 export function questionTransition(
   mode: SimulationMode | undefined,
@@ -82,10 +79,8 @@ export function questionTransition(
   questionNumber?: number,
 ): string {
   if (questionNumber !== undefined) {
-    const prefix = mode === 'study'
-      ? `Question ${questionNumber}: `
-      : `Question no. ${questionNumber}: `;
-    return `${prefix}${question.question}`;
+    const label = serverCopy('questionNumberLabel', language).replace('{number}', String(questionNumber));
+    return `${label} ${question.question}`;
   }
 
   if (mode === 'practice') {

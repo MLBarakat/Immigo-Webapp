@@ -100,6 +100,13 @@ describe('Study knowledge prompting and bilingual question guide', () => {
     expect(guide).toContain('Ahora intenta responder en inglés.');
   });
 
+  it('numbers the Study question by its bank question number', () => {
+    const guide = formatStudyQuestion({ ...q21, number: 21 }, 'The Senate is part of Congress.', 'English');
+    expect(guide).toContain('Question 21: In English, the USCIS question is: How many U.S. senators are there?');
+    // Without a bank number the guide omits the label rather than printing "Question undefined".
+    expect(formatStudyQuestion(q21, '', 'English')).not.toContain('Question');
+  });
+
   it('does not invent an answer for a dynamic question with no stored accepted answer', () => {
     const dynamicQuestion: CivicsItem = {
       id: 'q-038',

@@ -370,6 +370,7 @@
     "feedbackDynamic": "Gracias por tu respuesta. Continuemos.",
     "studyFeedbackIncorrect": "Buen esfuerzo. Repasemos la respuesta.",
     "standardNextQuestion": "Siguiente pregunta:",
+    "questionNumberLabel": "Pregunta n.º {number}:",
     "practiceNextOne": "La siguiente:",
     "practiceNextHere": "Aquí tienes la siguiente:",
     "practiceFirstQuestion": "La primera pregunta es:",

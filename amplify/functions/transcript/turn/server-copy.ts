@@ -62,6 +62,7 @@ export const SERVER_COPY: Readonly<Record<ServerCopyKey, ServerCopyEntry>> = {
   feedbackDynamic: entry('feedbackDynamic'),
   studyFeedbackIncorrect: entry('studyFeedbackIncorrect'),
   standardNextQuestion: entry('standardNextQuestion'),
+  questionNumberLabel: entry('questionNumberLabel'),
   practiceNextOne: entry('practiceNextOne'),
   practiceNextHere: entry('practiceNextHere'),
   practiceFirstQuestion: entry('practiceFirstQuestion'),
