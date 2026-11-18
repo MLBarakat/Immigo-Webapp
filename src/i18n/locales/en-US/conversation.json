@@ -383,7 +383,7 @@
     "feedbackDynamic": "Thanks for your answer. Let's continue.",
     "studyFeedbackIncorrect": "Good effort. Let's review the answer.",
     "standardNextQuestion": "Next question:",
-    "questionNumberLabel": "Question no. {number}:",
+    "questionNumberLabel": "Question {number}:",
     "practiceNextOne": "Next one:",
     "practiceNextHere": "Here's the next one:",
     "practiceFirstQuestion": "The first question is:",

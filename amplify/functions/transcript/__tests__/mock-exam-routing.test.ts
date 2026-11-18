@@ -367,7 +367,7 @@ describe('transcript handler — mock exam civics phase routing', () => {
 
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body) as { responseText: string; nextQuestion: string | null };
-    expect(body.responseText).toContain('Pregunta n.º 2: ');
+    expect(body.responseText).toContain('Pregunta 2: ');
     expect(body.nextQuestion).toBeTruthy();
     expect(body.responseText).toContain(body.nextQuestion as string);
     expect(body.responseText).not.toContain('Siguiente pregunta: ');

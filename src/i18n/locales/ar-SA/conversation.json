@@ -383,7 +383,7 @@
     "feedbackDynamic": "شكرًا على إجابتك. لنواصل.",
     "studyFeedbackIncorrect": "محاولة جيدة. لنراجع الإجابة.",
     "standardNextQuestion": "السؤال التالي:",
-    "questionNumberLabel": "السؤال رقم {number}:",
+    "questionNumberLabel": "السؤال {number}:",
     "practiceNextOne": "التالي:",
     "practiceNextHere": "إليك السؤال التالي:",
     "practiceFirstQuestion": "السؤال الأول هو:",

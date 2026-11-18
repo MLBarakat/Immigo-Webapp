@@ -133,11 +133,11 @@ describe('questionTransition (F11 mode-specific lead-ins)', () => {
 
   it('numbers the next question in the learner locale', () => {
     expect(questionTransition('standard', { id: 'q-001', question: 'What is the capital?' }, 'en-US', 2))
-      .toBe('Question no. 2: What is the capital?');
+      .toBe('Question 2: What is the capital?');
     expect(questionTransition('practice', { id: 'q-001', question: 'What is the capital?' }, 'es-ES', 7))
-      .toBe('Pregunta n.º 7: What is the capital?');
+      .toBe('Pregunta 7: What is the capital?');
     expect(questionTransition('standard', { id: 'q-001', question: 'What is the capital?' }, 'fr-FR', 4))
-      .toBe('Question n° 4 : What is the capital?');
+      .toBe('Question 4 : What is the capital?');
   });
 });
 
