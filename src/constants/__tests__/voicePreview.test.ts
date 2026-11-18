@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { pickVoicePreviewSentence, VOICE_PREVIEW_SENTENCES } from '../voicePreview';
+import { getVoicePreviewSentences, pickVoicePreviewSentence } from '../voicePreview';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -25,7 +25,7 @@ describe('voice preview sentences', () => {
     const first = pickVoicePreviewSentence('en-US', 'Ruth');
     const second = pickVoicePreviewSentence('en-US', 'Ruth', first);
 
-    const renderedEnglish = VOICE_PREVIEW_SENTENCES['en-US']
+    const renderedEnglish = getVoicePreviewSentences('en-US')
       .map((template) => template.replace(/\{\{name\}\}/g, 'Ruth'));
     expect(second).not.toBe(first);
     expect(renderedEnglish).toContain(first);
@@ -35,7 +35,13 @@ describe('voice preview sentences', () => {
   it('falls back to English for an unsupported language', () => {
     const sentence = pickVoicePreviewSentence('de-DE', 'Ruth');
 
-    expect(VOICE_PREVIEW_SENTENCES['en-US'].map((template) => template.replace(/\{\{name\}\}/g, 'Ruth')))
+    expect(getVoicePreviewSentences('en-US').map((template) => template.replace(/\{\{name\}\}/g, 'Ruth')))
       .toContain(sentence);
+  });
+
+  it('offers five localized sentences for every supported locale', () => {
+    for (const locale of ['en-US', 'es-ES', 'fr-FR', 'ar-SA']) {
+      expect(getVoicePreviewSentences(locale)).toHaveLength(5);
+    }
   });
 });

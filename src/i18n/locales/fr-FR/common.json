@@ -61,7 +61,9 @@
     "systemError": "Exception d'interception système : {{message}}",
     "acknowledge": "Confirmer",
     "clearConversation": "Effacer la conversation",
-    "downloadScript": "Télécharger le script"
+    "downloadScript": "Télécharger le script",
+    "logoAlt": "Logo ImmiGo",
+    "networkError": "Une erreur réseau inconnue s’est produite."
   },
   "auth": {
     "accountCreated": {
@@ -86,6 +88,10 @@
     "errorMustAgree": "Vous devez confirmer avoir 18 ans ou plus et accepter les Conditions d'utilisation et la Politique de confidentialité pour vous inscrire.",
     "errorPasswordRequirements": "Veuillez vous assurer que votre mot de passe respecte toutes les exigences ci-dessous.",
     "errorUnexpected": "Une erreur inattendue s'est produite.",
+    "serviceUnavailable": "Le service d’authentification est indisponible. Vérifiez votre configuration et réessayez.",
+    "deviceVerificationFailed": "Cet appareil n’a pas pu être vérifié pour une connexion sécurisée. Activez le stockage local et réessayez.",
+    "sessionVerificationFailed": "La vérification de la session sécurisée a échoué. Déconnectez-vous et réessayez.",
+    "signOutFailed": "La déconnexion n’a pas pu être terminée. Veuillez réessayer.",
     "processing": "Traitement...",
     "login": "Connexion",
     "signUp": "S'inscrire",
@@ -276,6 +282,29 @@
       "start": { "title": "Démarrez votre session", "description": "Appuyez sur le grand bouton animé pour commencer une session d'entraînement. L'IA vous saluera et attendra que vous parliez." },
       "speak": { "title": "Parlez naturellement", "description": "Lorsque l'IA écoute, parlez comme dans une conversation normale. Vos mots seront transcrits en temps réel." },
       "interrupt": { "title": "Astuce : interrompez à tout moment", "description": "C'est comme une vraie conversation. Vous pouvez interrompre l'IA à tout moment en commençant simplement à parler." }
+    }
+  },
+  "errorBoundary": {
+    "title": "Une erreur s’est produite.",
+    "description": "Nous sommes désolés pour la gêne occasionnée. L’erreur a été enregistrée et notre équipe l’examinera.",
+    "details": "Détails de l’erreur (développement uniquement)",
+    "retry": "Réessayer"
+  },
+  "password": {
+    "feedbackLabel": "Retour sur la solidité du mot de passe",
+    "rules": {
+      "minLength": "Au moins 8 caractères",
+      "lowercase": "Lettre minuscule (a-z)",
+      "uppercase": "Lettre majuscule (A-Z)",
+      "number": "Chiffre (0-9)",
+      "symbol": "Symbole (!@#$...)"
+    },
+    "strength": {
+      "weak": "Faible",
+      "fair": "Correcte",
+      "moderate": "Moyenne",
+      "strong": "Forte",
+      "veryStrong": "Très forte"
     }
   }
 }

@@ -1,14 +1,16 @@
-﻿interface Rule {
-  label: string;
+﻿export type PasswordRuleKey = 'minLength' | 'lowercase' | 'uppercase' | 'number' | 'symbol';
+
+interface Rule {
+  key: PasswordRuleKey;
   test: (password: string) => boolean;
 }
 
 export const PASSWORD_RULES: Rule[] = [
-  { label: 'At least 8 characters', test: password => password.length >= 8 },
-  { label: 'Lowercase letter (a-z)', test: password => /[a-z]/.test(password) },
-  { label: 'Uppercase letter (A-Z)', test: password => /[A-Z]/.test(password) },
-  { label: 'Number (0-9)', test: password => /[0-9]/.test(password) },
-  { label: 'Symbol (!@#$...)', test: password => /[^a-zA-Z0-9]/.test(password) },
+  { key: 'minLength', test: password => password.length >= 8 },
+  { key: 'lowercase', test: password => /[a-z]/.test(password) },
+  { key: 'uppercase', test: password => /[A-Z]/.test(password) },
+  { key: 'number', test: password => /[0-9]/.test(password) },
+  { key: 'symbol', test: password => /[^a-zA-Z0-9]/.test(password) },
 ];
 
 export function getPasswordStrength(password: string): number {

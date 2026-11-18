@@ -26,7 +26,11 @@
   },
   "voice": {
     "title": "Voz de IA",
-    "description": "Selecciona la voz de tu compañero de conversación de IA."
+    "description": "Selecciona la voz de tu compañero de conversación de IA.",
+    "gender": {
+      "female": "Femenino",
+      "male": "Masculino"
+    }
   },
   "feedback": {
     "title": "Retroalimentación en vivo",

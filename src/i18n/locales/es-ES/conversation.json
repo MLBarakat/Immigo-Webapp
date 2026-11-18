@@ -166,7 +166,9 @@
       "listening": "Escuchando",
       "thinking": "Pensando...",
       "speaking": "Hablando",
-      "audioRetryPending": "Toca en cualquier lugar para escuchar la respuesta"
+      "audioRetryPending": "Toca en cualquier lugar para escuchar la respuesta",
+    "consentSaveFailed": "No se pudo guardar el consentimiento del micrófono. Inténtalo de nuevo.",
+    "initFailed": "No se pudo configurar la voz. Toca el micrófono para reintentar."
     },
     "examReview": {
       "cardTitle": "Tu informe de entrevista está listo",
@@ -344,7 +346,18 @@
       "duration": "Duración",
       "exported": "Exportado",
       "officer": "Oficial de USCIS",
-      "user": "Usuario"
+      "user": "Usuario",
+    "titleStandard": "Transcripción de la entrevista de naturalización de ImmiGO",
+    "titlePractice": "Transcripción del entrenador de práctica de ImmiGO",
+    "titleStudy": "Transcripción del entrenador de estudio de ImmiGO",
+    "titleNeutral": "Transcripción de la conversación de ImmiGO",
+    "practiceCoach": "Entrenador de práctica",
+    "studyCoach": "Entrenador de estudio",
+    "system": "ImmiGO",
+    "report": "Informe de entrevista",
+    "reportAvailable": "Informe de entrevista disponible en ImmiGO.",
+    "dateRange": "Rango de fechas",
+    "partialHistory": "Nota: Solo se incluye la porción más reciente de la conversación."
     }
   },
   "server": {
@@ -392,6 +405,94 @@
     "englishCompletionFallback": "Gracias por completar la práctica de inglés.",
     "englishReadingTransition": "Has terminado las preguntas de educación cívica. Ahora sigue la práctica de lectura en inglés.",
     "englishWritingTransition": "Has terminado las preguntas de educación cívica. Ahora sigue la práctica de escritura en inglés.",
-    "openingAcknowledgement": "Gracias por compartirlo. Centrémonos en la práctica de educación cívica de hoy."
+    "openingAcknowledgement": "Gracias por compartirlo. Centrémonos en la práctica de educación cívica de hoy.",
+    "modePracticeLabel": "Modo práctica",
+    "modeStudyLabel": "Modo estudio",
+    "modeFirstTimePractice": "El Modo práctica está listo. Reproduce la entrevista de civismo: una pregunta a la vez, respondida con tus propias palabras y con comentarios directos después de cada respuesta. Practicar el recuerdo en condiciones de entrevista es lo que construye la confianza que necesitas para el examen de USCIS. Elige un área de enfoque o mantén Todas las áreas de enfoque abajo.",
+    "modeFirstTimeStudy": "El Modo estudio está listo. Recorre cada pregunta de civismo con una explicación breve, a tu ritmo, para que aprendas el razonamiento detrás de la respuesta. Entender por qué una respuesta es correcta hace que se fije cuando el oficial formula la pregunta con otras palabras. Elige un área de enfoque o mantén Todas las áreas de enfoque abajo.",
+    "modeReadyPractice": "Cuando estés listo, elige Listo. Te haré tu primera pregunta de práctica.",
+    "modeReadyStudy": "Cuando estés listo, elige Listo. Te mostraré tu primera pregunta de estudio.",
+    "allFocusAreasLabel": "Todas las áreas de enfoque",
+    "modeReturningPractice": "Modo práctica está listo. En el banco de preguntas de {version}, {mastered} preguntas están dominadas, {practiced} están practicadas pero aún no dominadas, y {notPracticed} no se han practicado.",
+    "modeReturningStudy": "Modo estudio está listo. En el banco de preguntas de {version}, {mastered} preguntas están dominadas, {practiced} están practicadas pero aún no dominadas, y {notPracticed} no se han practicado.",
+    "modeReturningAllFocus": "Ahora mismo abarcas Todas las áreas de enfoque.",
+    "modeReturningFocus": "En tu enfoque actual ({focus}), {mastered} están dominadas, {practiced} están practicadas pero no dominadas, y {notPracticed} no se han practicado.",
+    "modeSavedAllFocus": "Tu enfoque guardado se mantiene en Todas las áreas de enfoque.",
+    "modeSavedFocus": "Tu enfoque guardado se mantiene en {focus}.",
+    "modeReadyGateSuffix": "Elige Listo cuando estés listo para comenzar.",
+    "modeKeepAllFocus": "Mantén Todas las áreas de enfoque o elige un enfoque más concreto abajo.",
+    "modeKeepFocus": "Mantén este enfoque o elige otro abajo.",
+    "modeFocusConfirmation": "Perfecto. Usaremos {focus} en {mode}.",
+    "modeCycleNotice": "Has completado una vuelta completa por este enfoque. Empezamos de nuevo desde el principio.",
+    "recommendationPractice": "Un breve conjunto de práctica puede reforzar lo que sabes y fortalecer tu memoria.",
+    "recommendationStudy": "Una revisión guiada puede ayudar a reconstruir los conceptos detrás de las respuestas falladas.",
+    "standardModeSwitch": "Has elegido la Entrevista estándar. Inicia la entrevista cuando estés listo.",
+    "studyQuestionNumber": "Pregunta {n}:",
+    "studyQuestionLeadIn": "La pregunta de USCIS en inglés es:",
+    "studyAnswersLeadIn": "USCIS acepta estas respuestas en inglés:",
+    "studyDynamicAnswer": "Esta respuesta puede cambiar; consulta una fuente oficial y actualizada de USCIS.",
+    "studyAnswerInvitation": "Ahora intenta responder en inglés.",
+    "studyFeedbackAnswersLeadIn": "USCIS acepta estas respuestas en inglés:",
+    "studyFeedbackDynamic": "Esta respuesta puede cambiar; consulta una fuente oficial y actualizada de USCIS.",
+    "examIntroFirstFacts": "Esta entrevista de práctica tiene hasta {max} preguntas de civismo. Apruebas con {passAt} respuestas correctas. Termina antes al llegar a {passAt} correctas o {failAt} incorrectas.",
+    "examIntroTopics": "Las preguntas provienen de los nueve temas de civismo de USCIS.",
+    "examIntroEnglish": "Si apruebas civismo, seguirás con práctica de lectura y escritura. Si no apruebas, la práctica de inglés no se realiza.",
+    "examIntroReady": "Cuando estés listo, elige Listo. Te haré la primera pregunta.",
+    "examIntroReturning": "La última vez respondiste {correct} correctas y {incorrect} incorrectas ({total} respuestas calificadas).",
+    "examIntroReturningPassed": "Alcanzaste el umbral de aprobación esa vez.",
+    "examIntroReturningMissed": "No alcanzaste el umbral de aprobación esa vez.",
+    "examIntroReturningEndedEarly": "La entrevista terminó antes al alcanzarse un umbral.",
+    "examIntroReturningFullSet": "Se usó el conjunto completo de preguntas.",
+    "examIntroResume": "Has respondido {answered} preguntas: {correct} correctas y {incorrect} incorrectas. Necesitas {needed} respuestas correctas más para aprobar; {remaining} incorrectas más terminarían la entrevista.",
+    "examIntroOpener": "Bienvenido a tu entrevista de práctica de civismo. Haré preguntas una a la vez, y tú respondes con tus propias palabras. Elige Listo cuando estés listo para comenzar.",
+    "examIntroResumeOpener": "Bienvenido de nuevo a tu entrevista de práctica de civismo. Continuaremos desde donde lo dejaste. Elige Listo cuando estés listo para continuar."
+  },
+  "loading": {
+    "title": "Iniciando la aplicación ImmiGO...",
+    "hint": "Espera un momento; la primera visita puede tardar un poco."
+  },
+  "chatInput": {
+    "formLabel": "Área de mensajes de chat manual",
+    "placeholder": "Escribe un mensaje...",
+    "disabledPlaceholder": "La conversación por voz está activa...",
+    "ariaLabel": "Campo de entrada de texto del mensaje",
+    "disabledAriaLabel": "Entrada por teclado desactivada mientras la sesión de voz está activa"
+  },
+  "hub": {
+    "getFeedback": "Obtener comentarios",
+    "startSession": "Iniciar sesión",
+    "stopSession": "Detener sesión",
+    "ready": "Listo",
+    "listening": "Escuchando...",
+    "processing": "Pensando...",
+    "speaking": "Hablando...",
+    "error": "Error: {{message}}",
+    "unknownError": "Error desconocido"
+  },
+  "focusAreas": {
+    "remove": "Quitar {{label}}"
+  },
+  "voicePreview": {
+    "sentences": [
+      "Hola, soy {{name}} y estaré aquí para ayudarte a practicar para tu entrevista de civismo.",
+      "Hola, soy {{name}} y me alegra acompañarte a ganar confianza hoy.",
+      "Bienvenido, soy {{name}} y te guiaré con calma en tu práctica de civismo.",
+      "Hola, soy {{name}} y estoy aquí para ayudarte a prepararte pregunta por pregunta.",
+      "Hola, soy {{name}} y juntos haremos que tu estudio de civismo sea claro y sencillo."
+    ]
+  },
+  "micErrors": {
+    "permissionTimeout": "No se concedió permiso para usar el micrófono a tiempo. Permite el acceso al micrófono cuando se solicite y vuelve a tocar el micrófono.",
+    "setupTimeout": "El micrófono tardó demasiado en iniciarse. Toca el micrófono de nuevo para reintentar.",
+    "blocked": "Se bloqueó el acceso al micrófono. Permite el acceso a este sitio en la configuración del navegador y vuelve a tocar el micrófono.",
+    "notFound": "No se encontró ningún micrófono en este dispositivo. Conecta un micrófono y vuelve a tocar el micrófono.",
+    "busy": "Tu micrófono está ocupado o no disponible; otra aplicación puede estar usándolo. Cierra esa aplicación y vuelve a tocar el micrófono.",
+    "startFailed": "No se pudo iniciar el micrófono. Revisa tu dispositivo de entrada de audio y vuelve a tocar el micrófono.",
+    "acquisition": "Se necesita acceso al micrófono para practicar por voz. Permite el acceso en la configuración del navegador e inténtalo de nuevo."
+  },
+  "systemTurns": {
+    "runtimeInitializing": "El núcleo del sistema está inicializando los tiempos de ejecución de capacidades. Espera un momento e inténtalo de nuevo.",
+    "playbackRestricted": "Se gestionó la restricción de reproducción. El navegador requiere un gesto inicial del usuario.",
+    "syncFailed": "No se pudieron sincronizar las transacciones de la conversación."
   }
 }

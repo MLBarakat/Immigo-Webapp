@@ -95,7 +95,7 @@ export function VoiceHub({
     unlockAudioPlayback();
     void onPrepareMic?.();
     if (!onMicConsent) {
-      setConsentError('Unable to save microphone consent. Please try again.');
+      setConsentError(t('workspace.voice.consentSaveFailed'));
       onReleasePreparedMic?.();
       logger.error('Microphone consent cannot be accepted because persistence is unavailable.');
       return;
@@ -106,11 +106,11 @@ export function VoiceHub({
       logger.info('VoiceHub: microphone consent acknowledged. Launching speech session recording.');
       if (!isListenerLoading) onStartSession();
     } catch (error) {
-      setConsentError(error instanceof Error ? error.message : 'Unable to save microphone consent. Please try again.');
+      setConsentError(error instanceof Error ? error.message : t('workspace.voice.consentSaveFailed'));
       onReleasePreparedMic?.();
       logger.error('Failed to persist microphone consent.', { error: String(error) });
     }
-  }, [onMicConsent, onStartSession, onPrepareMic, onReleasePreparedMic, isListenerLoading]);
+  }, [onMicConsent, onStartSession, onPrepareMic, onReleasePreparedMic, isListenerLoading, t]);
 
   // 'connecting' = session starting, mic prompt pending. It must not be
   // disabled (the tap is the only way to cancel a stuck prompt) and it must
@@ -135,7 +135,7 @@ export function VoiceHub({
           </span>
         )}
         {micAccessError && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{micAccessError}</p>}
-        {initError && !isSessionActive && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{initError}</p>}
+        {initError && !isSessionActive && <p className="max-w-xs text-center text-xs text-art-red-600" role="alert">{t('workspace.voice.initFailed')}</p>}
         {isAudioRetryPending && (
           <p className="max-w-xs text-center text-xs font-semibold text-art-blue-600" role="status">
             {t('workspace.voice.audioRetryPending')}

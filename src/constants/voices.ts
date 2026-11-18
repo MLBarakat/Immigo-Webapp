@@ -4,33 +4,32 @@ export interface AppVoice {
   readonly id: string;
   /** Proper name used in preview introductions and accessible labels. */
   readonly name: string;
-  readonly displayName: string;
   readonly gender: 'female' | 'male';
   readonly locale: AppVoiceLocale;
-  readonly accentLabel: string;
   readonly isDefault: boolean;
 }
 
 /**
  * Authoritative list of supported Amazon Polly voices.
  * Exactly one female default and one male voice per supported locale (8 total).
+ * Display labels are composed from `name` plus the localized gender in the UI.
  */
 export const APP_VOICES: readonly AppVoice[] = [
   // English
-  { id: 'Ruth', name: 'Ruth', displayName: 'Ruth (Female)', gender: 'female', locale: 'en-US', accentLabel: 'English (US)', isDefault: true },
-  { id: 'Matthew', name: 'Matthew', displayName: 'Matthew (Male)', gender: 'male', locale: 'en-US', accentLabel: 'English (US)', isDefault: false },
+  { id: 'Ruth', name: 'Ruth', gender: 'female', locale: 'en-US', isDefault: true },
+  { id: 'Matthew', name: 'Matthew', gender: 'male', locale: 'en-US', isDefault: false },
 
   // Spanish
-  { id: 'Mia', name: 'Mía', displayName: 'Mía (Femenino)', gender: 'female', locale: 'es-ES', accentLabel: 'Español (LatAm)', isDefault: true },
-  { id: 'Andres', name: 'Andrés', displayName: 'Andrés (Masculino)', gender: 'male', locale: 'es-ES', accentLabel: 'Español (LatAm)', isDefault: false },
+  { id: 'Mia', name: 'Mía', gender: 'female', locale: 'es-ES', isDefault: true },
+  { id: 'Andres', name: 'Andrés', gender: 'male', locale: 'es-ES', isDefault: false },
 
   // French
-  { id: 'Lea', name: 'Léa', displayName: 'Léa (Féminin)', gender: 'female', locale: 'fr-FR', accentLabel: 'Français (FR)', isDefault: true },
-  { id: 'Remi', name: 'Rémi', displayName: 'Rémi (Masculin)', gender: 'male', locale: 'fr-FR', accentLabel: 'Français (FR)', isDefault: false },
+  { id: 'Lea', name: 'Léa', gender: 'female', locale: 'fr-FR', isDefault: true },
+  { id: 'Remi', name: 'Rémi', gender: 'male', locale: 'fr-FR', isDefault: false },
 
   // Arabic
-  { id: 'Hala', name: 'Hala', displayName: 'Hala (Female)', gender: 'female', locale: 'ar-SA', accentLabel: 'Arabic (Gulf)', isDefault: true },
-  { id: 'Zayd', name: 'Zayd', displayName: 'Zayd (Male)', gender: 'male', locale: 'ar-SA', accentLabel: 'Arabic (Gulf)', isDefault: false },
+  { id: 'Hala', name: 'Hala', gender: 'female', locale: 'ar-SA', isDefault: true },
+  { id: 'Zayd', name: 'Zayd', gender: 'male', locale: 'ar-SA', isDefault: false },
 ] as const;
 
 export const DEFAULT_VOICE_BY_LOCALE: Record<AppVoiceLocale, string> = {

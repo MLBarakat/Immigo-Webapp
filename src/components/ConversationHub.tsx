@@ -1,4 +1,5 @@
 import { Download, Trash2, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { AppStatus } from '../context/conversationContextTypes';
 import { AnimatedStatusButton } from './AnimatedStatusButton';
 import { UserSettings } from '../types/settings';
@@ -30,6 +31,7 @@ export function ConversationHub({
   onGetFeedback,
   isFeedbackDisabled,
 }: ConversationHubProps): JSX.Element {
+  const { t } = useTranslation('conversation');
 
   // Only 'processing'/'speaking' lock other actions. 'connecting' (mic prompt
   // still pending) must stay interactive so the user can cancel a stuck prompt.
@@ -37,15 +39,15 @@ export function ConversationHub({
 
   const statusMessage = () => {
     switch (status) {
-      case 'idle': return 'Ready';
+      case 'idle': return t('hub.ready');
       // 'connecting' = session starting, mic not confirmed yet. Deliberately
       // reads as idle: a consent/permission prompt is not "Thinking".
-      case 'connecting': return 'Ready';
-      case 'listening': return 'Listening...';
-      case 'processing': return 'Thinking...'; // Changed back from Transcribing
-      case 'speaking': return 'Speaking...';
-      case 'error': return `Error: ${errorMessage || 'Unknown error'}`;
-      default: return 'Ready';
+      case 'connecting': return t('hub.ready');
+      case 'listening': return t('hub.listening');
+      case 'processing': return t('hub.processing');
+      case 'speaking': return t('hub.speaking');
+      case 'error': return t('hub.error', { message: errorMessage || t('hub.unknownError') });
+      default: return t('hub.ready');
     }
   };
 
@@ -61,13 +63,13 @@ export function ConversationHub({
       <div className="flex flex-col justify-between w-full h-full bg-star-white rounded-lg shadow-md p-6">
           <div className="flex flex-col space-y-2">
               <button onClick={onGetFeedback} disabled={isFeedbackDisabled || isButtonDisabled} className="flex items-center justify-center p-3 rounded-lg bg-art-blue-50 hover:bg-art-blue-100 text-sm font-medium text-art-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <Sparkles className="w-4 h-4 mr-2" /> Get Feedback
+                  <Sparkles className="w-4 h-4 mr-2" /> {t('hub.getFeedback')}
               </button>
               <button onClick={onDownloadTranscript} disabled={isButtonDisabled} className="flex items-center justify-center p-3 rounded-lg bg-immigo-gray-100 hover:bg-immigo-gray-200 text-sm font-medium text-immigo-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <Download className="w-4 h-4 mr-2" /> Download Script
+                  <Download className="w-4 h-4 mr-2" /> {t('downloadScript')}
               </button>
               <button onClick={onClearConversation} disabled={isButtonDisabled} className="flex items-center justify-center p-3 rounded-lg bg-immigo-gray-100 hover:bg-immigo-gray-200 text-sm font-medium text-art-red-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <Trash2 className="w-4 h-4 mr-2" /> Clear Conversation
+                  <Trash2 className="w-4 h-4 mr-2" /> {t('clearConversation')}
               </button>
           </div>
 
@@ -76,7 +78,7 @@ export function ConversationHub({
                   setting up (mic permission pending/denied) so the user can
                   always cancel and retry. 'processing'/'speaking' are genuine
                   work states with no capture to stop, so only they disable it. */}
-              <button onClick={handleButtonClick} disabled={status === 'processing' || status === 'speaking'} className="w-32 h-32 flex items-center justify-center" aria-label={isSessionActive ? 'Stop Session' : 'Start Session'}>
+              <button onClick={handleButtonClick} disabled={status === 'processing' || status === 'speaking'} className="w-32 h-32 flex items-center justify-center" aria-label={isSessionActive ? t('hub.stopSession') : t('hub.startSession')}>
                   <AnimatedStatusButton status={status} />
               </button>
               <div className="text-center">

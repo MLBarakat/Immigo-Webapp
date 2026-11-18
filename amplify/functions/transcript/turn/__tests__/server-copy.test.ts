@@ -9,7 +9,60 @@ import arSA from '../../../../../src/i18n/locales/ar-SA/conversation.json';
 
 const languages: OnboardingLanguage[] = ['en-US', 'es-ES', 'fr-FR', 'ar-SA'];
 
+/**
+ * Copy that used to live in inline per-locale dictionaries inside the
+ * transcript Lambda. It must resolve through the shared locale catalog.
+ */
+const MIGRATED_COPY_KEYS: ServerCopyKey[] = [
+  'modePracticeLabel',
+  'modeStudyLabel',
+  'modeFirstTimePractice',
+  'modeFirstTimeStudy',
+  'modeReadyPractice',
+  'modeReadyStudy',
+  'allFocusAreasLabel',
+  'modeReturningPractice',
+  'modeReturningStudy',
+  'modeReturningAllFocus',
+  'modeReturningFocus',
+  'modeSavedAllFocus',
+  'modeSavedFocus',
+  'modeReadyGateSuffix',
+  'modeKeepAllFocus',
+  'modeKeepFocus',
+  'modeFocusConfirmation',
+  'modeCycleNotice',
+  'recommendationPractice',
+  'recommendationStudy',
+  'standardModeSwitch',
+  'studyQuestionNumber',
+  'studyQuestionLeadIn',
+  'studyAnswersLeadIn',
+  'studyDynamicAnswer',
+  'studyAnswerInvitation',
+  'studyFeedbackAnswersLeadIn',
+  'studyFeedbackDynamic',
+  'examIntroFirstFacts',
+  'examIntroTopics',
+  'examIntroEnglish',
+  'examIntroReady',
+  'examIntroReturning',
+  'examIntroReturningPassed',
+  'examIntroReturningMissed',
+  'examIntroReturningEndedEarly',
+  'examIntroReturningFullSet',
+  'examIntroResume',
+  'examIntroOpener',
+  'examIntroResumeOpener',
+];
+
 describe('server copy catalog (F5 typed catalog with safeReplyKey)', () => {
+  it('exposes every migrated onboarding, study, and exam-intro string through the catalog', () => {
+    for (const key of MIGRATED_COPY_KEYS) {
+      expect(SERVER_COPY[key], `missing server copy key: ${key}`).toBeDefined();
+    }
+  });
+
   it('has every ServerCopyKey present in all four supported locales', () => {
     const keys: ServerCopyKey[] = Object.keys(SERVER_COPY) as ServerCopyKey[];
     expect(keys.length).toBeGreaterThan(0);

@@ -287,6 +287,8 @@ This registry is the contract between the product, the tests, and every AI codin
 - English, Spanish, French, and Arabic remain supported.
 - Arabic renders RTL; layout, icons, and overlays respect direction.
 - New user-facing strings live in locale files, not components.
+- All user-facing copy — client and server — resolves from `src/i18n/locales/{en-US,es-ES,fr-FR,ar-SA}/`; inline per-locale maps or dictionaries in source files are forbidden.
+- Every locale key exists in all four locales; missing non-English keys are a defect, not a fallback.
 - Language changes persist and do not reset the active session.
 - Learning Modes, Standard Interview onboarding, Practice/Study focus onboarding, the focus combobox, and report actions and statuses are localized in English, Spanish, French, and Arabic.
 - Deterministic onboarding and report status copy is localized rather than model-generated; the All focus areas sentinel is displayed through a localized label.

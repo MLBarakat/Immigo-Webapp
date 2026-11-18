@@ -39,7 +39,7 @@ export function Header({
   return (
     <header className="flex items-center justify-between p-4 bg-star-white dark:bg-gray-800 shadow-sm border-b-2 border-immigo-gray-300 dark:border-gray-700">
       <div className="flex items-center gap-1">
-        <img src={ImmigoLogo} alt="ImmiGo Logo" className="h-10 w-10 object-contain" />
+        <img src={ImmigoLogo} alt={t('app.logoAlt')} className="h-10 w-10 object-contain" />
         <ImmiGOLabel className="flex items-baseline font-sans font-bold text-3xl select-none" />
       </div>
 

@@ -85,9 +85,61 @@ export const SERVER_COPY: Readonly<Record<ServerCopyKey, ServerCopyEntry>> = {
   englishReadingTransition: entry('englishReadingTransition'),
   englishWritingTransition: entry('englishWritingTransition'),
   openingAcknowledgement: entry('openingAcknowledgement'),
+  modePracticeLabel: entry('modePracticeLabel'),
+  modeStudyLabel: entry('modeStudyLabel'),
+  modeFirstTimePractice: entry('modeFirstTimePractice'),
+  modeFirstTimeStudy: entry('modeFirstTimeStudy'),
+  modeReadyPractice: entry('modeReadyPractice'),
+  modeReadyStudy: entry('modeReadyStudy'),
+  allFocusAreasLabel: entry('allFocusAreasLabel'),
+  modeReturningPractice: entry('modeReturningPractice'),
+  modeReturningStudy: entry('modeReturningStudy'),
+  modeReturningAllFocus: entry('modeReturningAllFocus'),
+  modeReturningFocus: entry('modeReturningFocus'),
+  modeSavedAllFocus: entry('modeSavedAllFocus'),
+  modeSavedFocus: entry('modeSavedFocus'),
+  modeReadyGateSuffix: entry('modeReadyGateSuffix'),
+  modeKeepAllFocus: entry('modeKeepAllFocus'),
+  modeKeepFocus: entry('modeKeepFocus'),
+  modeFocusConfirmation: entry('modeFocusConfirmation'),
+  modeCycleNotice: entry('modeCycleNotice'),
+  recommendationPractice: entry('recommendationPractice'),
+  recommendationStudy: entry('recommendationStudy'),
+  standardModeSwitch: entry('standardModeSwitch'),
+  studyQuestionNumber: entry('studyQuestionNumber'),
+  studyQuestionLeadIn: entry('studyQuestionLeadIn'),
+  studyAnswersLeadIn: entry('studyAnswersLeadIn'),
+  studyDynamicAnswer: entry('studyDynamicAnswer'),
+  studyAnswerInvitation: entry('studyAnswerInvitation'),
+  studyFeedbackAnswersLeadIn: entry('studyFeedbackAnswersLeadIn'),
+  studyFeedbackDynamic: entry('studyFeedbackDynamic'),
+  examIntroFirstFacts: entry('examIntroFirstFacts'),
+  examIntroTopics: entry('examIntroTopics'),
+  examIntroEnglish: entry('examIntroEnglish'),
+  examIntroReady: entry('examIntroReady'),
+  examIntroReturning: entry('examIntroReturning'),
+  examIntroReturningPassed: entry('examIntroReturningPassed'),
+  examIntroReturningMissed: entry('examIntroReturningMissed'),
+  examIntroReturningEndedEarly: entry('examIntroReturningEndedEarly'),
+  examIntroReturningFullSet: entry('examIntroReturningFullSet'),
+  examIntroResume: entry('examIntroResume'),
+  examIntroOpener: entry('examIntroOpener'),
+  examIntroResumeOpener: entry('examIntroResumeOpener'),
 };
 
 /** Resolve a localized server copy string by key and language. */
 export function serverCopy(key: ServerCopyKey, language: OnboardingLanguage): string {
   return CATALOGS[language][key];
+}
+
+/** Resolve a localized server copy string and fill `{name}` placeholders. */
+export function serverCopyTemplate(
+  key: ServerCopyKey,
+  language: OnboardingLanguage,
+  values: Readonly<Record<string, string | number>>,
+): string {
+  return Object.entries(values).reduce(
+    (text, [name, value]) => text.split(`{${name}}`).join(String(value)),
+    serverCopy(key, language),
+  );
 }

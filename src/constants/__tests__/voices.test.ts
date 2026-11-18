@@ -33,7 +33,8 @@ describe('voice support for multilingual Study mode', () => {
 
   it('uses human-readable names with localized gender labels', () => {
     expect(getVoiceById('Mia')?.name).toBe('Mía');
-    expect(getVoiceById('Andres')?.displayName).toContain('Andrés');
+    expect(getVoiceById('Andres')?.name).toBe('Andrés');
+    expect(getVoiceById('Andres')?.gender).toBe('male');
     expect(getVoiceById('Lea')?.name).toBe('Léa');
     expect(getVoiceById('Remi')?.name).toBe('Rémi');
   });

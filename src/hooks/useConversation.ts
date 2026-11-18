@@ -1370,7 +1370,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       dispatch({ 
         type: 'SEND_MESSAGE_FAILURE', 
         payload: { 
-          error: 'System core is initializing capability runtimes. Please wait a moment and retry.', 
+          error: t('systemTurns.runtimeInitializing'), 
           userMessageId: secureUserMessageId,
           assistantMessageId: secureAssistantMessageId
         } 
@@ -1726,7 +1726,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
         dispatch({ 
           type: 'SEND_MESSAGE_FAILURE', 
           payload: { 
-            error: 'Playback restriction handled. Browser container requests initial user interaction gesture anchors.', 
+            error: t('systemTurns.playbackRestricted'), 
             userMessageId: secureUserMessageId,
             assistantMessageId: secureAssistantMessageId
           } 
@@ -1758,7 +1758,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       if (turnController.signal.aborted || turnGeneration !== turnGenerationRef.current) return;
       if (isOpeningResponse) openingResponseRef.current = true;
       activeAssistantMessageIdRef.current = null;
-      const parsedErrorMessage = error instanceof Error ? error.message : 'Failed to synchronize conversation transactions.';
+      const parsedErrorMessage = error instanceof Error ? error.message : t('systemTurns.syncFailed');
       
       dispatch({ type: 'SET_STATUS', payload: 'error' });
       dispatch({ 
@@ -1784,7 +1784,7 @@ export function useConversation({ apiClient, userId, voiceId, simulationMode = '
       }
       releaseAssistantRequestHold();
     }
-  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, presentTextModeSegments, flushTextModeSegments, generatePeriodicProgressReport, showProgressCard, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeListeningAfterPlayback, updateCurrentItemId, updateFocusOnboarding, startStandardInterviewTimer, pauseStandardInterviewTimer]);
+  }, [apiClient, userId, conversationState.sessionId, conversationState.conversationHistory, dispatch, startRecording, stopRecording, clearTranscript, clearAudioPlayback, conversationState.isSessionActive, startAssistantReveal, stopAssistantReveal, finishAssistantTurn, presentTextModeSegments, flushTextModeSegments, generatePeriodicProgressReport, showProgressCard, completeBlockedAudioTurnAsText, describePollyPlayback, parkTurnForGestureRetry, pauseVAD, resumeListeningAfterPlayback, updateCurrentItemId, updateFocusOnboarding, startStandardInterviewTimer, pauseStandardInterviewTimer, t]);
 
   const requestSilenceNudge = useCallback(async () => {
     const currentItemId = currentItemIdRef.current;

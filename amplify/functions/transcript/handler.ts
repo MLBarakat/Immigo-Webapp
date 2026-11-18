@@ -39,7 +39,7 @@ import { dynamicAnswersRequireLocation, withDynamicAnswers } from './turn/dynami
 import { formatStudyFeedback, formatStudyQuestion, TurnInterpreterAdapter, bedrockComplete } from './turn/turn-interpreter';
 import { resolveTurn, sanitizeFinalAnswerFeedback } from './turn/turn-policy';
 import { applyVerdictPrefix, feedbackFallback, practiceFirstQuestion, questionTransition } from './turn/feedback-copy';
-import { serverCopy } from './turn/server-copy';
+import { serverCopy, serverCopyTemplate } from './turn/server-copy';
 import type { CivicsItem, ConversationTurn, SimulationMode, TestVersion } from './turn/types';
 import { getEnglishExercise, gradeEnglishReading, parseEnglishWritingGrade, pickEnglishExercisePrompts, resolveEnglishSectionProgress, type EnglishExerciseSection } from './english-exercises';
 
@@ -1197,60 +1197,6 @@ type MockExamIntro = {
   readyPrompt: string;
 };
 
-type ExamIntroCopy = {
-  firstFacts: (max: number, passAt: number, failAt: number) => string;
-  topics: string;
-  english: string;
-  ready: string;
-  returning: (correct: number, incorrect: number, total: number, thresholdReached: boolean, endedEarly: boolean) => string;
-  resume: (answered: number, correct: number, incorrect: number, needed: number, remaining: number) => string;
-  opener: string;
-  resumeOpener: string;
-};
-
-const EXAM_INTRO_COPY: Record<'en-US' | 'es-ES' | 'fr-FR' | 'ar-SA', ExamIntroCopy> = {
-  'en-US': {
-    firstFacts: (max, passAt, failAt) => `This practice interview has up to ${max} civics questions. You pass with ${passAt} correct answers. It ends early at ${passAt} correct or ${failAt} incorrect.`,
-    topics: 'The questions come from the nine USCIS civics topics.',
-    english: 'If you pass civics, reading and writing practice follows. If you do not pass, English practice is not administered.',
-    ready: 'When you are ready, choose Ready. I will ask the first question.',
-    returning: (correct, incorrect, total, thresholdReached, endedEarly) => `Last time you answered ${correct} correctly and ${incorrect} incorrectly (${total} graded answers). ${thresholdReached ? 'You reached the passing threshold that time.' : 'You did not reach the passing threshold that time.'}${endedEarly ? ' The interview ended early when a threshold was reached.' : ' It used the full question set.'}`,
-    resume: (answered, correct, incorrect, needed, remaining) => `You have answered ${answered} questions: ${correct} correct and ${incorrect} incorrect. You need ${needed} more correct answers to pass; ${remaining} more incorrect answers would end the interview.`,
-    opener: 'Welcome to your civics practice interview. I will ask questions one at a time, and you answer in your own words. Choose Ready when you are set to begin.',
-    resumeOpener: 'Welcome back to your civics practice interview. We will continue from where you left off. Choose Ready when you are set to continue.',
-  },
-  'es-ES': {
-    firstFacts: (max, passAt, failAt) => `Esta entrevista de práctica tiene hasta ${max} preguntas de civismo. Apruebas con ${passAt} respuestas correctas. Termina antes al llegar a ${passAt} correctas o ${failAt} incorrectas.`,
-    topics: 'Las preguntas provienen de los nueve temas de civismo de USCIS.',
-    english: 'Si apruebas civismo, seguirás con práctica de lectura y escritura. Si no apruebas, la práctica de inglés no se realiza.',
-    ready: 'Cuando estés listo, elige Listo. Te haré la primera pregunta.',
-    returning: (correct, incorrect, total, thresholdReached, endedEarly) => `La última vez respondiste ${correct} correctas y ${incorrect} incorrectas (${total} respuestas calificadas). ${thresholdReached ? 'Alcanzaste el umbral de aprobación esa vez.' : 'No alcanzaste el umbral de aprobación esa vez.'}${endedEarly ? ' La entrevista terminó antes al alcanzarse un umbral.' : ' Se usó el conjunto completo de preguntas.'}`,
-    resume: (answered, correct, incorrect, needed, remaining) => `Has respondido ${answered} preguntas: ${correct} correctas y ${incorrect} incorrectas. Necesitas ${needed} respuestas correctas más para aprobar; ${remaining} incorrectas más terminarían la entrevista.`,
-    opener: 'Bienvenido a tu entrevista de práctica de civismo. Haré preguntas una a la vez, y tú respondes con tus propias palabras. Elige Listo cuando estés listo para comenzar.',
-    resumeOpener: 'Bienvenido de nuevo a tu entrevista de práctica de civismo. Continuaremos desde donde lo dejaste. Elige Listo cuando estés listo para continuar.',
-  },
-  'fr-FR': {
-    firstFacts: (max, passAt, failAt) => `Cet entretien d’entraînement comporte jusqu’à ${max} questions de civisme. Vous réussissez avec ${passAt} bonnes réponses. Il s’arrête dès ${passAt} bonnes réponses ou ${failAt} mauvaises réponses.`,
-    topics: 'Les questions proviennent des neuf thèmes de civisme de l’USCIS.',
-    english: 'Si vous réussissez le civisme, la lecture et l’écriture suivent. Sinon, l’entraînement d’anglais n’est pas administré.',
-    ready: 'Quand vous êtes prêt, choisissez Prêt. Je poserai la première question.',
-    returning: (correct, incorrect, total, thresholdReached, endedEarly) => `La dernière fois, vous avez répondu correctement à ${correct} questions et incorrectement à ${incorrect} (${total} réponses évaluées). ${thresholdReached ? 'Vous avez atteint le seuil de réussite cette fois-là.' : 'Vous n’avez pas atteint le seuil de réussite cette fois-là.'}${endedEarly ? ' L’entretien s’est arrêté tôt lorsqu’un seuil a été atteint.' : ' Toutes les questions ont été utilisées.'}`,
-    resume: (answered, correct, incorrect, needed, remaining) => `Vous avez répondu à ${answered} questions : ${correct} correctes et ${incorrect} incorrectes. Il vous faut ${needed} bonnes réponses de plus pour réussir ; ${remaining} mauvaises réponses de plus mettraient fin à l’entretien.`,
-    opener: 'Bienvenue à votre entretien d’entraînement en civisme. Je poserai les questions une par une, et vous répondrez avec vos propres mots. Choisissez Prêt quand vous êtes prêt à commencer.',
-    resumeOpener: 'Bienvenue à nouveau à votre entretien d’entraînement en civisme. Nous reprendrons là où vous vous êtes arrêté. Choisissez Prêt quand vous êtes prêt à continuer.',
-  },
-  'ar-SA': {
-    firstFacts: (max, passAt, failAt) => `تتضمن مقابلة التدريب هذه ما يصل إلى ${max} سؤالًا في التربية المدنية. تنجح بـ ${passAt} إجابات صحيحة. تنتهي مبكرًا عند الوصول إلى ${passAt} صحيحة أو ${failAt} خاطئة.`,
-    topics: 'تأتي الأسئلة من موضوعات التربية المدنية التسعة لدى USCIS.',
-    english: 'إذا نجحت في التربية المدنية، تتبعها تدريبات القراءة والكتابة. وإذا لم تنجح، لا يُجرى تدريب اللغة الإنجليزية.',
-    ready: 'عندما تكون مستعدًا، اختر "جاهز". سأطرح السؤال الأول.',
-    returning: (correct, incorrect, total, thresholdReached, endedEarly) => `في المرة الماضية أجبت عن ${correct} إجابة صحيحة و${incorrect} خاطئة (${total} إجابات مصححة). ${thresholdReached ? 'لقد بلغت حد النجاح في تلك المرة.' : 'لم تبلغ حد النجاح في تلك المرة.'}${endedEarly ? ' انتهت المقابلة مبكرًا عند بلوغ أحد الحدود.' : ' استُخدمت مجموعة الأسئلة كاملة.'}`,
-    resume: (answered, correct, incorrect, needed, remaining) => `أجبت حتى الآن عن ${answered} سؤالًا: ${correct} صحيحة و${incorrect} خاطئة. تحتاج إلى ${needed} إجابات صحيحة إضافية للنجاح؛ و${remaining} إجابات خاطئة إضافية ستُنهي المقابلة.`,
-    opener: 'مرحبًا بك في مقابلة التدريب على التربية المدنية. سأطرح عليك الأسئلة واحدة تلو الأخرى، وتجاوبك بلغتك الخاصة. اختر جاهز عندما تكون مستعدًا للبدء.',
-    resumeOpener: 'مرحبًا بعودتك إلى مقابلة التدريب على التربية المدنية. سنكمل من حيث توقفت. اختر جاهز عندما تكون مستعدًا للمتابعة.',
-  },
-};
-
 /**
  * Deterministic score line shared by both completion paths. It owns every
  * number in the closing summary — correct, incorrect, total, and the question
@@ -1282,48 +1228,50 @@ async function buildStandardInterviewIntro(
   const maxQuestions = MAX_EXAM_QUESTIONS[version];
   const passAt = version === '2008' ? 6 : 12;
   const failAt = version === '2008' ? 5 : 9;
-  const copy = EXAM_INTRO_COPY[language];
 
   if (start.resumed && start.answeredCount > 0) {
     return {
       kind: 'resume',
-      icebreaker: copy.resumeOpener,
-      facts: copy.resume(
-        start.answeredCount,
-        start.exam.correct_count,
-        start.exam.incorrect_count,
-        Math.max(0, passAt - start.exam.correct_count),
-        Math.max(0, failAt - start.exam.incorrect_count),
-      ),
+      icebreaker: serverCopy('examIntroResumeOpener', language),
+      facts: serverCopyTemplate('examIntroResume', language, {
+        answered: start.answeredCount,
+        correct: start.exam.correct_count,
+        incorrect: start.exam.incorrect_count,
+        needed: Math.max(0, passAt - start.exam.correct_count),
+        remaining: Math.max(0, failAt - start.exam.incorrect_count),
+      }),
       rules: [],
       readyPrompt: '',
     };
   }
 
-  const rules = [copy.topics];
-  if (includeEnglishSimulation) rules.push(copy.english);
+  const rules = [serverCopy('examIntroTopics', language)];
+  if (includeEnglishSimulation) rules.push(serverCopy('examIntroEnglish', language));
   if (start.previous) {
     const previous = start.previous.summary;
+    const facts = [
+      serverCopyTemplate('examIntroReturning', language, {
+        correct: previous.correct,
+        incorrect: previous.incorrect,
+        total: previous.total,
+      }),
+      serverCopy(previous.passed ? 'examIntroReturningPassed' : 'examIntroReturningMissed', language),
+      serverCopy(previous.endedEarly ? 'examIntroReturningEndedEarly' : 'examIntroReturningFullSet', language),
+    ].join(' ');
     return {
       kind: 'returning',
-      icebreaker: copy.resumeOpener,
-      facts: copy.returning(
-        previous.correct,
-        previous.incorrect,
-        previous.total,
-        previous.passed,
-        previous.endedEarly,
-      ),
+      icebreaker: serverCopy('examIntroResumeOpener', language),
+      facts,
       rules: [],
-      readyPrompt: copy.ready,
+      readyPrompt: serverCopy('examIntroReady', language),
     };
   }
   return {
     kind: 'first-time',
-    icebreaker: copy.opener,
-    facts: copy.firstFacts(maxQuestions, passAt, failAt),
+    icebreaker: serverCopy('examIntroOpener', language),
+    facts: serverCopyTemplate('examIntroFirstFacts', language, { max: maxQuestions, passAt, failAt }),
     rules,
-    readyPrompt: copy.ready,
+    readyPrompt: serverCopy('examIntroReady', language),
   };
 }
 

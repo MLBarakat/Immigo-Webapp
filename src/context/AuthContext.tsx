@@ -12,6 +12,7 @@ import type { UserSettingsRow } from '../services/userSettingsService';
 import { normalizeTheme } from '../utils/theme';
 import { isSupportedUSTimeZone, US_STATES } from '../utils/usLocation';
 import { normalizeVoiceId } from '../constants/voices';
+import i18n from '../i18n';
 
 function clearReferralAttribution(): void {
   try {
@@ -56,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     }
     const { error } = await supabase.auth.signOut({ scope: 'local' });
     if (error) {
-      setSessionReplacementError('Sign-out could not be completed. Please try again.');
+      setSessionReplacementError(i18n.t('auth.signOutFailed', { ns: 'common' }));
       logger.error('Could not sign out a replaced device session.', { error: error.message });
       throw error;
     }
@@ -74,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     logger.warn('A different device claimed the active user session; signing out this device shortly.');
     replacementTimerRef.current = window.setTimeout(() => {
       void logoutReplacedSession().catch(() => {
-        setSessionReplacementError('Sign-out could not be completed. Please try again.');
+        setSessionReplacementError(i18n.t('auth.signOutFailed', { ns: 'common' }));
       });
     }, 6_000);
   }, [logoutReplacedSession]);
@@ -94,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         setSupabase(client);
       } catch {
         if (cancelled) return;
-        setInitializationError('The authentication service is unavailable. Check your configuration and try again.');
+        setInitializationError(i18n.t('auth.serviceUnavailable', { ns: 'common' }));
         setLoading(false);
       }
     };
@@ -328,7 +329,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       });
       queueMicrotask(() => {
         if (cancelled) return;
-        setInitializationError('This device could not be verified for secure sign-in. Please enable local storage and try again.');
+        setInitializationError(i18n.t('auth.deviceVerificationFailed', { ns: 'common' }));
         void supabase.auth.signOut({ scope: 'local' }).then(({ error: signOutError }) => {
           if (signOutError) {
             logger.error('Could not sign out after device verification failed.', {
@@ -376,7 +377,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
           userId: user.id,
           error: message,
         });
-        setInitializationError('Secure session verification failed. Please sign out and try again.');
+        setInitializationError(i18n.t('auth.sessionVerificationFailed', { ns: 'common' }));
       } finally {
         ownershipCheckInProgressRef.current = false;
       }

@@ -26,7 +26,11 @@
   },
   "voice": {
     "title": "AI Voice",
-    "description": "Select the voice for your AI conversation partner."
+    "description": "Select the voice for your AI conversation partner.",
+    "gender": {
+      "female": "Female",
+      "male": "Male"
+    }
   },
   "feedback": {
     "title": "Live Feedback",

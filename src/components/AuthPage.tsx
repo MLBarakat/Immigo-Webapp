@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
 import ImmigoLogo from '../assets/immigo_logo.svg';
 import { TermsModal } from './TermsModal';
@@ -85,7 +85,7 @@ export function AuthPage(): JSX.Element {
         <div className="w-full max-w-md bg-star-white p-8 lg:p-10 rounded-2xl shadow-xl border border-immigo-gray-200 text-center">
           <header className="flex flex-col items-center justify-center mb-6">
             <div className="flex items-center justify-center mb-4">
-              <img src={ImmigoLogo} alt="ImmiGo Logo" className="h-16 w-16 lg:h-20 lg:w-20 object-contain" />
+              <img src={ImmigoLogo} alt={t('app.logoAlt')} className="h-16 w-16 lg:h-20 lg:w-20 object-contain" />
               <ImmiGOLabel className="flex font-bold text-5xl lg:text-6xl" />
             </div>
             <h1 className="text-2xl font-bold text-deep-navy font-display">{t('auth.accountCreated.title')}</h1>
@@ -113,7 +113,7 @@ export function AuthPage(): JSX.Element {
         <div className="w-full max-w-md bg-star-white p-8 lg:p-10 rounded-2xl shadow-xl border border-immigo-gray-200">
           <header className="text-center mb-8">
             <div className="flex items-center justify-center mb-4">
-              <img src={ImmigoLogo} alt="ImmiGo Logo" className="h-16 w-16 lg:h-20 lg:w-20 object-contain" />
+              <img src={ImmigoLogo} alt={t('app.logoAlt')} className="h-16 w-16 lg:h-20 lg:w-20 object-contain" />
               <ImmiGOLabel className="flex font-bold text-5xl lg:text-6xl" />
             </div>
             <h1 className="text-2xl font-bold text-deep-navy font-display">
@@ -200,7 +200,18 @@ export function AuthPage(): JSX.Element {
                   <label className="flex items-start space-x-3 cursor-pointer">
                     <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-1 h-4 w-4 rounded border-gray-300 text-art-blue-600 focus:ring-art-blue-500" />
                     <span className="text-sm text-immigo-gray-700">
-                      I am 18 or older and a U.S. resident, and I agree to the <button type="button" onClick={() => setShowTerms(true)} className="font-semibold text-art-blue-600 hover:underline focus:outline-none">Terms of Service</button> and <button type="button" onClick={() => setShowPrivacy(true)} className="font-semibold text-art-blue-600 hover:underline focus:outline-none">Privacy Policy</button>.
+                      <Trans
+                        i18nKey="auth.termsAgreement"
+                        ns="common"
+                        components={{
+                          tos: (
+                            <button type="button" onClick={() => setShowTerms(true)} className="font-semibold text-art-blue-600 hover:underline focus:outline-none" />
+                          ),
+                          privacy: (
+                            <button type="button" onClick={() => setShowPrivacy(true)} className="font-semibold text-art-blue-600 hover:underline focus:outline-none" />
+                          ),
+                        }}
+                      />
                     </span>
                   </label>
                 </div>

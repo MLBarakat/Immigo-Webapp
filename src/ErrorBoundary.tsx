@@ -1,5 +1,6 @@
 import React from 'react';
 import { ErrorBoundary as ReactErrorBoundary, FallbackProps } from 'react-error-boundary';
+import i18n from './i18n';
 import { logger } from './logger';
 
 // This is the fallback component that gets rendered when an error is caught.
@@ -10,15 +11,16 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   }, [error]);
 
   const isDev = import.meta.env.DEV;
+  const t = i18n.getFixedT(null, 'common');
 
   return (
     <div role="alert" style={{ padding: '20px', border: '1px solid #FF0000', margin: '20px', backgroundColor: '#FFF0F0', color: '#000' }}>
-      <h2 style={{ color: '#D8000C' }}>Something went wrong.</h2>
-      <p>We apologize for the inconvenience. The error has been logged, and our team will look into it.</p>
+      <h2 style={{ color: '#D8000C' }}>{t('errorBoundary.title')}</h2>
+      <p>{t('errorBoundary.description')}</p>
       
       {isDev && (
         <details style={{ whiteSpace: 'pre-wrap', marginTop: '20px', backgroundColor: '#f3f3f3', padding: '10px' }}>
-          <summary>Error Details (Development Only)</summary>
+          <summary>{t('errorBoundary.details')}</summary>
           <p style={{ color: 'red' }}>{error.message}</p>
           <pre style={{ color: '#555' }}>{error.stack}</pre>
         </details>
@@ -28,7 +30,7 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
         onClick={resetErrorBoundary} 
         style={{ marginTop: '20px', padding: '10px 20px', cursor: 'pointer', border: '1px solid #D8000C', backgroundColor: '#D8000C', color: 'white' }}
       >
-        Try again
+        {t('errorBoundary.retry')}
       </button>
     </div>
   );

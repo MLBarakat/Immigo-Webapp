@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Search, X } from 'lucide-react';
 import { MAX_FOCUS_CATEGORIES, type FocusCategory } from '../constants/focusCategories';
 
@@ -41,6 +42,7 @@ export function FocusAreaCombobox({
   disabled = false,
   idPrefix,
 }: FocusAreaComboboxProps) {
+  const { t } = useTranslation('conversation');
   const generatedId = useId();
   const baseId = idPrefix ?? generatedId;
   const labelId = `${baseId}-label`;
@@ -112,7 +114,7 @@ export function FocusAreaCombobox({
             <button
               key={chip.id}
               type="button"
-              aria-label={`Remove ${chip.label}`}
+              aria-label={t('focusAreas.remove', { label: chip.label })}
               onClick={() => removeChip(chip.id)}
               disabled={disabled}
               className="flex min-h-8 items-center gap-1.5 rounded-full border border-immigo-gray-300 bg-immigo-gray-50 px-2.5 py-1 text-xs text-deep-navy hover:bg-immigo-gray-100 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"

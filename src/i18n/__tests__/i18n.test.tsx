@@ -227,4 +227,101 @@ describe('i18n configuration and utilities', () => {
     expect(screen.getByTestId('appearance-title').textContent).toBe('Apparence');
     expect(document.documentElement.lang).toBe('fr-FR');
   });
+
+  it('keeps migrated component, hook, and service copy in every conversation locale', () => {
+    const conversationKeys = [
+      'loading.title',
+      'loading.hint',
+      'chatInput.formLabel',
+      'chatInput.placeholder',
+      'chatInput.disabledPlaceholder',
+      'chatInput.ariaLabel',
+      'chatInput.disabledAriaLabel',
+      'hub.getFeedback',
+      'hub.startSession',
+      'hub.stopSession',
+      'hub.ready',
+      'hub.listening',
+      'hub.processing',
+      'hub.speaking',
+      'hub.error',
+      'hub.unknownError',
+      'focusAreas.remove',
+      'micErrors.permissionTimeout',
+      'micErrors.setupTimeout',
+      'micErrors.blocked',
+      'micErrors.notFound',
+      'micErrors.busy',
+      'micErrors.startFailed',
+      'micErrors.acquisition',
+      'systemTurns.runtimeInitializing',
+      'systemTurns.playbackRestricted',
+      'systemTurns.syncFailed',
+      'workspace.transcript.titlePractice',
+      'workspace.transcript.titleStudy',
+      'workspace.transcript.titleNeutral',
+      'workspace.transcript.practiceCoach',
+      'workspace.transcript.studyCoach',
+      'workspace.transcript.system',
+      'workspace.transcript.report',
+      'workspace.transcript.reportAvailable',
+      'workspace.transcript.dateRange',
+      'workspace.transcript.partialHistory',
+      'workspace.voice.consentSaveFailed',
+      'workspace.voice.initFailed',
+    ];
+
+    for (const code of SUPPORTED_LANGUAGE_CODES) {
+      for (const key of conversationKeys) {
+        const translated = i18n.t(key, { ns: 'conversation', lng: code });
+        expect(translated, `${code} is missing conversation.${key}`).not.toBe(key);
+        expect(translated.trim().length, `${code} has empty conversation.${key}`).toBeGreaterThan(0);
+      }
+    }
+
+    for (const code of SUPPORTED_LANGUAGE_CODES) {
+      const sentences = i18n.t('voicePreview.sentences', {
+        ns: 'conversation',
+        lng: code,
+        returnObjects: true,
+      });
+      expect(Array.isArray(sentences)).toBe(true);
+      expect((sentences as unknown[]).length).toBe(5);
+    }
+  });
+
+  it('keeps error-boundary and password copy in every common locale', () => {
+    const commonKeys = [
+      'errorBoundary.title',
+      'errorBoundary.description',
+      'errorBoundary.details',
+      'errorBoundary.retry',
+      'password.feedbackLabel',
+      'password.rules.minLength',
+      'password.rules.lowercase',
+      'password.rules.uppercase',
+      'password.rules.number',
+      'password.rules.symbol',
+      'password.strength.weak',
+      'password.strength.fair',
+      'password.strength.moderate',
+      'password.strength.strong',
+      'password.strength.veryStrong',
+      'auth.termsAgreement',
+      'auth.serviceUnavailable',
+      'auth.deviceVerificationFailed',
+      'auth.sessionVerificationFailed',
+      'auth.signOutFailed',
+      'app.logoAlt',
+      'app.networkError',
+    ];
+
+    for (const code of SUPPORTED_LANGUAGE_CODES) {
+      for (const key of commonKeys) {
+        const translated = i18n.t(key, { ns: 'common', lng: code });
+        expect(translated, `${code} is missing common.${key}`).not.toBe(key);
+        expect(translated.trim().length, `${code} has empty common.${key}`).toBeGreaterThan(0);
+      }
+    }
+  });
 });

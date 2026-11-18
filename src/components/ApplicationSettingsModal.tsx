@@ -243,7 +243,9 @@ export const ApplicationSettingsModal: React.FC<ApplicationSettingsModalProps> =
               className="bg-immigo-gray-100 dark:bg-gray-700 dark:text-gray-100 border-2 border-immigo-gray-300 dark:border-gray-600 p-2 rounded-lg text-sm"
             >
               {availableVoices.map((voice) => (
-                <option key={voice.id} value={voice.id}>{voice.displayName}</option>
+                <option key={voice.id} value={voice.id}>
+                  {`${voice.name} (${i18n.getFixedT(voice.locale, 'settings')(`voice.gender.${voice.gender}`)})`}
+                </option>
               ))}
             </select>
           </SettingRow>

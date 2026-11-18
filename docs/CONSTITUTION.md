@@ -37,7 +37,10 @@
 ### 1.5 Internationalization and accessibility
 
 - The UI supports English, Spanish, French, and Arabic, including RTL layout.
-- New user-facing strings belong in the locale files; do not hardcode English in components.
+- All user-facing copy lives in the locale files under `src/i18n/locales/{en-US,es-ES,fr-FR,ar-SA}/`; do not hardcode English in components, hooks, services, or backend handlers.
+- Inline per-locale maps or dictionaries in source files are forbidden. Read localized copy from the locale JSON through `t()` on the client or the typed server catalog (`amplify/functions/transcript/turn/server-copy.ts`) in Lambda code.
+- Every new or changed locale key must exist in all four locales before merge.
+- Exceptions: logs, internal error strings that are never rendered to a user, LLM prompts, USCIS exam content, and legal document bodies may stay in code.
 - Preserve semantic HTML, labels, keyboard access, visible focus, focus traps, reduced-motion behavior, and touch-sized controls.
 
 ### 1.6 Privacy and secrets

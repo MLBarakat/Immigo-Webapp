@@ -61,7 +61,9 @@
     "systemError": "Excepción de interceptación del sistema: {{message}}",
     "acknowledge": "Confirmar",
     "clearConversation": "Borrar conversación",
-    "downloadScript": "Descargar guion"
+    "downloadScript": "Descargar guion",
+    "logoAlt": "Logotipo de ImmiGo",
+    "networkError": "Se produjo un error de red desconocido."
   },
   "auth": {
     "accountCreated": {
@@ -86,6 +88,10 @@
     "errorMustAgree": "Debes confirmar que tienes 18 años o más y aceptar los Términos de servicio y la Política de privacidad para registrarte.",
     "errorPasswordRequirements": "Asegúrate de que tu contraseña cumpla con todos los requisitos mostrados a continuación.",
     "errorUnexpected": "Ocurrió un error inesperado.",
+    "serviceUnavailable": "El servicio de autenticación no está disponible. Revisa tu configuración e inténtalo de nuevo.",
+    "deviceVerificationFailed": "No se pudo verificar este dispositivo para un inicio de sesión seguro. Activa el almacenamiento local e inténtalo de nuevo.",
+    "sessionVerificationFailed": "No se pudo verificar la sesión segura. Cierra la sesión e inténtalo de nuevo.",
+    "signOutFailed": "No se pudo cerrar la sesión. Inténtalo de nuevo.",
     "processing": "Procesando...",
     "login": "Iniciar sesión",
     "signUp": "Registrarse",
@@ -278,6 +284,29 @@
       "start": { "title": "Inicia tu sesión", "description": "Presiona el botón animado grande para comenzar una sesión de práctica. La IA te saludará y esperará a que hables." },
       "speak": { "title": "Habla con naturalidad", "description": "Cuando la IA esté escuchando, habla como lo harías en una conversación normal. Tus palabras se transcribirán en tiempo real." },
       "interrupt": { "title": "Consejo: interrumpe cuando quieras", "description": "Es como una conversación real. Puedes interrumpir a la IA en cualquier momento simplemente empezando a hablar." }
+    }
+  },
+  "errorBoundary": {
+    "title": "Algo salió mal.",
+    "description": "Lamentamos las molestias. El error se registró y nuestro equipo lo revisará.",
+    "details": "Detalles del error (solo desarrollo)",
+    "retry": "Intentar de nuevo"
+  },
+  "password": {
+    "feedbackLabel": "Comentarios sobre la seguridad de la contraseña",
+    "rules": {
+      "minLength": "Al menos 8 caracteres",
+      "lowercase": "Letra minúscula (a-z)",
+      "uppercase": "Letra mayúscula (A-Z)",
+      "number": "Número (0-9)",
+      "symbol": "Símbolo (!@#$...)"
+    },
+    "strength": {
+      "weak": "Débil",
+      "fair": "Aceptable",
+      "moderate": "Moderada",
+      "strong": "Fuerte",
+      "veryStrong": "Muy fuerte"
     }
   }
 }

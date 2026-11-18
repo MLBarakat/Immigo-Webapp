@@ -166,7 +166,9 @@
       "listening": "Listening",
       "thinking": "Thinking...",
       "speaking": "Speaking",
-      "audioRetryPending": "Tap anywhere to hear the answer"
+      "audioRetryPending": "Tap anywhere to hear the answer",
+    "consentSaveFailed": "Unable to save microphone consent. Please try again.",
+    "initFailed": "Voice setup failed. Tap the mic to try again."
     },
     "examReview": {
       "cardTitle": "Your Interview Report is ready",
@@ -344,7 +346,18 @@
       "duration": "Duration",
       "exported": "Exported",
       "officer": "USCIS Officer",
-      "user": "User"
+      "user": "User",
+    "titleStandard": "ImmiGO Naturalization Interview Transcript",
+    "titlePractice": "ImmiGO Practice Coach Transcript",
+    "titleStudy": "ImmiGO Study Coach Transcript",
+    "titleNeutral": "ImmiGO Conversation Transcript",
+    "practiceCoach": "Practice Coach",
+    "studyCoach": "Study Coach",
+    "system": "ImmiGO",
+    "report": "Interview Report",
+    "reportAvailable": "Interview report available in ImmiGO.",
+    "dateRange": "Date range",
+    "partialHistory": "Note: Only the most recent portion of the conversation is included."
     }
   },
   "server": {
@@ -392,6 +405,94 @@
     "englishCompletionFallback": "Thank you for completing the English practice.",
     "englishReadingTransition": "You have finished the civics questions. Next is English reading practice.",
     "englishWritingTransition": "You have finished the civics questions. Next is English writing practice.",
-    "openingAcknowledgement": "Thanks for sharing. Let's focus on today's civics practice."
+    "openingAcknowledgement": "Thanks for sharing. Let's focus on today's civics practice.",
+    "modePracticeLabel": "Practice Mode",
+    "modeStudyLabel": "Study Mode",
+    "modeFirstTimePractice": "Practice Mode is ready. It mirrors the civics interview: one question at a time, answered in your own words, with direct feedback after each answer. Practicing recall under interview conditions is what builds the confidence you need for the USCIS test. Choose one focus area, or keep All focus areas, below.",
+    "modeFirstTimeStudy": "Study Mode is ready. It walks through each civics question with a short explanation, at your own pace, so you learn the reasoning behind the answer. Understanding why an answer is right makes it stick when the officer asks the question in different words. Choose one focus area, or keep All focus areas, below.",
+    "modeReadyPractice": "When you are ready, choose Ready. I will ask your first practice question.",
+    "modeReadyStudy": "When you are ready, choose Ready. I will show your first study question.",
+    "allFocusAreasLabel": "All focus areas",
+    "modeReturningPractice": "Practice Mode is ready. Across the {version} question bank, {mastered} questions are mastered, {practiced} are practiced but not yet mastered, and {notPracticed} have not been practiced.",
+    "modeReturningStudy": "Study Mode is ready. Across the {version} question bank, {mastered} questions are mastered, {practiced} are practiced but not yet mastered, and {notPracticed} have not been practiced.",
+    "modeReturningAllFocus": "You are currently covering All focus areas.",
+    "modeReturningFocus": "In your current focus ({focus}), {mastered} are mastered, {practiced} are practiced but not mastered, and {notPracticed} have not been practiced.",
+    "modeSavedAllFocus": "Your saved focus stays All focus areas.",
+    "modeSavedFocus": "Your saved focus stays {focus}.",
+    "modeReadyGateSuffix": "Choose Ready when you are ready to begin.",
+    "modeKeepAllFocus": "Keep All focus areas or choose a narrower focus below.",
+    "modeKeepFocus": "Keep this focus or choose another one below.",
+    "modeFocusConfirmation": "Great. We will use {focus} in {mode}.",
+    "modeCycleNotice": "You have completed a full pass through this focus. Starting again from the beginning.",
+    "recommendationPractice": "A short practice set can reinforce what you know and strengthen recall.",
+    "recommendationStudy": "A guided review can help rebuild the concepts behind missed answers.",
+    "standardModeSwitch": "You chose the Standard Interview. Start the interview when you are ready.",
+    "studyQuestionNumber": "Question {n}:",
+    "studyQuestionLeadIn": "In English, the USCIS question is:",
+    "studyAnswersLeadIn": "USCIS accepts these answers in English:",
+    "studyDynamicAnswer": "This answer changes over time; check a current official USCIS source.",
+    "studyAnswerInvitation": "Now try answering in English.",
+    "studyFeedbackAnswersLeadIn": "USCIS accepts these answers in English:",
+    "studyFeedbackDynamic": "This answer changes over time; check a current official USCIS source.",
+    "examIntroFirstFacts": "This practice interview has up to {max} civics questions. You pass with {passAt} correct answers. It ends early at {passAt} correct or {failAt} incorrect.",
+    "examIntroTopics": "The questions come from the nine USCIS civics topics.",
+    "examIntroEnglish": "If you pass civics, reading and writing practice follows. If you do not pass, English practice is not administered.",
+    "examIntroReady": "When you are ready, choose Ready. I will ask the first question.",
+    "examIntroReturning": "Last time you answered {correct} correctly and {incorrect} incorrectly ({total} graded answers).",
+    "examIntroReturningPassed": "You reached the passing threshold that time.",
+    "examIntroReturningMissed": "You did not reach the passing threshold that time.",
+    "examIntroReturningEndedEarly": "The interview ended early when a threshold was reached.",
+    "examIntroReturningFullSet": "It used the full question set.",
+    "examIntroResume": "You have answered {answered} questions: {correct} correct and {incorrect} incorrect. You need {needed} more correct answers to pass; {remaining} more incorrect answers would end the interview.",
+    "examIntroOpener": "Welcome to your civics practice interview. I will ask questions one at a time, and you answer in your own words. Choose Ready when you are set to begin.",
+    "examIntroResumeOpener": "Welcome back to your civics practice interview. We will continue from where you left off. Choose Ready when you are set to continue."
+  },
+  "loading": {
+    "title": "Initializing ImmiGO App...",
+    "hint": "Please wait, this may take a moment on your first visit."
+  },
+  "chatInput": {
+    "formLabel": "Manual Chat Message Area",
+    "placeholder": "Type a message...",
+    "disabledPlaceholder": "Voice conversation is active...",
+    "ariaLabel": "Message text input field",
+    "disabledAriaLabel": "Keyboard input disabled while voice session is active"
+  },
+  "hub": {
+    "getFeedback": "Get Feedback",
+    "startSession": "Start Session",
+    "stopSession": "Stop Session",
+    "ready": "Ready",
+    "listening": "Listening...",
+    "processing": "Thinking...",
+    "speaking": "Speaking...",
+    "error": "Error: {{message}}",
+    "unknownError": "Unknown error"
+  },
+  "focusAreas": {
+    "remove": "Remove {{label}}"
+  },
+  "voicePreview": {
+    "sentences": [
+      "Hi, I'm {{name}}, and I'll be right here to help you practice for your civics interview.",
+      "Hello, I'm {{name}}, and I'm looking forward to helping you build confidence today.",
+      "Hi there, I'm {{name}}, your guide for clear and friendly civics practice.",
+      "Welcome, I'm {{name}}, and I'm ready to help you prepare one question at a time.",
+      "Hello, I'm {{name}}, and together we'll make your civics study feel simple and encouraging."
+    ]
+  },
+  "micErrors": {
+    "permissionTimeout": "Microphone permission was not granted in time. Allow microphone access when prompted, then tap the mic again.",
+    "setupTimeout": "The microphone took too long to start. Tap the mic again to retry.",
+    "blocked": "Microphone access was blocked. Allow microphone access for this site in your browser settings, then tap the mic again.",
+    "notFound": "No microphone was found on this device. Connect a microphone and tap the mic again.",
+    "busy": "Your microphone is busy or unavailable — another app may be holding it. Close that app and tap the mic again.",
+    "startFailed": "The microphone could not be started. Check your audio input device and tap the mic again.",
+    "acquisition": "Microphone access is needed for voice practice. Allow microphone access in your browser settings, then try again."
+  },
+  "systemTurns": {
+    "runtimeInitializing": "System core is initializing capability runtimes. Please wait a moment and retry.",
+    "playbackRestricted": "Playback restriction handled. Browser container requests initial user interaction gesture anchors.",
+    "syncFailed": "Failed to synchronize conversation transactions."
   }
 }

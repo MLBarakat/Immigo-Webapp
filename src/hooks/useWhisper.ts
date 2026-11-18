@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState, useId } from 'react';
 import { logger } from '../logger';
+import i18n from '../i18n';
 import { MicVAD } from '@ricky0123/vad-web';
 import { useTranscription } from '../context/TranscriptionContext';
 import type { TranscriptionState } from '../context/transcriptionReducer';
@@ -996,8 +997,7 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     return stream.getAudioTracks().some((track) => track.readyState === 'live');
   }, []);
 
-  const micAcquisitionErrorMessage =
-    'Microphone access is needed for voice practice. Allow microphone access in your browser settings, then try again.';
+  const micAcquisitionErrorMessage = i18n.t('micErrors.acquisition', { ns: 'conversation' });
 
   /**
    * Best-effort release of a half-started capture. `MicVAD.start()` flips
@@ -1022,21 +1022,21 @@ export const useWhisper = ({ onSpeechStart }: WhisperOptions = {}): WhisperHook 
     const name = (error as { name?: string } | null)?.name;
     switch (name) {
       case 'MicPermissionTimeoutError':
-        return 'Microphone permission was not granted in time. Allow microphone access when prompted, then tap the mic again.';
+        return i18n.t('micErrors.permissionTimeout', { ns: 'conversation' });
       case 'MicSetupTimeoutError':
-        return 'The microphone took too long to start. Tap the mic again to retry.';
+        return i18n.t('micErrors.setupTimeout', { ns: 'conversation' });
       case 'NotAllowedError':
       case 'SecurityError':
-        return 'Microphone access was blocked. Allow microphone access for this site in your browser settings, then tap the mic again.';
+        return i18n.t('micErrors.blocked', { ns: 'conversation' });
       case 'NotFoundError':
       case 'DevicesNotFoundError':
-        return 'No microphone was found on this device. Connect a microphone and tap the mic again.';
+        return i18n.t('micErrors.notFound', { ns: 'conversation' });
       case 'NotReadableError':
       case 'TrackStartError':
-        return 'Your microphone is busy or unavailable — another app may be holding it. Close that app and tap the mic again.';
+        return i18n.t('micErrors.busy', { ns: 'conversation' });
       case 'AbortError':
       case 'OverconstrainedError':
-        return 'The microphone could not be started. Check your audio input device and tap the mic again.';
+        return i18n.t('micErrors.startFailed', { ns: 'conversation' });
       default:
         return micAcquisitionErrorMessage;
     }

@@ -65,7 +65,9 @@
     "systemError": "System Intercept Exception: {{message}}",
     "acknowledge": "Acknowledge",
     "clearConversation": "Clear Conversation",
-    "downloadScript": "Download Script"
+    "downloadScript": "Download Script",
+    "logoAlt": "ImmiGo Logo",
+    "networkError": "An unknown network API error occurred."
   },
   "auth": {
     "accountCreated": {
@@ -93,6 +95,10 @@
     "errorMustAgree": "You must confirm you are 18+ and agree to the Terms of Service and Privacy Policy to sign up.",
     "errorPasswordRequirements": "Please ensure your password meets all the requirements shown below.",
     "errorUnexpected": "An unexpected error occurred.",
+    "serviceUnavailable": "The authentication service is unavailable. Check your configuration and try again.",
+    "deviceVerificationFailed": "This device could not be verified for secure sign-in. Please enable local storage and try again.",
+    "sessionVerificationFailed": "Secure session verification failed. Please sign out and try again.",
+    "signOutFailed": "Sign-out could not be completed. Please try again.",
     "processing": "Processing...",
     "login": "Login",
     "signUp": "Sign Up",
@@ -337,6 +343,29 @@
         "title": "Pro Tip: Interrupt Anytime!",
         "description": "This is just like a real conversation. You can interrupt the AI at any point by simply starting to speak."
       }
+    }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong.",
+    "description": "We apologize for the inconvenience. The error has been logged, and our team will look into it.",
+    "details": "Error Details (Development Only)",
+    "retry": "Try again"
+  },
+  "password": {
+    "feedbackLabel": "Password strength feedback",
+    "rules": {
+      "minLength": "At least 8 characters",
+      "lowercase": "Lowercase letter (a-z)",
+      "uppercase": "Uppercase letter (A-Z)",
+      "number": "Number (0-9)",
+      "symbol": "Symbol (!@#$...)"
+    },
+    "strength": {
+      "weak": "Weak",
+      "fair": "Fair",
+      "moderate": "Moderate",
+      "strong": "Strong",
+      "veryStrong": "Very Strong"
     }
   }
 }

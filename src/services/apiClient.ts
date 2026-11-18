@@ -1,4 +1,5 @@
 import { apiBaseUrl } from '../config/amplifyOutputs';
+import i18n from '../i18n';
 import { logger } from '../logger';
 import { markDocTombstone } from '../utils/docTombstone';
 import type { SimulationMode, TestVersion } from '../context/conversationContextTypes';
@@ -195,7 +196,7 @@ export class ApiClient {
       }
 
       const errorPayload = errorData as ApiErrorPayload;
-      const errorMessage = errorPayload?.error || errorPayload?.message || 'An unknown network API error occurred.';
+      const errorMessage = errorPayload?.error || errorPayload?.message || i18n.t('app.networkError', { ns: 'common' });
 
       logger.error(`API Error Response: ${response.status} captured on request to ${fullUrl}`, {
         status: response.status,
